@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Iron Line - 2D Tank Prototype</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
+
+    <div class="hud hud-top">
+      <div class="hud-block">
+        <span class="hud-label">상태</span>
+        <strong id="statusText">출격 준비</strong>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">보병</span>
+        <strong id="playerHealth">100</strong>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">전차</span>
+        <strong id="tankHealth">100</strong>
+      </div>
+      <div class="hud-block wide">
+        <span class="hud-label">거점</span>
+        <strong id="objectiveText">A - B - C - D</strong>
+      </div>
+    </div>
+
+    <div class="hud hud-bottom">
+      <div class="weapon-panel">
+        <div class="reload-readout">
+          <span class="hud-label">장전 상태</span>
+          <strong id="weaponState">비어 있음</strong>
+          <div class="reload-track"><span id="reloadBar"></span></div>
+        </div>
+        <div class="ammo-row">
+          <div class="ammo-slot" id="slot-ap">
+            <span>철갑탄</span>
+            <strong id="ammo-ap">12</strong>
+          </div>
+          <div class="ammo-slot" id="slot-he">
+            <span>고폭탄</span>
+            <strong id="ammo-he">8</strong>
+          </div>
+          <div class="ammo-slot" id="slot-smoke">
+            <span>연막탄</span>
+            <strong id="ammo-smoke">4</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="src/core/math.js"></script>
+    <script src="src/data/constants.js"></script>
+    <script src="src/data/infantry-weapons.js"></script>
+    <script src="src/data/map01.js"></script>
+    <script src="src/core/input.js"></script>
+    <script src="src/systems/physics.js"></script>
+    <script src="src/systems/cover-slots.js"></script>
+    <script src="src/entities/player.js"></script>
+    <script src="src/entities/tank.js"></script>
+    <script src="src/entities/crew-member.js"></script>
+    <script src="src/entities/infantry-unit.js"></script>
+    <script src="src/entities/capture-point.js"></script>
+    <script src="src/ai/pathfinding.js"></script>
+    <script src="src/ai/squad-ai.js"></script>
+    <script src="src/ai/commander-ai.js"></script>
+    <script src="src/ai/navigation-agent.js"></script>
+    <script src="src/ai/combat-controller.js"></script>
+    <script src="src/ai/infantry-ai.js"></script>
+    <script src="src/ai/tank-ai.js"></script>
+    <script src="src/systems/combat.js"></script>
+    <script src="src/systems/hud.js"></script>
+    <script src="src/systems/renderer.js"></script>
+    <script src="src/main.js"></script>
+  </body>
+</html>
