@@ -3,6 +3,7 @@
 (function registerTank(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { AMMO } = IronLine.constants;
+  const { clamp, distXY, normalizeAngle } = IronLine.math;
 
   class Tank {
     constructor(options) {
@@ -16,10 +17,12 @@
       this.maxHp = options.maxHp || 110;
       this.hp = this.maxHp;
       this.speed = 0;
-      this.turnRate = options.turnRate || 2.35;
-      this.maxSpeed = options.maxSpeed || 180;
-      this.accel = options.accel || 260;
-      this.turretTurnRate = options.turretTurnRate || 3.4;
+      this.turnRate = options.turnRate || 1.95;
+      this.maxSpeed = options.maxSpeed || 145;
+      this.accel = options.accel || 215;
+      this.turretTurnRate = options.turretTurnRate || 1.65;
+      this.aimTargetAngle = this.turretAngle;
+      this.aimError = 0;
       this.loadedAmmo = null;
       this.reload = {
         active: false,
@@ -30,11 +33,12 @@
       this.ammo = {
         ap: options.ammo?.ap ?? 12,
         he: options.ammo?.he ?? 8,
-        smoke: options.ammo?.smoke ?? 4
+        smoke: options.ammo?.smoke ?? 1
       };
       this.fireCooldown = 0;
       this.smokeCooldown = 0;
       this.recoil = 0;
+      this.fireOrder = null;
       this.alive = true;
       this.ai = null;
       this.isPlayerTank = Boolean(options.isPlayerTank);
@@ -66,6 +70,7 @@
       if (this.loadedAmmo === ammoId) return true;
       if (this.reload.active && this.reload.ammoId === ammoId) return true;
 
+      this.fireOrder = null;
       this.loadedAmmo = null;
       this.reload.active = true;
       this.reload.ammoId = ammoId;
@@ -93,14 +98,14 @@
         }
       }
 
-      if (this.ai && this.isOperational()) this.ai.update(dt);
+      if (this.ai && this.isOperational() && game.matchStarted !== false) this.ai.update(dt);
     }
 
     canFire() {
       return this.alive && this.loadedAmmo && !AMMO[this.loadedAmmo]?.equipment && this.fireCooldown <= 0;
     }
 
-    fire(game) {
+    fire(game, options = {}) {
       if (!this.canFire()) return false;
 
       const ammo = AMMO[this.loadedAmmo];
@@ -113,8 +118,15 @@
       const muzzleDistance = this.radius + 28;
       const muzzleX = this.x + Math.cos(this.turretAngle) * muzzleDistance;
       const muzzleY = this.y + Math.sin(this.turretAngle) * muzzleDistance;
-      const variance = ammo.id === "he" ? 0.018 : 0.01;
+      const aimError = options.aimError ?? this.aimError ?? 0;
+      const baseVariance = ammo.id === "he" ? 0.018 : 0.01;
+      const rushedVariance = clamp(Math.max(0, aimError - 0.08) / 0.55, 0, 1) * (ammo.id === "he" ? 0.055 : 0.035);
+      const variance = baseVariance + rushedVariance;
       const shellAngle = this.turretAngle + (Math.random() - 0.5) * variance;
+      const fuseDistance = options.fuseDistance ?? (options.target ? distXY(muzzleX, muzzleY, options.target.x, options.target.y) : null);
+      const shellLife = ammo.id === "he" && fuseDistance
+        ? clamp(fuseDistance / ammo.speed, 0.12, ammo.life || 3)
+        : ammo.life || 3;
 
       game.projectiles.push({
         x: muzzleX,
@@ -126,7 +138,7 @@
         team: this.team,
         owner: this,
         ammo,
-        life: ammo.life || 3,
+        life: shellLife,
         radius: ammo.shellRadius
       });
 
@@ -142,8 +154,9 @@
 
       this.fireCooldown = 0.18;
       this.loadedAmmo = null;
+      this.fireOrder = null;
       this.recoil = 1;
-      this.speed -= Math.cos(IronLine.math.normalizeAngle(this.turretAngle - this.angle)) * 22;
+      this.speed -= Math.cos(normalizeAngle(this.turretAngle - this.angle)) * 22;
       return true;
     }
 

@@ -17,7 +17,7 @@
       this.maxHp = this.hp;
       this.angle = options.angle || 0;
       this.speed = 0;
-      this.maxSpeed = options.maxSpeed || 128;
+      this.maxSpeed = options.maxSpeed || 108;
       this.targetTank = options.targetTank || null;
       this.inTank = null;
       this.alive = true;
@@ -68,7 +68,8 @@
         Math.cos(this.angle) * this.speed,
         Math.sin(this.angle) * this.speed,
         this.radius,
-        dt
+        dt,
+        { blockTanks: true, padding: 5 }
       );
     }
 

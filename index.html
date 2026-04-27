@@ -4,27 +4,165 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Iron Line - 2D Tank Prototype</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
 
+    <button type="button" class="settings-button" id="settingsButton" aria-label="설정 열기" title="설정">&#9881;</button>
+
+    <section class="settings-panel hidden" id="settingsPanel" aria-label="설정">
+      <div class="settings-head">
+        <strong>설정</strong>
+        <button type="button" id="settingsClose" aria-label="설정 닫기">&times;</button>
+      </div>
+      <div class="settings-list">
+        <label class="settings-toggle">
+          <input type="checkbox" data-debug-option="ai">
+          <span>AI 판단 표시</span>
+          <small>G</small>
+        </label>
+        <label class="settings-toggle">
+          <input type="checkbox" data-debug-option="navGraph">
+          <span>경로 그리드 표시</span>
+          <small>N</small>
+        </label>
+        <label class="settings-toggle">
+          <input type="checkbox" data-mobile-controls>
+          <span>모바일 조작 UI</span>
+          <small>터치</small>
+        </label>
+      </div>
+      <div class="control-help">
+        <strong>PC 조작</strong>
+        <p>WASD 이동 · E 탑승/하차 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
+        <strong>모바일 조작</strong>
+        <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼</p>
+      </div>
+    </section>
+
+    <div class="orientation-overlay" id="orientationOverlay">
+      <strong>가로 화면으로 돌려주세요</strong>
+      <span>모바일 조작은 가로 화면에 맞춰져 있습니다.</span>
+    </div>
+
+    <div class="mobile-controls hidden" id="mobileControls" aria-label="모바일 조작">
+      <div class="mobile-stick move-stick" id="moveStick" aria-label="이동">
+        <span></span>
+      </div>
+      <div class="mobile-aim-zone">
+        <div class="mobile-stick aim-stick" id="aimStick" aria-label="조준">
+          <span></span>
+        </div>
+        <div class="mobile-action-grid">
+          <button type="button" class="mobile-action fire" data-mobile-mouse="0">발사</button>
+          <button type="button" class="mobile-action" data-mobile-mouse="2">조준</button>
+          <button type="button" class="mobile-action" data-mobile-key="KeyE">탑승</button>
+        </div>
+        <div class="mobile-ammo-row">
+          <button type="button" data-mobile-key="Digit1">철갑</button>
+          <button type="button" data-mobile-key="Digit2">고폭</button>
+          <button type="button" data-mobile-key="Digit3">연막</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="deployment-screen" id="deploymentScreen">
+      <div class="deployment-card">
+        <section class="deployment-map-wrap" aria-label="작전 지도">
+          <div class="deployment-map" id="deploymentMap"></div>
+        </section>
+        <section class="deployment-panel">
+          <div>
+            <span class="deployment-kicker">Iron Line</span>
+            <h1>전투 준비</h1>
+          </div>
+          <div class="deployment-mode-section">
+            <span class="deployment-section-label">모드</span>
+            <div class="deployment-mode-row">
+              <button type="button" class="deployment-mode active" data-mode-id="annihilation">
+                <strong>섬멸전</strong>
+                <span>거점 장악 또는 적 전투력 제거</span>
+              </button>
+              <button type="button" class="deployment-mode locked" data-mode-id="flags" disabled>
+                <strong>깃발전</strong>
+                <span>점수전 · 리스폰 준비 중</span>
+              </button>
+            </div>
+          </div>
+          <div class="deployment-class-list" id="deploymentClassList">
+            <button type="button" class="deployment-class" data-class-id="infantry">
+              <strong>보병</strong>
+              <span>기관총 · 권총 · 수류탄</span>
+            </button>
+            <button type="button" class="deployment-class" data-class-id="engineer">
+              <strong>공병</strong>
+              <span>기관총 · RPG · 수리킷</span>
+            </button>
+            <button type="button" class="deployment-class" data-class-id="scout">
+              <strong>정찰</strong>
+              <span>저격총 · 권총</span>
+            </button>
+          </div>
+          <div class="deployment-settings" id="deploymentSettings">
+            <label class="deployment-setting">
+              <span>난이도</span>
+              <select data-setting="difficulty">
+                <option value="easy">쉬움</option>
+                <option value="normal" selected>보통</option>
+                <option value="hard">어려움</option>
+              </select>
+            </label>
+            <label class="deployment-setting">
+              <span>아군 AI 전차</span>
+              <input type="number" data-setting="blueAiTanks" min="0" max="6" step="1" value="3">
+            </label>
+            <label class="deployment-setting">
+              <span>아군 보병</span>
+              <input type="number" data-setting="blueInfantry" min="4" max="30" step="1" value="14">
+            </label>
+            <label class="deployment-setting">
+              <span>적 전차</span>
+              <input type="number" data-setting="redTanks" min="1" max="8" step="1" value="4">
+            </label>
+            <label class="deployment-setting">
+              <span>적 보병</span>
+              <input type="number" data-setting="redInfantry" min="4" max="34" step="1" value="14">
+            </label>
+          </div>
+          <button type="button" class="deployment-start" id="deploymentStart">출격 시작</button>
+        </section>
+      </div>
+    </div>
+
+    <div class="scoreboard" id="scoreboard" aria-label="전투 현황">
+      <div class="scoreboard-head">
+        <strong>전투 현황</strong>
+        <span id="scoreboardTimer">00:00</span>
+      </div>
+      <div class="scoreboard-grid" id="scoreboardGrid"></div>
+    </div>
+
     <div class="hud hud-top">
-      <div class="hud-block">
-        <span class="hud-label">상태</span>
-        <strong id="statusText">출격 준비</strong>
-      </div>
-      <div class="hud-block">
-        <span class="hud-label">보병</span>
-        <strong id="playerHealth">100</strong>
-      </div>
-      <div class="hud-block">
-        <span class="hud-label">전차</span>
-        <strong id="tankHealth">100</strong>
-      </div>
-      <div class="hud-block wide">
-        <span class="hud-label">거점</span>
-        <strong id="objectiveText">A - B - C - D</strong>
+      <div class="objective-strip" id="objectiveStrip" aria-label="거점 상황"></div>
+      <div class="hud-details" id="hudDetails">
+        <div class="hud-block">
+          <span class="hud-label">상태</span>
+          <strong id="statusText">출격 준비</strong>
+        </div>
+        <div class="hud-block">
+          <span class="hud-label">보병</span>
+          <strong id="playerHealth">100</strong>
+        </div>
+        <div class="hud-block">
+          <span class="hud-label">전차</span>
+          <strong id="tankHealth">100</strong>
+        </div>
+        <div class="hud-block wide">
+          <span class="hud-label">작전</span>
+          <strong id="objectiveText">거점 점령</strong>
+        </div>
       </div>
     </div>
 
@@ -46,7 +184,7 @@
           </div>
           <div class="ammo-slot" id="slot-smoke">
             <span>연막탄</span>
-            <strong id="ammo-smoke">4</strong>
+            <strong id="ammo-smoke">1</strong>
           </div>
         </div>
       </div>
@@ -55,6 +193,7 @@
     <script src="src/core/math.js"></script>
     <script src="src/data/constants.js"></script>
     <script src="src/data/infantry-weapons.js"></script>
+    <script src="src/data/infantry-classes.js"></script>
     <script src="src/data/map01.js"></script>
     <script src="src/core/input.js"></script>
     <script src="src/systems/physics.js"></script>

@@ -27,7 +27,7 @@
 
     activeUnits() {
       return this.units
-        .filter((unit) => unit.alive && unit.ai)
+        .filter((unit) => unit.alive && unit.ai && unit.classId !== "scout")
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
     }
 
@@ -91,6 +91,17 @@
     }
 
     formationForRole(role, approachAngle) {
+      if (role === "scout") {
+        return {
+          angle: approachAngle,
+          distance: 225,
+          spacing: 58,
+          sideBias: -1,
+          stopDistance: 18,
+          allowOutside: true
+        };
+      }
+
       if (role === "support") {
         return {
           angle: approachAngle,

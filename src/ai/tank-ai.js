@@ -37,7 +37,8 @@
         pathIndex: 0,
         stuckTimer: 0,
         recoveryTimer: 0,
-        visible: false
+        visible: false,
+        unsafeLine: false
       };
     }
 
@@ -342,6 +343,7 @@
       this.debug.stuckTimer = navDebug.stuckTimer;
       this.debug.recoveryTimer = navDebug.recoveryTimer;
       this.debug.visible = Boolean(decision.visible);
+      this.debug.unsafeLine = Boolean(decision.unsafeLine);
     }
   }
 

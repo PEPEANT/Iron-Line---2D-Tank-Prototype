@@ -82,7 +82,9 @@
 
     findPathBetween(start, goal, options = {}) {
       const startNode = this.nearestNode(start.x, start.y, options);
-      const goalNode = goal.name ? this.nodeForObjective(goal.name) : this.nearestNode(goal.x, goal.y, options);
+      const goalNode = goal.name
+        ? this.nodeForObjective(goal.name) || this.nearestNode(goal.x, goal.y, options)
+        : this.nearestNode(goal.x, goal.y, options);
       if (!startNode || !goalNode) return [];
       return this.findPath(startNode.id, goalNode.id);
     }

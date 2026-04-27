@@ -15,8 +15,14 @@
       this.maxHp = this.hp;
       this.angle = options.angle || 0;
       this.speed = 0;
-      this.maxSpeed = options.maxSpeed || 118;
+      this.maxSpeed = options.maxSpeed || 98;
       this.weaponId = INFANTRY_WEAPONS[options.weaponId] ? options.weaponId : "rifle";
+      this.classId = options.classId || "infantry";
+      this.equipmentAmmo = {
+        rpg: options.equipmentAmmo?.rpg ?? options.rpgAmmo ?? (this.classId === "engineer" ? 2 : 0),
+        grenade: options.equipmentAmmo?.grenade ?? options.grenadeAmmo ?? 0,
+        repairKit: options.equipmentAmmo?.repairKit ?? options.repairKitAmmo ?? (this.classId === "engineer" ? 2 : 0)
+      };
       this.suppression = 0;
       this.suppressed = false;
       this.morale = 1;
@@ -39,7 +45,7 @@
     update(game, dt) {
       if (!this.alive) return;
       this.updateSuppression(dt);
-      if (this.ai) this.ai.update(dt);
+      if (this.ai && game.matchStarted !== false) this.ai.update(dt);
     }
 
     updateSuppression(dt) {

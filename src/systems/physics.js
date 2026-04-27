@@ -60,21 +60,71 @@
     return true;
   }
 
-  function tryMoveCircle(game, entity, vx, vy, radius, dt) {
+  function circleIntersectsTank(game, entity, x, y, radius, options = {}) {
+    const padding = options.padding ?? 4;
+    const ignoreTanks = new Set(options.ignoreTanks || []);
+    if (options.ignoreTank) ignoreTanks.add(options.ignoreTank);
+
+    return (game.tanks || []).some((tank) => {
+      if (tank === entity || ignoreTanks.has(tank)) return false;
+      if (!tank.alive && !options.blockWrecks) return false;
+      return distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
+    });
+  }
+
+  function tryMoveCircle(game, entity, vx, vy, radius, dt, options = {}) {
     const world = game.world;
     const nextX = clamp(entity.x + vx * dt, radius, world.width - radius);
-    if (!world.obstacles.some((obstacle) => circleRectCollision(nextX, entity.y, radius, obstacle))) {
+    const blockedX = world.obstacles.some((obstacle) => circleRectCollision(nextX, entity.y, radius, obstacle)) ||
+      options.blockTanks && circleIntersectsTank(game, entity, nextX, entity.y, radius, options);
+    if (!blockedX) {
       entity.x = nextX;
     } else if (entity.speed !== undefined) {
       entity.speed *= -0.18;
     }
 
     const nextY = clamp(entity.y + vy * dt, radius, world.height - radius);
-    if (!world.obstacles.some((obstacle) => circleRectCollision(entity.x, nextY, radius, obstacle))) {
+    const blockedY = world.obstacles.some((obstacle) => circleRectCollision(entity.x, nextY, radius, obstacle)) ||
+      options.blockTanks && circleIntersectsTank(game, entity, entity.x, nextY, radius, options);
+    if (!blockedY) {
       entity.y = nextY;
     } else if (entity.speed !== undefined) {
       entity.speed *= -0.18;
     }
+  }
+
+  function resolveCircleAgainstTanks(game, entity, padding = 5) {
+    if (!entity || entity.inTank || entity.alive === false || entity.hp <= 0) return;
+
+    const radius = entity.radius || 10;
+    for (const tank of game.tanks || []) {
+      if (!tank.alive) continue;
+      const dx = entity.x - tank.x;
+      const dy = entity.y - tank.y;
+      let distance = Math.hypot(dx, dy);
+      const minDistance = radius + tank.radius + padding;
+      if (distance >= minDistance) continue;
+
+      let nx = dx / Math.max(distance, 1);
+      let ny = dy / Math.max(distance, 1);
+      if (distance < 1) {
+        const angle = entity.angle ?? tank.angle ?? 0;
+        nx = Math.cos(angle);
+        ny = Math.sin(angle);
+        distance = 1;
+      }
+
+      const push = minDistance - distance;
+      entity.x = clamp(entity.x + nx * push, radius, game.world.width - radius);
+      entity.y = clamp(entity.y + ny * push, radius, game.world.height - radius);
+      if (entity.speed !== undefined) entity.speed *= 0.35;
+    }
+  }
+
+  function resolveInfantryTankSpacing(game) {
+    for (const unit of game.infantry || []) resolveCircleAgainstTanks(game, unit, 5);
+    for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 5);
+    if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 5);
   }
 
   function resolveTankSpacing(game, dt) {
@@ -111,6 +161,8 @@
     hasClearShot,
     tryMoveCircle,
     resolveTankSpacing,
+    resolveInfantryTankSpacing,
+    circleIntersectsTank,
     pointInRect,
     circleRectCollision,
     expandedRect,

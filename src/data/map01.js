@@ -94,8 +94,8 @@
         { x: 535, y: 1860, callSign: "B-INF-1", angle: -0.55, weaponId: "rifle" },
         { x: 620, y: 1930, callSign: "B-INF-2", angle: -0.55, weaponId: "lmg" },
         { x: 535, y: 1690, callSign: "B-INF-3", angle: -0.35, weaponId: "smg" },
-        { x: 740, y: 1710, callSign: "B-INF-4", angle: -0.42, weaponId: "rifle" },
-        { x: 350, y: 1770, callSign: "B-INF-5", angle: -0.32, weaponId: "smg" }
+        { x: 740, y: 1710, callSign: "B-ENG-1", angle: -0.42, weaponId: "rifle", classId: "engineer", rpgAmmo: 2 },
+        { x: 350, y: 1770, callSign: "B-SCT-1", angle: -0.32, weaponId: "sniper", classId: "scout" }
       ],
       red: [
         { x: 3090, y: 545, callSign: "R-05", angle: 2.72 },
@@ -107,8 +107,8 @@
         { x: 3160, y: 540, callSign: "R-INF-1", angle: 2.8, weaponId: "rifle" },
         { x: 3220, y: 1040, callSign: "R-INF-2", angle: 2.9, weaponId: "smg" },
         { x: 3000, y: 1455, callSign: "R-INF-3", angle: -2.8, weaponId: "lmg" },
-        { x: 2850, y: 1765, callSign: "R-INF-4", angle: -2.75, weaponId: "rifle" },
-        { x: 3145, y: 1645, callSign: "R-INF-5", angle: -2.82, weaponId: "smg" }
+        { x: 2850, y: 1765, callSign: "R-ENG-1", angle: -2.75, weaponId: "rifle", classId: "engineer", rpgAmmo: 2 },
+        { x: 3145, y: 1645, callSign: "R-SCT-1", angle: -2.82, weaponId: "sniper", classId: "scout" }
       ]
     },
     capturePoints: [
@@ -201,5 +201,230 @@
     }
   };
 
+  function expandBattlefield(world) {
+    const scale = 1.32;
+    const offsetX = 560;
+    const offsetY = 390;
+    const tx = (x) => Math.round(x * scale + offsetX);
+    const ty = (y) => Math.round(y * scale + offsetY);
+    const tr = (value) => Math.round(value * scale);
+
+    world.width = Math.round(world.width * scale + 980);
+    world.height = Math.round(world.height * scale + 760);
+    world.captureRate = 0.105;
+
+    for (const obstacle of world.obstacles) {
+      obstacle.x = tx(obstacle.x);
+      obstacle.y = ty(obstacle.y);
+      obstacle.w = tr(obstacle.w);
+      obstacle.h = tr(obstacle.h);
+    }
+
+    for (const road of world.roads) {
+      for (const point of road) {
+        point.x = tx(point.x);
+        point.y = ty(point.y);
+      }
+    }
+
+    for (const patch of world.terrainPatches) {
+      patch.x = tx(patch.x);
+      patch.y = ty(patch.y);
+      patch.r = tr(patch.r);
+    }
+
+    for (const point of world.capturePoints) {
+      point.x = tx(point.x);
+      point.y = ty(point.y);
+    }
+
+    for (const node of world.navGraph.nodes) {
+      node.x = tx(node.x);
+      node.y = ty(node.y);
+    }
+
+    configureBases(world);
+  }
+
+  function configureBases(world) {
+    world.safeZones = [
+      { name: "BLUE BASE", team: "blue", x: 760, y: 2930, radius: 500 },
+      { name: "RED BASE", team: "red", x: 4930, y: 1950, radius: 520 }
+    ];
+
+    world.baseExitPoints = {
+      blue: { x: 1280, y: 2920, radius: 135 },
+      red: { x: 4380, y: 2030, radius: 135 }
+    };
+
+    clearBaseBuildingIntrusions(world);
+
+    world.obstacles.push(
+      { x: 360, y: 2550, w: 780, h: 54, kind: "base-wall" },
+      { x: 360, y: 3240, w: 780, h: 54, kind: "base-wall" },
+      { x: 360, y: 2550, w: 54, h: 744, kind: "base-wall" },
+      { x: 1086, y: 2550, w: 54, h: 230, kind: "base-wall" },
+      { x: 1086, y: 3020, w: 54, h: 274, kind: "base-wall" },
+      { x: 560, y: 2645, w: 250, h: 58, kind: "concrete" },
+      { x: 520, y: 3130, w: 360, h: 52, kind: "concrete" },
+
+      { x: 4560, y: 1490, w: 720, h: 54, kind: "base-wall" },
+      { x: 4560, y: 2370, w: 720, h: 54, kind: "base-wall" },
+      { x: 4560, y: 1490, w: 54, h: 320, kind: "base-wall" },
+      { x: 4560, y: 2140, w: 54, h: 284, kind: "base-wall" },
+      { x: 5226, y: 1490, w: 54, h: 934, kind: "base-wall" },
+      { x: 4820, y: 1585, w: 300, h: 58, kind: "concrete" },
+      { x: 4780, y: 2260, w: 360, h: 52, kind: "concrete" }
+    );
+
+    world.roads.push(
+      [
+        { x: 650, y: 2935 },
+        { x: 1125, y: 2920 },
+        { x: 1299, y: 2476 }
+      ],
+      [
+        { x: 4910, y: 2030 },
+        { x: 4520, y: 2030 },
+        { x: 4174, y: 1208 }
+      ],
+      [
+        { x: 4910, y: 2030 },
+        { x: 4520, y: 2105 },
+        { x: 4045, y: 2555 }
+      ]
+    );
+
+    world.terrainPatches.push(
+      { x: 720, y: 2940, r: 520, color: "rgba(72, 118, 84, 0.22)" },
+      { x: 4930, y: 1950, r: 560, color: "rgba(108, 76, 72, 0.16)" },
+      { x: 2760, y: 2920, r: 420, color: "rgba(74, 113, 88, 0.2)" },
+      { x: 3580, y: 620, r: 420, color: "rgba(80, 116, 95, 0.2)" }
+    );
+
+    world.reconPoints = {
+      blue: [
+        { name: "A 외곽 정찰", x: 1287, y: 1168, radius: 135 },
+        { name: "B 남서 정찰", x: 2227, y: 2108, radius: 145 },
+        { name: "D 남측 정찰", x: 3400, y: 2900, radius: 150 },
+        { name: "중앙 숲 정찰", x: 2920, y: 1220, radius: 135 }
+      ],
+      red: [
+        { name: "C 동측 정찰", x: 4232, y: 1073, radius: 140 },
+        { name: "B 북동 정찰", x: 3050, y: 1460, radius: 135 },
+        { name: "D 동남 정찰", x: 4200, y: 2840, radius: 150 },
+        { name: "중앙 도로 정찰", x: 3370, y: 2100, radius: 140 }
+      ]
+    };
+
+    world.spawns = {
+      player: { x: 650, y: 2960 },
+      playerTank: { x: 730, y: 2865, angle: -0.18 },
+      blue: [
+        { x: 880, y: 2745, callSign: "B-12", angle: -0.22 },
+        { x: 900, y: 2945, callSign: "B-21", angle: -0.16 },
+        { x: 730, y: 3050, callSign: "B-34", angle: -0.24 }
+      ],
+      infantryBlue: [
+        { x: 540, y: 2820, callSign: "B-INF-1", angle: -0.2, weaponId: "rifle" },
+        { x: 610, y: 2750, callSign: "B-INF-2", angle: -0.2, weaponId: "machinegun" },
+        { x: 520, y: 2965, callSign: "B-INF-3", angle: -0.18, weaponId: "rifle" },
+        { x: 620, y: 3070, callSign: "B-INF-4", angle: -0.2, weaponId: "machinegun" },
+        { x: 930, y: 3190, callSign: "B-INF-5", angle: -0.28, weaponId: "rifle" },
+        { x: 950, y: 3060, callSign: "B-INF-6", angle: -0.18, weaponId: "rifle" },
+        { x: 450, y: 2720, callSign: "B-INF-7", angle: -0.2, weaponId: "rifle" },
+        { x: 1040, y: 2860, callSign: "B-INF-8", angle: -0.16, weaponId: "rifle" },
+        { x: 990, y: 2835, callSign: "B-MG-1", angle: -0.16, weaponId: "machinegun" },
+        { x: 1015, y: 3150, callSign: "B-MG-2", angle: -0.18, weaponId: "machinegun" },
+        { x: 795, y: 2730, callSign: "B-ENG-1", angle: -0.2, weaponId: "rifle", classId: "engineer", rpgAmmo: 2, repairKitAmmo: 2 },
+        { x: 980, y: 2950, callSign: "B-ENG-2", angle: -0.18, weaponId: "rifle", classId: "engineer", rpgAmmo: 2, repairKitAmmo: 2 },
+        { x: 940, y: 2685, callSign: "B-SCT-1", angle: -0.25, weaponId: "sniper", classId: "scout" },
+        { x: 1035, y: 3010, callSign: "B-SCT-2", angle: -0.22, weaponId: "sniper", classId: "scout" }
+      ],
+      red: [
+        { x: 4860, y: 1715, callSign: "R-05", angle: 3.02 },
+        { x: 5025, y: 1865, callSign: "R-18", angle: 3.08 },
+        { x: 4860, y: 2075, callSign: "R-33", angle: -3.06 },
+        { x: 5025, y: 2175, callSign: "R-44", angle: -3.02 }
+      ],
+      infantryRed: [
+        { x: 5140, y: 1710, callSign: "R-INF-1", angle: 3.04, weaponId: "rifle" },
+        { x: 5150, y: 1665, callSign: "R-INF-2", angle: 3.04, weaponId: "machinegun" },
+        { x: 5160, y: 1900, callSign: "R-INF-3", angle: 3.1, weaponId: "rifle" },
+        { x: 5050, y: 2040, callSign: "R-INF-4", angle: -3.05, weaponId: "machinegun" },
+        { x: 5160, y: 2180, callSign: "R-INF-5", angle: -3.05, weaponId: "rifle" },
+        { x: 4700, y: 2320, callSign: "R-INF-6", angle: -3.02, weaponId: "rifle" },
+        { x: 4690, y: 1660, callSign: "R-INF-7", angle: 3.04, weaponId: "rifle" },
+        { x: 5140, y: 2050, callSign: "R-INF-8", angle: -3.05, weaponId: "rifle" },
+        { x: 4700, y: 2150, callSign: "R-MG-1", angle: -3.05, weaponId: "machinegun" },
+        { x: 4690, y: 2225, callSign: "R-MG-2", angle: -3.04, weaponId: "machinegun" },
+        { x: 4720, y: 1785, callSign: "R-ENG-1", angle: 3.06, weaponId: "rifle", classId: "engineer", rpgAmmo: 2, repairKitAmmo: 2 },
+        { x: 4720, y: 1985, callSign: "R-ENG-2", angle: 3.08, weaponId: "rifle", classId: "engineer", rpgAmmo: 2, repairKitAmmo: 2 },
+        { x: 4670, y: 2090, callSign: "R-SCT-1", angle: -3.0, weaponId: "sniper", classId: "scout" },
+        { x: 4680, y: 1880, callSign: "R-SCT-2", angle: 3.08, weaponId: "sniper", classId: "scout" }
+      ]
+    };
+
+    setNode(world, "blue_base", 760, 2930);
+    setNode(world, "blue_west", 1180, 2860);
+    setNode(world, "blue_south", 1180, 2940);
+    setNode(world, "blue_low", 1180, 3010);
+    setNode(world, "red_north_base", 4780, 1720);
+    setNode(world, "red_mid", 4500, 2030);
+    setNode(world, "red_south", 4780, 2170);
+    setNode(world, "red_far_south", 5020, 2250);
+
+    world.navGraph.nodes.push(
+      { id: "blue_gate_in", x: 1050, y: 2920 },
+      { id: "blue_gate_out", x: 1205, y: 2920 },
+      { id: "red_gate_out", x: 4470, y: 2030 },
+      { id: "red_gate_in", x: 4660, y: 2030 },
+      { id: "red_base_core", x: 4930, y: 2030 }
+    );
+
+    world.navGraph.edges.push(
+      ["blue_base", "blue_gate_in"],
+      ["blue_gate_in", "blue_gate_out"],
+      ["blue_gate_out", "blue_west"],
+      ["blue_gate_out", "blue_south"],
+      ["blue_gate_out", "west_low_road"],
+      ["red_gate_out", "red_gate_in"],
+      ["red_gate_in", "red_base_core"],
+      ["red_base_core", "red_north_base"],
+      ["red_base_core", "red_south"],
+      ["red_base_core", "red_far_south"],
+      ["red_gate_out", "east_center"],
+      ["red_gate_out", "c_east"],
+      ["red_gate_out", "d_east"],
+      ["red_mid", "red_gate_out"],
+      ["red_mid", "red_gate_in"]
+    );
+  }
+
+  function setNode(world, id, x, y) {
+    const node = world.navGraph.nodes.find((item) => item.id === id);
+    if (!node) return;
+    node.x = x;
+    node.y = y;
+  }
+
+  function clearBaseBuildingIntrusions(world) {
+    world.obstacles = world.obstacles.filter((obstacle) => {
+      if (obstacle.kind !== "building") return true;
+      return !(world.safeZones || []).some((zone) => (
+        circleTouchesRect(zone.x, zone.y, zone.radius + 120, obstacle)
+      ));
+    });
+  }
+
+  function circleTouchesRect(cx, cy, radius, rect) {
+    const nearestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+    const nearestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+    const dx = cx - nearestX;
+    const dy = cy - nearestY;
+    return dx * dx + dy * dy <= radius * radius;
+  }
+
+  expandBattlefield(world);
   IronLine.map01 = world;
 })(window);

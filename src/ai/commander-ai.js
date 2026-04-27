@@ -114,7 +114,8 @@
         operationId: options.operationId || "",
         pairedSquadId: options.pairedSquadId || "",
         pairedTankId: options.pairedTankId || "",
-        supportPoint: options.supportPoint || null
+        supportPoint: options.supportPoint || null,
+        egressPoint: options.egressPoint || null
       };
     }
 
@@ -122,6 +123,7 @@
       this.infantryAssignments.clear();
       this.squadAssignments.clear();
       this.operations = [];
+      const scouts = this.teamScouts();
 
       const squads = (this.game.squads || [])
         .filter((squad) => squad.team === this.team && squad.activeUnits().length > 0)
@@ -130,11 +132,12 @@
       if (squads.length > 0) {
         this.rebuildSquadAssignments(squads);
         this.applyCombinedArmsOrders(squads);
+        this.assignScoutOrders(scouts);
         return;
       }
 
       const units = (this.game.infantry || [])
-        .filter((unit) => unit.alive && unit.ai && unit.team === this.team)
+        .filter((unit) => unit.alive && unit.ai && unit.team === this.team && unit.classId !== "scout")
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
 
       const candidates = this.objectiveOrder
@@ -147,7 +150,10 @@
           .map((name) => this.game.capturePoints.find((point) => point.name === name))
           .filter((point) => point);
 
-      if (targets.length === 0) return;
+      if (targets.length === 0) {
+        this.assignScoutOrders(scouts);
+        return;
+      }
 
       units.forEach((unit, index) => {
         const point = targets[index % targets.length];
@@ -159,6 +165,71 @@
           slotCount: units.length
         }));
       });
+      this.assignScoutOrders(scouts);
+    }
+
+    teamScouts() {
+      return (this.game.infantry || [])
+        .filter((unit) => unit.alive && unit.ai && unit.team === this.team && unit.classId === "scout")
+        .sort((a, b) => a.callSign.localeCompare(b.callSign));
+    }
+
+    assignScoutOrders(scouts) {
+      if (!scouts.length) return;
+      const points = this.reconPoints();
+      if (!points.length) return;
+
+      scouts.forEach((unit, index) => {
+        const seed = String(unit.callSign || index).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        const point = points[(index + seed) % points.length];
+        this.infantryAssignments.set(unit, this.createOrder(point, {
+          role: "recon",
+          stance: "observe",
+          priority: index,
+          slotIndex: index,
+          slotCount: scouts.length,
+          leashRadius: (point.radius || 130) + 360,
+          threatRadius: (point.radius || 130) + 520,
+          egressPoint: this.baseExitPoint()
+        }));
+      });
+    }
+
+    baseExitPoint() {
+      const configured = this.game.world.baseExitPoints?.[this.team];
+      if (configured && this.pointPassable(configured.x, configured.y, 20)) {
+        return {
+          x: configured.x,
+          y: configured.y,
+          radius: configured.radius || 70
+        };
+      }
+      return null;
+    }
+
+    reconPoints() {
+      const configured = this.game.world.reconPoints?.[this.team] || [];
+      if (configured.length > 0) {
+        return configured
+          .map((point, index) => ({
+            name: point.name || `R${index + 1}`,
+            x: point.x,
+            y: point.y,
+            radius: point.radius || 130
+          }))
+          .filter((point) => this.pointPassable(point.x, point.y, 20));
+      }
+
+      return this.objectiveOrder
+        .map((name) => this.game.capturePoints.find((point) => point.name === name))
+        .filter((point) => point)
+        .map((point, index) => ({
+          name: `${point.name}-RECON`,
+          x: point.x + (this.team === TEAM.BLUE ? -1 : 1) * (point.radius + 230),
+          y: point.y + (index % 2 === 0 ? -1 : 1) * 160,
+          radius: 140
+        }))
+        .filter((point) => this.pointPassable(point.x, point.y, 20));
     }
 
     rebuildSquadAssignments(squads) {
