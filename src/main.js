@@ -668,6 +668,38 @@
       return ammoId ? tank.beginLoad(ammoId) : false;
     }
 
+    cycleMobileWeapon() {
+      if (this.result || this.deploymentOpen || !this.player?.alive) return false;
+      if (this.player.inTank) return this.cycleMobileTankAmmo(this.player.inTank);
+      return this.cyclePlayerEquipment();
+    }
+
+    cycleMobileTankAmmo(tank) {
+      if (!tank?.alive) return false;
+      this.clearTankFireOrder(tank);
+      const choices = ["ap", "he"].filter((ammoId) => (tank.ammo?.[ammoId] || 0) > 0);
+      if (!choices.length) return false;
+
+      const current = tank.reload.active ? tank.reload.ammoId : tank.loadedAmmo;
+      const currentIndex = choices.indexOf(current);
+      const nextAmmo = choices[(currentIndex + 1 + choices.length) % choices.length];
+      return tank.beginLoad(nextAmmo);
+    }
+
+    cyclePlayerEquipment() {
+      const inventory = this.player?.weaponInventory || [];
+      if (!inventory.length) return false;
+
+      for (let step = 1; step <= inventory.length; step += 1) {
+        const nextSlot = (this.player.activeSlot + step) % inventory.length;
+        if (this.player.setEquipmentSlot(nextSlot)) {
+          this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
+          return true;
+        }
+      }
+      return false;
+    }
+
     clearTankFireOrder(tank) {
       if (tank) tank.fireOrder = null;
     }

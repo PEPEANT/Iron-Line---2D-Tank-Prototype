@@ -21,6 +21,7 @@
         orientationOverlay: document.getElementById("orientationOverlay"),
         moveStick: document.getElementById("moveStick"),
         aimStick: document.getElementById("aimStick"),
+        mobileWeaponButton: null,
         mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyE']"),
         mobileKeyButtons: Array.from(document.querySelectorAll("[data-mobile-key]")),
         mobileMouseButtons: Array.from(document.querySelectorAll("[data-mobile-mouse]")),
@@ -52,6 +53,8 @@
           smoke: document.getElementById("ammo-smoke")
         }
       };
+
+      this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
 
       this.nodes.classButtons.forEach((button) => {
         button.addEventListener("click", () => {
@@ -100,6 +103,21 @@
           game.beginDeploymentCountdown();
         }
       });
+    }
+
+    createMobileWeaponButton() {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      const icon = document.createElement("span");
+      button.type = "button";
+      button.className = "mobile-action weapon-cycle";
+      button.dataset.weapon = "WPN";
+      button.setAttribute("aria-label", "weapon switch");
+      button.append(icon);
+      controls.append(button);
+      return button;
     }
 
     toggleSettingsPanel(force = null) {
@@ -181,6 +199,27 @@
         button.addEventListener("pointerleave", release);
       };
 
+      const bindTap = (button, onTap) => {
+        if (!button) return;
+        let pointerId = null;
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          pointerId = event.pointerId;
+          button.setPointerCapture?.(pointerId);
+          button.classList.add("pressed");
+          onTap();
+        });
+        const release = (event) => {
+          if (pointerId !== null && event?.pointerId !== undefined && event.pointerId !== pointerId) return;
+          event?.preventDefault?.();
+          pointerId = null;
+          button.classList.remove("pressed");
+        };
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("pointerleave", release);
+      };
+
       this.nodes.mobileKeyButtons.forEach((button) => {
         const code = button.dataset.mobileKey;
         bindHold(
@@ -198,6 +237,8 @@
           () => IronLine.game?.input?.setVirtualMouseButton(buttonId, false)
         );
       });
+
+      bindTap(this.nodes.mobileWeaponButton, () => IronLine.game?.cycleMobileWeapon?.());
     }
 
     update(game) {
@@ -256,6 +297,39 @@
         this.nodes.mobileInteractButton.textContent = inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
         this.nodes.mobileInteractButton.setAttribute("aria-label", inTank ? "dismount" : "mount");
       }
+
+      this.updateMobileWeaponButton(game, showControls, inTank);
+    }
+
+    updateMobileWeaponButton(game, showControls, inTank) {
+      const button = this.nodes.mobileWeaponButton;
+      if (!button) return;
+      const label = inTank ? this.mobileTankWeaponLabel(game.player.inTank) : this.mobileInfantryWeaponLabel(game.player);
+      button.dataset.weapon = label;
+      button.classList.toggle("hidden", !showControls);
+      button.setAttribute("aria-label", `weapon switch ${label}`);
+    }
+
+    mobileTankWeaponLabel(tank) {
+      const ammoId = tank?.reload?.active ? tank.reload.ammoId : tank?.loadedAmmo;
+      if (ammoId === "he") return "HE";
+      return "AP";
+    }
+
+    mobileInfantryWeaponLabel(player) {
+      const weapon = player?.getWeapon?.();
+      const labels = {
+        rifle: "RF",
+        smg: "SMG",
+        lmg: "LMG",
+        machinegun: "MG",
+        pistol: "PST",
+        sniper: "SR",
+        grenade: "GR",
+        rpg: "RPG",
+        repairKit: "FIX"
+      };
+      return labels[weapon?.id] || "WPN";
     }
 
     updateTankWeapons(tank) {
