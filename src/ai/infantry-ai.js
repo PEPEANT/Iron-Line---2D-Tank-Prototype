@@ -20,7 +20,11 @@
     repairHoldDistance: 58,
     scoutSightRange: 1080,
     scoutReportRange: 1220,
-    scoutReportTtl: 3.8
+    scoutReportTtl: 3.8,
+    scoutWatchMin: 2.2,
+    scoutWatchMax: 4.8,
+    scoutPatrolMinDistance: 54,
+    scoutPatrolMaxDistance: 118
   };
 
   class InfantryAI {
@@ -37,6 +41,10 @@
       this.fireCooldown = Math.random() * 0.35;
       this.coverTimer = 0;
       this.coverTarget = null;
+      this.reconPostId = "";
+      this.reconWatchTimer = 0;
+      this.reconPatrolTarget = null;
+      this.reconPatrolStep = 0;
       this.target = null;
       this.moveHeading = unit.angle;
       this.seed = this.hash(unit.callSign);
@@ -322,6 +330,7 @@
     }
 
     updateReconOrder(dt, order, contact, tankThreat, beforeX, beforeY) {
+      this.refreshReconPost(order);
       const threat = this.closestReconThreat(contact, tankThreat);
       if (threat?.tooClose) {
         const coverTarget = this.resolveCoverTarget(threat.target);
@@ -372,10 +381,26 @@
 
       const distanceToPost = distXY(this.unit.x, this.unit.y, order.point.x, order.point.y);
       if (distanceToPost <= (order.point.radius || 130)) {
+        const patrolTarget = this.activeReconPatrolTarget(order);
+        if (patrolTarget) {
+          this.state = "recon-patrol";
+          this.moveTo(dt, patrolTarget);
+          this.recordMovement(dt, beforeX, beforeY, patrolTarget);
+          this.updateDebug(patrolTarget);
+          return;
+        }
+
         this.state = "recon-watch";
+        this.reconWatchTimer -= dt;
         this.unit.speed = approach(this.unit.speed, 0, 220 * dt);
-        this.faceContact(contact || tankThreat, dt);
-        this.updateDebug(null);
+        this.scanReconPost(dt, order, tankThreat);
+
+        if (this.reconWatchTimer <= 0) {
+          this.reconPatrolTarget = this.pickReconPatrolTarget(order);
+          this.reconWatchTimer = this.nextReconWatchDuration();
+        }
+
+        this.updateDebug(this.reconPatrolTarget);
         return;
       }
 
@@ -384,6 +409,70 @@
       this.moveTo(dt, moveTarget);
       this.recordMovement(dt, beforeX, beforeY, moveTarget);
       this.updateDebug(moveTarget);
+    }
+
+    refreshReconPost(order) {
+      const nextPostId = `${order?.objectiveName || ""}:${Math.round(order?.point?.x || 0)}:${Math.round(order?.point?.y || 0)}`;
+      if (this.reconPostId === nextPostId) return;
+      this.reconPostId = nextPostId;
+      this.reconPatrolTarget = null;
+      this.reconWatchTimer = this.nextReconWatchDuration();
+      this.reconPatrolStep = 0;
+    }
+
+    nextReconWatchDuration() {
+      const span = INFANTRY_CONFIG.scoutWatchMax - INFANTRY_CONFIG.scoutWatchMin;
+      return INFANTRY_CONFIG.scoutWatchMin + Math.random() * Math.max(0.1, span);
+    }
+
+    activeReconPatrolTarget(order) {
+      const target = this.reconPatrolTarget;
+      if (!target) return null;
+      const reachedTarget = distXY(this.unit.x, this.unit.y, target.x, target.y) <= (target.stopDistance || 18) + 6;
+      const leftPost = distXY(this.unit.x, this.unit.y, order.point.x, order.point.y) > (order.point.radius || 130) + 56;
+      if (reachedTarget || leftPost || !this.pointPassable(target.x, target.y, this.unit.radius + 3)) {
+        this.reconPatrolTarget = null;
+        this.reconWatchTimer = this.nextReconWatchDuration();
+        return null;
+      }
+      return target;
+    }
+
+    pickReconPatrolTarget(order) {
+      const radius = order.point.radius || 130;
+      const baseAngle = this.seed * 0.31 + this.reconPatrolStep * 1.17 + (this.game.matchTime || 0) * 0.08;
+      this.reconPatrolStep += 1;
+
+      for (let step = 0; step < 14; step += 1) {
+        const angle = baseAngle + step * Math.PI * 2 / 14;
+        const distance = INFANTRY_CONFIG.scoutPatrolMinDistance +
+          (step % 4) / 3 * (INFANTRY_CONFIG.scoutPatrolMaxDistance - INFANTRY_CONFIG.scoutPatrolMinDistance);
+        const candidate = {
+          x: order.point.x + Math.cos(angle) * Math.min(distance, radius - 18),
+          y: order.point.y + Math.sin(angle) * Math.min(distance, radius - 18),
+          stopDistance: 16,
+          final: false,
+          reconPatrol: true
+        };
+        if (distXY(this.unit.x, this.unit.y, candidate.x, candidate.y) < INFANTRY_CONFIG.scoutPatrolMinDistance) continue;
+        if (!this.pointPassable(candidate.x, candidate.y, this.unit.radius + 3)) continue;
+        if (!this.canMoveDirect(candidate.x, candidate.y, 18)) continue;
+        return candidate;
+      }
+
+      return null;
+    }
+
+    scanReconPost(dt, order, tankThreat) {
+      if (tankThreat) {
+        this.faceContact(tankThreat);
+        return;
+      }
+
+      const outwardAngle = angleTo(order.point.x, order.point.y, this.unit.x, this.unit.y);
+      const sweep = Math.sin(((this.game.matchTime || 0) + this.seed * 0.13) * 0.9) * 0.72;
+      this.unit.angle = rotateTowards(this.unit.angle, outwardAngle + sweep, 1.55 * dt);
+      this.moveHeading = this.unit.angle;
     }
 
     reconEgressTarget(order) {

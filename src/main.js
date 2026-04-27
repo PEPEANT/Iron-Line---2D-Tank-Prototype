@@ -21,7 +21,10 @@
   class Game {
     constructor() {
       this.canvas = document.getElementById("game");
-      this.canvas.addEventListener("pointerdown", () => this.canvas.focus());
+      this.canvas.addEventListener("pointerdown", () => {
+        this.canvas.focus();
+        this.requestMobileFullscreen();
+      });
       this.canvas.focus();
       this.world = IronLine.map01;
       this.camera = {
@@ -36,6 +39,7 @@
 
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
+      this.fullscreenRequestPending = false;
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
@@ -110,8 +114,47 @@
       const mobileLike = window.matchMedia?.("(pointer: coarse)")?.matches ||
         (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0);
       return {
+        mobileLike: Boolean(mobileLike),
         mobileControls: Boolean(mobileLike)
       };
+    }
+
+    requestMobileFullscreen() {
+      const wantsFullscreen = this.settings?.mobileLike || this.settings?.mobileControls;
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      if (!wantsFullscreen || fullscreenElement || this.fullscreenRequestPending) return false;
+
+      const target = document.documentElement;
+      const requestFullscreen = target.requestFullscreen || target.webkitRequestFullscreen;
+      if (!requestFullscreen) return false;
+
+      const lockLandscape = () => {
+        const orientation = global.screen?.orientation;
+        if (!orientation?.lock) return;
+        orientation.lock("landscape").catch(() => {});
+      };
+
+      try {
+        this.fullscreenRequestPending = true;
+        const result = requestFullscreen.call(target);
+        if (result && typeof result.then === "function") {
+          result
+            .then(() => {
+              this.fullscreenRequestPending = false;
+              lockLandscape();
+            })
+            .catch(() => {
+              this.fullscreenRequestPending = false;
+            });
+        } else {
+          this.fullscreenRequestPending = false;
+          lockLandscape();
+        }
+        return true;
+      } catch (_error) {
+        this.fullscreenRequestPending = false;
+        return false;
+      }
     }
 
     setDebugOption(key, enabled) {
@@ -458,6 +501,7 @@
 
     beginDeploymentCountdown() {
       if (this.matchStarted) return;
+      this.requestMobileFullscreen();
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
       this.countdownStarted = true;

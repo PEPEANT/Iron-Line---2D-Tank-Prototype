@@ -18,8 +18,10 @@ html,
 body {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #132118;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -30,9 +32,11 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: block;
   background: #17281c;
   outline: none;
+  touch-action: none;
 }
 
 .settings-button {
@@ -311,7 +315,11 @@ body {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 28px;
+  padding:
+    max(28px, env(safe-area-inset-top))
+    max(28px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(28px, env(safe-area-inset-left));
   background: radial-gradient(circle at 48% 40%, rgba(24, 42, 30, 0.64), rgba(6, 10, 8, 0.92));
   pointer-events: auto;
 }
@@ -321,10 +329,12 @@ body {
 }
 
 .deployment-card {
-  width: min(1120px, 96vw);
-  height: min(700px, 88vh);
+  width: min(1120px, 100%);
+  height: min(700px, calc(100vh - 56px));
+  height: min(700px, calc(100dvh - 56px));
   min-height: 0;
-  max-height: 94vh;
+  max-height: calc(100vh - 56px);
+  max-height: calc(100dvh - 56px);
   display: grid;
   grid-template-columns: minmax(420px, 1fr) minmax(300px, 360px);
   overflow: hidden;
@@ -335,7 +345,7 @@ body {
 }
 
 .deployment-map-wrap {
-  min-height: 520px;
+  min-height: 0;
   padding: 18px;
   border-right: 1px solid rgba(237, 244, 239, 0.16);
 }
@@ -344,7 +354,7 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 500px;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(237, 244, 239, 0.14);
   border-radius: 7px;
@@ -890,29 +900,43 @@ body {
 
 @media (max-width: 720px) {
   .deployment-screen {
-    padding: 12px;
+    align-items: stretch;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
   }
 
   .deployment-card {
-    width: 96vw;
-    max-height: 94vh;
+    width: 100%;
+    height: calc(100vh - 20px);
+    height: calc(100dvh - 20px);
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
     grid-template-columns: 1fr;
     overflow-y: auto;
   }
 
   .deployment-map-wrap {
-    min-height: 300px;
+    height: clamp(220px, 36vh, 320px);
+    height: clamp(220px, 36dvh, 320px);
+    min-height: 0;
     padding: 12px;
     border-right: 0;
     border-bottom: 1px solid rgba(237, 244, 239, 0.16);
   }
 
   .deployment-map {
-    min-height: 300px;
+    min-height: 0;
   }
 
   .deployment-panel {
     padding: 18px;
+  }
+
+  .deployment-start {
+    position: static;
   }
 
   .deployment-mode-row,
@@ -975,5 +999,180 @@ body {
 
   .ammo-row {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .deployment-screen {
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .deployment-card {
+    width: 100%;
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    grid-template-columns: minmax(300px, 1fr) minmax(280px, 0.78fr);
+    overflow: hidden;
+  }
+
+  .deployment-map-wrap {
+    height: auto;
+    min-height: 0;
+    padding: 10px;
+    border-right: 1px solid rgba(237, 244, 239, 0.16);
+    border-bottom: 0;
+  }
+
+  .deployment-map {
+    min-height: 0;
+  }
+
+  .deployment-panel {
+    gap: 5px;
+    padding: 10px;
+  }
+
+  .deployment-kicker {
+    font-size: 10px;
+  }
+
+  .deployment-panel h1 {
+    margin-top: 2px;
+    font-size: 23px;
+  }
+
+  .deployment-mode-section {
+    gap: 4px;
+  }
+
+  .deployment-section-label {
+    font-size: 10px;
+  }
+
+  .deployment-mode-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .deployment-class-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .deployment-class,
+  .deployment-mode {
+    min-height: 42px;
+    padding: 7px 9px;
+  }
+
+  .deployment-class strong,
+  .deployment-mode strong {
+    font-size: 14px;
+  }
+
+  .deployment-class span,
+  .deployment-mode span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  .deployment-settings {
+    grid-template-columns: repeat(5, minmax(56px, 1fr));
+    gap: 5px;
+  }
+
+  .deployment-setting span {
+    font-size: 8px;
+  }
+
+  .deployment-setting input,
+  .deployment-setting select {
+    min-height: 28px;
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+
+  .deployment-start {
+    position: static;
+    min-height: 38px;
+  }
+
+  .map-marker {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .map-marker.unit-blue,
+  .map-marker.unit-red {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-height: 480px) and (max-width: 720px) and (orientation: landscape) {
+  .deployment-card {
+    grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.86fr);
+  }
+
+  .deployment-map-wrap {
+    padding: 8px;
+  }
+
+  .deployment-panel {
+    gap: 4px;
+    padding: 8px;
+  }
+
+  .deployment-kicker {
+    display: none;
+  }
+
+  .deployment-panel h1 {
+    margin: 0;
+    font-size: 20px;
+  }
+
+  .deployment-mode,
+  .deployment-class {
+    min-height: 36px;
+    padding: 5px 7px;
+  }
+
+  .deployment-mode strong,
+  .deployment-class strong {
+    font-size: 13px;
+  }
+
+  .deployment-mode span,
+  .deployment-class span {
+    font-size: 9px;
+  }
+
+  .deployment-settings {
+    gap: 4px;
+  }
+
+  .deployment-setting span {
+    display: none;
+  }
+
+  .deployment-setting input,
+  .deployment-setting select {
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .deployment-start {
+    min-height: 34px;
   }
 }

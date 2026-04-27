@@ -72,6 +72,7 @@
     maxPursuitFromOrder: 720,
     blockedShotRepositionRange: 1450,
     retreatHealthRatio: 0.34,
+    reconReassignInterval: 36,
     desiredRange: {
       ap: 980,
       he: 760,

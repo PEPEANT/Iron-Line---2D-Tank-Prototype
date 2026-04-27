@@ -179,9 +179,10 @@
       const points = this.reconPoints();
       if (!points.length) return;
 
+      const rotation = Math.floor((this.game.matchTime || 0) / (AI_CONFIG.reconReassignInterval || 36));
       scouts.forEach((unit, index) => {
         const seed = String(unit.callSign || index).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-        const point = points[(index + seed) % points.length];
+        const point = points[(index + seed + rotation) % points.length];
         this.infantryAssignments.set(unit, this.createOrder(point, {
           role: "recon",
           stance: "observe",
