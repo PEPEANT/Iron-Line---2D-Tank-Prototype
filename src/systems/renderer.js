@@ -835,10 +835,11 @@
     drawMinimap(game) {
       const ctx = this.ctx;
       const camera = this.camera;
-      const mapW = 178;
-      const mapH = 120;
-      const x = camera.width - mapW - 16;
-      const y = camera.height - mapH - 18;
+      const mobileLayout = Boolean(game.settings?.mobileControls && camera.width > camera.height && !game.deploymentOpen);
+      const mapW = mobileLayout ? 150 : 178;
+      const mapH = mobileLayout ? 94 : 120;
+      const x = mobileLayout ? 14 : camera.width - mapW - 16;
+      const y = mobileLayout ? 14 : camera.height - mapH - 18;
       const sx = mapW / game.world.width;
       const sy = mapH / game.world.height;
 

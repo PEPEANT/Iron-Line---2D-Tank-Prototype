@@ -604,13 +604,27 @@
         return;
       }
 
+      this.mobileAutoLoadTank(tank);
+
       const turnInput = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
       const throttle = this.input.axis("KeyS", "ArrowDown", "KeyW", "ArrowUp");
+      const mobileStickX = this.input.virtual.axisX || 0;
+      const mobileStickY = this.input.virtual.axisY || 0;
+      const mobileDriveAmount = Math.min(1, Math.hypot(mobileStickX, mobileStickY));
+      const useMobileDriveAssist = Boolean(this.settings?.mobileControls && this.input.virtual.enabled && mobileDriveAmount > 0.16);
 
-      tank.angle = normalizeAngle(tank.angle + turnInput * tank.turnRate * dt);
-      const targetSpeed = throttle * tank.maxSpeed;
-      tank.speed = approach(tank.speed, targetSpeed, tank.accel * dt);
-      if (Math.abs(throttle) < 0.01) tank.speed = approach(tank.speed, 0, tank.accel * 0.72 * dt);
+      if (useMobileDriveAssist) {
+        const desiredAngle = Math.atan2(mobileStickY, mobileStickX);
+        tank.angle = rotateTowards(tank.angle, desiredAngle, tank.turnRate * 1.25 * dt);
+        const alignment = (Math.cos(normalizeAngle(desiredAngle - tank.angle)) + 1) / 2;
+        const targetSpeed = tank.maxSpeed * mobileDriveAmount * (0.48 + alignment * 0.52);
+        tank.speed = approach(tank.speed, targetSpeed, tank.accel * dt);
+      } else {
+        tank.angle = normalizeAngle(tank.angle + turnInput * tank.turnRate * dt);
+        const targetSpeed = throttle * tank.maxSpeed;
+        tank.speed = approach(tank.speed, targetSpeed, tank.accel * dt);
+        if (Math.abs(throttle) < 0.01) tank.speed = approach(tank.speed, 0, tank.accel * 0.72 * dt);
+      }
       tank.speed *= 1 - 0.18 * dt;
 
       tryMoveCircle(this, tank, Math.cos(tank.angle) * tank.speed, Math.sin(tank.angle) * tank.speed, tank.radius, dt);
@@ -646,6 +660,12 @@
       }
 
       this.updateHeFireOrder(tank, dt);
+    }
+
+    mobileAutoLoadTank(tank) {
+      if (!this.settings?.mobileControls || !tank || tank.loadedAmmo || tank.reload.active) return false;
+      const ammoId = tank.ammo.ap > 0 ? "ap" : tank.ammo.he > 0 ? "he" : null;
+      return ammoId ? tank.beginLoad(ammoId) : false;
     }
 
     clearTankFireOrder(tank) {
@@ -1028,16 +1048,20 @@
         return;
       }
 
-      const candidates = this.tanks
-        .filter((tank) => tank.alive && tank.isPlayerTank && distXY(this.player.x, this.player.y, tank.x, tank.y) < 74)
-        .sort((a, b) => distXY(this.player.x, this.player.y, a.x, a.y) - distXY(this.player.x, this.player.y, b.x, b.y));
-
-      if (candidates.length > 0) {
-        this.player.inTank = candidates[0];
-        candidates[0].playerControlled = true;
-        this.player.x = candidates[0].x;
-        this.player.y = candidates[0].y;
+      const tank = this.findMountablePlayerTank();
+      if (tank) {
+        this.player.inTank = tank;
+        tank.playerControlled = true;
+        this.player.x = tank.x;
+        this.player.y = tank.y;
       }
+    }
+
+    findMountablePlayerTank(maxDistance = 82) {
+      if (this.player.inTank) return this.player.inTank;
+      return this.tanks
+        .filter((tank) => tank.alive && tank.isPlayerTank && distXY(this.player.x, this.player.y, tank.x, tank.y) < maxDistance)
+        .sort((a, b) => distXY(this.player.x, this.player.y, a.x, a.y) - distXY(this.player.x, this.player.y, b.x, b.y))[0] || null;
     }
 
     dismountTank(tank) {

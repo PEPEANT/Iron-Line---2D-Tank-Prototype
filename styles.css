@@ -203,8 +203,7 @@ body {
 }
 
 .mobile-stick,
-.mobile-action,
-.mobile-ammo-row button {
+.mobile-action {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -213,8 +212,8 @@ body {
 
 .mobile-stick {
   position: fixed;
-  width: 132px;
-  height: 132px;
+  width: 138px;
+  height: 138px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(237, 244, 239, 0.22);
@@ -225,88 +224,184 @@ body {
 }
 
 .mobile-stick span {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: rgba(237, 244, 239, 0.84);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 
 .move-stick {
-  left: 34px;
-  bottom: 34px;
+  left: max(28px, env(safe-area-inset-left));
+  bottom: max(28px, env(safe-area-inset-bottom));
 }
 
 .mobile-aim-zone {
   position: fixed;
-  right: clamp(176px, 20vw, 240px);
-  bottom: 22px;
-  display: grid;
-  grid-template-columns: 120px 116px;
-  grid-template-rows: auto auto;
-  gap: 10px;
-  align-items: end;
+  right: max(28px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: 240px;
+  height: 194px;
+  display: block;
   pointer-events: none;
 }
 
 .aim-stick {
-  position: relative;
-  right: auto;
-  bottom: auto;
-  width: 120px;
-  height: 120px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 138px;
+  height: 138px;
 }
 
 .aim-stick span {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   background: rgba(107, 188, 255, 0.88);
 }
 
 .mobile-action-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 7px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.mobile-action,
-.mobile-ammo-row button {
+.mobile-action {
+  position: absolute;
+  display: grid;
+  place-items: center;
   border: 1px solid rgba(237, 244, 239, 0.18);
   border-radius: 50%;
   background: rgba(8, 14, 12, 0.72);
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
+  font-size: 0;
   font-weight: 950;
   cursor: pointer;
   backdrop-filter: blur(8px);
 }
 
 .mobile-action {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
 }
 
 .mobile-action.fire {
-  width: 76px;
-  height: 76px;
+  right: 30px;
+  bottom: 138px;
+  width: 78px;
+  height: 78px;
   border-color: rgba(255, 209, 102, 0.66);
   background: rgba(255, 209, 102, 0.22);
 }
 
-.mobile-ammo-row {
-  grid-column: 1 / span 2;
-  display: grid;
-  grid-template-columns: repeat(3, 72px);
-  justify-content: end;
-  gap: 8px;
+.mobile-action[data-mobile-mouse="2"] {
+  right: 142px;
+  bottom: 48px;
+}
+
+.mobile-action span,
+.mobile-action::before,
+.mobile-action::after {
   pointer-events: none;
 }
 
-.mobile-ammo-row button {
-  width: 72px;
-  height: 44px;
+.mobile-action.fire span {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(255, 241, 190, 0.96);
+  border-radius: 50%;
+}
+
+.mobile-action.fire::before {
+  content: "";
+  position: absolute;
+  width: 27px;
+  height: 27px;
+  border: 3px solid rgba(255, 241, 190, 0.96);
+  border-radius: 50%;
+}
+
+.mobile-action.fire::after {
+  content: "";
+  position: absolute;
+  width: 50px;
+  height: 4px;
   border-radius: 999px;
+  background: rgba(255, 241, 190, 0.92);
+  box-shadow: 0 0 0 0 rgba(255, 241, 190, 0), 0 -16px 0 -1px rgba(255, 241, 190, 0), 0 16px 0 -1px rgba(255, 241, 190, 0);
+}
+
+.mobile-action.fire span::before,
+.mobile-action.fire span::after,
+.mobile-action[data-mobile-mouse="2"]::before,
+.mobile-action[data-mobile-mouse="2"]::after {
+  content: "";
+  position: absolute;
+  display: block;
+}
+
+.mobile-action.fire span::before {
+  left: 50%;
+  top: -12px;
+  width: 4px;
+  height: 50px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 241, 190, 0.92);
+}
+
+.mobile-action.fire span::after {
+  left: -12px;
+  top: 50%;
+  width: 50px;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(255, 241, 190, 0.92);
+}
+
+.mobile-action[data-mobile-mouse="2"]::before {
+  width: 31px;
+  height: 31px;
+  border: 3px solid rgba(237, 244, 239, 0.9);
+  border-radius: 50%;
+}
+
+.mobile-action[data-mobile-mouse="2"]::after {
+  width: 46px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(237, 244, 239, 0.82);
+  box-shadow: 0 15px 0 rgba(237, 244, 239, 0), 0 -15px 0 rgba(237, 244, 239, 0);
+}
+
+.mobile-action[data-mobile-key="KeyE"] {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: max(36px, env(safe-area-inset-bottom));
+  width: 76px;
+  height: 76px;
+  transform: translateX(-50%);
+  border-color: rgba(120, 214, 140, 0.68);
+  background: rgba(12, 20, 16, 0.82);
+  color: #edf4ef;
+  font-size: 15px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(120, 214, 140, 0.18);
+}
+
+.mobile-controls.can-interact .mobile-action[data-mobile-key="KeyE"] {
+  display: grid;
+}
+
+.mobile-ammo-row {
+  display: none;
+}
+
+.mobile-ammo-row button {
+  display: none;
 }
 
 .deployment-screen {
@@ -896,6 +991,32 @@ body {
 
 .ammo-slot.empty {
   opacity: 0.45;
+}
+
+body.mobile-controls-active .hud-bottom {
+  display: none;
+}
+
+body.mobile-controls-active .hud-top {
+  top: 10px;
+  width: auto;
+}
+
+body.mobile-controls-active .objective-strip {
+  min-height: 42px;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(8, 14, 12, 0.72);
+}
+
+body.mobile-controls-active .objective-node {
+  width: 42px;
+  height: 32px;
+}
+
+body.mobile-controls-active .objective-node strong {
+  font-size: 16px;
 }
 
 @media (max-width: 720px) {

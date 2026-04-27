@@ -172,9 +172,17 @@
     axis(negativeA, negativeB, positiveA, positiveB) {
       const keyAxis = (this.keyDown(positiveA) || this.keyDown(positiveB) ? 1 : 0) -
         (this.keyDown(negativeA) || this.keyDown(negativeB) ? 1 : 0);
-      const virtualAxis = negativeA === "KeyW" || negativeA === "ArrowUp"
-        ? this.virtual.axisY
-        : this.virtual.axisX;
+      const positiveCodes = new Set([positiveA, positiveB]);
+      let virtualAxis = 0;
+      if (positiveCodes.has("KeyW") || positiveCodes.has("ArrowUp")) {
+        virtualAxis = -this.virtual.axisY;
+      } else if (positiveCodes.has("KeyS") || positiveCodes.has("ArrowDown")) {
+        virtualAxis = this.virtual.axisY;
+      } else if (positiveCodes.has("KeyD") || positiveCodes.has("ArrowRight")) {
+        virtualAxis = this.virtual.axisX;
+      } else if (positiveCodes.has("KeyA") || positiveCodes.has("ArrowLeft")) {
+        virtualAxis = -this.virtual.axisX;
+      }
       return Math.max(-1, Math.min(1, keyAxis + virtualAxis));
     }
 

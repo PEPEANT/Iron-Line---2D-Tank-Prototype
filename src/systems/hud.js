@@ -21,6 +21,7 @@
         orientationOverlay: document.getElementById("orientationOverlay"),
         moveStick: document.getElementById("moveStick"),
         aimStick: document.getElementById("aimStick"),
+        mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyE']"),
         mobileKeyButtons: Array.from(document.querySelectorAll("[data-mobile-key]")),
         mobileMouseButtons: Array.from(document.querySelectorAll("[data-mobile-mouse]")),
         deploymentScreen: document.getElementById("deploymentScreen"),
@@ -213,7 +214,7 @@
       }
 
       const inTank = Boolean(game.player.inTank);
-      ui.bottomHud?.classList.toggle("hidden", !inTank);
+      ui.bottomHud?.classList.toggle("hidden", !inTank || this.mobileControlsVisible);
       if (!inTank) return;
 
       this.updateTankWeapons(game.player.inTank);
@@ -239,9 +240,22 @@
       const enabled = Boolean(game.settings?.mobileControls);
       const portrait = window.innerHeight > window.innerWidth;
       const showControls = enabled && !portrait && !game.deploymentOpen && !game.result;
+      const inTank = Boolean(game.player?.inTank);
+      const canInteract = Boolean(inTank || game.findMountablePlayerTank?.());
+
+      this.mobileControlsVisible = showControls;
 
       this.nodes.orientationOverlay?.classList.toggle("visible", enabled && portrait);
       this.nodes.mobileControls?.classList.toggle("hidden", !showControls);
+      this.nodes.mobileControls?.classList.toggle("in-tank", inTank);
+      this.nodes.mobileControls?.classList.toggle("can-interact", canInteract);
+      document.body.classList.toggle("mobile-controls-active", showControls);
+      document.body.classList.toggle("mobile-player-in-tank", showControls && inTank);
+
+      if (this.nodes.mobileInteractButton) {
+        this.nodes.mobileInteractButton.textContent = inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
+        this.nodes.mobileInteractButton.setAttribute("aria-label", inTank ? "dismount" : "mount");
+      }
     }
 
     updateTankWeapons(tank) {
