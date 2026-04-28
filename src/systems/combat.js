@@ -5,6 +5,95 @@
   const { TEAM, INFANTRY_WEAPONS } = IronLine.constants;
   const { clamp, distXY, circleRectCollision, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
 
+  function vehicleTargets(game) {
+    return [...(game.tanks || []), ...(game.humvees || [])];
+  }
+
+  function pushLimited(list, item, max = 180) {
+    if (!list) return;
+    if (list.length > max) list.shift();
+    list.push(item);
+  }
+
+  function emitSmallArmsImpact(game, x, y, angle, weapon, options = {}) {
+    if (!game?.effects) return;
+
+    const hard = Boolean(options.hard || options.tank);
+    const heavy = weapon?.id === "machinegun" || weapon?.id === "lmg" || weapon?.id === "sniper";
+    const dustPuffs = game.effects.dustPuffs || (game.effects.dustPuffs = []);
+    const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
+    const emitDust = (scale, alpha, color, drift = 1) => {
+      const life = 0.12 + Math.random() * 0.09;
+      pushLimited(dustPuffs, {
+        x: x + (Math.random() - 0.5) * 3,
+        y: y + (Math.random() - 0.5) * 3,
+        vx: -Math.cos(angle) * (10 + Math.random() * 20) * drift + (Math.random() - 0.5) * 18,
+        vy: -Math.sin(angle) * (10 + Math.random() * 20) * drift + (Math.random() - 0.5) * 18,
+        angle: angle + (Math.random() - 0.5) * 1.1,
+        radius: Math.max(1.2, scale * (1.2 + Math.random() * 0.7)),
+        maxRadius: scale * (5.5 + Math.random() * 4.5),
+        life,
+        maxLife: life,
+        alpha,
+        color
+      }, 190);
+    };
+
+    if (hard) {
+      const sparkCount = heavy ? 5 : 3;
+      for (let i = 0; i < sparkCount; i += 1) {
+        const spread = Math.PI + angle + (Math.random() - 0.5) * 1.35;
+        const speed = 100 + Math.random() * (heavy ? 190 : 120);
+        const life = 0.055 + Math.random() * 0.07;
+        pushLimited(blastSparks, {
+          x: x + (Math.random() - 0.5) * 2,
+          y: y + (Math.random() - 0.5) * 2,
+          vx: Math.cos(spread) * speed,
+          vy: Math.sin(spread) * speed,
+          length: 3 + Math.random() * (heavy ? 7 : 4),
+          life,
+          maxLife: life,
+          color: options.tank ? "rgba(255, 222, 146, 0.92)" : "rgba(255, 205, 125, 0.78)",
+          width: options.tank ? 1.25 : 0.95,
+          alpha: options.tank ? 1 : 0.82
+        }, 220);
+      }
+      emitDust(heavy ? 1.35 : 1.05, options.tank ? 0.13 : 0.18, options.tank ? "#b8b9ad" : "#a8ada2", 0.55);
+
+      const explosions = game.effects.explosions || (game.effects.explosions = []);
+      pushLimited(explosions, {
+        x,
+        y,
+        radius: 1.7,
+        maxRadius: heavy ? 9 : 6,
+        life: 0.065,
+        maxLife: 0.065,
+        color: "rgba(255, 236, 170, 0.45)"
+      }, 180);
+      return;
+    }
+
+    emitDust(heavy ? 1.65 : 1.25, heavy ? 0.18 : 0.12, "#cbb987", 1);
+    if (heavy || Math.random() < 0.42) emitDust(heavy ? 1.15 : 0.9, heavy ? 0.12 : 0.08, "#8e8262", 0.72);
+    if (heavy && Math.random() < 0.55) {
+      const chipAngle = Math.PI + angle + (Math.random() - 0.5) * 1.8;
+      const speed = 45 + Math.random() * 85;
+      const life = 0.08 + Math.random() * 0.06;
+      pushLimited(blastSparks, {
+        x,
+        y,
+        vx: Math.cos(chipAngle) * speed,
+        vy: Math.sin(chipAngle) * speed,
+        length: 2.2 + Math.random() * 3.2,
+        life,
+        maxLife: life,
+        color: "rgba(184, 157, 103, 0.54)",
+        width: 0.65,
+        alpha: 0.68
+      }, 220);
+    }
+  }
+
   function fireRifle(game, shooter, target, options = {}) {
     if (shooter.alive === false || !target || target.alive === false || target.hp <= 0) return false;
     if (target === game.player && game.isPlayerInSafeZone?.()) return false;
@@ -20,15 +109,17 @@
     const minAccuracy = options.minAccuracy ?? 0.22;
     const maxAccuracy = options.maxAccuracy ?? 0.86;
     const hitChance = clamp(baseAccuracy - distance / range * accuracyFalloff + (options.accuracyBonus || 0), minAccuracy, maxAccuracy);
-    const muzzleDistance = shooter.radius + 8;
-    const startX = shooter.x + Math.cos(shooter.angle) * muzzleDistance;
-    const startY = shooter.y + Math.sin(shooter.angle) * muzzleDistance;
+    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
+    const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const hit = Math.random() < hitChance;
     const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34);
     const endX = hit ? target.x : startX + Math.cos(missAngle) * Math.min(range, distance + 80);
     const endY = hit ? target.y : startY + Math.sin(missAngle) * Math.min(range, distance + 80);
+    const impactAngle = hit ? Math.atan2(endY - startY, endX - startX) : missAngle;
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
+    if (tracers.length > 180) tracers.shift();
     tracers.push({
       x1: startX,
       y1: startY,
@@ -36,15 +127,26 @@
       y2: endY,
       life: options.tracerLife || weapon.tracerLife || 0.09,
       maxLife: options.tracerLife || weapon.tracerLife || 0.09,
-      color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.92)" : "rgba(255, 176, 171, 0.92)")
+      color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.92)" : "rgba(255, 176, 171, 0.92)"),
+      width: options.tracerWidth || weapon.visualWidth || 2,
+      length: options.tracerLength || weapon.visualLength || 18
     });
 
     applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon);
 
     if (hit) {
       const damage = options.damage || (weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin));
-      if (target.takeDamage) target.takeDamage(damage);
+      emitSmallArmsImpact(game, endX, endY, impactAngle, weapon, {
+        hard: Boolean(target.vehicleType),
+        tank: Boolean(target.vehicleType)
+      });
+      if (target.takeDamage) {
+        if (target.vehicleType) target.takeDamage(game, damage);
+        else target.takeDamage(damage);
+      }
       else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
+    } else if (Math.random() < (options.impactChance ?? 0.16)) {
+      emitSmallArmsImpact(game, endX, endY, impactAngle, weapon);
     }
 
     return true;
@@ -55,14 +157,15 @@
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
     const range = options.range || weapon.range || 560;
-    const muzzleDistance = shooter.radius + 8;
-    const startX = shooter.x + Math.cos(shooter.angle) * muzzleDistance;
-    const startY = shooter.y + Math.sin(shooter.angle) * muzzleDistance;
+    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
+    const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const aimAngle = Math.atan2(aimY - shooter.y, aimX - shooter.x);
     const shotAngle = aimAngle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.22) * 0.18;
     const impact = traceSmallArmsShot(game, shooter, startX, startY, shotAngle, range, options);
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
+    if (tracers.length > 180) tracers.shift();
     tracers.push({
       x1: startX,
       y1: startY,
@@ -70,10 +173,15 @@
       y2: impact.y,
       life: options.tracerLife || weapon.tracerLife || 0.09,
       maxLife: options.tracerLife || weapon.tracerLife || 0.09,
-      color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)")
+      color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)"),
+      width: options.tracerWidth || weapon.visualWidth || 2,
+      length: options.tracerLength || weapon.visualLength || 18
     });
 
     if (impact.tank) applySmallArmsTankHit(game, shooter, impact.tank, impact.x, impact.y, weapon, options);
+    else if (impact.blocked || Math.random() < (options.impactChance ?? 0.28)) {
+      emitSmallArmsImpact(game, impact.x, impact.y, shotAngle, weapon, { hard: impact.blocked });
+    }
     applyLineSuppression(game, shooter, startX, startY, impact.x, impact.y, weapon, options.targetTeam);
     return true;
   }
@@ -87,9 +195,9 @@
     if (distance > range) return false;
     if (!IronLine.physics.hasLineOfSight(game, shooter, tank, { padding: 3 })) return false;
 
-    const muzzleDistance = shooter.radius + 8;
-    const startX = shooter.x + Math.cos(shooter.angle) * muzzleDistance;
-    const startY = shooter.y + Math.sin(shooter.angle) * muzzleDistance;
+    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
+    const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const baseChance = weapon.id === "lmg" || weapon.id === "machinegun" ? 0.2 : 0.13;
     const hitChance = clamp(baseChance - distance / range * 0.08 + (options.accuracyBonus || 0), 0.04, 0.24);
     const hit = Math.random() < hitChance;
@@ -98,6 +206,7 @@
     const endY = hit ? tank.y + (Math.random() - 0.5) * tank.radius : startY + Math.sin(missAngle) * Math.min(range, distance + 90);
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
+    if (tracers.length > 180) tracers.shift();
     tracers.push({
       x1: startX,
       y1: startY,
@@ -105,11 +214,15 @@
       y2: endY,
       life: options.tracerLife || weapon.tracerLife || 0.09,
       maxLife: options.tracerLife || weapon.tracerLife || 0.09,
-      color: shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)"
+      color: shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)",
+      width: options.tracerWidth || weapon.visualWidth || 2,
+      length: options.tracerLength || weapon.visualLength || 18
     });
 
     if (hit) {
       applySmallArmsTankHit(game, shooter, tank, endX, endY, weapon, options);
+    } else if (Math.random() < (options.impactChance ?? 0.18)) {
+      emitSmallArmsImpact(game, endX, endY, missAngle, weapon);
     }
 
     return true;
@@ -197,7 +310,7 @@
         circleRectCollision(x, y, 2, obstacle) ||
         lineIntersectsRect(lastX, lastY, x, y, obstacle)
       ));
-      if (blocked) return { x: lastX, y: lastY };
+      if (blocked) return { x, y, blocked: true };
 
       const hitTank = findSmallArmsTankHit(game, shooter, lastX, lastY, x, y, options);
       if (hitTank) {
@@ -222,7 +335,7 @@
     const dy = y2 - y1;
     const lenSq = Math.max(1, dx * dx + dy * dy);
 
-    for (const tank of game.tanks || []) {
+    for (const tank of vehicleTargets(game)) {
       if (!tank.alive || tank === shooter) continue;
       if (options.targetTeam && tank.team !== options.targetTeam) continue;
 
@@ -251,6 +364,11 @@
     if (chipDamage > 0) {
       tank.hp = Math.max(0, tank.hp - chipDamage);
     }
+
+    emitSmallArmsImpact(game, x, y, Math.atan2(y - shooter.y, x - shooter.x), weapon, {
+      hard: true,
+      tank: true
+    });
 
     game.effects.explosions.push({
       x,
@@ -332,7 +450,8 @@
           life: 0.13,
           maxLife: 0.13,
           color: "rgba(255, 199, 120, 0.78)",
-          width: 3.2
+          width: 3.2,
+          length: 26
         });
       }
 
@@ -357,7 +476,7 @@
       }
 
       if (!hit) {
-        for (const tank of game.tanks) {
+        for (const tank of vehicleTargets(game)) {
           if (!tank.alive || tank.team === shell.team || tank === shell.owner) continue;
           const shellDistance = segmentDistanceToPoint(
             shell.previousX,
@@ -449,24 +568,7 @@
         excludeTarget: ammo.id === "rpg" ? hitTank : null,
         tankDamageScale: ammo.id === "rpg" ? 0.38 : ammo.tankDamageScale
       });
-      game.effects.explosions.push({
-        x,
-        y,
-        radius: ammo.explosionStart || (ammo.id === "rpg" ? 24 : 18),
-        maxRadius: ammo.splash,
-        life: ammo.explosionLife || 0.45,
-        maxLife: ammo.explosionLife || 0.45,
-        color: ammo.id === "rpg" ? "rgba(255, 118, 72, 0.92)" : "rgba(255, 159, 85, 0.9)"
-      });
-      game.effects.explosions.push({
-        x,
-        y,
-        radius: 16,
-        maxRadius: (ammo.splash || 80) * 0.62,
-        life: 0.24,
-        maxLife: 0.24,
-        color: "rgba(255, 226, 160, 0.34)"
-      });
+      emitBlastEffect(game, x, y, ammo);
       game.effects.scorchMarks.push({ x, y, radius: (ammo.scorchRadius || 34) + Math.random() * 18, alpha: ammo.id === "he" ? 0.3 : 0.22 });
       return;
     }
@@ -487,8 +589,71 @@
     game.effects.scorchMarks.push({ x, y, radius: (ammo.directScorchRadius || 16) + Math.random() * 8, alpha: 0.12 });
   }
 
+  function emitBlastEffect(game, x, y, ammo) {
+    const blastRings = game.effects.blastRings || (game.effects.blastRings = []);
+    const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
+    const splash = ammo.splash || ammo.directExplosionRadius || 80;
+    const isRpg = ammo.id === "rpg";
+    const isGrenade = ammo.id === "grenade";
+    const scale = isRpg ? 0.9 : isGrenade ? 0.72 : 1;
+    const fireLife = ammo.explosionLife || (isGrenade ? 0.36 : 0.48);
+    const smokeLife = isGrenade ? 0.72 : 0.92;
+
+    blastRings.push({
+      x,
+      y,
+      radius: 8,
+      maxRadius: splash * (isRpg ? 0.62 : 0.72),
+      life: 0.18,
+      maxLife: 0.18,
+      color: "rgba(255, 238, 178, 0.72)",
+      width: isGrenade ? 4 : 6
+    });
+
+    game.effects.explosions.push({
+      x,
+      y,
+      radius: ammo.explosionStart || (isRpg ? 20 : isGrenade ? 15 : 24),
+      maxRadius: splash * (isGrenade ? 0.45 : 0.58),
+      life: fireLife,
+      maxLife: fireLife,
+      color: isRpg ? "rgba(255, 112, 52, 0.95)" : "rgba(255, 145, 58, 0.92)",
+      core: true,
+      smoke: false
+    });
+
+    game.effects.explosions.push({
+      x: x + (Math.random() - 0.5) * 10,
+      y: y + (Math.random() - 0.5) * 10,
+      radius: 18,
+      maxRadius: splash * (isGrenade ? 0.7 : 0.88),
+      life: smokeLife,
+      maxLife: smokeLife,
+      color: "rgba(70, 63, 50, 0.58)",
+      core: false,
+      smoke: true
+    });
+
+    const sparkCount = Math.round((isGrenade ? 9 : isRpg ? 13 : 16) * scale);
+    for (let i = 0; i < sparkCount; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (isGrenade ? 90 : 125) + Math.random() * (isRpg ? 170 : 210);
+      const life = 0.22 + Math.random() * 0.28;
+      blastSparks.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        length: 8 + Math.random() * 18,
+        life,
+        maxLife: life,
+        color: i % 3 === 0 ? "rgba(255, 228, 148, 0.92)" : "rgba(255, 127, 67, 0.82)"
+      });
+    }
+  }
+
   function damageRadius(game, x, y, radius, damage, team, ammo = {}) {
-    for (const tank of game.tanks) {
+    for (const tank of vehicleTargets(game)) {
       if (tank === ammo.excludeTarget) continue;
       if (!tank.alive || tank.team === team) continue;
       const d = distXY(x, y, tank.x, tank.y);
@@ -516,11 +681,67 @@
 
   function updateEffects(game, dt) {
     const { explosions, smokeClouds, scorchMarks } = game.effects;
+    const blastRings = game.effects.blastRings || (game.effects.blastRings = []);
+    const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
     const tracers = game.effects.tracers || (game.effects.tracers = []);
+    const dustPuffs = game.effects.dustPuffs || (game.effects.dustPuffs = []);
+    const trackScuffs = game.effects.trackScuffs || (game.effects.trackScuffs = []);
+    const muzzleFlashes = game.effects.muzzleFlashes || (game.effects.muzzleFlashes = []);
+    const gunSmokePuffs = game.effects.gunSmokePuffs || (game.effects.gunSmokePuffs = []);
 
     for (let i = tracers.length - 1; i >= 0; i -= 1) {
       tracers[i].life -= dt;
       if (tracers[i].life <= 0) tracers.splice(i, 1);
+    }
+
+    for (let i = muzzleFlashes.length - 1; i >= 0; i -= 1) {
+      muzzleFlashes[i].life -= dt;
+      if (muzzleFlashes[i].life <= 0) muzzleFlashes.splice(i, 1);
+    }
+
+    for (let i = blastRings.length - 1; i >= 0; i -= 1) {
+      const ring = blastRings[i];
+      ring.life -= dt;
+      const t = 1 - ring.life / ring.maxLife;
+      ring.radius = lerp(ring.radius, ring.maxRadius, Math.min(1, t * 1.4));
+      if (ring.life <= 0) blastRings.splice(i, 1);
+    }
+
+    for (let i = blastSparks.length - 1; i >= 0; i -= 1) {
+      const spark = blastSparks[i];
+      spark.life -= dt;
+      spark.x += spark.vx * dt;
+      spark.y += spark.vy * dt;
+      spark.vx *= Math.max(0, 1 - 3.2 * dt);
+      spark.vy *= Math.max(0, 1 - 3.2 * dt);
+      if (spark.life <= 0) blastSparks.splice(i, 1);
+    }
+
+    for (let i = dustPuffs.length - 1; i >= 0; i -= 1) {
+      const puff = dustPuffs[i];
+      puff.life -= dt;
+      puff.x += (puff.vx || 0) * dt;
+      puff.y += (puff.vy || 0) * dt;
+      const t = 1 - puff.life / puff.maxLife;
+      puff.radius = lerp(puff.radius, puff.maxRadius, t);
+      if (puff.life <= 0) dustPuffs.splice(i, 1);
+    }
+
+    for (let i = trackScuffs.length - 1; i >= 0; i -= 1) {
+      trackScuffs[i].life -= dt;
+      if (trackScuffs[i].life <= 0) trackScuffs.splice(i, 1);
+    }
+
+    for (let i = gunSmokePuffs.length - 1; i >= 0; i -= 1) {
+      const puff = gunSmokePuffs[i];
+      puff.life -= dt;
+      puff.x += (puff.vx || 0) * dt;
+      puff.y += (puff.vy || 0) * dt;
+      puff.vx *= Math.max(0, 1 - 1.2 * dt);
+      puff.vy *= Math.max(0, 1 - 1.2 * dt);
+      const t = 1 - puff.life / puff.maxLife;
+      puff.radius = lerp(puff.radius, puff.maxRadius, t);
+      if (puff.life <= 0) gunSmokePuffs.splice(i, 1);
     }
 
     for (let i = explosions.length - 1; i >= 0; i -= 1) {

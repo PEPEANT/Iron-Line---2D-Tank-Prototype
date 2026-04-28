@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Iron Line - 맵 편집기</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="map-editor.css">
+  </head>
+  <body>
+    <canvas id="editorCanvas" tabindex="0" aria-label="Iron Line 맵 편집기 캔버스"></canvas>
+
+    <aside class="editor-panel" aria-label="맵 편집기 컨트롤">
+      <header class="editor-head">
+        <div>
+          <span>Iron Line</span>
+          <h1>맵 편집기</h1>
+        </div>
+        <a href="index.html">게임</a>
+      </header>
+
+      <section class="control-section">
+        <div class="segmented mode-switch" role="group" aria-label="편집 대상">
+          <button type="button" class="active" data-mode="road">도로</button>
+          <button type="button" data-mode="obstacle">건물/벽</button>
+          <button type="button" data-mode="layout">배치</button>
+        </div>
+      </section>
+
+      <section class="control-section" data-panel="road">
+        <label class="field">
+          <span>도로</span>
+          <select id="roadSelect"></select>
+        </label>
+        <div class="button-row">
+          <button type="button" id="newRoadButton">새 도로</button>
+          <button type="button" id="deleteRoadButton">삭제</button>
+        </div>
+      </section>
+
+      <section class="control-section" data-panel="road">
+        <div class="segmented" role="group" aria-label="도로 편집 도구">
+          <button type="button" class="active" data-tool="move">이동</button>
+          <button type="button" data-tool="add">점 추가</button>
+          <button type="button" data-tool="delete">삭제</button>
+        </div>
+        <button type="button" id="deletePointButton">선택 점 삭제</button>
+      </section>
+
+      <section class="control-section" data-panel="road">
+        <label class="field">
+          <span>도로 폭</span>
+          <input id="roadWidthRange" type="range" min="48" max="132" step="2">
+        </label>
+        <input id="roadWidthInput" type="number" min="48" max="132" step="2">
+      </section>
+
+      <section class="control-section hidden" data-panel="obstacle">
+        <label class="field">
+          <span>건물/벽</span>
+          <select id="obstacleSelect"></select>
+        </label>
+        <label class="field">
+          <span>종류</span>
+          <select id="obstacleKindSelect">
+            <option value="building">건물</option>
+            <option value="concrete">콘크리트</option>
+            <option value="base-wall">기지 벽</option>
+          </select>
+        </label>
+        <div class="button-row">
+          <button type="button" id="newObstacleButton">새 건물</button>
+          <button type="button" id="deleteObstacleButton">삭제</button>
+        </div>
+      </section>
+
+      <section class="control-section hidden" data-panel="layout">
+        <label class="field">
+          <span>맵 폭</span>
+          <input id="worldWidthInput" type="number" min="1200" max="9000" step="40">
+        </label>
+        <label class="field">
+          <span>맵 높이</span>
+          <input id="worldHeightInput" type="number" min="1200" max="7000" step="40">
+        </label>
+        <div class="button-row">
+          <button type="button" id="expandWorld10Button">10% 확장</button>
+          <button type="button" id="expandWorld20Button">20% 확장</button>
+        </div>
+      </section>
+
+      <section class="control-section">
+        <label class="check-row">
+          <input id="snapToggle" type="checkbox" checked>
+          <span>격자에 맞춤</span>
+        </label>
+        <label class="field">
+          <span>격자 크기</span>
+          <input id="gridSizeInput" type="number" min="10" max="160" step="10" value="40">
+        </label>
+      </section>
+
+      <section class="control-section">
+        <div class="button-row">
+          <button type="button" id="fitButton">전체 보기</button>
+          <button type="button" id="focusConflictsButton">충돌 위치</button>
+        </div>
+        <div class="button-row">
+          <button type="button" id="saveDraftButton">임시 저장</button>
+          <button type="button" id="resetDraftButton">초기화</button>
+        </div>
+      </section>
+
+      <section class="control-section export-section">
+        <div class="button-row">
+          <button type="button" id="copyButton">JS 복사</button>
+          <button type="button" id="downloadButton">JS 다운로드</button>
+        </div>
+        <textarea id="exportOutput" spellcheck="false" aria-label="내보낸 맵 JavaScript"></textarea>
+      </section>
+
+      <footer class="editor-status" id="statusText"></footer>
+    </aside>
+
+    <script src="src/core/math.js"></script>
+    <script src="src/data/map01.js"></script>
+    <script src="src/data/map01-custom-layout.js"></script>
+    <script src="src/tools/map-editor.js"></script>
+  </body>
+</html>

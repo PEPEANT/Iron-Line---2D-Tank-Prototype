@@ -40,8 +40,13 @@
       this.drawCapturePoints(game);
       this.drawScorchMarks(game);
       this.drawObstacles(game);
+      this.drawDustPuffs(game);
+      this.drawTrackScuffs(game);
 
+      for (const humvee of game.humvees || []) this.drawHumvee(game, humvee);
       for (const tank of game.tanks) this.drawTank(game, tank);
+      this.drawGunSmokePuffs(game);
+      this.drawMuzzleFlashes(game);
       this.drawPlayerTankAim(game);
       for (const unit of game.infantry || []) this.drawInfantryUnit(game, unit);
       for (const crew of game.crews || []) this.drawCrewMember(game, crew);
@@ -51,6 +56,8 @@
       this.drawProjectiles(game);
       this.drawTracers(game);
       this.drawExplosions(game);
+      this.drawBlastSparks(game);
+      this.drawBlastRings(game);
       this.drawSmoke(game);
       this.drawDebugOverlay(game);
 
@@ -83,23 +90,7 @@
         ctx.fill();
       }
 
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      for (const road of world.roads) {
-        ctx.beginPath();
-        ctx.moveTo(road[0].x, road[0].y);
-        for (let i = 1; i < road.length; i += 1) ctx.lineTo(road[i].x, road[i].y);
-        ctx.strokeStyle = "rgba(111, 105, 83, 0.58)";
-        ctx.lineWidth = 84;
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(158, 151, 118, 0.22)";
-        ctx.lineWidth = 7;
-        ctx.setLineDash([28, 36]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.restore();
+      this.drawRoadNetwork(world);
 
       ctx.save();
       ctx.globalAlpha = 0.14;
@@ -118,6 +109,56 @@
         ctx.stroke();
       }
       ctx.restore();
+    }
+
+    drawRoadNetwork(world) {
+      const ctx = this.ctx;
+      const roads = world.roads || [];
+      const roadWidth = world.roadWidth || 84;
+      const junctions = collectRoadJunctions(roads);
+      const roadBody = "#64614a";
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      for (const road of roads) this.strokeRoadPath(road, "#50523d", (road.width || roadWidth) + 10);
+      for (const road of roads) this.strokeRoadPath(road, roadBody, road.width || roadWidth);
+      for (const junction of junctions) {
+        const radius = Math.max(28, roadWidth * 0.54);
+        ctx.fillStyle = roadBody;
+        ctx.beginPath();
+        ctx.arc(junction.x, junction.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const road of roads) {
+        const width = road.width || roadWidth;
+        this.strokeRoadPath(road, "rgba(211, 197, 139, 0.32)", Math.max(5, width * 0.08), [28, 36]);
+      }
+
+      for (const junction of junctions) {
+        const radius = Math.max(24, roadWidth * 0.4);
+        ctx.fillStyle = roadBody;
+        ctx.beginPath();
+        ctx.arc(junction.x, junction.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    strokeRoadPath(road, color, width, dash = null) {
+      if (!road || road.length < 2) return;
+      const ctx = this.ctx;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      if (dash) ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(road[0].x, road[0].y);
+      for (let i = 1; i < road.length; i += 1) ctx.lineTo(road[i].x, road[i].y);
+      ctx.stroke();
+      if (dash) ctx.setLineDash([]);
     }
 
     drawSafeZones(game) {
@@ -207,6 +248,84 @@
       }
     }
 
+    drawDustPuffs(game) {
+      const ctx = this.ctx;
+      const puffs = game.effects.dustPuffs || [];
+      ctx.save();
+      for (const puff of puffs) {
+        const lifePct = clamp(puff.life / puff.maxLife, 0, 1);
+        ctx.globalAlpha = lifePct * (puff.alpha || 0.18);
+        ctx.fillStyle = puff.color || "#d1c092";
+        ctx.beginPath();
+        ctx.ellipse(puff.x, puff.y, puff.radius * 1.35, puff.radius * 0.82, puff.angle || 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    drawTrackScuffs(game) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.lineCap = "round";
+      for (const mark of game.effects.trackScuffs || []) {
+        const lifePct = clamp(mark.life / mark.maxLife, 0, 1);
+        ctx.globalAlpha = lifePct * (mark.alpha || 0.1);
+        ctx.strokeStyle = "#242a25";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(mark.x1, mark.y1);
+        ctx.lineTo(mark.x2, mark.y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    drawGunSmokePuffs(game) {
+      const ctx = this.ctx;
+      const puffs = game.effects.gunSmokePuffs || [];
+      ctx.save();
+      for (const puff of puffs) {
+        const lifePct = clamp(puff.life / puff.maxLife, 0, 1);
+        ctx.globalAlpha = Math.pow(lifePct, 1.35) * (puff.alpha || 0.2);
+        ctx.fillStyle = puff.warm ? "#d7c1a0" : "#bfc5bf";
+        ctx.beginPath();
+        ctx.ellipse(puff.x, puff.y, puff.radius * 1.45, puff.radius, puff.angle || 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    drawMuzzleFlashes(game) {
+      const ctx = this.ctx;
+      for (const flash of game.effects.muzzleFlashes || []) {
+        const lifePct = clamp(flash.life / flash.maxLife, 0, 1);
+        const length = flash.length * (0.65 + lifePct * 0.35);
+        const width = flash.width * lifePct;
+
+        ctx.save();
+        ctx.translate(flash.x, flash.y);
+        ctx.rotate(flash.angle);
+        ctx.globalAlpha = lifePct;
+        ctx.fillStyle = flash.color || "rgba(255, 226, 160, 0.92)";
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(length * 0.72, -width * 0.5);
+        ctx.lineTo(length, 0);
+        ctx.lineTo(length * 0.72, width * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 248, 210, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(length * 0.46, -width * 0.22);
+        ctx.lineTo(length * 0.62, 0);
+        ctx.lineTo(length * 0.46, width * 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     drawObstacles(game) {
       const ctx = this.ctx;
       for (const obstacle of game.world.obstacles) {
@@ -235,19 +354,176 @@
       }
     }
 
+    drawHumvee(game, humvee) {
+      const ctx = this.ctx;
+      const hullColor = humvee.team === TEAM.BLUE ? "#536a5e" : "#725f51";
+      const darkColor = humvee.team === TEAM.BLUE ? "#202a25" : "#332b27";
+      const lightColor = humvee.team === TEAM.BLUE ? "#7b8e82" : "#91796a";
+      const accentColor = humvee.team === TEAM.BLUE ? "#6bbcff" : "#ff817b";
+
+      ctx.save();
+      ctx.translate(humvee.x, humvee.y);
+      if (humvee.impactShake > 0.001) {
+        const wobble = (humvee.trackPhase || 0) * 9 + (game.matchTime || 0) * 28;
+        ctx.translate(
+          Math.sin(wobble) * humvee.impactShake * 3.2,
+          Math.cos(wobble * 0.84) * humvee.impactShake * 2.6
+        );
+      }
+      ctx.rotate(humvee.angle);
+      ctx.scale(1.14, 1.14);
+
+      if (!humvee.alive) {
+        ctx.globalAlpha = 0.86;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+        ctx.beginPath();
+        ctx.ellipse(2, 7, 33, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#191a18";
+        roundRect(ctx, -31, -17, 62, 34, 5);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 120, 70, 0.16)";
+        roundRect(ctx, -18, -10, 36, 20, 4);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.48)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-22, -13);
+        ctx.lineTo(20, 12);
+        ctx.moveTo(-12, 14);
+        ctx.lineTo(25, -10);
+        ctx.stroke();
+        ctx.restore();
+        this.drawTankLabel(humvee);
+        return;
+      }
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.beginPath();
+      ctx.ellipse(2, 7, 34, 19, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = darkColor;
+      for (const x of [-22, 20]) {
+        for (const y of [-17, 17]) {
+          ctx.beginPath();
+          ctx.ellipse(x, y, 8, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = hullColor;
+      ctx.beginPath();
+      ctx.moveTo(-31, -13);
+      ctx.lineTo(14, -17);
+      ctx.lineTo(31, -8);
+      ctx.lineTo(34, 0);
+      ctx.lineTo(30, 9);
+      ctx.lineTo(14, 17);
+      ctx.lineTo(-31, 13);
+      ctx.lineTo(-35, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.beginPath();
+      ctx.moveTo(6, -14);
+      ctx.lineTo(24, -7);
+      ctx.lineTo(29, 0);
+      ctx.lineTo(23, 7);
+      ctx.lineTo(6, 14);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = lightColor;
+      roundRect(ctx, -16, -9, 17, 18, 3);
+      ctx.fill();
+      ctx.fillStyle = "rgba(14, 19, 17, 0.56)";
+      roundRect(ctx, -12, -6, 9, 12, 2);
+      ctx.fill();
+      ctx.fillStyle = accentColor;
+      roundRect(ctx, -29, -7, 4, 14, 1.5);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-22, -12);
+      ctx.lineTo(-18, 12);
+      ctx.moveTo(7, -14);
+      ctx.lineTo(7, 14);
+      ctx.stroke();
+      ctx.restore();
+
+      const mount = humvee.machineGunMountPoint?.() || { x: humvee.x, y: humvee.y };
+      const manned = humvee.hasCrew?.() ?? humvee.playerControlled;
+      ctx.save();
+      ctx.translate(mount.x, mount.y);
+      const humveeKick = humvee.machineGunKick || 0;
+      ctx.rotate((humvee.machineGunAngle ?? humvee.angle) + Math.sin((game.matchTime || 0) * 90) * humveeKick * 0.014);
+      ctx.globalAlpha = manned ? 0.94 : 0.34;
+      const kick = humveeKick * 3.5;
+      ctx.fillStyle = darkColor;
+      roundRect(ctx, -7 - kick, -4, 14, 8, 3);
+      ctx.fill();
+      ctx.fillStyle = manned ? lightColor : "rgba(214, 222, 210, 0.44)";
+      roundRect(ctx, 4 - kick, -1.5, 22, 3, 1.3);
+      ctx.fill();
+      ctx.fillStyle = "#151b18";
+      roundRect(ctx, 24 - kick, -2.8, 5, 5.6, 1.2);
+      ctx.fill();
+      ctx.restore();
+
+      this.drawTankHealth(humvee);
+      this.drawTankLabel(humvee);
+    }
+
     drawTank(game, tank) {
       const ctx = this.ctx;
+      const hullColor = tank.team === TEAM.BLUE ? "#566b60" : "#69584c";
+      const darkColor = tank.team === TEAM.BLUE ? "#27312c" : "#342c28";
+      const lightColor = tank.team === TEAM.BLUE ? "#728278" : "#867168";
+      const turretColor = tank.team === TEAM.BLUE ? "#607469" : "#736154";
+      const accentColor = tank.team === TEAM.BLUE ? "#5ca6d6" : "#c96259";
+
       ctx.save();
       ctx.translate(tank.x, tank.y);
+      if (tank.impactShake > 0.001) {
+        const wobble = (tank.trackPhase || 0) * 13 + (game.matchTime || 0) * 21;
+        ctx.translate(
+          Math.sin(wobble) * tank.impactShake * 4,
+          Math.cos(wobble * 0.83) * tank.impactShake * 3
+        );
+      }
+      if (tank.fireKick > 0.001) {
+        const kick = tank.fireKick * 6;
+        ctx.translate(-Math.cos(tank.turretAngle) * kick, -Math.sin(tank.turretAngle) * kick);
+      }
       ctx.rotate(tank.angle);
+      ctx.scale(1.22, 1.22);
 
       if (!tank.alive) {
         ctx.globalAlpha = 0.82;
-        ctx.fillStyle = "#1a1a18";
-        roundRect(ctx, -31, -21, 62, 42, 8);
+        ctx.fillStyle = "#151615";
+        roundRect(ctx, -36, -25, 72, 50, 6);
         ctx.fill();
-        ctx.fillStyle = "rgba(255, 120, 80, 0.18)";
-        roundRect(ctx, -23, -15, 46, 30, 5);
+        ctx.fillStyle = "#25231f";
+        roundRect(ctx, -29, -18, 58, 36, 5);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 120, 80, 0.16)";
+        roundRect(ctx, -18, -13, 38, 25, 5);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.38)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-28, -19);
+        ctx.lineTo(20, 18);
+        ctx.moveTo(-18, 18);
+        ctx.lineTo(32, -14);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 174, 96, 0.18)";
+        ctx.beginPath();
+        ctx.arc(2, -2, 15 + Math.sin((tank.wreckTimer || 0) * 2.8) * 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
         this.drawTankLabel(tank);
@@ -256,59 +532,241 @@
 
       ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
       ctx.beginPath();
-      ctx.ellipse(2, 6, 36, 25, 0, 0, Math.PI * 2);
+      ctx.ellipse(2, 7, 39, 23, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = tank.team === TEAM.BLUE ? "#2a668f" : "#943c37";
-      roundRect(ctx, -32, -22, 64, 44, 7);
+      ctx.fillStyle = darkColor;
+      roundRect(ctx, -42, -27, 84, 13, 3);
+      roundRect(ctx, -42, 14, 84, 13, 3);
       ctx.fill();
 
-      ctx.fillStyle = tank.team === TEAM.BLUE ? "#1c445e" : "#642a28";
-      roundRect(ctx, -36, -25, 18, 50, 5);
-      roundRect(ctx, 18, -25, 18, 50, 5);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+      roundRect(ctx, -38, -23, 76, 4, 2);
+      roundRect(ctx, -38, 19, 76, 4, 2);
       ctx.fill();
 
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      roundRect(ctx, -18, -16, 36, 32, 6);
+      const treadPhase = (tank.trackPhase || 0) % 12;
+      ctx.fillStyle = "rgba(218, 225, 210, 0.09)";
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 6; i += 1) {
+          const stripeX = -31 + ((i * 12 + treadPhase) % 72);
+          roundRect(ctx, stripeX - 4, side * 19 - 2, 8, 4, 1.5);
+          ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = hullColor;
+      ctx.beginPath();
+      ctx.moveTo(-35, -18);
+      ctx.lineTo(22, -18);
+      ctx.lineTo(34, -10);
+      ctx.lineTo(38, 0);
+      ctx.lineTo(34, 10);
+      ctx.lineTo(22, 18);
+      ctx.lineTo(-35, 18);
+      ctx.lineTo(-39, 10);
+      ctx.lineTo(-39, -10);
+      ctx.closePath();
       ctx.fill();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.beginPath();
+      ctx.moveTo(8, -15);
+      ctx.lineTo(28, -10);
+      ctx.lineTo(36, 0);
+      ctx.lineTo(28, 10);
+      ctx.lineTo(8, 15);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.24)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-18, -16);
+      ctx.lineTo(-13, -6);
+      ctx.lineTo(-13, 6);
+      ctx.lineTo(-18, 16);
+      ctx.moveTo(9, -17);
+      ctx.lineTo(9, 17);
+      ctx.moveTo(23, -12);
+      ctx.lineTo(31, 0);
+      ctx.lineTo(23, 12);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+      roundRect(ctx, -14, -9, 22, 18, 3);
+      ctx.fill();
+
+      ctx.fillStyle = accentColor;
+      roundRect(ctx, -30, -13, 5, 26, 1.5);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(18, 23, 20, 0.82)";
+      for (const side of [-1, 1]) {
+        roundRect(ctx, -38, side * 22 - 4, 76, 8, 3);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "rgba(218, 225, 210, 0.14)";
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 7; i += 1) {
+          const stripeX = -34 + ((i * 12 + treadPhase) % 80);
+          roundRect(ctx, stripeX - 3.5, side * 22 - 2, 7, 4, 1.5);
+          ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = "rgba(6, 10, 8, 0.56)";
+      for (const side of [-1, 1]) {
+        for (const x of [-29, -16, -3, 10, 23, 34]) {
+          ctx.beginPath();
+          ctx.arc(x, side * 22, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = "rgba(20, 26, 22, 0.34)";
+      for (const x of [-24, 20]) {
+        for (const y of [-12, 12]) {
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
       ctx.restore();
 
       ctx.save();
       ctx.translate(tank.x, tank.y);
+      if (tank.impactShake > 0.001) {
+        const wobble = (tank.trackPhase || 0) * 13 + (game.matchTime || 0) * 21;
+        ctx.translate(
+          Math.sin(wobble) * tank.impactShake * 4,
+          Math.cos(wobble * 0.83) * tank.impactShake * 3
+        );
+      }
+      if (tank.fireKick > 0.001) {
+        const kick = tank.fireKick * 6;
+        ctx.translate(-Math.cos(tank.turretAngle) * kick, -Math.sin(tank.turretAngle) * kick);
+      }
       ctx.rotate(tank.turretAngle);
+      ctx.scale(1.22, 1.22);
       const recoilOffset = -tank.recoil * 7;
-      ctx.fillStyle = tank.team === TEAM.BLUE ? "#78c6ff" : "#ff8a80";
-      roundRect(ctx, -7 + recoilOffset, -6, 46, 12, 4);
+      ctx.fillStyle = darkColor;
+      roundRect(ctx, 8 + recoilOffset, -4, 58, 8, 2.5);
       ctx.fill();
-      ctx.fillStyle = tank.team === TEAM.BLUE ? "#3a82ad" : "#ad4a45";
-      ctx.beginPath();
-      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fillStyle = lightColor;
+      roundRect(ctx, 9 + recoilOffset, -2.5, 51, 5, 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillStyle = "#1d2420";
+      roundRect(ctx, 58 + recoilOffset, -5, 10, 10, 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
       ctx.beginPath();
-      ctx.arc(0, 0, 9, 0, Math.PI * 2);
+      ctx.ellipse(1, 4, 25, 17, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = turretColor;
+      ctx.beginPath();
+      ctx.moveTo(-21, -11);
+      ctx.lineTo(7, -15);
+      ctx.lineTo(24, -8);
+      ctx.lineTo(25, 8);
+      ctx.lineTo(8, 15);
+      ctx.lineTo(-19, 11);
+      ctx.lineTo(-24, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.28)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-13, -9);
+      ctx.lineTo(4, -12);
+      ctx.moveTo(-15, 9);
+      ctx.lineTo(6, 12);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.11)";
+      roundRect(ctx, -9, -6, 13, 12, 3);
+      ctx.fill();
+      ctx.fillStyle = accentColor;
+      roundRect(ctx, 11, -9, 9, 4, 1.5);
       ctx.fill();
       ctx.restore();
 
-      if (tank.reload.active) {
-        const pct = clamp(tank.reload.progress / tank.reload.duration, 0, 1);
-        ctx.save();
-        ctx.translate(tank.x, tank.y);
-        ctx.strokeStyle = "rgba(255, 209, 102, 0.95)";
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(0, 0, 39, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
+      this.drawTankMachineGun(game, tank, { darkColor, lightColor, accentColor });
 
       this.drawTankHealth(tank);
       this.drawTankLabel(tank);
     }
 
+    drawTankMachineGun(game, tank, colors) {
+      if (!tank.alive) return;
+      const ctx = this.ctx;
+      const manned = tank.hasMachineGunner?.();
+      const active = manned && tank.weaponMode === "mg" && (tank.ammo?.mg || 0) > 0;
+      const baseAngle = tank.turretAngle ?? tank.angle;
+      const mount = tank.machineGunMountPoint?.() || {
+        x: tank.x + Math.cos(baseAngle) * -4 + Math.cos(baseAngle + Math.PI / 2) * -15,
+        y: tank.y + Math.sin(baseAngle) * -4 + Math.sin(baseAngle + Math.PI / 2) * -15
+      };
+
+      ctx.save();
+      ctx.translate(mount.x, mount.y);
+      if (tank.impactShake > 0.001) {
+        const wobble = (tank.trackPhase || 0) * 13 + (game.matchTime || 0) * 21;
+        ctx.translate(
+          Math.sin(wobble) * tank.impactShake * 4,
+          Math.cos(wobble * 0.83) * tank.impactShake * 3
+        );
+      }
+      ctx.rotate(baseAngle);
+      ctx.globalAlpha = manned ? 0.92 : 0.38;
+      ctx.fillStyle = colors.darkColor;
+      roundRect(ctx, -8, -5, 16, 10, 3);
+      ctx.fill();
+      ctx.fillStyle = active ? colors.accentColor : colors.lightColor;
+      roundRect(ctx, -3, -3, 7, 6, 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, -8, -5, 16, 10, 3);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(mount.x, mount.y);
+      if (tank.impactShake > 0.001) {
+        const wobble = (tank.trackPhase || 0) * 13 + (game.matchTime || 0) * 21;
+        ctx.translate(
+          Math.sin(wobble) * tank.impactShake * 4,
+          Math.cos(wobble * 0.83) * tank.impactShake * 3
+        );
+      }
+      const tankKick = tank.machineGunKick || 0;
+      ctx.rotate((tank.machineGunAngle ?? baseAngle) + Math.sin((game.matchTime || 0) * 90) * tankKick * 0.012);
+      ctx.globalAlpha = manned ? 0.96 : 0.34;
+      const kick = tankKick * 3.4;
+      ctx.fillStyle = colors.darkColor;
+      roundRect(ctx, -4 - kick, -3, 12, 6, 2);
+      ctx.fill();
+      ctx.fillStyle = active ? colors.lightColor : "rgba(214, 222, 210, 0.46)";
+      roundRect(ctx, 6 - kick, -1.3, 18, 2.6, 1);
+      ctx.fill();
+      ctx.fillStyle = "#151b18";
+      roundRect(ctx, 22 - kick, -2.5, 5, 5, 1.2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     drawPlayerTankAim(game) {
       const tank = game.player.inTank;
       if (!tank || !tank.alive) return;
+      if (tank.vehicleType === "humvee" || tank.weaponMode === "mg") {
+        this.drawPlayerMachineGunAim(game, tank);
+        return;
+      }
 
       const ctx = this.ctx;
       const ammo = AMMO[tank.loadedAmmo] || AMMO[tank.reload.ammoId] || AMMO.ap;
@@ -328,65 +786,37 @@
         ? game.resolveTankGroundAim(tank, heAimSource.x, heAimSource.y, ammo)
         : null;
       const hePreview = heAimSolution || impact;
-      const targetX = fireOrder && heAimSolution ? heAimSolution.x : mouseTargetX;
-      const targetY = fireOrder && heAimSolution ? heAimSolution.y : mouseTargetY;
-      const mouseDistance = distXY(muzzleX, muzzleY, targetX, targetY);
-      const targetBeyondRange = heAimSolution?.rangeClamped || mouseDistance > ammoRange;
-      const rangeEndX = muzzleX + Math.cos(tank.turretAngle) * ammoRange;
-      const rangeEndY = muzzleY + Math.sin(tank.turretAngle) * ammoRange;
 
       ctx.save();
       ctx.lineCap = "round";
-      ctx.strokeStyle = aimReady ? "rgba(255, 209, 102, 0.62)" : "rgba(237, 244, 239, 0.28)";
-      ctx.lineWidth = aimMode ? 2.4 : aimReady ? 2 : 1.5;
-      ctx.setLineDash(aimReady || aimMode ? [] : [10, 12]);
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, muzzleY);
-      ctx.lineTo(impact.x, impact.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      if (aimMode && !impact.blocked && targetBeyondRange) {
-        ctx.strokeStyle = "rgba(237, 244, 239, 0.24)";
-        ctx.lineWidth = 1.4;
-        ctx.setLineDash([7, 10]);
-        ctx.beginPath();
-        ctx.moveTo(rangeEndX, rangeEndY);
-        ctx.lineTo(targetX, targetY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
       if (aimMode) {
-        ctx.strokeStyle = aimReady ? "rgba(255, 209, 102, 0.9)" : "rgba(237, 244, 239, 0.54)";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = aimReady ? "rgba(200, 218, 207, 0.68)" : "rgba(237, 244, 239, 0.42)";
+        ctx.lineWidth = 1.35;
         ctx.beginPath();
-        ctx.arc(impact.x, impact.y, 10, 0, Math.PI * 2);
+        ctx.arc(impact.x, impact.y, 6.5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(impact.x - 18, impact.y);
-        ctx.lineTo(impact.x - 8, impact.y);
-        ctx.moveTo(impact.x + 8, impact.y);
-        ctx.lineTo(impact.x + 18, impact.y);
-        ctx.moveTo(impact.x, impact.y - 18);
-        ctx.lineTo(impact.x, impact.y - 8);
-        ctx.moveTo(impact.x, impact.y + 8);
-        ctx.lineTo(impact.x, impact.y + 18);
+        ctx.moveTo(impact.x - 13, impact.y);
+        ctx.lineTo(impact.x - 6, impact.y);
+        ctx.moveTo(impact.x + 6, impact.y);
+        ctx.lineTo(impact.x + 13, impact.y);
+        ctx.moveTo(impact.x, impact.y - 13);
+        ctx.lineTo(impact.x, impact.y - 6);
+        ctx.moveTo(impact.x, impact.y + 6);
+        ctx.lineTo(impact.x, impact.y + 13);
         ctx.stroke();
       }
 
       if (ammo.id === "he" && (aimMode || fireOrder)) {
         const lockedColor = fireOrder
-          ? aimReady ? "rgba(114, 232, 154, 0.92)" : "rgba(255, 209, 102, 0.9)"
-          : "rgba(255, 159, 85, 0.68)";
+          ? aimReady ? "rgba(114, 232, 154, 0.82)" : "rgba(214, 202, 142, 0.72)"
+          : "rgba(214, 171, 118, 0.48)";
         const pulse = fireOrder ? 1 + Math.sin(performance.now() * 0.012) * 0.08 : 1;
         ctx.strokeStyle = lockedColor;
         ctx.lineWidth = fireOrder ? 2.6 : 2;
-        ctx.setLineDash(fireOrder && !aimReady ? [7, 6] : []);
         ctx.beginPath();
         ctx.arc(hePreview.x, hePreview.y, (fireOrder ? 18 : 13) * pulse, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(hePreview.x - 24, hePreview.y);
         ctx.lineTo(hePreview.x - 10, hePreview.y);
@@ -399,34 +829,16 @@
         ctx.stroke();
 
         if (fireOrder && !aimReady) {
-          ctx.strokeStyle = "rgba(255, 209, 102, 0.42)";
-          ctx.lineWidth = 1.4;
-          ctx.setLineDash([5, 9]);
+          ctx.strokeStyle = "rgba(214, 202, 142, 0.28)";
+          ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(muzzleX, muzzleY);
           ctx.lineTo(hePreview.x, hePreview.y);
           ctx.stroke();
-          ctx.setLineDash([]);
         }
       }
 
-      ctx.strokeStyle = aimMode && targetBeyondRange ? "rgba(237, 244, 239, 0.28)" : "rgba(237, 244, 239, 0.36)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(targetX, targetY, 12, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(targetX - 18, targetY);
-      ctx.lineTo(targetX - 8, targetY);
-      ctx.moveTo(targetX + 8, targetY);
-      ctx.lineTo(targetX + 18, targetY);
-      ctx.moveTo(targetX, targetY - 18);
-      ctx.lineTo(targetX, targetY - 8);
-      ctx.moveTo(targetX, targetY + 8);
-      ctx.lineTo(targetX, targetY + 18);
-      ctx.stroke();
-
-      if (ammo.id === "he") {
+      if (ammo.id === "he" && (aimMode || fireOrder)) {
         ctx.strokeStyle = fireOrder
           ? aimReady ? "rgba(114, 232, 154, 0.42)" : "rgba(255, 209, 102, 0.38)"
           : aimMode ? "rgba(255, 159, 85, 0.5)" : "rgba(255, 159, 85, 0.38)";
@@ -435,6 +847,37 @@
         ctx.arc(hePreview.x, hePreview.y, ammo.splash || 98, 0, Math.PI * 2);
         ctx.stroke();
       }
+      ctx.restore();
+    }
+
+    drawPlayerMachineGunAim(game, tank) {
+      if (!game.input.mouse.rightDown) return;
+      const ctx = this.ctx;
+      const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
+      const muzzle = tank.machineGunMuzzlePoint?.() || {
+        x: tank.x + Math.cos(tank.machineGunAngle) * (tank.radius + 22),
+        y: tank.y + Math.sin(tank.machineGunAngle) * (tank.radius + 22)
+      };
+      const range = weapon.range || 760;
+      const impact = this.traceTankAim(game, muzzle.x, muzzle.y, tank.machineGunAngle, range);
+      const ready = (tank.vehicleType === "humvee" || tank.hasMachineGunner?.()) && tank.machineGunCooldown <= 0 && (tank.ammo?.mg || 0) > 0;
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.strokeStyle = ready ? "rgba(184, 224, 255, 0.68)" : "rgba(255, 146, 116, 0.58)";
+      ctx.lineWidth = 1.45;
+      ctx.beginPath();
+      ctx.arc(impact.x, impact.y, ready ? 7 : 10, 0, Math.PI * 2);
+      ctx.moveTo(impact.x - 15, impact.y);
+      ctx.lineTo(impact.x - 7, impact.y);
+      ctx.moveTo(impact.x + 7, impact.y);
+      ctx.lineTo(impact.x + 15, impact.y);
+      ctx.moveTo(impact.x, impact.y - 15);
+      ctx.lineTo(impact.x, impact.y - 7);
+      ctx.moveTo(impact.x, impact.y + 7);
+      ctx.lineTo(impact.x, impact.y + 15);
+      ctx.stroke();
+
       ctx.restore();
     }
 
@@ -459,6 +902,11 @@
     }
 
     drawPlayerInfantryAim(game) {
+      if (game.isPlayerMachineGunAimMode?.()) {
+        this.drawPlayerInfantryMachineGunAim(game);
+        return;
+      }
+
       if (!game.isPlayerRpgAimMode?.()) return;
 
       const player = game.player;
@@ -520,12 +968,57 @@
       ctx.restore();
     }
 
+    drawPlayerInfantryMachineGunAim(game) {
+      const player = game.player;
+      const weapon = player.getWeapon?.() || INFANTRY_WEAPONS.machinegun;
+      if (weapon.id !== "machinegun" && weapon.id !== "lmg") return;
+
+      const ctx = this.ctx;
+      const range = (weapon.range || 620) * 1.08;
+      const aimX = game.input.mouse.worldX;
+      const aimY = game.input.mouse.worldY;
+      const inRange = distXY(player.x, player.y, aimX, aimY) <= range;
+      const ammo = weapon.ammoKey ? player.equipmentAmmo?.[weapon.ammoKey] || 0 : 1;
+      const ready = player.rifleCooldown <= 0 && ammo > 0;
+      const reticleColor = ready
+        ? inRange ? "rgba(184, 224, 255, 0.78)" : "rgba(184, 224, 255, 0.34)"
+        : "rgba(255, 146, 116, 0.64)";
+      const pulse = 1 + Math.sin(performance.now() * 0.016) * 0.05;
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.strokeStyle = reticleColor;
+      ctx.lineWidth = inRange ? 1.45 : 1.1;
+      ctx.beginPath();
+      ctx.arc(aimX, aimY, (ready ? 7 : 10) * pulse, 0, Math.PI * 2);
+      ctx.moveTo(aimX - 15, aimY);
+      ctx.lineTo(aimX - 7, aimY);
+      ctx.moveTo(aimX + 7, aimY);
+      ctx.lineTo(aimX + 15, aimY);
+      ctx.moveTo(aimX, aimY - 15);
+      ctx.lineTo(aimX, aimY - 7);
+      ctx.moveTo(aimX, aimY + 7);
+      ctx.lineTo(aimX, aimY + 15);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     drawTankHealth(tank) {
       const ctx = this.ctx;
-      const width = 54;
+      const width = 66;
       const pct = tank.maxHp > 0 ? tank.hp / tank.maxHp : 0;
       ctx.save();
-      ctx.translate(tank.x, tank.y - 47);
+      ctx.translate(tank.x, tank.y - 58);
+      if (tank.reload?.active) {
+        const reloadPct = clamp(tank.reload.progress / Math.max(tank.reload.duration, 0.001), 0, 1);
+        const reloadWidth = 52;
+        ctx.fillStyle = "rgba(9, 15, 13, 0.68)";
+        roundRect(ctx, -reloadWidth / 2, -14, reloadWidth, 4, 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 209, 102, 0.96)";
+        roundRect(ctx, -reloadWidth / 2, -14, reloadWidth * reloadPct, 4, 2);
+        ctx.fill();
+      }
       ctx.fillStyle = "rgba(9, 15, 13, 0.72)";
       roundRect(ctx, -width / 2, -5, width, 8, 4);
       ctx.fill();
@@ -538,9 +1031,9 @@
     drawTankLabel(tank) {
       const ctx = this.ctx;
       ctx.save();
-      ctx.translate(tank.x, tank.y + 42);
+      ctx.translate(tank.x, tank.y + 53);
       ctx.fillStyle = "rgba(9, 15, 13, 0.65)";
-      roundRect(ctx, -25, -10, 50, 18, 4);
+      roundRect(ctx, -27, -10, 54, 18, 4);
       ctx.fill();
       ctx.fillStyle = "#edf4ef";
       ctx.font = "700 10px Inter, sans-serif";
@@ -571,20 +1064,23 @@
       ctx.restore();
 
       if (options.showPrompt === false) return;
-      const d = distXY(unit.x, unit.y, game.playerTank.x, game.playerTank.y);
-      if (d < 78 && game.playerTank.alive) {
+      const mountTarget = game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.();
+      if (mountTarget?.alive) {
         ctx.save();
         ctx.globalAlpha = 0.55 + Math.sin(unit.interactPulse * 5) * 0.18;
         ctx.strokeStyle = "#ffd166";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(game.playerTank.x, game.playerTank.y, 47, 0, Math.PI * 2);
+        ctx.arc(mountTarget.x, mountTarget.y, mountTarget.radius + 20, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
     }
 
     isScopedInfantryPose(game, unit, weapon) {
+      if (unit === game.player && (weapon.id === "machinegun" || weapon.id === "lmg")) {
+        return Boolean(game.isPlayerMachineGunAimMode?.());
+      }
       if (weapon.id !== "sniper") return false;
       if (unit === game.player) return Boolean(game.isPlayerScoutAimMode?.());
       const state = unit.ai?.state || "";
@@ -597,56 +1093,54 @@
       const width = weapon.visualWidth || 5;
       const length = weapon.visualLength || 16;
       const rpg = weapon.id === "rpg";
+      const machineGun = weapon.id === "machinegun" || weapon.id === "lmg";
       const sideOffset = scoped || rpg && unit.rpgAim ? 0 : rpg ? 7 : 6;
       const forwardOffset = scoped ? 3 : 2;
       const stockLength = Math.max(4, length * 0.24);
+      const recoil = (unit.gunKick || 0) * (machineGun ? 3.4 : 1.8);
+      const bodyX = forwardOffset - recoil;
 
       ctx.fillStyle = "rgba(19, 24, 19, 0.72)";
-      roundRect(ctx, -stockLength, sideOffset - Math.max(2, width * 0.42), stockLength + 6, Math.max(4, width * 0.85), 2);
+      roundRect(ctx, bodyX - stockLength, sideOffset - Math.max(2, width * 0.42), stockLength + 6, Math.max(4, width * 0.85), 2);
       ctx.fill();
 
       ctx.fillStyle = rpg ? "#2f3b2d" : "#243222";
-      roundRect(ctx, forwardOffset, sideOffset - width / 2, length, width, 2);
+      roundRect(ctx, bodyX, sideOffset - width / 2, length, width, 2);
       ctx.fill();
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.2)";
-      roundRect(ctx, forwardOffset + length - 1, sideOffset - Math.max(1, width * 0.28), 5, Math.max(2, width * 0.56), 1);
+      roundRect(ctx, bodyX + length - 1, sideOffset - Math.max(1, width * 0.28), 5, Math.max(2, width * 0.56), 1);
       ctx.fill();
 
       if (rpg) {
         ctx.fillStyle = "rgba(255, 180, 92, 0.68)";
         ctx.beginPath();
-        ctx.moveTo(forwardOffset + length + 8, sideOffset);
-        ctx.lineTo(forwardOffset + length - 2, sideOffset - width * 0.72);
-        ctx.lineTo(forwardOffset + length - 2, sideOffset + width * 0.72);
+        ctx.moveTo(bodyX + length + 8, sideOffset);
+        ctx.lineTo(bodyX + length - 2, sideOffset - width * 0.72);
+        ctx.lineTo(bodyX + length - 2, sideOffset + width * 0.72);
         ctx.closePath();
         ctx.fill();
 
         ctx.fillStyle = "rgba(237, 244, 239, 0.18)";
-        roundRect(ctx, forwardOffset + length * 0.36, sideOffset - width / 2 - 3, 10, 2, 1);
+        roundRect(ctx, bodyX + length * 0.36, sideOffset - width / 2 - 3, 10, 2, 1);
         ctx.fill();
       }
 
-      if (unit.weaponId === "lmg" || unit.weaponId === "machinegun") {
+      if (machineGun) {
         ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-        roundRect(ctx, forwardOffset + 9, sideOffset + width * 0.42, 8, 3, 1);
+        roundRect(ctx, bodyX + 9, sideOffset + width * 0.42, 8, 3, 1);
+        ctx.fill();
+        ctx.fillStyle = "rgba(15, 19, 16, 0.54)";
+        roundRect(ctx, bodyX + length * 0.42, sideOffset - width * 0.88, 9, 3, 1);
         ctx.fill();
       }
 
       if (unit.weaponId === "sniper") {
         ctx.fillStyle = "rgba(120, 214, 140, 0.45)";
-        roundRect(ctx, forwardOffset + 7, sideOffset - width / 2 - 3, 8, 2, 1);
+        roundRect(ctx, bodyX + 7, sideOffset - width / 2 - 3, 8, 2, 1);
         ctx.fill();
       }
 
-      if (scoped || rpg && unit.rpgAim) {
-        ctx.strokeStyle = "rgba(237, 244, 239, 0.22)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(forwardOffset + length + 6, 0);
-        ctx.lineTo(forwardOffset + length + 32, 0);
-        ctx.stroke();
-      }
     }
 
     drawCrewMember(game, crew) {
@@ -789,10 +1283,11 @@
       const ctx = this.ctx;
       for (const tracer of game.effects.tracers || []) {
         const alpha = clamp(tracer.life / tracer.maxLife, 0, 1);
+        const width = Math.min(tracer.width || 1.2, 1.2);
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = alpha * 0.42;
         ctx.strokeStyle = tracer.color;
-        ctx.lineWidth = tracer.width || 2;
+        ctx.lineWidth = width;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(tracer.x1, tracer.y1);
@@ -807,14 +1302,57 @@
       for (const explosion of game.effects.explosions) {
         const alpha = clamp(explosion.life / explosion.maxLife, 0, 1);
         const gradient = ctx.createRadialGradient(explosion.x, explosion.y, 0, explosion.x, explosion.y, explosion.radius);
-        gradient.addColorStop(0, explosion.color.replace(/[\d.]+\)$/u, `${0.8 * alpha})`));
-        gradient.addColorStop(0.45, explosion.color.replace(/[\d.]+\)$/u, `${0.32 * alpha})`));
-        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        if (explosion.smoke) {
+          gradient.addColorStop(0, `rgba(45, 41, 35, ${0.42 * alpha})`);
+          gradient.addColorStop(0.5, explosion.color.replace(/[\d.]+\)$/u, `${0.28 * alpha})`));
+          gradient.addColorStop(1, "rgba(42, 38, 31, 0)");
+        } else {
+          gradient.addColorStop(0, `rgba(255, 246, 198, ${0.9 * alpha})`);
+          gradient.addColorStop(0.2, explosion.color.replace(/[\d.]+\)$/u, `${0.78 * alpha})`));
+          gradient.addColorStop(0.58, explosion.color.replace(/[\d.]+\)$/u, `${0.28 * alpha})`));
+          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        }
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    drawBlastRings(game) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.lineCap = "round";
+      for (const ring of game.effects.blastRings || []) {
+        const alpha = clamp(ring.life / ring.maxLife, 0, 1);
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = ring.color || "rgba(255, 238, 178, 0.65)";
+        ctx.lineWidth = (ring.width || 5) * alpha;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    drawBlastSparks(game) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.lineCap = "round";
+      for (const spark of game.effects.blastSparks || []) {
+        const alpha = clamp(spark.life / spark.maxLife, 0, 1);
+        const speedAngle = Math.atan2(spark.vy, spark.vx);
+        const tailX = spark.x - Math.cos(speedAngle) * spark.length;
+        const tailY = spark.y - Math.sin(speedAngle) * spark.length;
+        ctx.globalAlpha = alpha * (spark.alpha ?? 1);
+        ctx.strokeStyle = spark.color || "rgba(255, 172, 92, 0.86)";
+        ctx.lineWidth = (spark.width || 2.2) * alpha + 0.35;
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(spark.x, spark.y);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     drawSmoke(game) {
@@ -872,6 +1410,12 @@
         if (!tank.alive) continue;
         ctx.fillStyle = TEAM_COLORS[tank.team];
         ctx.fillRect(x + tank.x * sx - 2.5, y + tank.y * sy - 2.5, 5, 5);
+      }
+
+      for (const humvee of game.humvees || []) {
+        if (!humvee.alive) continue;
+        ctx.fillStyle = TEAM_COLORS[humvee.team];
+        ctx.fillRect(x + humvee.x * sx - 2, y + humvee.y * sy - 2, 4, 4);
       }
 
       for (const crew of game.crews || []) {
@@ -1190,7 +1734,7 @@
         ctx.fillStyle = "rgba(5, 9, 8, 0.54)";
         ctx.fillRect(0, 0, camera.width, camera.height);
         const resultTitle = game.result === "BLUE VICTORY" ? "승리" : "패배";
-        const reason = game.resultReason || "섬멸전 종료";
+        const reason = game.resultReason || "전투 종료";
         ctx.fillStyle = "#edf4ef";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -1223,7 +1767,7 @@
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.92)";
       ctx.font = "900 18px Inter, sans-serif";
-      ctx.fillText("기지에서 탱크에 탑승하세요", camera.width / 2, camera.height * 0.34 + 78);
+      ctx.fillText("기지에서 차량에 탑승하세요", camera.width / 2, camera.height * 0.34 + 78);
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
       ctx.font = "800 12px Inter, sans-serif";
@@ -1368,6 +1912,51 @@
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  function collectRoadJunctions(roads) {
+    const junctions = [];
+    const seen = new Set();
+    const add = (point) => {
+      const key = `${Math.round(point.x / 8) * 8}:${Math.round(point.y / 8) * 8}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      junctions.push({ x: point.x, y: point.y });
+    };
+
+    for (let roadA = 0; roadA < roads.length; roadA += 1) {
+      for (let segmentA = 1; segmentA < roads[roadA].length; segmentA += 1) {
+        const a = roads[roadA][segmentA - 1];
+        const b = roads[roadA][segmentA];
+        for (let roadB = roadA + 1; roadB < roads.length; roadB += 1) {
+          for (let segmentB = 1; segmentB < roads[roadB].length; segmentB += 1) {
+            const c = roads[roadB][segmentB - 1];
+            const d = roads[roadB][segmentB];
+            const point = segmentIntersectionPoint(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y);
+            if (point) add(point);
+          }
+        }
+      }
+    }
+    return junctions;
+  }
+
+  function segmentIntersectionPoint(ax, ay, bx, by, cx, cy, dx, dy) {
+    const rx = bx - ax;
+    const ry = by - ay;
+    const sx = dx - cx;
+    const sy = dy - cy;
+    const denominator = rx * sy - ry * sx;
+    if (Math.abs(denominator) < 0.0001) return null;
+    const qpx = cx - ax;
+    const qpy = cy - ay;
+    const t = (qpx * sy - qpy * sx) / denominator;
+    const u = (qpx * ry - qpy * rx) / denominator;
+    if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
+    return {
+      x: ax + rx * clamp(t, 0, 1),
+      y: ay + ry * clamp(t, 0, 1)
+    };
   }
 
   Renderer.VERSION = "canvas-renderer-v1";

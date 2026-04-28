@@ -6,7 +6,6 @@
   const {
     clamp,
     lerp,
-    approach,
     distXY,
     angleTo,
     normalizeAngle,
@@ -56,11 +55,18 @@
       this.projectiles = [];
       this.effects = {
         explosions: [],
+        blastRings: [],
+        blastSparks: [],
         tracers: [],
+        dustPuffs: [],
+        trackScuffs: [],
+        muzzleFlashes: [],
+        gunSmokePuffs: [],
         smokeClouds: [],
         scorchMarks: []
       };
       this.tanks = [];
+      this.humvees = [];
       this.crews = [];
       this.infantry = [];
       this.squads = [];
@@ -74,6 +80,8 @@
       this.playerTank = null;
       this.result = "";
       this.resultReason = "";
+      this.playerDeathActive = false;
+      this.playerDeathReason = "";
       this.deploymentOpen = true;
       this.countdownStarted = false;
       this.matchStarted = false;
@@ -192,6 +200,12 @@
         turretTurnRate: 1.45
       });
       this.tanks.push(this.playerTank);
+      this.spawnCrewForTank(this.playerTank, {
+        callSign: "RAVEN-MG",
+        maxSpeed: 126,
+        role: "machine-gunner",
+        dedicated: true
+      });
 
       for (const spawn of this.scaledSpawns(this.world.spawns.blue, config.blueAiTanks, "B-TNK", 32)) {
         const tank = new IronLine.Tank({
@@ -235,6 +249,51 @@
         difficulty
       );
       this.createSquads(TEAM.RED, redInfantry, "R-SQD");
+      this.spawnHumvees(difficulty);
+    }
+
+    spawnHumvees(difficulty = this.difficultyProfile()) {
+      const exits = this.world.baseExitPoints || {};
+      const blueBase = exits.blue || this.world.spawns.playerTank;
+      const redBase = exits.red || this.world.spawns.red?.[0] || { x: this.world.width - 420, y: 420 };
+      const spawns = [
+        {
+          team: TEAM.BLUE,
+          callSign: "B-HMV-1",
+          x: blueBase.x - 78,
+          y: blueBase.y + 118,
+          angle: -0.18,
+          maxHp: 72,
+          maxSpeed: 252
+        },
+        {
+          team: TEAM.RED,
+          callSign: "R-HMV-1",
+          x: redBase.x + 72,
+          y: redBase.y - 116,
+          angle: 3.02,
+          maxHp: Math.round(68 * difficulty.enemyTankHp),
+          maxSpeed: 248 * difficulty.enemyTankSpeed
+        }
+      ];
+
+      const reserved = [];
+      spawns.forEach((spawn, index) => {
+        const point = this.findOpenSpawnNear(spawn, index, 0, 32, reserved);
+        reserved.push(point);
+        const humvee = new IronLine.Humvee({
+          ...spawn,
+          x: point.x,
+          y: point.y
+        });
+        humvee.ai = new IronLine.HumveeAI(humvee, this);
+        this.humvees.push(humvee);
+        this.spawnCrewForTank(humvee, {
+          callSign: `${spawn.callSign}-DRV`,
+          maxSpeed: 116,
+          role: "driver"
+        });
+      });
     }
 
     spawnInfantry(spawns, team, difficulty = this.difficultyProfile()) {
@@ -357,17 +416,22 @@
       }
     }
 
-    spawnCrewForTank(tank) {
-      const spawn = this.findCrewSpawn(tank);
+    spawnCrewForTank(tank, options = {}) {
+      const spawn = options.boardImmediately ? { x: tank.x, y: tank.y } : this.findCrewSpawn(tank);
       const crew = new IronLine.CrewMember({
         x: spawn.x,
         y: spawn.y,
         team: tank.team,
-        callSign: `${tank.callSign}-CREW`,
+        callSign: options.callSign || `${tank.callSign}-CREW`,
         angle: tank.angle,
+        maxSpeed: options.maxSpeed,
+        role: options.role,
+        dedicated: options.dedicated,
         targetTank: tank
       });
       this.crews.push(crew);
+      if (options.boardImmediately) crew.boardTargetTank();
+      return crew;
     }
 
     findCrewSpawn(tank) {
@@ -415,16 +479,27 @@
         return;
       }
 
-      this.updatePlayer(dt);
+      if (this.playerDeathActive) {
+        this.updateDeathRestartInput();
+        IronLine.combat.updateEffects(this, dt);
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
 
-      for (const crew of this.crews) crew.update(this, dt);
+      this.updatePlayer(dt);
+      this.updatePlayerDeathState();
+      if (this.playerDeathActive) {
+        IronLine.combat.updateEffects(this, dt);
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
 
       this.updateStartCountdown(dt);
 
       if (!this.matchStarted) {
-        for (const tank of this.tanks) tank.update(this, dt);
         IronLine.combat.updateEffects(this, dt);
-        resolveTankSpacing(this, dt);
         resolveInfantryTankSpacing(this);
         this.updateCamera(dt);
         this.hud.update(this);
@@ -432,6 +507,7 @@
       }
 
       this.matchTime += dt;
+      for (const crew of this.crews) crew.update(this, dt);
       for (const commander of Object.values(this.commanders)) commander.update(dt);
       this.coverSlots.update(dt);
       for (const squad of this.squads) squad.update(dt);
@@ -440,9 +516,16 @@
       this.updateTeamReports(dt);
 
       for (const tank of this.tanks) tank.update(this, dt);
+      for (const humvee of this.humvees || []) humvee.update(this, dt);
 
       IronLine.combat.updateProjectiles(this, dt);
       IronLine.combat.updateEffects(this, dt);
+      this.updatePlayerDeathState();
+      if (this.playerDeathActive) {
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
 
       for (const point of this.capturePoints) point.update(this, dt);
 
@@ -514,11 +597,18 @@
       this.projectiles = [];
       this.effects = {
         explosions: [],
+        blastRings: [],
+        blastSparks: [],
         tracers: [],
+        dustPuffs: [],
+        trackScuffs: [],
+        muzzleFlashes: [],
+        gunSmokePuffs: [],
         smokeClouds: [],
         scorchMarks: []
       };
       this.tanks = [];
+      this.humvees = [];
       this.crews = [];
       this.infantry = [];
       this.squads = [];
@@ -533,6 +623,8 @@
       this.playerTank = null;
       this.result = "";
       this.resultReason = "";
+      this.playerDeathActive = false;
+      this.playerDeathReason = "";
       this.matchTime = 0;
       this.objectiveHold = {
         [TEAM.BLUE]: 0,
@@ -545,7 +637,10 @@
     }
 
     updatePlayer(dt) {
-      if (this.player.hp <= 0) return;
+      if (this.player.hp <= 0) {
+        this.handlePlayerDeath("적 공격으로 쓰러졌습니다.");
+        return;
+      }
 
       this.updatePlayerSafeZone();
       if (this.input.consumePress("KeyE")) this.toggleTank();
@@ -554,6 +649,43 @@
       else this.updateInfantryPlayer(dt);
 
       this.updatePlayerSafeZone();
+    }
+
+    updatePlayerDeathState() {
+      if (this.playerDeathActive || this.result || this.deploymentOpen) return;
+      if (this.player.hp <= 0) this.handlePlayerDeath("적 공격으로 쓰러졌습니다.");
+    }
+
+    handlePlayerDeath(reason = "사망했습니다.") {
+      if (this.playerDeathActive || this.result) return;
+      if (this.player.inTank) {
+        this.player.inTank.playerControlled = false;
+        this.player.inTank = null;
+      }
+      this.player.hp = 0;
+      this.player.alive = false;
+      this.playerDeathActive = true;
+      this.playerDeathReason = reason;
+      this.input.clear();
+      this.hud?.toggleSettingsPanel?.(false);
+    }
+
+    updateDeathRestartInput() {
+      if (this.input.consumePress("KeyR") || this.input.consumePress("Enter")) {
+        this.restartMatchAfterDeath();
+      }
+    }
+
+    restartMatchAfterDeath() {
+      if (!this.playerDeathActive) return false;
+      this.input.clear();
+      this.resetScenarioForMatch();
+      this.deploymentOpen = false;
+      this.countdownStarted = true;
+      this.matchStarted = false;
+      this.startCountdown = 5;
+      this.canvas.focus();
+      return true;
     }
 
     updatePlayerSafeZone() {
@@ -582,7 +714,13 @@
     }
 
     updateMountedPlayer(dt) {
-      const tank = this.player.inTank;
+      const vehicle = this.player.inTank;
+      if (vehicle?.vehicleType === "humvee") {
+        this.updateMountedHumvee(vehicle, dt);
+        return;
+      }
+
+      const tank = vehicle;
       this.player.x = tank.x;
       this.player.y = tank.y;
       this.applyVirtualAim(tank, this.input.mouse.rightDown ? 1250 : 860);
@@ -595,7 +733,7 @@
       }
 
       if (!this.matchStarted) {
-        tank.speed = approach(tank.speed, 0, tank.accel * dt);
+        tank.drive(this, dt, 0, 0, { dust: false, coastScale: 0.76, coastDrag: 1.05 });
         const mouse = this.input.mouse;
         const targetTurret = angleTo(tank.x, tank.y, mouse.worldX, mouse.worldY);
         tank.turretAngle = rotateTowards(tank.turretAngle, targetTurret, tank.turretTurnRate * dt);
@@ -613,45 +751,68 @@
       const mobileDriveAmount = Math.min(1, Math.hypot(mobileStickX, mobileStickY));
       const useMobileDriveAssist = Boolean(this.settings?.mobileControls && this.input.virtual.enabled && mobileDriveAmount > 0.16);
 
+      let driveThrottle = throttle;
+      let driveTurn = turnInput;
+
       if (useMobileDriveAssist) {
         const desiredAngle = Math.atan2(mobileStickY, mobileStickX);
-        tank.angle = rotateTowards(tank.angle, desiredAngle, tank.turnRate * 1.25 * dt);
-        const alignment = (Math.cos(normalizeAngle(desiredAngle - tank.angle)) + 1) / 2;
-        const targetSpeed = tank.maxSpeed * mobileDriveAmount * (0.48 + alignment * 0.52);
-        tank.speed = approach(tank.speed, targetSpeed, tank.accel * dt);
-      } else {
-        tank.angle = normalizeAngle(tank.angle + turnInput * tank.turnRate * dt);
-        const targetSpeed = throttle * tank.maxSpeed;
-        tank.speed = approach(tank.speed, targetSpeed, tank.accel * dt);
-        if (Math.abs(throttle) < 0.01) tank.speed = approach(tank.speed, 0, tank.accel * 0.72 * dt);
+        const forwardDiff = normalizeAngle(desiredAngle - tank.angle);
+        const reverseDiff = normalizeAngle(desiredAngle - normalizeAngle(tank.angle + Math.PI));
+        if (Math.abs(forwardDiff) > 2.2 && Math.abs(reverseDiff) < Math.abs(forwardDiff) - 0.28) {
+          driveThrottle = -mobileDriveAmount * 0.48;
+          driveTurn = clamp(reverseDiff * 1.15, -1, 1);
+        } else {
+          const alignment = clamp((Math.cos(forwardDiff) + 0.2) / 1.2, 0, 1);
+          driveThrottle = mobileDriveAmount * (0.34 + alignment * 0.66);
+          driveTurn = clamp(forwardDiff * 1.18, -1, 1);
+        }
       }
-      tank.speed *= 1 - 0.18 * dt;
 
-      tryMoveCircle(this, tank, Math.cos(tank.angle) * tank.speed, Math.sin(tank.angle) * tank.speed, tank.radius, dt);
+      tank.drive(this, dt, driveThrottle, driveTurn, {
+        brake: this.input.keyDown("Space") && Math.abs(driveThrottle) < 0.01,
+        turnAccel: 3.9,
+        driveDrag: 0.18
+      });
 
       if (this.input.consumePress("Digit1") || this.input.consumePress("Numpad1")) {
         this.clearTankFireOrder(tank);
+        tank.weaponMode = "cannon";
         tank.beginLoad("ap");
       }
       if (this.input.consumePress("Digit2") || this.input.consumePress("Numpad2")) {
         this.clearTankFireOrder(tank);
+        tank.weaponMode = "cannon";
         tank.beginLoad("he");
       }
       if (this.input.consumePress("Digit3") || this.input.consumePress("Numpad3")) {
+        this.clearTankFireOrder(tank);
+        if (tank.hasMachineGunner() && (tank.ammo.mg || 0) > 0) tank.weaponMode = "mg";
+      }
+      if (this.input.consumePress("KeyQ")) {
         this.clearTankFireOrder(tank);
         tank.deploySmoke(this);
       }
 
       const mouse = this.input.mouse;
       const heOrder = tank.fireOrder?.ammoId === "he" ? tank.fireOrder : null;
-      const aimX = heOrder ? heOrder.currentX || heOrder.x : mouse.worldX;
-      const aimY = heOrder ? heOrder.currentY || heOrder.y : mouse.worldY;
-      const targetTurret = angleTo(tank.x, tank.y, aimX, aimY);
-      tank.turretAngle = rotateTowards(tank.turretAngle, targetTurret, tank.turretTurnRate * dt);
-      tank.aimTargetAngle = targetTurret;
-      tank.aimError = Math.abs(normalizeAngle(tank.turretAngle - targetTurret));
+      if (tank.weaponMode === "mg") {
+        const targetGun = angleTo(tank.x, tank.y, mouse.worldX, mouse.worldY);
+        tank.machineGunAngle = rotateTowards(tank.machineGunAngle, targetGun, tank.machineGunTurnRate * dt);
+        tank.aimTargetAngle = targetGun;
+        tank.aimError = Math.abs(normalizeAngle(tank.machineGunAngle - targetGun));
+      } else {
+        const aimX = heOrder ? heOrder.currentX || heOrder.x : mouse.worldX;
+        const aimY = heOrder ? heOrder.currentY || heOrder.y : mouse.worldY;
+        const targetTurret = angleTo(tank.x, tank.y, aimX, aimY);
+        tank.turretAngle = rotateTowards(tank.turretAngle, targetTurret, tank.turretTurnRate * dt);
+        tank.aimTargetAngle = targetTurret;
+        tank.aimError = Math.abs(normalizeAngle(tank.turretAngle - targetTurret));
+      }
 
-      if (this.input.consumeMousePress(0)) {
+      if (tank.weaponMode === "mg") {
+        if (mouse.leftDown) this.fireTankMachineGun(tank, mouse.worldX, mouse.worldY);
+        this.input.consumeMousePress(0);
+      } else if (this.input.consumeMousePress(0)) {
         if (tank.loadedAmmo === "he") this.queueHeFire(tank, mouse.worldX, mouse.worldY);
         else {
           this.clearTankFireOrder(tank);
@@ -659,7 +820,63 @@
         }
       }
 
+      this.updatePlayerTankMachineGunner(tank, dt);
       this.updateHeFireOrder(tank, dt);
+    }
+
+    updateMountedHumvee(humvee, dt) {
+      this.player.x = humvee.x;
+      this.player.y = humvee.y;
+      this.applyVirtualAim(humvee, this.input.mouse.rightDown ? 1050 : 760);
+
+      if (!humvee.alive) {
+        this.player.inTank = null;
+        humvee.playerControlled = false;
+        this.player.hp = Math.max(0, this.player.hp - 28);
+        return;
+      }
+
+      const mouse = this.input.mouse;
+      const targetGun = angleTo(humvee.x, humvee.y, mouse.worldX, mouse.worldY);
+      humvee.machineGunAngle = rotateTowards(humvee.machineGunAngle, targetGun, humvee.machineGunTurnRate * dt);
+
+      if (!this.matchStarted) {
+        humvee.drive(this, dt, 0, 0, { dust: false, collisionSpeedRetain: 0.34 });
+        return;
+      }
+
+      const turnInput = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
+      const throttle = this.input.axis("KeyS", "ArrowDown", "KeyW", "ArrowUp");
+      const mobileStickX = this.input.virtual.axisX || 0;
+      const mobileStickY = this.input.virtual.axisY || 0;
+      const mobileDriveAmount = Math.min(1, Math.hypot(mobileStickX, mobileStickY));
+      const useMobileDriveAssist = Boolean(this.settings?.mobileControls && this.input.virtual.enabled && mobileDriveAmount > 0.16);
+
+      let driveThrottle = throttle;
+      let driveTurn = turnInput;
+
+      if (useMobileDriveAssist) {
+        const desiredAngle = Math.atan2(mobileStickY, mobileStickX);
+        const forwardDiff = normalizeAngle(desiredAngle - humvee.angle);
+        const reverseDiff = normalizeAngle(desiredAngle - normalizeAngle(humvee.angle + Math.PI));
+        if (Math.abs(forwardDiff) > 2.18 && Math.abs(reverseDiff) < Math.abs(forwardDiff) - 0.28) {
+          driveThrottle = -mobileDriveAmount * 0.46;
+          driveTurn = clamp(reverseDiff * 1.16, -1, 1);
+        } else {
+          const alignment = clamp((Math.cos(forwardDiff) + 0.15) / 1.15, 0, 1);
+          driveThrottle = mobileDriveAmount * (0.3 + alignment * 0.7);
+          driveTurn = clamp(forwardDiff * 1.22, -1, 1);
+        }
+      }
+
+      humvee.drive(this, dt, driveThrottle, driveTurn, {
+        brake: this.input.keyDown("Space") && Math.abs(driveThrottle) < 0.01,
+        turnScale: 1.03,
+        collisionSpeedRetain: 0.34
+      });
+
+      if (mouse.leftDown) this.fireTankMachineGun(humvee, mouse.worldX, mouse.worldY);
+      this.input.consumeMousePress(0);
     }
 
     mobileAutoLoadTank(tank) {
@@ -676,13 +893,20 @@
 
     cycleMobileTankAmmo(tank) {
       if (!tank?.alive) return false;
+      if (tank.vehicleType === "humvee") return true;
       this.clearTankFireOrder(tank);
       const choices = ["ap", "he"].filter((ammoId) => (tank.ammo?.[ammoId] || 0) > 0);
+      if (tank.hasMachineGunner?.() && (tank.ammo?.mg || 0) > 0) choices.push("mg");
       if (!choices.length) return false;
 
-      const current = tank.reload.active ? tank.reload.ammoId : tank.loadedAmmo;
+      const current = tank.weaponMode === "mg" ? "mg" : tank.reload.active ? tank.reload.ammoId : tank.loadedAmmo;
       const currentIndex = choices.indexOf(current);
       const nextAmmo = choices[(currentIndex + 1 + choices.length) % choices.length];
+      if (nextAmmo === "mg") {
+        tank.weaponMode = "mg";
+        return true;
+      }
+      tank.weaponMode = "cannon";
       return tank.beginLoad(nextAmmo);
     }
 
@@ -702,6 +926,105 @@
 
     clearTankFireOrder(tank) {
       if (tank) tank.fireOrder = null;
+    }
+
+    fireTankMachineGun(tank, targetX, targetY) {
+      if (!tank?.canFireMachineGun?.()) return false;
+      const target = this.findTankMachineGunTarget(tank, targetX, targetY);
+      return tank.fireMachineGun(this, targetX, targetY, { target });
+    }
+
+    updatePlayerTankMachineGunner(tank, dt) {
+      if (!tank?.hasMachineGunner?.() || (tank.ammo?.mg || 0) <= 0) return false;
+      if (tank.weaponMode === "mg") return false;
+
+      const target = this.findAutoTankMachineGunTarget(tank);
+      if (!target) {
+        tank.machineGunAngle = rotateTowards(
+          tank.machineGunAngle,
+          tank.turretAngle,
+          tank.machineGunTurnRate * 0.7 * dt
+        );
+        return false;
+      }
+
+      const targetAngle = angleTo(tank.x, tank.y, target.x, target.y);
+      tank.machineGunAngle = rotateTowards(tank.machineGunAngle, targetAngle, tank.machineGunTurnRate * dt);
+      const aimError = Math.abs(normalizeAngle(tank.machineGunAngle - targetAngle));
+      if (aimError > 0.16) return false;
+      return tank.fireMachineGun(this, target.x, target.y, { target });
+    }
+
+    findAutoTankMachineGunTarget(tank) {
+      const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
+      const muzzle = tank.machineGunMuzzlePoint?.() || { x: tank.x, y: tank.y };
+      const range = weapon.range || 740;
+      const candidates = [];
+
+      const addTarget = (target, priority = 1) => {
+        if (!target || !target.alive || target.team === tank.team) return;
+        const distance = distXY(muzzle.x, muzzle.y, target.x, target.y);
+        if (distance > range) return;
+        if (!hasLineOfSight(this, muzzle, target, { padding: 4 })) return;
+        const threatBonus =
+          target.classId === "engineer" ? 220 :
+          target.weaponId === "machinegun" || target.weaponId === "lmg" ? 120 :
+          target.weaponId === "rpg" ? 180 :
+          0;
+        candidates.push({
+          target,
+          score: distance - threatBonus - priority * 80
+        });
+      };
+
+      for (const unit of this.infantry || []) addTarget(unit, unit.classId === "engineer" ? 3 : 2);
+      for (const crew of this.crews || []) {
+        if (crew.inTank) continue;
+        addTarget(crew, 1);
+      }
+
+      if (tank.team === TEAM.RED && !this.player.inTank && this.player.hp > 0 && !this.isPlayerInSafeZone?.()) {
+        addTarget(this.player, 2);
+      }
+
+      return candidates.sort((a, b) => a.score - b.score)[0]?.target || null;
+    }
+
+    findTankMachineGunTarget(tank, targetX, targetY) {
+      const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
+      const muzzle = tank.machineGunMuzzlePoint?.() || { x: tank.x, y: tank.y };
+      const range = weapon.range || 740;
+      const enemies = [];
+
+      for (const unit of this.infantry || []) {
+        if (!unit.alive || unit.team === tank.team) continue;
+        enemies.push(unit);
+      }
+
+      for (const crew of this.crews || []) {
+        if (!crew.alive || crew.inTank || crew.team === tank.team) continue;
+        enemies.push(crew);
+      }
+
+      if (!this.player.inTank && this.player.hp > 0 && tank.team === TEAM.RED && !this.isPlayerInSafeZone?.()) {
+        enemies.push(this.player);
+      }
+
+      return enemies
+        .map((target) => {
+          const rangeDistance = distXY(muzzle.x, muzzle.y, target.x, target.y);
+          if (rangeDistance > range) return null;
+          const laneDistance = segmentDistanceToPoint(muzzle.x, muzzle.y, targetX, targetY, target.x, target.y);
+          const cursorDistance = distXY(targetX, targetY, target.x, target.y);
+          if (laneDistance > 42 + target.radius || cursorDistance > 120) return null;
+          if (!hasLineOfSight(this, muzzle, target, { padding: 4 })) return null;
+          return {
+            target,
+            score: laneDistance * 1.25 + cursorDistance * 0.55 + rangeDistance * 0.02
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.score - b.score)[0]?.target || null;
     }
 
     applyVirtualAim(focus, distance) {
@@ -806,21 +1129,24 @@
 
     updateInfantryPlayer(dt) {
       this.player.rifleCooldown = Math.max(0, this.player.rifleCooldown - dt);
+      this.player.gunKick = Math.max(0, (this.player.gunKick || 0) - dt * 11);
       this.updateInfantryWeaponInput();
       const scoutAimMode = this.isPlayerScoutAimMode();
       const rpgAimMode = this.isPlayerRpgAimMode();
+      const machineGunAimMode = this.isPlayerMachineGunAimMode();
       this.player.scoutAim = scoutAimMode;
       this.player.rpgAim = rpgAimMode;
+      this.player.machineGunAim = machineGunAimMode;
       this.player.rpgAimTime = rpgAimMode ? Math.min((this.player.rpgAimTime || 0) + dt, 0.7) : 0;
       const moveX = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
       const moveY = this.input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
       const length = Math.hypot(moveX, moveY);
-      const infantrySpeed = scoutAimMode ? 0 : rpgAimMode ? 68 : 155;
+      const infantrySpeed = scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 82 : 155;
       const vx = length > 0 ? (moveX / length) * infantrySpeed : 0;
       const vy = length > 0 ? (moveY / length) * infantrySpeed : 0;
 
       tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, padding: 5 });
-      this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : 650);
+      this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : 650);
 
       const mouse = this.input.mouse;
       this.player.angle = angleTo(this.player.x, this.player.y, mouse.worldX, mouse.worldY);
@@ -843,6 +1169,12 @@
       if (this.player.inTank || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
       const weapon = this.player.getWeapon?.();
       return this.player.classId === "engineer" && weapon?.id === "rpg";
+    }
+
+    isPlayerMachineGunAimMode() {
+      if (this.player.inTank || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
+      const weapon = this.player.getWeapon?.();
+      return weapon?.id === "machinegun" || weapon?.id === "lmg";
     }
 
     updateInfantryWeaponInput() {
@@ -970,22 +1302,81 @@
     }
 
     firePlayerGun(weapon, targetX, targetY) {
+      if (!this.hasPlayerWeaponAmmo(weapon)) return false;
+
       const scoped = this.isPlayerScoutAimMode() && weapon.id === "sniper";
-      const range = scoped ? weapon.range * 1.28 : weapon.range;
+      const machineGunAim = this.isPlayerMachineGunAimMode() && (weapon.id === "machinegun" || weapon.id === "lmg");
+      const range = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : weapon.range;
       const target = this.findPlayerRifleTarget();
-      return target
+      const fired = target
         ? IronLine.combat.fireRifle(this, this.player, target, {
         weapon,
         range,
         damage: weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin),
-        accuracyBonus: weapon.accuracyBonus + 0.08 + (scoped ? 0.16 : 0)
+        accuracyBonus: weapon.accuracyBonus + 0.08 + (scoped ? 0.16 : machineGunAim ? 0.12 : 0),
+        spread: machineGunAim ? weapon.spread * 0.58 : weapon.spread,
+        impactChance: machineGunAim ? 0.45 : 0.24
         })
         : IronLine.combat.fireRifleAtPoint(this, this.player, targetX, targetY, {
           weapon,
           range,
-          spread: scoped ? weapon.spread * 0.35 : weapon.spread,
-          targetTeam: TEAM.RED
+          spread: scoped ? weapon.spread * 0.35 : machineGunAim ? weapon.spread * 0.58 : weapon.spread,
+          targetTeam: TEAM.RED,
+          impactChance: machineGunAim ? 0.46 : 0.28
         });
+      if (fired) {
+        this.consumePlayerEquipmentAmmo(weapon);
+        this.emitPlayerGunFeedback(weapon, machineGunAim);
+      }
+      return fired;
+    }
+
+    emitPlayerGunFeedback(weapon, aimed = false) {
+      const player = this.player;
+      const angle = player.angle;
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      const side = aimed ? 0 : 6;
+      const muzzleDistance = player.radius + (weapon.visualLength || 16) + 5;
+      const muzzleX = player.x + c * muzzleDistance - s * side;
+      const muzzleY = player.y + s * muzzleDistance + c * side;
+      const heavy = weapon.id === "machinegun" || weapon.id === "lmg";
+      const flashes = this.effects.muzzleFlashes || (this.effects.muzzleFlashes = []);
+      const smokePuffs = this.effects.gunSmokePuffs || (this.effects.gunSmokePuffs = []);
+
+      if (flashes.length > 90) flashes.shift();
+      flashes.push({
+        x: muzzleX,
+        y: muzzleY,
+        angle,
+        length: heavy ? 18 : 12,
+        width: heavy ? 8 : 5,
+        life: heavy ? 0.055 : 0.045,
+        maxLife: heavy ? 0.055 : 0.045,
+        color: heavy ? "rgba(255, 228, 148, 0.92)" : "rgba(255, 236, 170, 0.82)"
+      });
+
+      if (smokePuffs.length > 180) smokePuffs.shift();
+      smokePuffs.push({
+        x: muzzleX - c * 4,
+        y: muzzleY - s * 4,
+        vx: c * (heavy ? 24 : 16) + (Math.random() - 0.5) * 10,
+        vy: s * (heavy ? 24 : 16) + (Math.random() - 0.5) * 10,
+        angle: angle + (Math.random() - 0.5) * 0.36,
+        radius: heavy ? 2.8 : 1.9,
+        maxRadius: heavy ? 11 + Math.random() * 5 : 7 + Math.random() * 3,
+        life: heavy ? 0.22 : 0.15,
+        maxLife: heavy ? 0.22 : 0.15,
+        alpha: heavy ? 0.13 : 0.08,
+        warm: true
+      });
+
+      player.gunKick = Math.max(player.gunKick || 0, heavy ? 1.35 : 0.8);
+    }
+
+    hasPlayerWeaponAmmo(weapon) {
+      if (!weapon?.ammoKey) return true;
+      return (this.player.equipmentAmmo?.[weapon.ammoKey] || 0) > 0;
     }
 
     consumePlayerEquipmentAmmo(weapon) {
@@ -1016,7 +1407,7 @@
 
     findRepairTarget(range) {
       const mouse = this.input.mouse;
-      return this.tanks
+      return [...(this.tanks || []), ...(this.humvees || [])]
         .filter((tank) => (
           tank.alive &&
           tank.team === TEAM.BLUE &&
@@ -1034,9 +1425,10 @@
       const mouse = this.input.mouse;
       const weapon = this.player.getWeapon();
       const scoped = this.isPlayerScoutAimMode() && weapon.id === "sniper";
-      const range = scoped ? weapon.range * 1.28 : weapon.range;
-      const aimTolerance = scoped ? 16 + weapon.spread * 16 : 30 + weapon.spread * 28;
-      const cursorTolerance = scoped ? 28 + weapon.spread * 10 : 46 + weapon.spread * 18;
+      const machineGunAim = this.isPlayerMachineGunAimMode() && (weapon.id === "machinegun" || weapon.id === "lmg");
+      const range = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : weapon.range;
+      const aimTolerance = scoped ? 16 + weapon.spread * 16 : machineGunAim ? 22 + weapon.spread * 12 : 30 + weapon.spread * 28;
+      const cursorTolerance = scoped ? 28 + weapon.spread * 10 : machineGunAim ? 34 + weapon.spread * 12 : 46 + weapon.spread * 18;
       const candidates = [];
 
       for (const unit of this.infantry || []) {
@@ -1080,20 +1472,40 @@
         return;
       }
 
-      const tank = this.findMountablePlayerTank();
-      if (tank) {
-        this.player.inTank = tank;
-        tank.playerControlled = true;
-        this.player.x = tank.x;
-        this.player.y = tank.y;
+      const vehicle = this.findMountablePlayerVehicle();
+      if (vehicle) {
+        if (vehicle.vehicleType === "humvee" && vehicle.crew) {
+          const crew = vehicle.crew;
+          crew.dismount(this);
+          crew.targetTank = vehicle;
+          const angle = vehicle.angle + Math.PI / 2;
+          crew.x = clamp(vehicle.x + Math.cos(angle) * (vehicle.radius + crew.radius + 18), crew.radius, this.world.width - crew.radius);
+          crew.y = clamp(vehicle.y + Math.sin(angle) * (vehicle.radius + crew.radius + 18), crew.radius, this.world.height - crew.radius);
+          crew.angle = vehicle.angle;
+        }
+        this.player.inTank = vehicle;
+        vehicle.playerControlled = true;
+        vehicle.ai?.navigation?.clearPath?.(`player:${vehicle.callSign}`);
+        this.player.x = vehicle.x;
+        this.player.y = vehicle.y;
       }
     }
 
-    findMountablePlayerTank(maxDistance = 82) {
+    findMountablePlayerVehicle(maxDistance = 104) {
       if (this.player.inTank) return this.player.inTank;
-      return this.tanks
-        .filter((tank) => tank.alive && tank.isPlayerTank && distXY(this.player.x, this.player.y, tank.x, tank.y) < maxDistance)
+      const vehicles = [...(this.tanks || []), ...(this.humvees || [])];
+      return vehicles
+        .filter((vehicle) => (
+          vehicle.alive &&
+          vehicle.team === TEAM.BLUE &&
+          distXY(this.player.x, this.player.y, vehicle.x, vehicle.y) < maxDistance + Math.max(0, (vehicle.radius || 0) - 30)
+        ))
         .sort((a, b) => distXY(this.player.x, this.player.y, a.x, a.y) - distXY(this.player.x, this.player.y, b.x, b.y))[0] || null;
+    }
+
+    findMountablePlayerTank(maxDistance = 104) {
+      const vehicle = this.findMountablePlayerVehicle(maxDistance);
+      return vehicle?.vehicleType === "humvee" ? null : vehicle;
     }
 
     dismountTank(tank) {
@@ -1105,8 +1517,9 @@
       ];
 
       for (const angle of offsets) {
-        const x = clamp(tank.x + Math.cos(angle) * 55, this.player.radius, this.world.width - this.player.radius);
-        const y = clamp(tank.y + Math.sin(angle) * 55, this.player.radius, this.world.height - this.player.radius);
+        const dismountDistance = tank.radius + this.player.radius + 22;
+        const x = clamp(tank.x + Math.cos(angle) * dismountDistance, this.player.radius, this.world.width - this.player.radius);
+        const y = clamp(tank.y + Math.sin(angle) * dismountDistance, this.player.radius, this.world.height - this.player.radius);
         const blocked = this.world.obstacles.some((obstacle) => circleRectCollision(x, y, this.player.radius, obstacle)) ||
           circleIntersectsTank(this, this.player, x, y, this.player.radius, { ignoreTank: tank, padding: 5 });
         if (!blocked) {
@@ -1121,7 +1534,7 @@
       this.player.inTank = null;
       tank.playerControlled = false;
       this.player.x = tank.x;
-      this.player.y = tank.y + 58;
+      this.player.y = tank.y + tank.radius + this.player.radius + 24;
     }
 
     updateCamera(dt) {
@@ -1129,20 +1542,23 @@
       const tankAimMode = Boolean(this.player.inTank && this.input.mouse.rightDown);
       const scoutAimMode = Boolean(!this.player.inTank && this.isPlayerScoutAimMode());
       const rpgAimMode = Boolean(!this.player.inTank && this.isPlayerRpgAimMode());
-      const targetZoom = tankAimMode ? 0.76 : scoutAimMode ? 0.72 : rpgAimMode ? 0.82 : 1;
+      const machineGunAimMode = Boolean(!this.player.inTank && this.isPlayerMachineGunAimMode());
+      const targetZoom = tankAimMode ? 0.76 : scoutAimMode ? 0.72 : rpgAimMode ? 0.82 : machineGunAimMode ? 0.88 : 1;
       this.camera.zoom = lerp(this.camera.zoom || 1, targetZoom, 1 - Math.pow(0.0002, dt));
       this.camera.viewWidth = this.camera.width / this.camera.zoom;
       this.camera.viewHeight = this.camera.height / this.camera.zoom;
 
       let focusX = focus.x;
       let focusY = focus.y;
-      if (tankAimMode || scoutAimMode || rpgAimMode) {
+      if (tankAimMode || scoutAimMode || rpgAimMode || machineGunAimMode) {
         const mouseDistance = distXY(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
         const lookAhead = tankAimMode
           ? clamp(mouseDistance * 0.42, 0, 520)
           : scoutAimMode
             ? clamp(mouseDistance * 0.52, 0, 650)
-            : clamp(mouseDistance * 0.38, 0, 440);
+            : rpgAimMode
+              ? clamp(mouseDistance * 0.38, 0, 440)
+              : clamp(mouseDistance * 0.44, 0, 520);
         const lookAngle = angleTo(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
         focusX += Math.cos(lookAngle) * lookAhead;
         focusY += Math.sin(lookAngle) * lookAhead;
@@ -1157,6 +1573,7 @@
 
     updateResult(dt) {
       if (this.result) return;
+      if (this.playerDeathActive) return;
       if (this.matchConfig.mode !== "annihilation") return;
       this.updateAnnihilationResult(dt);
     }
@@ -1168,27 +1585,22 @@
       this.objectiveHold[TEAM.RED] = redOwned ? this.objectiveHold[TEAM.RED] + dt : 0;
 
       if (this.objectiveHold[TEAM.BLUE] >= this.objectiveHoldDuration) {
-        this.finishGame("BLUE VICTORY", "섬멸전 종료");
+        this.finishGame("BLUE VICTORY", "거점 완전 장악");
         return;
       }
 
       if (this.objectiveHold[TEAM.RED] >= this.objectiveHoldDuration) {
-        this.finishGame("MISSION LOST", "섬멸전 종료");
+        this.finishGame("MISSION LOST", "거점 전부 상실");
         return;
       }
 
       if (!this.hasCombatPower(TEAM.RED)) {
-        this.finishGame("BLUE VICTORY", "섬멸전 종료");
-        return;
-      }
-
-      if (this.player.hp <= 0) {
-        this.finishGame("MISSION LOST", "섬멸전 종료");
+        this.finishGame("BLUE VICTORY", "적 전투력 소멸");
         return;
       }
 
       if (!this.hasCombatPower(TEAM.BLUE)) {
-        this.finishGame("MISSION LOST", "섬멸전 종료");
+        this.finishGame("MISSION LOST", "아군 전투력 소멸");
       }
     }
 
@@ -1200,9 +1612,10 @@
 
     hasCombatPower(team) {
       const tankAlive = this.tanks.some((tank) => tank.team === team && tank.alive);
+      const humveeAlive = (this.humvees || []).some((humvee) => humvee.team === team && humvee.isOperational?.());
       const infantryAlive = (this.infantry || []).some((unit) => unit.team === team && unit.alive);
-      const playerAlive = team === TEAM.BLUE && this.player.hp > 0;
-      return tankAlive || infantryAlive || playerAlive;
+      const playerAlive = team === TEAM.BLUE && !this.playerDeathActive && this.player.hp > 0;
+      return tankAlive || humveeAlive || infantryAlive || playerAlive;
     }
 
     reportContact(team, target, reporter, ttl = 3.4) {

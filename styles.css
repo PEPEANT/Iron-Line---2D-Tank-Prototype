@@ -482,6 +482,70 @@ body {
   display: none;
 }
 
+.death-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 9, 8, 0.56);
+  backdrop-filter: blur(5px);
+}
+
+.death-screen.hidden {
+  display: none;
+}
+
+.death-card {
+  width: min(360px, calc(100vw - 48px));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 24px 24px;
+  border: 1px solid rgba(255, 147, 140, 0.32);
+  border-radius: 8px;
+  background: rgba(8, 14, 12, 0.92);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+.death-card span {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.death-card h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 44px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.death-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.death-card button {
+  min-width: 160px;
+  min-height: 44px;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 209, 102, 0.42);
+  border-radius: 7px;
+  background: linear-gradient(180deg, #ffe08a, #d59f35);
+  color: #14140f;
+  font-size: 15px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
 .deployment-card {
   width: min(1120px, 100%);
   height: min(700px, calc(100vh - 56px));
@@ -984,7 +1048,7 @@ body {
 }
 
 .weapon-panel {
-  min-width: 400px;
+  min-width: 520px;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 14px;
@@ -992,6 +1056,10 @@ body {
   padding: 12px;
   border-radius: 7px;
   background: var(--panel-strong);
+}
+
+.hud-bottom.infantry-weapons .weapon-panel {
+  min-width: 440px;
 }
 
 .reload-readout {
@@ -1018,8 +1086,12 @@ body {
 
 .ammo-row {
   display: grid;
-  grid-template-columns: repeat(3, 78px);
+  grid-template-columns: repeat(4, 78px);
   gap: 8px;
+}
+
+.hud-bottom.infantry-weapons .ammo-row {
+  grid-template-columns: repeat(3, 82px);
 }
 
 .ammo-slot {
@@ -1030,6 +1102,10 @@ body {
   border: 1px solid rgba(237, 244, 239, 0.14);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.055);
+}
+
+.ammo-slot.hidden {
+  display: none;
 }
 
 .ammo-slot span {
@@ -1178,6 +1254,10 @@ body.mobile-controls-active .objective-node strong {
   }
 
   .ammo-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .hud-bottom.infantry-weapons .ammo-row {
     grid-template-columns: repeat(3, 1fr);
   }
 }

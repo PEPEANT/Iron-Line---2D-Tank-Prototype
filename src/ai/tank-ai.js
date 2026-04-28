@@ -306,12 +306,13 @@
         ay += (awayY / distance) * force;
       }
 
-      for (const other of this.game.tanks) {
+      for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (other === this.tank || !other.alive) continue;
         const distance = distXY(this.tank.x, this.tank.y, other.x, other.y);
-        if (distance > 82 || distance < 1) continue;
-        ax += ((this.tank.x - other.x) / distance) * (82 - distance) / 42;
-        ay += ((this.tank.y - other.y) / distance) * (82 - distance) / 42;
+        const avoidRange = (this.tank.radius || 38) + (other.radius || 32) + 22;
+        if (distance > avoidRange || distance < 1) continue;
+        ax += ((this.tank.x - other.x) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.5, 1);
+        ay += ((this.tank.y - other.y) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.5, 1);
       }
 
       if (this.tank.x < 120) ax += 1.2;
@@ -325,6 +326,17 @@
 
     applyDrive(dt, throttle, turn) {
       const tank = this.tank;
+      if (typeof tank.drive === "function") {
+        tank.drive(this.game, dt, throttle, turn, {
+          accelScale: 1.08,
+          turnScale: 0.92,
+          turnAccel: 4.1,
+          driveDrag: 0.24,
+          coastDrag: 0.95
+        });
+        return;
+      }
+
       tank.angle = normalizeAngle(tank.angle + turn * tank.turnRate * 0.82 * dt);
       const targetSpeed = tank.maxSpeed * throttle;
       tank.speed = approach(tank.speed, targetSpeed, tank.accel * 0.72 * dt);

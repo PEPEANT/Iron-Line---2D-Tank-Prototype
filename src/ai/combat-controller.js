@@ -109,6 +109,11 @@
         other.team !== this.tank.team
       ));
 
+      for (const humvee of this.game.humvees || []) {
+        if (!humvee.alive || humvee.team === this.tank.team) continue;
+        enemies.push(humvee);
+      }
+
       for (const unit of this.game.infantry || []) {
         if (!unit.alive || unit.team === this.tank.team) continue;
         enemies.push(unit);

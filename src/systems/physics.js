@@ -65,7 +65,7 @@
     const ignoreTanks = new Set(options.ignoreTanks || []);
     if (options.ignoreTank) ignoreTanks.add(options.ignoreTank);
 
-    return (game.tanks || []).some((tank) => {
+    return [...(game.tanks || []), ...(game.humvees || [])].some((tank) => {
       if (tank === entity || ignoreTanks.has(tank)) return false;
       if (!tank.alive && !options.blockWrecks) return false;
       return distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
@@ -74,13 +74,14 @@
 
   function tryMoveCircle(game, entity, vx, vy, radius, dt, options = {}) {
     const world = game.world;
+    const collisionSpeedScale = options.collisionSpeedScale ?? -0.18;
     const nextX = clamp(entity.x + vx * dt, radius, world.width - radius);
     const blockedX = world.obstacles.some((obstacle) => circleRectCollision(nextX, entity.y, radius, obstacle)) ||
       options.blockTanks && circleIntersectsTank(game, entity, nextX, entity.y, radius, options);
     if (!blockedX) {
       entity.x = nextX;
     } else if (entity.speed !== undefined) {
-      entity.speed *= -0.18;
+      entity.speed *= collisionSpeedScale;
     }
 
     const nextY = clamp(entity.y + vy * dt, radius, world.height - radius);
@@ -89,15 +90,17 @@
     if (!blockedY) {
       entity.y = nextY;
     } else if (entity.speed !== undefined) {
-      entity.speed *= -0.18;
+      entity.speed *= collisionSpeedScale;
     }
+
+    return { blocked: blockedX || blockedY, blockedX, blockedY };
   }
 
   function resolveCircleAgainstTanks(game, entity, padding = 5) {
     if (!entity || entity.inTank || entity.alive === false || entity.hp <= 0) return;
 
     const radius = entity.radius || 10;
-    for (const tank of game.tanks || []) {
+    for (const tank of [...(game.tanks || []), ...(game.humvees || [])]) {
       if (!tank.alive) continue;
       const dx = entity.x - tank.x;
       const dy = entity.y - tank.y;
@@ -128,7 +131,7 @@
   }
 
   function resolveTankSpacing(game, dt) {
-    const tanks = game.tanks;
+    const tanks = [...(game.tanks || []), ...(game.humvees || [])];
     for (let i = 0; i < tanks.length; i += 1) {
       const a = tanks[i];
       if (!a.alive) continue;
@@ -150,6 +153,11 @@
         a.y -= ny * push * dt * 14;
         b.x += nx * push * dt * 14;
         b.y += ny * push * dt * 14;
+        const impact = clamp((minDist - d) / Math.max(minDist, 1), 0.08, 0.45);
+        a.impactShake = Math.max(a.impactShake || 0, impact);
+        b.impactShake = Math.max(b.impactShake || 0, impact);
+        if (a.turnVelocity !== undefined) a.turnVelocity *= 0.9;
+        if (b.turnVelocity !== undefined) b.turnVelocity *= 0.9;
         a.speed *= 0.82;
         b.speed *= 0.82;
       }

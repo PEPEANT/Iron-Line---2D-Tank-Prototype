@@ -45,6 +45,10 @@
       this.reconWatchTimer = 0;
       this.reconPatrolTarget = null;
       this.reconPatrolStep = 0;
+      this.reconEgressTimer = 0;
+      this.reconEgressSkipUntil = 0;
+      this.recoveryTarget = null;
+      this.recoveryTimer = 0;
       this.target = null;
       this.moveHeading = unit.angle;
       this.seed = this.hash(unit.callSign);
@@ -353,11 +357,22 @@
 
       const egressTarget = this.reconEgressTarget(order);
       if (egressTarget) {
-        this.state = "recon-egress";
-        this.moveTo(dt, egressTarget);
-        this.recordMovement(dt, beforeX, beforeY, egressTarget);
-        this.updateDebug(egressTarget);
-        return;
+        this.reconEgressTimer = this.state === "recon-egress" ? this.reconEgressTimer + dt : dt;
+        if (this.shouldSkipReconEgress(order)) {
+          this.reconEgressSkipUntil = (this.game.matchTime || 0) + 5.5;
+          this.reconEgressTimer = 0;
+          this.path = [];
+          this.pathIndex = 0;
+          this.repathTimer = 0;
+        } else {
+          this.state = "recon-egress";
+          this.moveTo(dt, egressTarget);
+          this.recordMovement(dt, beforeX, beforeY, egressTarget);
+          this.updateDebug(egressTarget);
+          return;
+        }
+      } else {
+        this.reconEgressTimer = 0;
       }
 
       const weapon = this.weapon();
@@ -418,6 +433,8 @@
       this.reconPatrolTarget = null;
       this.reconWatchTimer = this.nextReconWatchDuration();
       this.reconPatrolStep = 0;
+      this.reconEgressTimer = 0;
+      this.reconEgressSkipUntil = 0;
     }
 
     nextReconWatchDuration() {
@@ -476,12 +493,32 @@
     }
 
     reconEgressTarget(order) {
+      if ((this.game.matchTime || 0) < this.reconEgressSkipUntil) return null;
       const point = order?.egressPoint;
       if (!point) return null;
       const insideBase = this.game.isPointInSafeZone?.(this.unit.x, this.unit.y, this.unit.team);
       if (!insideBase) return null;
       const stopDistance = point.radius || 70;
       if (distXY(this.unit.x, this.unit.y, point.x, point.y) <= stopDistance) return null;
+      if (!this.canMoveDirect(point.x, point.y, 18)) {
+        const routedTarget = this.nextMoveTarget({
+          ...order,
+          id: `${order.id}:egress`,
+          point: {
+            name: `${order.objectiveName || "recon"}-egress`,
+            x: point.x,
+            y: point.y,
+            radius: stopDistance
+          },
+          formation: null,
+          slotIndex: 0,
+          slotCount: 1
+        });
+        return {
+          ...routedTarget,
+          reconEgress: true
+        };
+      }
       return {
         x: point.x,
         y: point.y,
@@ -489,6 +526,18 @@
         final: false,
         reconEgress: true
       };
+    }
+
+    shouldSkipReconEgress(order) {
+      const point = order?.egressPoint;
+      if (!point) return false;
+      const exitRadius = point.radius || 70;
+      const exitDistance = distXY(this.unit.x, this.unit.y, point.x, point.y);
+      const nearExit = exitDistance <= exitRadius + 120;
+      const recoveryActive = this.recoveryTimer > 0 && this.reconEgressTimer > 1.1;
+      const waitedNearExit = this.reconEgressTimer > 2.2 && nearExit;
+      const waitedTooLong = this.reconEgressTimer > 4.6 && exitDistance <= exitRadius + 240;
+      return (recoveryActive && nearExit) || waitedNearExit || waitedTooLong;
     }
 
     closestReconThreat(contact, tankThreat) {
@@ -1065,6 +1114,7 @@
     }
 
     moveTo(dt, target) {
+      target = this.activeMoveTarget(dt, target);
       const dx = target.x - this.unit.x;
       const dy = target.y - this.unit.y;
       const distance = Math.hypot(dx, dy);
@@ -1120,7 +1170,7 @@
         ay += ((this.unit.y - other.y) / distance) * (32 - distance) / 22;
       }
 
-      for (const tank of this.game.tanks || []) {
+      for (const tank of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (!tank.alive) continue;
         const distance = distXY(this.unit.x, this.unit.y, tank.x, tank.y);
         if (distance > 86 || distance < 1) continue;
@@ -1177,6 +1227,7 @@
 
       for (const tank of this.game.tanks || []) {
         if (!tank.alive || tank.team !== this.unit.team) continue;
+        if (tank.isPlayerTank && !tank.playerControlled) continue;
         if (!tank.isOperational?.() && !tank.playerControlled) continue;
 
         const ammoId = tank.loadedAmmo || tank.reload?.ammoId || "ap";
@@ -1243,15 +1294,74 @@
     recordMovement(dt, beforeX, beforeY, target) {
       const moved = distXY(beforeX, beforeY, this.unit.x, this.unit.y);
       const trying = target && distXY(this.unit.x, this.unit.y, target.x, target.y) > (target.stopDistance || 20) + 8;
-      if (trying && moved < 5 * dt) this.stuckTimer += dt;
+      if (trying && moved < 12 * dt) this.stuckTimer += dt;
       else this.stuckTimer = Math.max(0, this.stuckTimer - dt * 1.8);
 
       if (this.stuckTimer > 0.9) {
         this.path = [];
         this.pathIndex = 0;
         this.repathTimer = 0;
+        this.startMovementRecovery(target);
         this.stuckTimer = 0;
       }
+    }
+
+    activeMoveTarget(dt, target) {
+      if (this.recoveryTimer <= 0 || !this.recoveryTarget || target?.recovery) {
+        if (this.recoveryTimer <= 0) this.recoveryTarget = null;
+        return target;
+      }
+
+      this.recoveryTimer = Math.max(0, this.recoveryTimer - dt);
+      const reached = distXY(this.unit.x, this.unit.y, this.recoveryTarget.x, this.recoveryTarget.y) <=
+        (this.recoveryTarget.stopDistance || 12) + 6;
+      const passable = this.pointPassable(this.recoveryTarget.x, this.recoveryTarget.y, this.unit.radius + 3);
+      if (reached || !passable) {
+        this.recoveryTarget = null;
+        this.recoveryTimer = 0;
+        return target;
+      }
+
+      return this.recoveryTarget;
+    }
+
+    startMovementRecovery(target) {
+      const recovery = this.findMovementRecoveryTarget(target);
+      if (!recovery) return false;
+      this.recoveryTarget = recovery;
+      this.recoveryTimer = 0.72;
+      return true;
+    }
+
+    findMovementRecoveryTarget(target) {
+      if (!target) return null;
+
+      const desiredAngle = angleTo(this.unit.x, this.unit.y, target.x, target.y);
+      const angles = [
+        desiredAngle + Math.PI / 2,
+        desiredAngle - Math.PI / 2,
+        desiredAngle + Math.PI,
+        desiredAngle + 0.68,
+        desiredAngle - 0.68
+      ];
+      const distances = [52, 76, 104];
+
+      for (const distance of distances) {
+        for (const angle of angles) {
+          const candidate = {
+            x: this.unit.x + Math.cos(angle) * distance,
+            y: this.unit.y + Math.sin(angle) * distance,
+            stopDistance: 10,
+            final: false,
+            recovery: true
+          };
+          if (!this.pointPassable(candidate.x, candidate.y, this.unit.radius + 3)) continue;
+          if (!this.canMoveDirect(candidate.x, candidate.y, 14)) continue;
+          return candidate;
+        }
+      }
+
+      return null;
     }
 
     updateDebug(moveTarget) {

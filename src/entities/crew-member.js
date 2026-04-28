@@ -19,6 +19,8 @@
       this.speed = 0;
       this.maxSpeed = options.maxSpeed || 108;
       this.targetTank = options.targetTank || null;
+      this.role = options.role || "crew";
+      this.dedicated = Boolean(options.dedicated);
       this.inTank = null;
       this.alive = true;
       this.state = this.targetTank ? "mounting" : "idle";
@@ -41,6 +43,13 @@
       if (!this.targetTank || !this.targetTank.alive) {
         this.state = "idle";
         this.speed = approach(this.speed, 0, 220 * dt);
+        return;
+      }
+
+      if (this.targetTank.vehicleType === "humvee" && this.targetTank.playerControlled) {
+        this.state = "idle";
+        this.speed = approach(this.speed, 0, 220 * dt);
+        this.mountTimer = 0;
         return;
       }
 

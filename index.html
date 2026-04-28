@@ -63,7 +63,8 @@
         <div class="mobile-ammo-row">
           <button type="button" data-mobile-key="Digit1">철갑</button>
           <button type="button" data-mobile-key="Digit2">고폭</button>
-          <button type="button" data-mobile-key="Digit3">연막</button>
+          <button type="button" data-mobile-key="Digit3">기관총</button>
+          <button type="button" data-mobile-key="KeyQ">연막</button>
         </div>
       </div>
     </div>
@@ -136,6 +137,15 @@
       </div>
     </div>
 
+    <div class="death-screen hidden" id="deathScreen" aria-label="사망">
+      <div class="death-card">
+        <span>전투 불능</span>
+        <h2>사망</h2>
+        <p id="deathReason">적 공격으로 쓰러졌습니다.</p>
+        <button type="button" id="deathRestartButton">다시 시작</button>
+      </div>
+    </div>
+
     <div class="scoreboard" id="scoreboard" aria-label="전투 현황">
       <div class="scoreboard-head">
         <strong>전투 현황</strong>
@@ -166,7 +176,7 @@
       </div>
     </div>
 
-    <div class="hud hud-bottom">
+    <div class="hud hud-bottom hidden">
       <div class="weapon-panel">
         <div class="reload-readout">
           <span class="hud-label">장전 상태</span>
@@ -182,8 +192,12 @@
             <span>고폭탄</span>
             <strong id="ammo-he">8</strong>
           </div>
+          <div class="ammo-slot" id="slot-mg">
+            <span>기관총</span>
+            <strong id="ammo-mg">240</strong>
+          </div>
           <div class="ammo-slot" id="slot-smoke">
-            <span>연막탄</span>
+            <span>연막 Q</span>
             <strong id="ammo-smoke">1</strong>
           </div>
         </div>
@@ -195,11 +209,13 @@
     <script src="src/data/infantry-weapons.js"></script>
     <script src="src/data/infantry-classes.js"></script>
     <script src="src/data/map01.js"></script>
+    <script src="src/data/map01-custom-layout.js"></script>
     <script src="src/core/input.js"></script>
     <script src="src/systems/physics.js"></script>
     <script src="src/systems/cover-slots.js"></script>
     <script src="src/entities/player.js"></script>
     <script src="src/entities/tank.js"></script>
+    <script src="src/entities/humvee.js"></script>
     <script src="src/entities/crew-member.js"></script>
     <script src="src/entities/infantry-unit.js"></script>
     <script src="src/entities/capture-point.js"></script>
@@ -207,6 +223,7 @@
     <script src="src/ai/squad-ai.js"></script>
     <script src="src/ai/commander-ai.js"></script>
     <script src="src/ai/navigation-agent.js"></script>
+    <script src="src/ai/humvee-ai.js"></script>
     <script src="src/ai/combat-controller.js"></script>
     <script src="src/ai/infantry-ai.js"></script>
     <script src="src/ai/tank-ai.js"></script>

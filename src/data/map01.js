@@ -7,6 +7,7 @@
     width: 3400,
     height: 2200,
     captureRate: 0.16,
+    roadWidth: 84,
     obstacles: [
       { x: 240, y: 360, w: 360, h: 92, kind: "concrete" },
       { x: 545, y: 605, w: 92, h: 300, kind: "building" },

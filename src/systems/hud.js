@@ -2,7 +2,7 @@
 
 (function registerHud(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM, AMMO } = IronLine.constants;
+  const { TEAM, AMMO, INFANTRY_WEAPONS } = IronLine.constants;
 
   class Hud {
     constructor() {
@@ -28,6 +28,9 @@
         deploymentScreen: document.getElementById("deploymentScreen"),
         deploymentMap: document.getElementById("deploymentMap"),
         deploymentStart: document.getElementById("deploymentStart"),
+        deathScreen: document.getElementById("deathScreen"),
+        deathReason: document.getElementById("deathReason"),
+        deathRestartButton: document.getElementById("deathRestartButton"),
         modeButtons: Array.from(document.querySelectorAll("[data-mode-id]")),
         settingControls: Array.from(document.querySelectorAll("[data-setting]")),
         classButtons: Array.from(document.querySelectorAll("[data-class-id]")),
@@ -40,16 +43,19 @@
         slots: {
           ap: document.getElementById("slot-ap"),
           he: document.getElementById("slot-he"),
+          mg: document.getElementById("slot-mg"),
           smoke: document.getElementById("slot-smoke")
         },
         slotLabels: {
           ap: document.querySelector("#slot-ap span"),
           he: document.querySelector("#slot-he span"),
+          mg: document.querySelector("#slot-mg span"),
           smoke: document.querySelector("#slot-smoke span")
         },
         ammo: {
           ap: document.getElementById("ammo-ap"),
           he: document.getElementById("ammo-he"),
+          mg: document.getElementById("ammo-mg"),
           smoke: document.getElementById("ammo-smoke")
         }
       };
@@ -102,6 +108,11 @@
           this.toggleSettingsPanel(false);
           game.beginDeploymentCountdown();
         }
+      });
+
+      this.nodes.deathRestartButton?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (game) game.restartMatchAfterDeath();
       });
     }
 
@@ -246,6 +257,7 @@
 
       this.updateObjectiveStrip(game);
       this.updateDeployment(game);
+      this.updateDeathScreen(game);
       this.updateScoreboard(game);
       this.updateSettings(game);
       this.updateMobileControls(game);
@@ -255,10 +267,13 @@
       }
 
       const inTank = Boolean(game.player.inTank);
-      ui.bottomHud?.classList.toggle("hidden", !inTank || this.mobileControlsVisible);
-      if (!inTank) return;
+      const showWeaponPanel = !game.deploymentOpen && !game.result && !game.playerDeathActive && game.player.hp > 0 && !this.mobileControlsVisible;
+      ui.bottomHud?.classList.toggle("hidden", !showWeaponPanel);
+      ui.bottomHud?.classList.toggle("infantry-weapons", showWeaponPanel && !inTank);
+      if (!showWeaponPanel) return;
 
-      this.updateTankWeapons(game.player.inTank);
+      if (inTank) this.updateTankWeapons(game.player.inTank);
+      else this.updateInfantryWeapons(game.player);
     }
 
     updateSettings(game) {
@@ -280,9 +295,9 @@
     updateMobileControls(game) {
       const enabled = Boolean(game.settings?.mobileControls);
       const portrait = window.innerHeight > window.innerWidth;
-      const showControls = enabled && !portrait && !game.deploymentOpen && !game.result;
+      const showControls = enabled && !portrait && !game.deploymentOpen && !game.result && !game.playerDeathActive;
       const inTank = Boolean(game.player?.inTank);
-      const canInteract = Boolean(inTank || game.findMountablePlayerTank?.());
+      const canInteract = Boolean(inTank || game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.());
 
       this.mobileControlsVisible = showControls;
 
@@ -311,9 +326,11 @@
     }
 
     mobileTankWeaponLabel(tank) {
+      if (tank?.vehicleType === "humvee") return `HMG ${tank.ammo?.mg || 0}`;
+      if (tank?.weaponMode === "mg") return `MG ${tank.ammo?.mg || 0}`;
       const ammoId = tank?.reload?.active ? tank.reload.ammoId : tank?.loadedAmmo;
-      if (ammoId === "he") return "HE";
-      return "AP";
+      if (ammoId === "he") return `HE ${tank.ammo?.he || 0}`;
+      return `AP ${tank?.ammo?.ap || 0}`;
     }
 
     mobileInfantryWeaponLabel(player) {
@@ -329,25 +346,58 @@
         rpg: "RPG",
         repairKit: "FIX"
       };
-      return labels[weapon?.id] || "WPN";
+      const ammo = this.weaponAmmoText(player, weapon);
+      return `${labels[weapon?.id] || "WPN"} ${ammo}`;
     }
 
     updateTankWeapons(tank) {
+      if (tank?.vehicleType === "humvee") {
+        this.updateHumveeWeapons(tank);
+        return;
+      }
+
       const ui = this.nodes;
 
-      for (const id of Object.keys(AMMO)) {
+      for (const id of ["ap", "he"]) {
+        if (!ui.slots[id]) continue;
+        ui.slots[id].classList.remove("hidden");
         ui.slotLabels[id].textContent = AMMO[id].name;
         ui.ammo[id].textContent = tank.ammo[id];
         ui.slots[id].classList.toggle("empty", tank.ammo[id] <= 0);
-        ui.slots[id].classList.toggle(
-          "active",
-          id === "smoke"
-            ? tank.smokeCooldown > 0
-            : tank.loadedAmmo === id || tank.reload.ammoId === id && tank.reload.active
-        );
+        ui.slots[id].classList.toggle("active", tank.weaponMode !== "mg" && (tank.loadedAmmo === id || tank.reload.ammoId === id && tank.reload.active));
       }
 
-      if (tank.reload.active) {
+      const hasGunner = Boolean(tank.hasMachineGunner?.());
+      if (ui.slots.mg) {
+        ui.slots.mg.classList.remove("hidden");
+        ui.slotLabels.mg.textContent = "기관총 3";
+        ui.ammo.mg.textContent = hasGunner ? tank.ammo.mg : "사수 없음";
+        ui.slots.mg.classList.toggle("empty", !hasGunner || (tank.ammo.mg || 0) <= 0);
+        ui.slots.mg.classList.toggle("active", tank.weaponMode === "mg");
+      }
+
+      if (ui.slots.smoke) {
+        ui.slots.smoke.classList.remove("hidden");
+        ui.slotLabels.smoke.textContent = "연막 Q";
+        ui.ammo.smoke.textContent = tank.ammo.smoke;
+        ui.slots.smoke.classList.toggle("empty", tank.ammo.smoke <= 0);
+        ui.slots.smoke.classList.toggle("active", tank.smokeCooldown > 0);
+      }
+
+      if (tank.weaponMode === "mg") {
+        if (!hasGunner) {
+          ui.weaponState.textContent = "기관총 사수 없음";
+          ui.reloadBar.style.width = "0%";
+        } else if ((tank.ammo.mg || 0) <= 0) {
+          ui.weaponState.textContent = "기관총 탄 없음";
+          ui.reloadBar.style.width = "0%";
+        } else {
+          const weapon = tank.machineGunWeapon?.() || { cooldown: 0.075 };
+          const pct = IronLine.math.clamp(1 - (tank.machineGunCooldown || 0) / Math.max(weapon.cooldown || 0.075, 0.001), 0, 1);
+          ui.weaponState.textContent = `기관총 ${tank.ammo.mg}발`;
+          ui.reloadBar.style.width = `${pct * 100}%`;
+        }
+      } else if (tank.reload.active) {
         const ammo = AMMO[tank.reload.ammoId];
         const pct = IronLine.math.clamp(tank.reload.progress / tank.reload.duration, 0, 1);
         ui.weaponState.textContent = `${ammo.name} ${Math.round(pct * 100)}%`;
@@ -359,6 +409,84 @@
         ui.weaponState.textContent = "비어 있음";
         ui.reloadBar.style.width = "0%";
       }
+    }
+
+    updateHumveeWeapons(humvee) {
+      const ui = this.nodes;
+
+      for (const id of ["ap", "he", "smoke"]) {
+        ui.slots[id]?.classList.add("hidden");
+      }
+
+      if (ui.slots.mg) {
+        ui.slots.mg.classList.remove("hidden");
+        ui.slotLabels.mg.textContent = "HMG";
+        ui.ammo.mg.textContent = humvee.ammo?.mg || 0;
+        ui.slots.mg.classList.toggle("empty", (humvee.ammo?.mg || 0) <= 0);
+        ui.slots.mg.classList.add("active");
+      }
+
+      const weapon = humvee.machineGunWeapon?.() || { cooldown: 0.092 };
+      const pct = IronLine.math.clamp(1 - (humvee.machineGunCooldown || 0) / Math.max(weapon.cooldown || 0.092, 0.001), 0, 1);
+      if ((humvee.ammo?.mg || 0) <= 0) {
+        ui.weaponState.textContent = "HMG EMPTY";
+        ui.reloadBar.style.width = "0%";
+      } else {
+        ui.weaponState.textContent = `HMG ${humvee.ammo.mg}`;
+        ui.reloadBar.style.width = `${pct * 100}%`;
+      }
+    }
+
+    updateInfantryWeapons(player) {
+      const ui = this.nodes;
+      const slotIds = ["ap", "he", "mg"];
+      const inventory = player.weaponInventory || [];
+
+      for (let i = 0; i < slotIds.length; i += 1) {
+        const slotId = slotIds[i];
+        const slot = ui.slots[slotId];
+        const weaponId = inventory[i];
+        const weapon = INFANTRY_WEAPONS[weaponId];
+        if (!slot) continue;
+
+        slot.classList.toggle("hidden", !weapon);
+        if (!weapon) continue;
+
+        const ammo = this.weaponAmmoCount(player, weapon);
+        ui.slotLabels[slotId].textContent = `${i + 1} ${weapon.shortName || weapon.name}`;
+        ui.ammo[slotId].textContent = this.weaponAmmoText(player, weapon);
+        slot.classList.toggle("empty", ammo !== null && ammo <= 0);
+        slot.classList.toggle("active", player.activeSlot === i);
+      }
+
+      ui.slots.smoke?.classList.add("hidden");
+
+      const weapon = player.getWeapon?.();
+      const ammo = this.weaponAmmoCount(player, weapon);
+      const readyPct = weapon
+        ? IronLine.math.clamp(1 - (player.rifleCooldown || 0) / Math.max(weapon.cooldown || 0.35, 0.001), 0, 1)
+        : 0;
+      if (!weapon) {
+        ui.weaponState.textContent = "무기 없음";
+        ui.reloadBar.style.width = "0%";
+      } else if (ammo !== null && ammo <= 0) {
+        ui.weaponState.textContent = `${weapon.name} 탄 없음`;
+        ui.reloadBar.style.width = "0%";
+      } else {
+        ui.weaponState.textContent = `${weapon.name} ${this.weaponAmmoText(player, weapon)}`;
+        ui.reloadBar.style.width = `${readyPct * 100}%`;
+      }
+    }
+
+    weaponAmmoCount(player, weapon) {
+      if (!player || !weapon?.ammoKey) return null;
+      return player.equipmentAmmo?.[weapon.ammoKey] || 0;
+    }
+
+    weaponAmmoText(player, weapon) {
+      const ammo = this.weaponAmmoCount(player, weapon);
+      if (ammo === null) return "-";
+      return String(ammo);
     }
 
     updateDeployment(game) {
@@ -386,6 +514,14 @@
         const value = game.matchConfig[key];
         if (value !== undefined) control.value = value;
       });
+    }
+
+    updateDeathScreen(game) {
+      const visible = Boolean(game.playerDeathActive && !game.result);
+      this.nodes.deathScreen?.classList.toggle("hidden", !visible);
+      if (this.nodes.deathReason) {
+        this.nodes.deathReason.textContent = game.playerDeathReason || "적 공격으로 쓰러졌습니다.";
+      }
     }
 
     invalidateDeploymentMap() {
@@ -420,6 +556,11 @@
       for (const tank of game.tanks) {
         if (!tank.alive) continue;
         addMarker(`unit-${tank.team === TEAM.BLUE ? "blue" : "red"}`, "", tank.x, tank.y);
+      }
+
+      for (const humvee of game.humvees || []) {
+        if (!humvee.alive) continue;
+        addMarker(`unit-${humvee.team === TEAM.BLUE ? "blue" : "red"}`, "", humvee.x, humvee.y);
       }
     }
 
@@ -457,17 +598,19 @@
 
     teamStats(game, team) {
       const tanks = game.tanks.filter((tank) => tank.team === team);
+      const humvees = (game.humvees || []).filter((humvee) => humvee.team === team);
       const infantry = game.infantry.filter((unit) => unit.team === team);
-      const aliveTanks = tanks.filter((tank) => tank.alive).length;
+      const vehicleTotal = tanks.length + humvees.length;
+      const aliveTanks = tanks.filter((tank) => tank.alive).length + humvees.filter((humvee) => humvee.alive).length;
       const playerTotal = team === TEAM.BLUE ? 1 : 0;
-      const playerAlive = team === TEAM.BLUE && game.player.hp > 0 ? 1 : 0;
+      const playerAlive = team === TEAM.BLUE && !game.playerDeathActive && game.player.hp > 0 ? 1 : 0;
       const aliveInfantry = infantry.filter((unit) => unit.alive).length + playerAlive;
       const infantryTotal = infantry.length + playerTotal;
-      const total = tanks.length + infantryTotal;
+      const total = vehicleTotal + infantryTotal;
       const alive = aliveTanks + aliveInfantry;
 
       return {
-        tanks: `${aliveTanks}/${tanks.length}`,
+        tanks: `${aliveTanks}/${vehicleTotal}`,
         infantry: `${aliveInfantry}/${infantryTotal}`,
         alive,
         total,

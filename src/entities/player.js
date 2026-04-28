@@ -8,6 +8,27 @@
     return (INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry).equipment.slice();
   }
 
+  function ammoForClass(classId) {
+    const infantryClass = INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry;
+    const ammo = {
+      grenade: 0,
+      rpg: 0,
+      repairKit: 0
+    };
+
+    for (const weaponId of infantryClass.equipment || []) {
+      const weapon = INFANTRY_WEAPONS[weaponId];
+      if (weapon?.type === "gun" && weapon.ammoKey) {
+        ammo[weapon.ammoKey] = weapon.defaultAmmo ?? 60;
+      }
+    }
+
+    return {
+      ...ammo,
+      ...(infantryClass.defaultAmmo || {})
+    };
+  }
+
   function createPlayer(spawn) {
     return {
       x: spawn.x,
@@ -20,15 +41,13 @@
       inTank: null,
       interactPulse: 0,
       rifleCooldown: 0,
+      gunKick: 0,
+      machineGunAim: false,
       classId: "infantry",
       activeSlot: 0,
       weaponId: "machinegun",
       weaponInventory: equipmentForClass("infantry"),
-      equipmentAmmo: {
-        grenade: 2,
-        rpg: 0,
-        repairKit: 0
-      },
+      equipmentAmmo: ammoForClass("infantry"),
       getWeapon() {
         return INFANTRY_WEAPONS[this.weaponId] || INFANTRY_WEAPONS.machinegun;
       },
@@ -50,12 +69,7 @@
         this.weaponInventory = equipmentForClass(classId);
         this.activeSlot = 0;
         this.weaponId = this.weaponInventory[0];
-        this.equipmentAmmo = {
-          grenade: 0,
-          rpg: 0,
-          repairKit: 0,
-          ...(infantryClass.defaultAmmo || {})
-        };
+        this.equipmentAmmo = ammoForClass(classId);
         return true;
       },
       alive: true

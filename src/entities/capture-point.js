@@ -26,6 +26,12 @@
         if (tank.team === TEAM.RED) redPower += 1;
       }
 
+      for (const humvee of game.humvees || []) {
+        if (!humvee.alive || distXY(humvee.x, humvee.y, this.x, this.y) > this.radius) continue;
+        if (humvee.team === TEAM.BLUE) bluePower += 0.45;
+        if (humvee.team === TEAM.RED) redPower += 0.45;
+      }
+
       for (const unit of game.infantry || []) {
         if (!unit.alive || distXY(unit.x, unit.y, this.x, this.y) > this.radius) continue;
         const morale = unit.morale ?? 1;
