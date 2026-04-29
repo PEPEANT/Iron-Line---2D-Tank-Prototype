@@ -255,6 +255,7 @@
     }
 
     toggleAdminPanel(force = null) {
+      if (!IronLine.game?.adminEnabled) return;
       const panel = this.nodes.adminPanel;
       if (!panel) return;
       const open = force === null ? panel.classList.contains("hidden") : Boolean(force);
@@ -274,6 +275,7 @@
 
     runAdminAction(action) {
       const game = IronLine.game;
+      if (!game?.adminEnabled) return false;
       if (!game || !action) return false;
       if (action === "spawn-selected") {
         return game.adminSpawnTestUnit({
@@ -454,6 +456,14 @@
 
     updateAdminPanel(game) {
       const ui = this.nodes;
+      if (!game.adminEnabled) {
+        ui.adminButton?.classList.add("hidden");
+        ui.adminButton?.setAttribute("aria-hidden", "true");
+        ui.adminPanel?.classList.add("hidden");
+        return;
+      }
+      ui.adminButton?.classList.remove("hidden");
+      ui.adminButton?.setAttribute("aria-hidden", "false");
       ui.adminButton?.setAttribute(
         "aria-expanded",
         String(!ui.adminPanel?.classList.contains("hidden"))

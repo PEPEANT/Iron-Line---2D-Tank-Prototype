@@ -97,6 +97,10 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.admin-button.hidden {
+  display: none;
+}
+
 .admin-button:hover,
 .admin-button[aria-expanded="true"] {
   border-color: rgba(255, 209, 102, 0.58);

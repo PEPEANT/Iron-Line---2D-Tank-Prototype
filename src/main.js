@@ -44,6 +44,7 @@
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
       this.testLab = this.requestedTestLab();
+      this.adminEnabled = this.requestedAdminMode();
       this.testLabAiPaused = false;
       this.testLabSpawnIndex = 0;
       this.testLabRoofPoint = null;
@@ -123,6 +124,12 @@
       if (!params.has("testLab") && !params.has("lab")) return "";
       const value = params.get("testLab") || params.get("lab") || "drone";
       return String(value).toLowerCase() || "drone";
+    }
+
+    requestedAdminMode() {
+      const params = new URLSearchParams(window.location.search || "");
+      const value = params.get("admin") || params.get("debugAdmin") || "";
+      return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
     }
 
     defaultMatchConfig() {
