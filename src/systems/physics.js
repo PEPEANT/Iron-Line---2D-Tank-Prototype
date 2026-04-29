@@ -15,6 +15,8 @@
 
   function hasLineOfSight(game, a, b, options = {}) {
     for (const obstacle of game.world.obstacles) {
+      if (options.ignoreObstacleContainingA && pointInRect(a.x, a.y, obstacle)) continue;
+      if (options.ignoreObstacleContainingB && pointInRect(b.x, b.y, obstacle)) continue;
       if (lineIntersectsRect(a.x, a.y, b.x, b.y, expandedRect(obstacle, options.padding || 0))) {
         return false;
       }
@@ -125,7 +127,9 @@
   }
 
   function resolveInfantryTankSpacing(game) {
-    for (const unit of game.infantry || []) resolveCircleAgainstTanks(game, unit, 5);
+    for (const unit of game.infantry || []) {
+      if (!unit.inVehicle) resolveCircleAgainstTanks(game, unit, 5);
+    }
     for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 5);
     if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 5);
   }

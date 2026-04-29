@@ -115,7 +115,7 @@
       }
 
       for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.team === this.tank.team) continue;
+        if (!unit.alive || unit.inVehicle || unit.team === this.tank.team) continue;
         enemies.push(unit);
       }
 
@@ -205,7 +205,7 @@
 
       const dangerRadius = ammo.splash + 42;
       for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.team !== this.tank.team) continue;
+        if (!unit.alive || unit.inVehicle || unit.team !== this.tank.team) continue;
         if (distXY(unit.x, unit.y, target.x, target.y) <= dangerRadius + unit.radius) return false;
       }
 
@@ -232,7 +232,7 @@
       const laneWidth = (ammo.id === "he" ? 34 : 24) + (ammo.shellRadius || 4);
 
       for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.team !== this.tank.team) continue;
+        if (!unit.alive || unit.inVehicle || unit.team !== this.tank.team) continue;
         if (segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y) <= laneWidth + unit.radius) return false;
       }
 
@@ -261,7 +261,7 @@
       let count = this.isInfantryTarget(target) ? 1 : 0;
 
       for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.team === this.tank.team || unit === target) continue;
+        if (!unit.alive || unit.inVehicle || unit.team === this.tank.team || unit === target) continue;
         if (distXY(unit.x, unit.y, target.x, target.y) <= radius) count += 1;
       }
 

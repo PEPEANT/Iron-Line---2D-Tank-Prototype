@@ -33,7 +33,7 @@
       }
 
       for (const unit of game.infantry || []) {
-        if (!unit.alive || distXY(unit.x, unit.y, this.x, this.y) > this.radius) continue;
+        if (!unit.alive || unit.inVehicle || distXY(unit.x, unit.y, this.x, this.y) > this.radius) continue;
         const morale = unit.morale ?? 1;
         const suppressionFactor = unit.suppressed ? 0.35 : 1;
         const infantryPower = 0.28 * morale * suppressionFactor;

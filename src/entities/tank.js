@@ -56,11 +56,16 @@
       this.isPlayerTank = Boolean(options.isPlayerTank);
       this.crew = null;
       this.playerControlled = false;
+      this.repairHoldTimer = 0;
+      this.repairHoldSource = "";
       this.wreckTimer = 0;
+      this.destructionPending = false;
+      this.destructionTimer = 0;
+      this.destructionDelay = 0;
+      this.criticalEffectTimer = 0;
     }
 
     hasCrew() {
-      if (this.isPlayerTank) return this.playerControlled;
       return Boolean(this.crew) || this.playerControlled;
     }
 
@@ -69,23 +74,29 @@
     }
 
     hasMachineGunner() {
-      return this.alive && this.playerControlled && Boolean(this.crew);
+      return this.alive && !this.destructionPending && this.playerControlled && Boolean(this.crew);
     }
 
     isOperational() {
-      return this.alive && this.hasCrew();
+      return this.alive && !this.destructionPending && this.hasCrew();
     }
 
     drive(game, dt, throttle = 0, turn = 0, options = {}) {
-      if (!this.alive) return { moved: 0, blocked: false };
+      if (!this.alive || this.destructionPending) {
+        this.speed = 0;
+        this.turnVelocity = 0;
+        return { moved: 0, blocked: false };
+      }
 
       const throttleInput = clamp(Number(throttle) || 0, -1, 1);
       const turnInput = clamp(Number(turn) || 0, -1, 1);
       const speedAbs = Math.abs(this.speed);
-      const speedRatio = clamp(speedAbs / Math.max(this.maxSpeed, 1), 0, 1);
+      const speedScale = options.speedScale ?? 1;
+      const speedLimit = this.maxSpeed * speedScale;
+      const speedRatio = clamp(speedAbs / Math.max(speedLimit, 1), 0, 1);
       const throttleActive = Math.abs(throttleInput) > 0.01;
       const reverseScale = options.reverseScale ?? 0.52;
-      const targetSpeed = throttleInput * this.maxSpeed * (throttleInput < -0.01 ? reverseScale : 1);
+      const targetSpeed = throttleInput * speedLimit * (throttleInput < -0.01 ? reverseScale : 1);
       const changingDirection = throttleActive &&
         Math.sign(targetSpeed) !== Math.sign(this.speed) &&
         speedAbs > 10;
@@ -128,7 +139,7 @@
       const blocked = Boolean(result?.blocked) || (expectedMove > 1 && moved < expectedMove * 0.42);
 
       if (blocked) {
-        const impulse = clamp(Math.abs(beforeSpeed) / Math.max(this.maxSpeed, 1), 0.18, 1);
+        const impulse = clamp(Math.abs(beforeSpeed) / Math.max(speedLimit, 1), 0.18, 1);
         this.impactShake = Math.max(this.impactShake, impulse);
         this.speed *= options.collisionSpeedRetain ?? 0.55;
         this.turnVelocity *= 0.52;
@@ -251,9 +262,16 @@
         return;
       }
 
+      if (this.destructionPending) {
+        this.updateDestructionPending(game, dt);
+        return;
+      }
+
       this.fireCooldown = Math.max(0, this.fireCooldown - dt);
       this.smokeCooldown = Math.max(0, this.smokeCooldown - dt);
       this.machineGunCooldown = Math.max(0, this.machineGunCooldown - dt);
+      this.repairHoldTimer = Math.max(0, (this.repairHoldTimer || 0) - dt);
+      if (this.repairHoldTimer <= 0) this.repairHoldSource = "";
       this.recoil = Math.max(0, this.recoil - dt * 4);
       this.fireKick = Math.max(0, this.fireKick - dt * 5.2);
       this.machineGunKick = Math.max(0, this.machineGunKick - dt * 9);
@@ -270,11 +288,167 @@
         }
       }
 
-      if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false) this.ai.update(dt);
+      if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
+    }
+
+    updateDestructionPending(game, dt) {
+      this.destructionTimer = Math.max(0, this.destructionTimer - dt);
+      this.criticalEffectTimer = Math.max(0, this.criticalEffectTimer - dt);
+      this.speed = 0;
+      this.turnVelocity = 0;
+      this.fireCooldown = Math.max(this.fireCooldown, 0.25);
+      this.machineGunCooldown = Math.max(this.machineGunCooldown, 0.25);
+      this.smokeCooldown = Math.max(this.smokeCooldown, 0.25);
+      this.recoil = Math.max(0, this.recoil - dt * 3.2);
+      this.fireKick = Math.max(0, this.fireKick - dt * 3.2);
+      this.machineGunKick = 0;
+      this.impactShake = Math.max(0.08, this.impactShake - dt * 1.2);
+
+      if (this.criticalEffectTimer <= 0) {
+        this.emitCriticalDamageEffects(game);
+        this.criticalEffectTimer = 0.08 + Math.random() * 0.08;
+      }
+
+      if (this.destructionTimer <= 0) this.finalizeDestruction(game);
+    }
+
+    beginDestruction(game) {
+      if (this.destructionPending || !this.alive) return;
+
+      this.hp = 0;
+      this.destructionPending = true;
+      this.destructionDelay = 0.85 + Math.random() * 0.65;
+      this.destructionTimer = this.destructionDelay;
+      this.criticalEffectTimer = 0;
+      this.speed = 0;
+      this.turnVelocity = 0;
+      this.reload.active = false;
+      this.loadedAmmo = null;
+      this.weaponMode = "cannon";
+      this.fireOrder = null;
+      this.impactShake = Math.max(this.impactShake, 0.42);
+      if (this.crew) this.crew.takeDamage(999);
+
+      if (game?.effects) {
+        game.effects.explosions.push({
+          x: this.x + (Math.random() - 0.5) * 18,
+          y: this.y + (Math.random() - 0.5) * 18,
+          radius: 10,
+          maxRadius: 36,
+          life: 0.34,
+          maxLife: 0.34,
+          color: "rgba(255, 142, 72, 0.82)",
+          core: true
+        });
+      }
+    }
+
+    emitCriticalDamageEffects(game) {
+      if (!game?.effects) return;
+
+      const smokePuffs = game.effects.gunSmokePuffs || (game.effects.gunSmokePuffs = []);
+      const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
+      const c = Math.cos(this.angle);
+      const s = Math.sin(this.angle);
+      const forward = -6 + Math.random() * 22;
+      const side = (Math.random() - 0.5) * 34;
+      const x = this.x + c * forward - s * side;
+      const y = this.y + s * forward + c * side;
+
+      if (smokePuffs.length > 180) smokePuffs.shift();
+      smokePuffs.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 34 - c * 10,
+        vy: (Math.random() - 0.5) * 34 - s * 10,
+        angle: this.angle + (Math.random() - 0.5) * 1.2,
+        radius: 7 + Math.random() * 4,
+        maxRadius: 32 + Math.random() * 22,
+        life: 0.72 + Math.random() * 0.28,
+        maxLife: 0.9,
+        alpha: 0.24 + Math.random() * 0.12,
+        warm: Math.random() < 0.42
+      });
+
+      if (Math.random() < 0.55) {
+        game.effects.explosions.push({
+          x: x + (Math.random() - 0.5) * 8,
+          y: y + (Math.random() - 0.5) * 8,
+          radius: 5,
+          maxRadius: 18 + Math.random() * 10,
+          life: 0.16 + Math.random() * 0.08,
+          maxLife: 0.22,
+          color: "rgba(255, 116, 46, 0.72)",
+          core: true
+        });
+      }
+
+      if (Math.random() < 0.32) {
+        const angle = this.angle + Math.PI + (Math.random() - 0.5) * 1.4;
+        const speed = 70 + Math.random() * 120;
+        blastSparks.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          length: 8 + Math.random() * 10,
+          life: 0.16 + Math.random() * 0.12,
+          maxLife: 0.28,
+          color: "rgba(255, 183, 92, 0.78)"
+        });
+      }
+    }
+
+    finalizeDestruction(game) {
+      if (!this.destructionPending && !this.alive) return;
+
+      this.destructionPending = false;
+      this.destructionTimer = 0;
+      this.hp = 0;
+      this.alive = false;
+      this.speed = 0;
+      this.turnVelocity = 0;
+      this.reload.active = false;
+      this.loadedAmmo = null;
+      this.weaponMode = "cannon";
+      this.fireOrder = null;
+      this.machineGunKick = 0;
+      if (this.crew) this.crew.takeDamage(999);
+
+      if (!game?.effects) return;
+      game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 58, alpha: 0.45 });
+      game.effects.explosions.push({
+        x: this.x,
+        y: this.y,
+        radius: 30,
+        maxRadius: 138,
+        life: 0.72,
+        maxLife: 0.72,
+        color: "rgba(255, 118, 72, 0.95)",
+        core: true
+      });
+      game.effects.explosions.push({
+        x: this.x + (Math.random() - 0.5) * 12,
+        y: this.y + (Math.random() - 0.5) * 12,
+        radius: 24,
+        maxRadius: 168,
+        life: 1.05,
+        maxLife: 1.05,
+        color: "rgba(58, 52, 44, 0.58)",
+        smoke: true
+      });
+    }
+
+    requestRepairHold(engineer, options = {}) {
+      if (!this.alive || this.destructionPending || this.playerControlled) return false;
+      const duration = options.duration ?? 0.65;
+      this.repairHoldTimer = Math.max(this.repairHoldTimer || 0, duration);
+      this.repairHoldSource = engineer?.callSign || this.repairHoldSource || "engineer";
+      return true;
     }
 
     canFire() {
-      return this.alive && this.loadedAmmo && !AMMO[this.loadedAmmo]?.equipment && this.fireCooldown <= 0;
+      return this.alive && !this.destructionPending && this.loadedAmmo && !AMMO[this.loadedAmmo]?.equipment && this.fireCooldown <= 0;
     }
 
     fire(game, options = {}) {
@@ -516,7 +690,7 @@
 
     deploySmoke(game) {
       const smoke = AMMO.smoke;
-      if (!this.alive || this.smokeCooldown > 0 || this.ammo.smoke <= 0) return false;
+      if (!this.alive || this.destructionPending || this.smokeCooldown > 0 || this.ammo.smoke <= 0) return false;
 
       this.ammo.smoke -= 1;
       this.smokeCooldown = smoke.cooldown || 7;
@@ -556,6 +730,11 @@
 
     takeDamage(game, amount) {
       if (!this.alive) return;
+      if (this.destructionPending) {
+        this.impactShake = Math.max(this.impactShake, 0.22);
+        if (amount > 36) this.destructionTimer = Math.min(this.destructionTimer, 0.42);
+        return;
+      }
 
       this.hp -= amount;
       game.effects.explosions.push({
@@ -569,24 +748,7 @@
       });
 
       if (this.hp <= 0) {
-        this.hp = 0;
-        this.alive = false;
-        this.speed = 0;
-        this.turnVelocity = 0;
-        this.reload.active = false;
-        this.loadedAmmo = null;
-        this.weaponMode = "cannon";
-        if (this.crew) this.crew.takeDamage(999);
-        game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 58, alpha: 0.45 });
-        game.effects.explosions.push({
-          x: this.x,
-          y: this.y,
-          radius: 30,
-          maxRadius: 138,
-          life: 0.72,
-          maxLife: 0.72,
-          color: "rgba(255, 118, 72, 0.95)"
-        });
+        this.beginDestruction(game);
       }
     }
   }

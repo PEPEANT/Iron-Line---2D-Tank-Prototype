@@ -3,7 +3,7 @@
 (function registerHumvee(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { INFANTRY_WEAPONS, TEAM } = IronLine.constants;
-  const { clamp, approach, distXY, normalizeAngle, segmentDistanceToPoint } = IronLine.math;
+  const { clamp, approach, distXY, normalizeAngle, segmentDistanceToPoint, circleRectCollision } = IronLine.math;
   const { tryMoveCircle } = IronLine.physics;
 
   class Humvee {
@@ -37,6 +37,10 @@
       this.vehicleType = "humvee";
       this.playerControlled = false;
       this.crew = null;
+      this.passengerCapacity = options.passengerCapacity || 4;
+      this.passengers = [];
+      this.repairHoldTimer = 0;
+      this.repairHoldSource = "";
     }
 
     hasCrew() {
@@ -44,7 +48,16 @@
     }
 
     occupantCount() {
-      return (this.playerControlled ? 1 : 0) + (this.crew ? 1 : 0);
+      return (this.playerControlled ? 1 : 0) + (this.crew ? 1 : 0) + this.passengerCount();
+    }
+
+    passengerCount() {
+      this.passengers = (this.passengers || []).filter((unit) => unit?.alive && unit.inVehicle === this);
+      return this.passengers.length;
+    }
+
+    availablePassengerSeats() {
+      return Math.max(0, this.passengerCapacity - this.passengerCount());
     }
 
     isOperational() {
@@ -57,10 +70,12 @@
       const throttleInput = clamp(Number(throttle) || 0, -1, 1);
       const turnInput = clamp(Number(turn) || 0, -1, 1);
       const speedAbs = Math.abs(this.speed);
-      const speedRatio = clamp(speedAbs / Math.max(this.maxSpeed, 1), 0, 1);
       const roadScale = this.isOnRoad(game) ? 1.08 : 0.82;
+      const speedScale = options.speedScale ?? 1;
+      const speedLimit = this.maxSpeed * roadScale * speedScale;
+      const speedRatio = clamp(speedAbs / Math.max(speedLimit, 1), 0, 1);
       const reverseScale = options.reverseScale ?? 0.42;
-      const targetSpeed = throttleInput * this.maxSpeed * roadScale * (throttleInput < -0.01 ? reverseScale : 1);
+      const targetSpeed = throttleInput * speedLimit * (throttleInput < -0.01 ? reverseScale : 1);
       const changingDirection = Math.abs(throttleInput) > 0.01 &&
         Math.sign(targetSpeed) !== Math.sign(this.speed) &&
         speedAbs > 12;
@@ -69,7 +84,7 @@
       if (changingDirection || options.brake) accelScale = 1.65;
       if (Math.abs(throttleInput) < 0.01) accelScale = 0.54;
 
-      this.speed = approach(this.speed, targetSpeed, this.accel * accelScale * dt);
+      this.speed = approach(this.speed, targetSpeed, this.accel * (options.accelScale ?? 1) * accelScale * dt);
       const drag = Math.abs(throttleInput) > 0.01 ? 0.18 : 1.08;
       this.speed *= Math.max(0, 1 - drag * dt);
       if (Math.abs(this.speed) < 0.45) this.speed = 0;
@@ -99,7 +114,7 @@
       const blocked = Boolean(result?.blocked) || (expectedMove > 1 && moved < expectedMove * 0.42);
 
       if (blocked) {
-        const impulse = clamp(Math.abs(beforeSpeed) / Math.max(this.maxSpeed, 1), 0.14, 0.8);
+        const impulse = clamp(Math.abs(beforeSpeed) / Math.max(speedLimit, 1), 0.14, 0.8);
         this.impactShake = Math.max(this.impactShake, impulse);
         this.speed *= options.collisionSpeedRetain ?? 0.42;
         this.turnVelocity *= 0.46;
@@ -120,8 +135,19 @@
       this.machineGunKick = Math.max(0, this.machineGunKick - dt * 10);
       this.impactShake = Math.max(0, this.impactShake - dt * 4.6);
       this.dustCooldown = Math.max(0, this.dustCooldown - dt);
+      this.repairHoldTimer = Math.max(0, (this.repairHoldTimer || 0) - dt);
+      if (this.repairHoldTimer <= 0) this.repairHoldSource = "";
+      this.updatePassengers();
 
-      if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false) this.ai.update(dt);
+      if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
+    }
+
+    requestRepairHold(engineer, options = {}) {
+      if (!this.alive || this.playerControlled) return false;
+      const duration = options.duration ?? 0.65;
+      this.repairHoldTimer = Math.max(this.repairHoldTimer || 0, duration);
+      this.repairHoldSource = engineer?.callSign || this.repairHoldSource || "engineer";
+      return true;
     }
 
     machineGunWeapon() {
@@ -175,6 +201,114 @@
 
     leaveCrew(crew) {
       if (this.crew === crew) this.crew = null;
+    }
+
+    canBoardPassenger(unit) {
+      if (!this.alive || this.playerControlled || !unit?.alive || unit.team !== this.team) return false;
+      if (unit.inVehicle === this) return true;
+      if (unit.inVehicle) return false;
+      return this.availablePassengerSeats() > 0;
+    }
+
+    boardPassenger(unit) {
+      if (!this.canBoardPassenger(unit)) return false;
+      if (!this.passengers.includes(unit)) this.passengers.push(unit);
+      unit.inVehicle = this;
+      unit.transportVehicle = this;
+      unit.transportCooldown = 0;
+      unit.speed = 0;
+      this.updatePassengerSeat(unit, Math.max(0, this.passengers.indexOf(unit)));
+      return true;
+    }
+
+    leavePassenger(unit) {
+      this.passengers = (this.passengers || []).filter((passenger) => passenger !== unit);
+      if (unit?.inVehicle === this) unit.inVehicle = null;
+      if (unit?.transportVehicle === this) unit.transportVehicle = null;
+    }
+
+    updatePassengers() {
+      this.passengers = (this.passengers || []).filter((unit, index) => {
+        if (!unit?.alive || unit.inVehicle !== this) return false;
+        this.updatePassengerSeat(unit, index);
+        return true;
+      });
+    }
+
+    updatePassengerSeat(unit, index) {
+      const seatX = [-10, -14, 8, 12][index % 4] || 0;
+      const seatY = [-9, 9, -10, 10][index % 4] || 0;
+      const c = Math.cos(this.angle);
+      const s = Math.sin(this.angle);
+      unit.x = this.x + c * seatX - s * seatY;
+      unit.y = this.y + s * seatX + c * seatY;
+      unit.angle = this.machineGunAngle || this.angle;
+      unit.speed = 0;
+    }
+
+    dismountPassengers(game, options = {}) {
+      const passengers = [...(this.passengers || [])];
+      let dismounted = 0;
+      passengers.forEach((unit, index) => {
+        if (this.dismountPassenger(game, unit, { ...options, index })) dismounted += 1;
+      });
+      return dismounted;
+    }
+
+    dismountPassenger(game, unit, options = {}) {
+      if (!unit || unit.inVehicle !== this) return false;
+      const point = this.findDismountPoint(game, unit, options);
+      this.leavePassenger(unit);
+      unit.x = point.x;
+      unit.y = point.y;
+      unit.angle = point.angle ?? this.angle;
+      unit.speed = 0;
+      unit.transportCooldown = options.emergency ? 1.2 : options.cooldown ?? 6.2;
+      unit.suppress?.(options.emergency ? 32 : 10, { x: this.x, y: this.y, team: this.team });
+      if (options.damage) unit.takeDamage(options.damage);
+      return true;
+    }
+
+    findDismountPoint(game, unit, options = {}) {
+      const preferred = options.point || null;
+      const baseAngle = preferred ? Math.atan2(preferred.y - this.y, preferred.x - this.x) : this.angle;
+      const side = options.index % 2 === 0 ? -1 : 1;
+      const angles = [
+        baseAngle + Math.PI / 2 * side,
+        baseAngle - Math.PI / 2 * side,
+        baseAngle + Math.PI,
+        baseAngle,
+        baseAngle + Math.PI * 0.75 * side,
+        baseAngle - Math.PI * 0.75 * side
+      ];
+      const distances = [this.radius + unit.radius + 22, this.radius + unit.radius + 34, this.radius + unit.radius + 48];
+
+      for (const distance of distances) {
+        for (const angle of angles) {
+          const candidate = {
+            x: clamp(this.x + Math.cos(angle) * distance, unit.radius, game.world.width - unit.radius),
+            y: clamp(this.y + Math.sin(angle) * distance, unit.radius, game.world.height - unit.radius),
+            angle
+          };
+          if (this.dismountPointPassable(game, unit, candidate.x, candidate.y)) return candidate;
+        }
+      }
+
+      return {
+        x: clamp(this.x + Math.cos(baseAngle + Math.PI / 2 * side) * (this.radius + unit.radius + 26), unit.radius, game.world.width - unit.radius),
+        y: clamp(this.y + Math.sin(baseAngle + Math.PI / 2 * side) * (this.radius + unit.radius + 26), unit.radius, game.world.height - unit.radius),
+        angle: baseAngle
+      };
+    }
+
+    dismountPointPassable(game, unit, x, y) {
+      const radius = unit.radius + 2;
+      if (x < radius || y < radius || x > game.world.width - radius || y > game.world.height - radius) return false;
+      if ((game.world.obstacles || []).some((obstacle) => circleRectCollision(x, y, radius, obstacle))) return false;
+      return !IronLine.physics.circleIntersectsTank(game, this, x, y, radius, {
+        ignoreTank: this,
+        padding: 5
+      });
     }
 
     fireMachineGun(game, targetX, targetY, options = {}) {
@@ -292,6 +426,11 @@
         this.machineGunKick = 0;
         this.turnVelocity = 0;
         if (this.crew) this.crew.takeDamage(999);
+        this.dismountPassengers(game || { world: { width: Infinity, height: Infinity, obstacles: [] } }, {
+          emergency: true,
+          damage: 34,
+          cooldown: 1.2
+        });
         if (game?.effects) {
           game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 38, alpha: 0.34 });
           game.effects.explosions.push({

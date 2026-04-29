@@ -3,16 +3,181 @@
 (function registerCombat(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, INFANTRY_WEAPONS } = IronLine.constants;
-  const { clamp, distXY, circleRectCollision, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
+  const { clamp, distXY, normalizeAngle, circleRectCollision, expandedRect, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
 
   function vehicleTargets(game) {
     return [...(game.tanks || []), ...(game.humvees || [])];
+  }
+
+  function isVehicleWreck(vehicle) {
+    return Boolean(vehicle && (!vehicle.alive || vehicle.hp <= 0));
   }
 
   function pushLimited(list, item, max = 180) {
     if (!list) return;
     if (list.length > max) list.shift();
     list.push(item);
+  }
+
+  function smallArmsRangeScale(shooter, weapon) {
+    if (!shooter?.isProne || weapon?.type && weapon.type !== "gun") return 1;
+    if (weapon?.id === "lmg" || weapon?.id === "machinegun") return 1.1;
+    if (weapon?.id === "sniper") return 1.05;
+    if (weapon?.id === "pistol") return 1.04;
+    return 1.08;
+  }
+
+  function smallArmsRange(weapon, shooter, baseRange = null) {
+    const range = baseRange ?? weapon?.range ?? 560;
+    return range * smallArmsRangeScale(shooter, weapon);
+  }
+
+  function directArmorProfile(tank, sourceX, sourceY, ammoId = "") {
+    if (!tank || tank.vehicleType === "humvee") {
+      return { zone: "light", multiplier: 1 };
+    }
+
+    const hitAngle = Math.atan2(sourceY - tank.y, sourceX - tank.x);
+    const aspect = Math.abs(normalizeAngle(hitAngle - tank.angle));
+    const zone = aspect <= 0.78
+      ? "front"
+      : aspect >= 2.38 ? "rear" : "side";
+
+    const table = ammoId === "rpg"
+      ? { front: 0.52, side: 0.92, rear: 1.42 }
+      : ammoId === "ap"
+        ? { front: 0.68, side: 1, rear: 1.34 }
+        : { front: 0.82, side: 1, rear: 1.18 };
+
+    return { zone, multiplier: table[zone] ?? 1 };
+  }
+
+  function directArmorSource(shell, tank) {
+    let x = shell.previousX ?? shell.x;
+    let y = shell.previousY ?? shell.y;
+    if (distXY(x, y, tank.x, tank.y) <= 1 && shell.owner) {
+      x = shell.owner.x ?? x;
+      y = shell.owner.y ?? y;
+    }
+    return { x, y };
+  }
+
+  function emitDirectArmorFeedback(game, tank, impactX, impactY, profile, ammo) {
+    if (!game?.effects || !tank || profile.zone === "light") return;
+
+    const sparks = game.effects.blastSparks || (game.effects.blastSparks = []);
+    const rings = game.effects.blastRings || (game.effects.blastRings = []);
+    const frontHit = profile.zone === "front";
+    const rearHit = profile.zone === "rear";
+    const sparkCount = frontHit ? 7 : rearHit ? 12 : 9;
+    const baseAngle = Math.atan2(impactY - tank.y, impactX - tank.x);
+
+    rings.push({
+      x: impactX,
+      y: impactY,
+      radius: 5,
+      maxRadius: rearHit ? 36 : frontHit ? 20 : 28,
+      life: 0.14,
+      maxLife: 0.14,
+      color: rearHit ? "rgba(255, 176, 92, 0.72)" : frontHit ? "rgba(202, 218, 214, 0.45)" : "rgba(255, 218, 142, 0.56)",
+      width: rearHit ? 4 : 2.4
+    });
+
+    for (let i = 0; i < sparkCount; i += 1) {
+      const spread = frontHit ? 1.25 : 0.92;
+      const angle = baseAngle + Math.PI + (Math.random() - 0.5) * spread;
+      const speed = (frontHit ? 80 : 105) + Math.random() * (rearHit ? 190 : 130);
+      sparks.push({
+        x: impactX,
+        y: impactY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        length: (frontHit ? 8 : 11) + Math.random() * (ammo?.id === "rpg" ? 14 : 9),
+        life: 0.16 + Math.random() * 0.16,
+        maxLife: 0.32,
+        color: rearHit ? "rgba(255, 158, 76, 0.82)" : "rgba(255, 225, 154, 0.74)"
+      });
+    }
+  }
+
+  function directTankDamage(game, tank, baseDamage, shell) {
+    if (!tank || !shell) return baseDamage;
+    const source = directArmorSource(shell, tank);
+    const profile = directArmorProfile(tank, source.x, source.y, shell.ammo?.id);
+    const damage = baseDamage * profile.multiplier;
+    tank.lastArmorHit = {
+      zone: profile.zone,
+      multiplier: profile.multiplier,
+      ammoId: shell.ammo?.id || "",
+      time: game?.matchTime || 0
+    };
+    emitDirectArmorFeedback(game, tank, shell.x, shell.y, profile, shell.ammo);
+    return damage;
+  }
+
+  function smallArmsDroneProfile(target, distance, range) {
+    if (!target?.isDrone) {
+      return {
+        accuracyPenalty: 0,
+        damageScale: 1,
+        minAccuracy: null,
+        maxAccuracy: null
+      };
+    }
+
+    const attackDrone = target.droneRole === "attack";
+    const speed = Math.abs(target.speed || 0) * (target.boosting ? target.boostSpeedMultiplier || 1.6 : 1);
+    const speedPenalty = clamp(speed / 1100, 0.06, attackDrone ? 0.18 : 0.15);
+    const rangePenalty = clamp(distance / Math.max(range, 1), 0, 1) * (attackDrone ? 0.18 : 0.14);
+    const controlPenalty = target.controlled ? 0.07 : 0.03;
+
+    return {
+      accuracyPenalty: (attackDrone ? 0.23 : 0.2) + speedPenalty + rangePenalty + controlPenalty,
+      damageScale: attackDrone ? 0.52 : 0.58,
+      minAccuracy: attackDrone ? 0.025 : 0.035,
+      maxAccuracy: attackDrone ? 0.38 : 0.44
+    };
+  }
+
+  function pointOnRoad(game, x, y) {
+    const world = game?.world;
+    if (!world) return false;
+    const baseWidth = world.roadWidth || 84;
+    for (const road of world.roads || []) {
+      if (!road || road.length < 2) continue;
+      const halfWidth = (road.width || baseWidth) * 0.52;
+      for (let i = 1; i < road.length; i += 1) {
+        const a = road[i - 1];
+        const b = road[i];
+        if (segmentDistanceToPoint(a.x, a.y, b.x, b.y, x, y) <= halfWidth) return true;
+      }
+    }
+    return false;
+  }
+
+  function patchLooksLikeGrass(patch) {
+    const match = String(patch?.color || "").match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/u);
+    if (!match) return true;
+    const r = Number(match[1]);
+    const g = Number(match[2]);
+    const b = Number(match[3]);
+    return g >= r * 0.92 && g >= b * 0.78;
+  }
+
+  function pointOnGrass(game, x, y) {
+    for (const patch of game?.world?.terrainPatches || []) {
+      if (!patchLooksLikeGrass(patch)) continue;
+      if (distXY(x, y, patch.x, patch.y) <= (patch.r || 0) * 0.92) return true;
+    }
+    return false;
+  }
+
+  function smallArmsSurface(game, x, y, options = {}) {
+    if (options.tank) return "metal";
+    if (options.hard) return "hard";
+    if (pointOnRoad(game, x, y)) return "road";
+    if (pointOnGrass(game, x, y)) return "grass";
+    return "dirt";
   }
 
   function emitSmallArmsImpact(game, x, y, angle, weapon, options = {}) {
@@ -37,6 +202,25 @@
         alpha,
         color
       }, 190);
+    };
+    const emitChip = (count, color, speedMin, speedMax, alpha = 0.68, width = 0.65) => {
+      for (let i = 0; i < count; i += 1) {
+        const chipAngle = Math.PI + angle + (Math.random() - 0.5) * 1.85;
+        const speed = speedMin + Math.random() * Math.max(1, speedMax - speedMin);
+        const life = 0.07 + Math.random() * 0.08;
+        pushLimited(blastSparks, {
+          x: x + (Math.random() - 0.5) * 2,
+          y: y + (Math.random() - 0.5) * 2,
+          vx: Math.cos(chipAngle) * speed,
+          vy: Math.sin(chipAngle) * speed,
+          length: 1.8 + Math.random() * 3,
+          life,
+          maxLife: life,
+          color,
+          width,
+          alpha
+        }, 220);
+      }
     };
 
     if (hard) {
@@ -73,42 +257,59 @@
       return;
     }
 
+    const surface = options.surface || smallArmsSurface(game, x, y, options);
+    if (surface === "road") {
+      emitDust(heavy ? 1.38 : 1.08, heavy ? 0.19 : 0.13, "#a7a18e", 0.78);
+      if (heavy || Math.random() < 0.48) emitDust(heavy ? 0.9 : 0.72, heavy ? 0.11 : 0.075, "#5d5e50", 0.55);
+      emitChip(heavy ? 3 : 1, "rgba(178, 174, 151, 0.62)", 42, heavy ? 132 : 88, 0.64, 0.58);
+      return;
+    }
+
+    if (surface === "grass") {
+      emitDust(heavy ? 1.48 : 1.08, heavy ? 0.16 : 0.1, "#9a9164", 0.9);
+      if (heavy || Math.random() < 0.55) emitDust(heavy ? 1.05 : 0.78, heavy ? 0.1 : 0.07, "#587148", 0.72);
+      emitChip(heavy ? 4 : 2, "rgba(108, 151, 81, 0.58)", 34, heavy ? 110 : 76, 0.58, 0.5);
+      return;
+    }
+
     emitDust(heavy ? 1.65 : 1.25, heavy ? 0.18 : 0.12, "#cbb987", 1);
     if (heavy || Math.random() < 0.42) emitDust(heavy ? 1.15 : 0.9, heavy ? 0.12 : 0.08, "#8e8262", 0.72);
     if (heavy && Math.random() < 0.55) {
-      const chipAngle = Math.PI + angle + (Math.random() - 0.5) * 1.8;
-      const speed = 45 + Math.random() * 85;
-      const life = 0.08 + Math.random() * 0.06;
-      pushLimited(blastSparks, {
-        x,
-        y,
-        vx: Math.cos(chipAngle) * speed,
-        vy: Math.sin(chipAngle) * speed,
-        length: 2.2 + Math.random() * 3.2,
-        life,
-        maxLife: life,
-        color: "rgba(184, 157, 103, 0.54)",
-        width: 0.65,
-        alpha: 0.68
-      }, 220);
+      emitChip(1, "rgba(184, 157, 103, 0.54)", 45, 130, 0.68, 0.65);
     }
   }
 
   function fireRifle(game, shooter, target, options = {}) {
     if (shooter.alive === false || !target || target.alive === false || target.hp <= 0) return false;
+    if (shooter.inVehicle) return false;
+    if (target.inVehicle) return false;
     if (target === game.player && game.isPlayerInSafeZone?.()) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const range = options.range || weapon.range || 560;
+    const baseRange = options.range || weapon.range || 560;
+    const range = smallArmsRange(weapon, shooter, baseRange);
     const distance = distXY(shooter.x, shooter.y, target.x, target.y);
     if (distance > range) return false;
-    if (!IronLine.physics.hasLineOfSight(game, shooter, target, { padding: 3 })) return false;
+    if (target.isDrone && game.droneHasRoofCover?.(target) && !options.allowRoofDroneHit) return false;
+    if (options.requireLineOfSight !== false && !IronLine.physics.hasLineOfSight(game, shooter, target, { padding: 3 })) return false;
 
     const baseAccuracy = options.baseAccuracy ?? 0.78;
     const accuracyFalloff = options.accuracyFalloff ?? 0.38;
     const minAccuracy = options.minAccuracy ?? 0.22;
     const maxAccuracy = options.maxAccuracy ?? 0.86;
-    const hitChance = clamp(baseAccuracy - distance / range * accuracyFalloff + (options.accuracyBonus || 0), minAccuracy, maxAccuracy);
+    const accuracyDistance = options.accuracyDistance ?? distance;
+    const shooterProneBonus = shooter.isProne ? 0.05 : 0;
+    const targetPronePenalty = target.isProne ? clamp(0.06 + distance / range * 0.13, 0.06, 0.19) : 0;
+    const droneProfile = smallArmsDroneProfile(target, distance, range);
+    const effectiveMinAccuracy = droneProfile.minAccuracy ?? minAccuracy;
+    const effectiveMaxAccuracy = droneProfile.maxAccuracy !== null
+      ? Math.min(maxAccuracy, droneProfile.maxAccuracy)
+      : maxAccuracy;
+    const hitChance = clamp(
+      baseAccuracy - accuracyDistance / range * accuracyFalloff + (options.accuracyBonus || 0) + shooterProneBonus - targetPronePenalty - droneProfile.accuracyPenalty,
+      effectiveMinAccuracy,
+      effectiveMaxAccuracy
+    );
     const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
@@ -116,15 +317,22 @@
     const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34);
     const endX = hit ? target.x : startX + Math.cos(missAngle) * Math.min(range, distance + 80);
     const endY = hit ? target.y : startY + Math.sin(missAngle) * Math.min(range, distance + 80);
-    const impactAngle = hit ? Math.atan2(endY - startY, endX - startX) : missAngle;
+    const wreckBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, {
+      onlyWrecks: true
+    });
+    const finalEndX = wreckBlock ? wreckBlock.x : endX;
+    const finalEndY = wreckBlock ? wreckBlock.y : endY;
+    const impactAngle = wreckBlock
+      ? Math.atan2(finalEndY - startY, finalEndX - startX)
+      : hit ? Math.atan2(endY - startY, endX - startX) : missAngle;
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
     if (tracers.length > 180) tracers.shift();
     tracers.push({
       x1: startX,
       y1: startY,
-      x2: endX,
-      y2: endY,
+      x2: finalEndX,
+      y2: finalEndY,
       life: options.tracerLife || weapon.tracerLife || 0.09,
       maxLife: options.tracerLife || weapon.tracerLife || 0.09,
       color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.92)" : "rgba(255, 176, 171, 0.92)"),
@@ -132,21 +340,33 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
-    applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon);
+    applyRifleSuppression(game, shooter, target, startX, startY, finalEndX, finalEndY, hit && !wreckBlock, weapon);
+    if (target === game.player && shooter.team === TEAM.RED) {
+      game.warnPlayerDanger?.(shooter, weapon.id === "sniper" ? "sniper" : weapon.id, {
+        ttl: weapon.id === "sniper" ? 1.25 : 0.76
+      });
+    }
 
-    if (hit) {
-      const damage = options.damage || (weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin));
-      emitSmallArmsImpact(game, endX, endY, impactAngle, weapon, {
+    if (wreckBlock) {
+      applySmallArmsWreckHit(game, shooter, wreckBlock.tank, finalEndX, finalEndY, weapon);
+    } else if (hit) {
+      const baseDamage = options.damage || (weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin));
+      const damage = baseDamage * droneProfile.damageScale;
+      emitSmallArmsImpact(game, finalEndX, finalEndY, impactAngle, weapon, {
         hard: Boolean(target.vehicleType),
         tank: Boolean(target.vehicleType)
       });
-      if (target.takeDamage) {
+      if (target === game.player && typeof game.applyPlayerDamage === "function") {
+        game.applyPlayerDamage(damage, shooter, weapon.id || "rifle", {
+          label: weapon.id === "sniper" ? "\uC800\uACA9" : "\uCD1D\uACA9"
+        });
+      } else if (target.takeDamage) {
         if (target.vehicleType) target.takeDamage(game, damage);
         else target.takeDamage(damage);
       }
       else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
     } else if (Math.random() < (options.impactChance ?? 0.16)) {
-      emitSmallArmsImpact(game, endX, endY, impactAngle, weapon);
+      emitSmallArmsImpact(game, finalEndX, finalEndY, impactAngle, weapon);
     }
 
     return true;
@@ -154,14 +374,17 @@
 
   function fireRifleAtPoint(game, shooter, aimX, aimY, options = {}) {
     if (shooter.alive === false || shooter.hp <= 0) return false;
+    if (shooter.inVehicle) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const range = options.range || weapon.range || 560;
+    const baseRange = options.range || weapon.range || 560;
+    const range = smallArmsRange(weapon, shooter, baseRange);
     const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const aimAngle = Math.atan2(aimY - shooter.y, aimX - shooter.x);
-    const shotAngle = aimAngle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.22) * 0.18;
+    const proneSpreadScale = shooter.isProne ? 0.68 : 1;
+    const shotAngle = aimAngle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.22) * 0.18 * proneSpreadScale;
     const impact = traceSmallArmsShot(game, shooter, startX, startY, shotAngle, range, options);
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
@@ -178,7 +401,10 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
-    if (impact.tank) applySmallArmsTankHit(game, shooter, impact.tank, impact.x, impact.y, weapon, options);
+    if (impact.tank) {
+      if (impact.wreck) applySmallArmsWreckHit(game, shooter, impact.tank, impact.x, impact.y, weapon);
+      else applySmallArmsTankHit(game, shooter, impact.tank, impact.x, impact.y, weapon, options);
+    }
     else if (impact.blocked || Math.random() < (options.impactChance ?? 0.28)) {
       emitSmallArmsImpact(game, impact.x, impact.y, shotAngle, weapon, { hard: impact.blocked });
     }
@@ -188,9 +414,11 @@
 
   function fireRifleAtTank(game, shooter, tank, options = {}) {
     if (shooter.alive === false || shooter.hp <= 0 || !tank || !tank.alive || tank.team === shooter.team) return false;
+    if (shooter.inVehicle) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const range = options.range || weapon.range || 560;
+    const baseRange = options.range || weapon.range || 560;
+    const range = smallArmsRange(weapon, shooter, baseRange);
     const distance = distXY(shooter.x, shooter.y, tank.x, tank.y);
     if (distance > range) return false;
     if (!IronLine.physics.hasLineOfSight(game, shooter, tank, { padding: 3 })) return false;
@@ -199,19 +427,25 @@
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const baseChance = weapon.id === "lmg" || weapon.id === "machinegun" ? 0.2 : 0.13;
-    const hitChance = clamp(baseChance - distance / range * 0.08 + (options.accuracyBonus || 0), 0.04, 0.24);
+    const hitChance = clamp(baseChance - distance / range * 0.08 + (options.accuracyBonus || 0) + (shooter.isProne ? 0.025 : 0), 0.04, 0.24);
     const hit = Math.random() < hitChance;
-    const missAngle = shooter.angle + (Math.random() - 0.5) * (weapon.spread || 0.34);
+    const missAngle = shooter.angle + (Math.random() - 0.5) * (weapon.spread || 0.34) * (shooter.isProne ? 0.74 : 1);
     const endX = hit ? tank.x + (Math.random() - 0.5) * tank.radius : startX + Math.cos(missAngle) * Math.min(range, distance + 90);
     const endY = hit ? tank.y + (Math.random() - 0.5) * tank.radius : startY + Math.sin(missAngle) * Math.min(range, distance + 90);
+    const wreckBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, {
+      onlyWrecks: true
+    });
+    const finalEndX = wreckBlock ? wreckBlock.x : endX;
+    const finalEndY = wreckBlock ? wreckBlock.y : endY;
+    const finalAngle = wreckBlock ? Math.atan2(finalEndY - startY, finalEndX - startX) : missAngle;
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
     if (tracers.length > 180) tracers.shift();
     tracers.push({
       x1: startX,
       y1: startY,
-      x2: endX,
-      y2: endY,
+      x2: finalEndX,
+      y2: finalEndY,
       life: options.tracerLife || weapon.tracerLife || 0.09,
       maxLife: options.tracerLife || weapon.tracerLife || 0.09,
       color: shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)",
@@ -219,10 +453,12 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
-    if (hit) {
-      applySmallArmsTankHit(game, shooter, tank, endX, endY, weapon, options);
+    if (wreckBlock) {
+      applySmallArmsWreckHit(game, shooter, wreckBlock.tank, finalEndX, finalEndY, weapon);
+    } else if (hit) {
+      applySmallArmsTankHit(game, shooter, tank, finalEndX, finalEndY, weapon, options);
     } else if (Math.random() < (options.impactChance ?? 0.18)) {
-      emitSmallArmsImpact(game, endX, endY, missAngle, weapon);
+      emitSmallArmsImpact(game, finalEndX, finalEndY, finalAngle, weapon);
     }
 
     return true;
@@ -256,6 +492,7 @@
 
   function launchInfantryProjectile(game, shooter, aimX, aimY, ammo) {
     if (shooter.alive === false || shooter.hp <= 0) return false;
+    if (shooter.inVehicle) return false;
 
     const muzzleDistance = shooter.radius + 12;
     const baseAngle = Math.atan2(aimY - shooter.y, aimX - shooter.x);
@@ -317,7 +554,8 @@
         return {
           x: hitTank.x,
           y: hitTank.y,
-          tank: hitTank.tank
+          tank: hitTank.tank,
+          wreck: hitTank.wreck
         };
       }
 
@@ -336,8 +574,12 @@
     const lenSq = Math.max(1, dx * dx + dy * dy);
 
     for (const tank of vehicleTargets(game)) {
-      if (!tank.alive || tank === shooter) continue;
-      if (options.targetTeam && tank.team !== options.targetTeam) continue;
+      const wreck = isVehicleWreck(tank);
+      if (tank === shooter) continue;
+      if (options.onlyWrecks && !wreck) continue;
+      if (wreck && options.ignoreWrecks) continue;
+      if (!wreck && !tank.alive) continue;
+      if (!wreck && options.targetTeam && tank.team !== options.targetTeam) continue;
 
       const laneDistance = segmentDistanceToPoint(x1, y1, x2, y2, tank.x, tank.y);
       if (laneDistance > tank.radius + 2) continue;
@@ -347,11 +589,30 @@
       const impactDistance = Math.max(0, Math.hypot(tank.radius, 0) - 2);
       const impactX = tank.x - dx / Math.sqrt(lenSq) * impactDistance;
       const impactY = tank.y - dy / Math.sqrt(lenSq) * impactDistance;
-      best = { tank, x: impactX, y: impactY };
+      best = { tank, x: impactX, y: impactY, wreck };
       bestT = t;
     }
 
     return best;
+  }
+
+  function applySmallArmsWreckHit(game, shooter, wreck, x, y, weapon) {
+    if (!isVehicleWreck(wreck)) return false;
+    emitSmallArmsImpact(game, x, y, Math.atan2(y - shooter.y, x - shooter.x), weapon, {
+      hard: true,
+      tank: true
+    });
+
+    game.effects.explosions.push({
+      x,
+      y,
+      radius: 1.8,
+      maxRadius: weapon.id === "sniper" ? 14 : 9,
+      life: 0.11,
+      maxLife: 0.11,
+      color: "rgba(220, 226, 213, 0.42)"
+    });
+    return true;
   }
 
   function applySmallArmsTankHit(game, shooter, tank, x, y, weapon, options = {}) {
@@ -394,7 +655,7 @@
 
   function applyLineSuppression(game, shooter, startX, startY, endX, endY, weapon, targetTeam = null) {
     for (const unit of game.infantry || []) {
-      if (!unit.alive || unit.team === shooter.team) continue;
+      if (!unit.alive || unit.inVehicle || unit.team === shooter.team) continue;
       if (targetTeam && unit.team !== targetTeam) continue;
 
       const lineDistance = segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y);
@@ -411,10 +672,10 @@
 
   function applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon) {
     const targetTeam = target.team ?? null;
-    if (target.suppress) target.suppress(hit ? weapon.suppressionHit : weapon.suppressionMiss, shooter);
+    if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit : weapon.suppressionMiss, shooter);
 
     for (const unit of game.infantry || []) {
-      if (!unit.alive || unit === target || unit.team === shooter.team) continue;
+      if (!unit.alive || unit.inVehicle || unit === target || unit.team === shooter.team) continue;
       if (targetTeam && unit.team !== targetTeam) continue;
 
       const lineDistance = segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y);
@@ -465,6 +726,17 @@
         continue;
       }
 
+      if (!game.player.inTank && game.player.hp > 0 && shell.team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
+        const playerDistance = distXY(shell.x, shell.y, game.player.x, game.player.y);
+        const warningRange = shell.ammo.id === "rpg" ? 260 : shell.ammo.id === "grenade" ? 185 : 230;
+        if (playerDistance <= warningRange) {
+          game.warnPlayerDanger?.(shell.owner || shell, shell.ammo.id || "shell", {
+            key: shell,
+            ttl: 0.32
+          });
+        }
+      }
+
       let hit = null;
       for (const obstacle of game.world.obstacles) {
         const hitObstacle = circleRectCollision(shell.x, shell.y, shell.radius, obstacle) ||
@@ -477,7 +749,9 @@
 
       if (!hit) {
         for (const tank of vehicleTargets(game)) {
-          if (!tank.alive || tank.team === shell.team || tank === shell.owner) continue;
+          const wreck = isVehicleWreck(tank);
+          if (tank === shell.owner) continue;
+          if (!wreck && (!tank.alive || tank.team === shell.team)) continue;
           const shellDistance = segmentDistanceToPoint(
             shell.previousX,
             shell.previousY,
@@ -487,7 +761,7 @@
             tank.y
           );
           if (shellDistance <= tank.radius + shell.radius) {
-            hit = { tank };
+            hit = wreck ? { wreck: tank } : { tank };
             break;
           }
         }
@@ -495,7 +769,7 @@
 
       if (!hit) {
         for (const unit of game.infantry || []) {
-          if (!unit.alive || unit.team === shell.team) continue;
+          if (!unit.alive || unit.inVehicle || unit.team === shell.team) continue;
           const shellDistance = segmentDistanceToPoint(
             shell.previousX,
             shell.previousY,
@@ -560,7 +834,8 @@
 
     if (ammo.id === "he" || ammo.id === "grenade" || ammo.id === "rpg") {
       if (ammo.id === "rpg" && hitTank) {
-        hitTank.takeDamage(game, ammo.directDamage || ammo.damage);
+        const damage = directTankDamage(game, hitTank, ammo.directDamage || ammo.damage, shell);
+        hitTank.takeDamage(game, damage);
       }
 
       damageRadius(game, x, y, ammo.splash, ammo.damage, shell.team, {
@@ -573,8 +848,19 @@
       return;
     }
 
-    if (hitTank) hitTank.takeDamage(game, ammo.damage);
-    if (hitInfantry) game.player.hp = Math.max(0, game.player.hp - (ammo.infantryDamage || ammo.damage || 55));
+    if (hitTank) {
+      const damage = directTankDamage(game, hitTank, ammo.damage, shell);
+      hitTank.takeDamage(game, damage);
+    }
+    if (hitInfantry) {
+      const hitDamage = ammo.infantryDamage || ammo.damage || 55;
+      game.applyPlayerDamage?.(hitDamage, shell.owner || shell, ammo.id || "shell", {
+        label: ammo.id === "rpg" ? "RPG \uC9C1\uACA9" : "\uD3EC\uD0C4 \uC9C1\uACA9"
+      });
+      if (typeof game.applyPlayerDamage !== "function") {
+        game.player.hp = Math.max(0, game.player.hp - hitDamage);
+      }
+    }
     if (hitInfantryUnit) hitInfantryUnit.takeDamage(ammo.infantryDamage || ammo.damage);
 
     game.effects.explosions.push({
@@ -652,6 +938,83 @@
     }
   }
 
+  function segmentRectInteriorLength(x1, y1, x2, y2, rect) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy);
+    if (length <= 0.001) return 0;
+
+    let entry = 0;
+    let exit = 1;
+    const axes = [
+      { start: x1, delta: dx, min: rect.x, max: rect.x + rect.w },
+      { start: y1, delta: dy, min: rect.y, max: rect.y + rect.h }
+    ];
+
+    for (const axis of axes) {
+      if (Math.abs(axis.delta) <= 0.0001) {
+        if (axis.start < axis.min || axis.start > axis.max) return 0;
+        continue;
+      }
+
+      const t1 = (axis.min - axis.start) / axis.delta;
+      const t2 = (axis.max - axis.start) / axis.delta;
+      const low = Math.min(t1, t2);
+      const high = Math.max(t1, t2);
+      entry = Math.max(entry, low);
+      exit = Math.min(exit, high);
+      if (entry > exit) return 0;
+    }
+
+    return Math.max(0, exit - entry) * length;
+  }
+
+  function blastExposure(game, x, y, target, options = {}) {
+    if (!target) return 1;
+
+    const d = distXY(x, y, target.x, target.y);
+    const nearRadius = options.nearRadius ?? 28;
+    if (d <= nearRadius) return 1;
+
+    const padding = options.padding ?? 6;
+    const blockLength = options.blockLength ?? 9;
+    let blockers = 0;
+    let blockedDepth = 0;
+
+    for (const obstacle of game.world?.obstacles || []) {
+      const depth = segmentRectInteriorLength(x, y, target.x, target.y, expandedRect(obstacle, padding));
+      if (depth <= blockLength) continue;
+      blockers += 1;
+      blockedDepth += depth;
+    }
+
+    const dx = target.x - x;
+    const dy = target.y - y;
+    const lenSq = Math.max(1, dx * dx + dy * dy);
+    for (const wreck of vehicleTargets(game)) {
+      if (!isVehicleWreck(wreck) || wreck === target) continue;
+      const t = ((wreck.x - x) * dx + (wreck.y - y) * dy) / lenSq;
+      if (t <= 0.08 || t >= 0.96) continue;
+      const laneDistance = segmentDistanceToPoint(x, y, target.x, target.y, wreck.x, wreck.y);
+      const wreckPadding = (wreck.radius || 18) + padding;
+      if (laneDistance > wreckPadding) continue;
+      blockers += 1;
+      blockedDepth += Math.max(14, wreckPadding * 1.35);
+    }
+
+    if (!blockers) return 1;
+
+    const coverScale = options.coverScale ?? 0.28;
+    const minimum = options.minimum ?? 0.12;
+    const depthScale = clamp(1 - blockedDepth / 260, 0.52, 1);
+    const stackedCoverScale = Math.pow(0.66, blockers - 1);
+    return clamp(coverScale * depthScale * stackedCoverScale, minimum, 1);
+  }
+
+  function blastSuppressionExposure(exposure) {
+    return clamp(0.35 + exposure * 0.65, 0.26, 1);
+  }
+
   function damageRadius(game, x, y, radius, damage, team, ammo = {}) {
     for (const tank of vehicleTargets(game)) {
       if (tank === ammo.excludeTarget) continue;
@@ -659,22 +1022,70 @@
       const d = distXY(x, y, tank.x, tank.y);
       if (d > radius + tank.radius) continue;
       const falloff = clamp(1 - d / (radius + tank.radius), 0.18, 1);
-      tank.takeDamage(game, damage * (ammo.tankDamageScale ?? 1) * falloff);
+      const exposure = blastExposure(game, x, y, tank, {
+        padding: tank.vehicleType === "humvee" ? 6 : 9,
+        coverScale: tank.vehicleType === "humvee" ? 0.34 : 0.4,
+        minimum: tank.vehicleType === "humvee" ? 0.14 : 0.18,
+        nearRadius: 34 + (tank.radius || 0) * 0.25
+      });
+      const vehicleScale = tank.vehicleType === "humvee"
+        ? ammo.lightVehicleDamageScale ?? ammo.tankDamageScale ?? 1
+        : ammo.tankDamageScale ?? 1;
+      tank.takeDamage(game, damage * vehicleScale * falloff * exposure);
     }
 
     for (const unit of game.infantry || []) {
-      if (!unit.alive || unit.team === team) continue;
+      if (!unit.alive || unit.inVehicle || unit.team === team) continue;
       const d = distXY(x, y, unit.x, unit.y);
       if (d > radius + unit.radius) continue;
       const falloff = clamp(1 - d / (radius + unit.radius), 0.2, 1);
-      unit.suppress((ammo.suppressionBase ?? 18) + (ammo.suppressionMax ?? 42) * falloff, { x, y, team });
-      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff);
+      const exposure = blastExposure(game, x, y, unit, {
+        padding: 5,
+        coverScale: 0.24,
+        minimum: 0.1,
+        nearRadius: 26
+      });
+      unit.suppress(
+        ((ammo.suppressionBase ?? 18) + (ammo.suppressionMax ?? 42) * falloff) * blastSuppressionExposure(exposure),
+        { x, y, team }
+      );
+      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure);
+    }
+
+    for (const drone of game.drones || []) {
+      if (!drone.alive || drone.team === team) continue;
+      const d = distXY(x, y, drone.x, drone.y);
+      if (d > radius + drone.radius) continue;
+      const falloff = clamp(1 - d / (radius + drone.radius), 0.24, 1);
+      const exposure = blastExposure(game, x, y, drone, {
+        padding: 3,
+        coverScale: 0.18,
+        minimum: 0.12,
+        nearRadius: 24
+      });
+      const droneScale = drone.droneRole === "attack" ? 0.46 : 0.5;
+      drone.takeDamage(damage * droneScale * falloff * exposure);
     }
 
     if (!game.player.inTank && game.player.hp > 0 && team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
       const d = distXY(x, y, game.player.x, game.player.y);
       if (d < radius + game.player.radius) {
-        game.player.hp = Math.max(0, game.player.hp - damage * (ammo.infantryDamageScale ?? 1) * clamp(1 - d / radius, 0.24, 1));
+        const falloff = clamp(1 - d / radius, 0.24, 1);
+        const exposure = blastExposure(game, x, y, game.player, {
+          padding: 5,
+          coverScale: 0.24,
+          minimum: 0.1,
+          nearRadius: 26
+        });
+        const playerDamage = damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure;
+        const source = { x, y, team, owner: ammo.owner || ammo.source || null };
+        game.applyPlayerDamage?.(playerDamage, source, ammo.id || "explosion", {
+          x,
+          y
+        });
+        if (typeof game.applyPlayerDamage !== "function") {
+          game.player.hp = Math.max(0, game.player.hp - playerDamage);
+        }
       }
     }
   }
@@ -769,6 +1180,7 @@
     fireRifle,
     fireRifleAtPoint,
     fireRifleAtTank,
+    smallArmsRange,
     throwGrenade,
     fireRpg,
     updateProjectiles,

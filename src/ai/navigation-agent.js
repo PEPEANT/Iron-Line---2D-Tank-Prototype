@@ -2,7 +2,7 @@
 
 (function registerNavigationAgent(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { distXY, clamp, expandedRect, lineIntersectsRect, circleRectCollision } = IronLine.math;
+  const { distXY, clamp, angleTo, normalizeAngle, expandedRect, lineIntersectsRect, circleRectCollision } = IronLine.math;
 
   class NavigationAgent {
     constructor(tank, game) {
@@ -72,7 +72,7 @@
 
     finalTarget(order) {
       if (order.supportPoint) {
-        const safeSupport = this.safePointNear(order.supportPoint, this.tank.radius + 6);
+        const safeSupport = this.safePointNear(order.supportPoint, this.tank.radius + 6, order.supportPoint.avoidEdgeMargin || 124);
         return {
           x: safeSupport.x,
           y: safeSupport.y,
@@ -82,7 +82,8 @@
         };
       }
 
-      const radius = order.role === "hold" ? 88 : 66;
+      const captureIntent = order.role !== "hold" && order.role !== "support";
+      const radius = order.role === "hold" ? 98 : order.role === "support" ? 108 : 56;
       const offset = this.formationOffset(order, radius);
       const preferred = {
         x: order.point.x + offset.x,
@@ -92,7 +93,7 @@
       return {
         x: safeTarget.x,
         y: safeTarget.y,
-        stopDistance: order.role === "hold" ? 72 : 48,
+        stopDistance: captureIntent ? 28 : order.role === "hold" ? 78 : 62,
         final: true
       };
     }
@@ -101,7 +102,11 @@
       if (this.pointPassable(preferred.x, preferred.y, this.tank.radius + 5)) return preferred;
 
       const baseAngle = this.seed * 0.41 + (order.slotIndex || 0) * 0.9;
-      const radii = [92, 112, 72, 128];
+      const captureIntent = order.role !== "hold" && order.role !== "support";
+      const radii = captureIntent ? [48, 64, 82, 104] : [112, 126, 92, 72];
+      const maxObjectiveDistance = captureIntent
+        ? Math.max(36, (order.point.radius || 135) - 34)
+        : (order.point.radius || 135) - 6;
       for (const radius of radii) {
         for (let step = 0; step < 12; step += 1) {
           const angle = baseAngle + step * Math.PI * 2 / 12;
@@ -109,7 +114,7 @@
             x: order.point.x + Math.cos(angle) * radius,
             y: order.point.y + Math.sin(angle) * radius
           };
-          if (distXY(candidate.x, candidate.y, order.point.x, order.point.y) > order.point.radius - 6) continue;
+          if (distXY(candidate.x, candidate.y, order.point.x, order.point.y) > maxObjectiveDistance) continue;
           if (this.pointPassable(candidate.x, candidate.y, this.tank.radius + 5)) return candidate;
         }
       }
@@ -117,10 +122,10 @@
       return preferred;
     }
 
-    safePointNear(point, radius) {
+    safePointNear(point, radius, margin = radius) {
       const preferred = {
-        x: clamp(point.x, radius, this.game.world.width - radius),
-        y: clamp(point.y, radius, this.game.world.height - radius)
+        x: clamp(point.x, margin, this.game.world.width - margin),
+        y: clamp(point.y, margin, this.game.world.height - margin)
       };
       if (this.pointPassable(preferred.x, preferred.y, radius)) return preferred;
 
@@ -129,8 +134,8 @@
         for (let step = 0; step < 12; step += 1) {
           const angle = baseAngle + step * Math.PI * 2 / 12;
           const candidate = {
-            x: clamp(preferred.x + Math.cos(angle) * distance, radius, this.game.world.width - radius),
-            y: clamp(preferred.y + Math.sin(angle) * distance, radius, this.game.world.height - radius)
+            x: clamp(preferred.x + Math.cos(angle) * distance, margin, this.game.world.width - margin),
+            y: clamp(preferred.y + Math.sin(angle) * distance, margin, this.game.world.height - margin)
           };
           if (this.pointPassable(candidate.x, candidate.y, radius)) return candidate;
         }
@@ -227,9 +232,30 @@
 
     getRecoveryDrive() {
       if (this.recoveryTimer <= 0) return null;
+      const edge = this.edgeRecoveryDrive();
+      if (edge) return edge;
       return {
         throttle: -0.48,
         turn: this.recoverySide * 0.88
+      };
+    }
+
+    edgeRecoveryDrive() {
+      const world = this.game.world;
+      const margin = Math.max(150, (this.tank.radius || 36) + 104);
+      const nearEdge = this.tank.x < margin ||
+        this.tank.y < margin ||
+        this.tank.x > world.width - margin ||
+        this.tank.y > world.height - margin;
+      if (!nearEdge) return null;
+
+      const targetAngle = angleTo(this.tank.x, this.tank.y, world.width / 2, world.height / 2);
+      const diff = normalizeAngle(targetAngle - this.tank.angle);
+      const aligned = clamp((Math.cos(diff) + 1) / 2, 0, 1);
+      return {
+        throttle: 0.24 + aligned * 0.36,
+        turn: clamp(diff * 1.35, -1, 1),
+        edge: true
       };
     }
 

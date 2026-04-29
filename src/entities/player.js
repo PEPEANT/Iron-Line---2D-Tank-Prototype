@@ -13,7 +13,9 @@
     const ammo = {
       grenade: 0,
       rpg: 0,
-      repairKit: 0
+      repairKit: 0,
+      reconDrone: 0,
+      kamikazeDrone: 0
     };
 
     for (const weaponId of infantryClass.equipment || []) {
@@ -43,9 +45,20 @@
       rifleCooldown: 0,
       gunKick: 0,
       machineGunAim: false,
+      isProne: false,
+      proneTransitionTimer: 0,
+      proneTransitionDuration: 0.3,
+      proneTargetState: false,
+      deathTime: 0,
+      deathPoseAngle: 0,
       classId: "infantry",
       activeSlot: 0,
+      activeDrone: null,
+      controlledDrone: null,
       weaponId: "machinegun",
+      boostCharge: 1,
+      boostRecoverDelay: 0,
+      boosting: false,
       weaponInventory: equipmentForClass("infantry"),
       equipmentAmmo: ammoForClass("infantry"),
       getWeapon() {

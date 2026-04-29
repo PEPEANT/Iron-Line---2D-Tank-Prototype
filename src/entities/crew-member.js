@@ -26,6 +26,8 @@
       this.state = this.targetTank ? "mounting" : "idle";
       this.mountTimer = 0;
       this.mountTime = 0.65 + Math.random() * 0.35;
+      this.deathTime = 0;
+      this.deathPoseAngle = 0;
     }
 
     update(game, dt) {
@@ -108,6 +110,8 @@
         this.hp = 0;
         this.alive = false;
         this.speed = 0;
+        this.deathTime = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
+        this.deathPoseAngle = this.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.42;
         if (this.inTank) this.inTank.leaveCrew(this);
         this.inTank = null;
       }

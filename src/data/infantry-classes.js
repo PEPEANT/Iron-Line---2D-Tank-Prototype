@@ -18,15 +18,18 @@
       name: "공병",
       shortName: "공병",
       equipment: ["machinegun", "rpg", "repairKit"],
-      defaultAmmo: { rpg: 2, repairKit: 2 },
+      equipmentChoices: {
+        2: ["repairKit", "kamikazeDrone"]
+      },
+      defaultAmmo: { rpg: 2, repairKit: 2, kamikazeDrone: 1 },
       description: "대전차와 수리"
     },
     scout: {
       id: "scout",
       name: "정찰",
       shortName: "정찰",
-      equipment: ["sniper", "pistol", null],
-      defaultAmmo: {},
+      equipment: ["sniper", "pistol", "reconDrone"],
+      defaultAmmo: { reconDrone: 1 },
       description: "장거리 사격과 감시"
     }
   };

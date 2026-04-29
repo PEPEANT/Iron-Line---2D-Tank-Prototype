@@ -3,7 +3,7 @@
 (function registerRenderer(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, TEAM_COLORS, AMMO, INFANTRY_WEAPONS } = IronLine.constants;
-  const { clamp, lerp, distXY, roundRect, hexToRgba, lineIntersectsRect } = IronLine.math;
+  const { clamp, lerp, distXY, angleTo, roundRect, hexToRgba, lineIntersectsRect } = IronLine.math;
 
   class Renderer {
     constructor(canvas, camera) {
@@ -32,6 +32,10 @@
       const camera = this.camera;
       ctx.clearRect(0, 0, camera.width, camera.height);
       ctx.save();
+      const shake = game.screenShake || 0;
+      if (shake > 0.05) {
+        ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+      }
       ctx.scale(camera.zoom || 1, camera.zoom || 1);
       ctx.translate(-camera.x, -camera.y);
 
@@ -50,8 +54,10 @@
       this.drawPlayerTankAim(game);
       for (const unit of game.infantry || []) this.drawInfantryUnit(game, unit);
       for (const crew of game.crews || []) this.drawCrewMember(game, crew);
-      if (!game.player.inTank && game.player.hp > 0) this.drawInfantry(game, game.player);
+      if (!game.player.inTank && game.player.hp > 0) this.drawInfantry(game, game.player, { color: "#b6dcff" });
+      else if (!game.player.inTank && (game.playerDowned || game.playerDeathActive)) this.drawInfantryCorpse(game.player);
       this.drawPlayerInfantryAim(game);
+      for (const drone of game.drones || []) this.drawReconDrone(game, drone);
 
       this.drawProjectiles(game);
       this.drawTracers(game);
@@ -65,9 +71,41 @@
       this.drawMinimap(game);
       this.drawScreenVignette(game);
       this.drawStartCountdown(game);
+      this.drawTestLabOverlay(game);
       this.drawAimModeOverlay(game);
       this.drawScoutAimOverlay(game);
       this.drawRpgAimOverlay(game);
+    }
+
+    drawTestLabOverlay(game) {
+      if (!game.testLab) return;
+
+      const ctx = this.ctx;
+      const x = 16;
+      const y = 82;
+      const width = 330;
+      const height = 92;
+      ctx.save();
+      ctx.fillStyle = "rgba(8, 13, 12, 0.62)";
+      roundRect(ctx, x, y, width, height, 6);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(143, 222, 207, 0.28)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, width, height, 6);
+      ctx.stroke();
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "rgba(237, 244, 239, 0.94)";
+      ctx.font = "700 13px Rajdhani, sans-serif";
+      ctx.fillText(`TEST LAB: ${String(game.testLab).toUpperCase()}  AI ${game.testLabAiPaused ? "PAUSED" : "ACTIVE"}`, x + 12, y + 10);
+      ctx.font = "11px Rajdhani, sans-serif";
+      ctx.fillStyle = "rgba(183, 223, 213, 0.84)";
+      ctx.fillText("F1 infantry  F2 tank  F3 humvee  F4 AI", x + 12, y + 34);
+      ctx.fillText("F5 refill  F6 roof drone  F7 debug", x + 12, y + 52);
+      ctx.fillStyle = "rgba(255, 209, 102, 0.78)";
+      ctx.fillText("Open: index.html?testLab=drone", x + 12, y + 70);
+      ctx.restore();
     }
 
     drawTerrain(game) {
@@ -500,7 +538,7 @@
         ctx.translate(-Math.cos(tank.turretAngle) * kick, -Math.sin(tank.turretAngle) * kick);
       }
       ctx.rotate(tank.angle);
-      ctx.scale(1.22, 1.22);
+      ctx.scale(1.34, 1.34);
 
       if (!tank.alive) {
         ctx.globalAlpha = 0.82;
@@ -633,6 +671,20 @@
           ctx.fill();
         }
       }
+      if (tank.destructionPending) {
+        const pulse = 0.5 + Math.sin((game.matchTime || 0) * 18) * 0.5;
+        ctx.fillStyle = "rgba(10, 9, 8, 0.48)";
+        roundRect(ctx, -30, -16, 58, 32, 5);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 93, 42, ${0.24 + pulse * 0.16})`;
+        ctx.beginPath();
+        ctx.arc(4, -2, 12 + pulse * 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 189, 88, ${0.22 + pulse * 0.18})`;
+        ctx.beginPath();
+        ctx.arc(-12, 8, 6 + pulse * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
 
       ctx.save();
@@ -649,7 +701,7 @@
         ctx.translate(-Math.cos(tank.turretAngle) * kick, -Math.sin(tank.turretAngle) * kick);
       }
       ctx.rotate(tank.turretAngle);
-      ctx.scale(1.22, 1.22);
+      ctx.scale(1.34, 1.34);
       const recoilOffset = -tank.recoil * 7;
       ctx.fillStyle = darkColor;
       roundRect(ctx, 8 + recoilOffset, -4, 58, 8, 2.5);
@@ -693,6 +745,12 @@
       ctx.fillStyle = accentColor;
       roundRect(ctx, 11, -9, 9, 4, 1.5);
       ctx.fill();
+      if (tank.destructionPending) {
+        ctx.fillStyle = "rgba(8, 7, 6, 0.44)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
 
       this.drawTankMachineGun(game, tank, { darkColor, lightColor, accentColor });
@@ -902,6 +960,7 @@
     }
 
     drawPlayerInfantryAim(game) {
+      if (game.player?.controlledDrone) return;
       if (game.isPlayerMachineGunAimMode?.()) {
         this.drawPlayerInfantryMachineGunAim(game);
         return;
@@ -921,7 +980,7 @@
       const angle = Math.atan2(game.input.mouse.worldY - player.y, game.input.mouse.worldX - player.x);
       const muzzleX = player.x + Math.cos(angle) * muzzleDistance;
       const muzzleY = player.y + Math.sin(angle) * muzzleDistance;
-      const aimReady = (player.rpgAimTime || 0) >= 0.34 && !aim.tooClose;
+      const aimReady = (player.rpgAimTime || 0) >= (player.isProne ? 0.42 : 0.34) && !aim.tooClose;
       const lineColor = aim.tooClose
         ? "rgba(255, 109, 102, 0.66)"
         : aimReady
@@ -1008,7 +1067,7 @@
       const width = 66;
       const pct = tank.maxHp > 0 ? tank.hp / tank.maxHp : 0;
       ctx.save();
-      ctx.translate(tank.x, tank.y - 58);
+      ctx.translate(tank.x, tank.y - (tank.vehicleType === "humvee" ? 58 : 64));
       if (tank.reload?.active) {
         const reloadPct = clamp(tank.reload.progress / Math.max(tank.reload.duration, 0.001), 0, 1);
         const reloadWidth = 52;
@@ -1031,36 +1090,60 @@
     drawTankLabel(tank) {
       const ctx = this.ctx;
       ctx.save();
-      ctx.translate(tank.x, tank.y + 53);
+      ctx.translate(tank.x, tank.y + (tank.vehicleType === "humvee" ? 53 : 60));
+      const passengerText = tank.vehicleType === "humvee" && tank.passengerCapacity
+        ? ` ${tank.passengerCount?.() || 0}/${tank.passengerCapacity}`
+        : "";
+      const label = `${tank.callSign}${passengerText}`;
+      const width = Math.max(54, label.length * 7.2 + 14);
       ctx.fillStyle = "rgba(9, 15, 13, 0.65)";
-      roundRect(ctx, -27, -10, 54, 18, 4);
+      roundRect(ctx, -width / 2, -10, width, 18, 4);
       ctx.fill();
       ctx.fillStyle = "#edf4ef";
       ctx.font = "700 10px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(tank.callSign, 0, 0);
+      ctx.fillText(label, 0, 0);
       ctx.restore();
     }
 
     drawInfantry(game, unit, options = {}) {
       const ctx = this.ctx;
-      const color = options.color || "#89d27e";
+      const teamColor = options.color || "#89d27e";
+      const style = this.infantryVisualStyle(unit, teamColor);
       const weapon = INFANTRY_WEAPONS[unit.weaponId] || INFANTRY_WEAPONS.rifle;
       const scoped = this.isScopedInfantryPose(game, unit, weapon);
+      const prone = Boolean(unit.isProne || (unit.proneTransitionTimer || 0) > 0);
+      const moving = Math.abs(unit.speed || 0) > (prone ? 5 : 12);
+      const firingState = ["fire", "support-fire", "prone-fire", "recon-snipe", "harass-tank", "rpg-attack"].includes(unit.ai?.state || "");
+      const playerHoldingPistol = unit === game.player &&
+        weapon.id === "pistol" &&
+        !unit.controlledDrone &&
+        Boolean(game.input?.mouse?.leftDown || game.input?.keyDown?.("Space"));
+      const firing = scoped || playerHoldingPistol || (unit.gunKick || 0) > 0.02 || firingState;
+      const pose = prone
+        ? moving ? "prone-crawl" : "prone-fire"
+        : firing ? "stand-fire" : "stand-move";
+      const clock = game.matchTime || (typeof performance !== "undefined" ? performance.now() / 1000 : 0);
+      const phase = clock * (prone ? 9.5 : 8.2) + (unit.x + unit.y) * 0.035;
+      const controlledDrone = unit === game.player && unit.controlledDrone?.alive ? unit.controlledDrone : null;
+      const bodyAngle = controlledDrone ? angleTo(unit.x, unit.y, controlledDrone.x, controlledDrone.y) : unit.angle;
       ctx.save();
       ctx.translate(unit.x, unit.y);
-      ctx.rotate(unit.angle);
+      ctx.rotate(bodyAngle);
+
       ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
       ctx.beginPath();
-      ctx.ellipse(2, 4, 13, 9, 0, 0, Math.PI * 2);
+      ctx.ellipse(prone ? -2 : 0, prone ? 4 : 5, prone ? 20 : 13, prone ? 7.5 : 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(0, 0, unit.radius, 0, Math.PI * 2);
-      ctx.fill();
-      this.drawInfantryWeapon(ctx, unit, weapon, scoped);
+      if (prone) this.drawProneInfantryBody(ctx, unit, style, pose, phase);
+      else this.drawStandingInfantryBody(ctx, unit, style, pose, phase);
+
+      if (unit.isSquadLeader) this.drawSquadLeaderMarker(ctx, unit, style, prone);
+
+      if (controlledDrone) this.drawInfantryDroneController(ctx, controlledDrone);
+      else this.drawInfantryWeapon(ctx, unit, weapon, pose, scoped, phase);
       ctx.restore();
 
       if (options.showPrompt === false) return;
@@ -1077,6 +1160,223 @@
       }
     }
 
+    infantryVisualStyle(unit, teamColor) {
+      const red = unit.team === TEAM.RED;
+      return {
+        cloth: red ? "#51483a" : "#43533f",
+        clothDark: red ? "#39332b" : "#2f3b30",
+        vest: red ? "#27251f" : "#202920",
+        gear: red ? "#1b1a17" : "#171d18",
+        helmet: red ? "#28261f" : "#202a22",
+        boot: "#111611",
+        skin: "rgba(219, 210, 184, 0.34)",
+        patch: teamColor,
+        patchDim: red ? "rgba(255, 176, 171, 0.62)" : "rgba(182, 220, 255, 0.62)"
+      };
+    }
+
+    drawSquadLeaderMarker(ctx, unit, style, prone) {
+      const radius = unit.radius || 10;
+      const x = prone ? radius * 0.38 : radius * -0.03;
+      const y = prone ? -radius * 0.47 : -radius * 0.63;
+      const width = prone ? radius * 0.58 : radius * 0.52;
+      const height = Math.max(2.4, radius * 0.22);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(prone ? -0.08 : 0.12);
+      ctx.fillStyle = "rgba(76, 214, 108, 0.95)";
+      ctx.strokeStyle = "rgba(8, 36, 16, 0.76)";
+      ctx.lineWidth = 0.85;
+      roundRect(ctx, -width / 2, -height / 2, width, height, 1.5);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(221, 255, 215, 0.42)";
+      roundRect(ctx, -width * 0.33, -height * 0.34, width * 0.24, height * 0.68, 1);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    drawStandingInfantryBody(ctx, unit, style, pose, phase) {
+      const radius = unit.radius || 10;
+      const moving = pose === "stand-move";
+      const firing = pose === "stand-fire";
+      const sway = moving ? Math.cos(phase * 0.5) * 0.28 : 0;
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      ctx.fillStyle = style.gear;
+      roundRect(ctx, -radius * 1.16, -radius * 0.46, radius * 0.48, radius * 0.92, 3.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.58)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(237, 244, 239, 0.08)";
+      roundRect(ctx, -radius * 1.04, -radius * 0.32, radius * 0.12, radius * 0.64, 2);
+      ctx.fill();
+
+      ctx.strokeStyle = style.clothDark;
+      ctx.lineWidth = 3.1;
+      ctx.beginPath();
+      if (firing) {
+        ctx.moveTo(-radius * 0.02, -radius * 0.5);
+        ctx.lineTo(radius * 0.42, -radius * 0.24);
+        ctx.moveTo(-radius * 0.02, radius * 0.5);
+        ctx.lineTo(radius * 0.42, radius * 0.22);
+      } else {
+        ctx.moveTo(-radius * 0.16, -radius * 0.56);
+        ctx.lineTo(radius * 0.08, -radius * 0.66);
+        ctx.moveTo(-radius * 0.16, radius * 0.56);
+        ctx.lineTo(radius * 0.08, radius * 0.66);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = style.cloth;
+      roundRect(ctx, -radius * 0.7, -radius * 0.58 + sway, radius * 1.02, radius * 1.16, 4.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.48)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = style.vest;
+      roundRect(ctx, -radius * 0.5, -radius * 0.48 + sway, radius * 0.64, radius * 0.96, 3.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.45)";
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.1)";
+      roundRect(ctx, -radius * 0.24, -radius * 0.38 + sway, radius * 0.16, radius * 0.76, 2);
+      ctx.fill();
+
+      ctx.fillStyle = style.patchDim;
+      roundRect(ctx, -radius * 0.04, -radius * 0.62 + sway, radius * 0.26, radius * 0.11, 1.5);
+      ctx.fill();
+      ctx.fillStyle = style.patch;
+      roundRect(ctx, radius * 0.42, -radius * 0.08, radius * 0.14, radius * 0.16, 1.2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(11, 15, 12, 0.38)";
+      roundRect(ctx, radius * 0.22, -radius * 0.2, radius * 0.18, radius * 0.4, 2);
+      ctx.fill();
+
+      ctx.fillStyle = style.helmet;
+      ctx.beginPath();
+      ctx.ellipse(radius * 0.66, 0, Math.max(4.2, radius * 0.42), Math.max(4, radius * 0.43), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.62)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(10, 14, 11, 0.34)";
+      ctx.beginPath();
+      ctx.ellipse(radius * 0.78, 0, radius * 0.2, radius * 0.33, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.08)";
+      roundRect(ctx, radius * 0.5, -radius * 0.05, radius * 0.28, radius * 0.1, 1);
+      ctx.fill();
+      ctx.fillStyle = style.patch;
+      roundRect(ctx, radius * 0.58, -radius * 0.24, radius * 0.15, radius * 0.08, 1);
+      ctx.fill();
+    }
+
+    drawProneInfantryBody(ctx, unit, style, pose, phase) {
+      const radius = unit.radius || 10;
+      const crawling = pose === "prone-crawl";
+      const wave = crawling ? Math.sin(phase) : 0;
+      const counter = crawling ? Math.cos(phase) : 0;
+      const leftForward = radius * (0.62 + wave * 0.16);
+      const rightForward = radius * (0.62 - wave * 0.16);
+      const leftKnee = -radius * (1.18 - counter * 0.1);
+      const rightKnee = -radius * (1.18 + counter * 0.1);
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      ctx.strokeStyle = style.boot;
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.76, -radius * 0.24);
+      ctx.lineTo(leftKnee, -radius * (0.52 + wave * 0.06));
+      ctx.lineTo(-radius * (1.54 - wave * 0.08), -radius * 0.48);
+      ctx.moveTo(-radius * 0.76, radius * 0.24);
+      ctx.lineTo(rightKnee, radius * (0.52 - wave * 0.06));
+      ctx.lineTo(-radius * (1.54 + wave * 0.08), radius * 0.48);
+      ctx.stroke();
+
+      ctx.fillStyle = style.gear;
+      roundRect(ctx, -radius * 1.3, -radius * 0.38, radius * 0.46, radius * 0.76, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.58)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      ctx.strokeStyle = style.clothDark;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (crawling) {
+        ctx.moveTo(-radius * 0.02, -radius * 0.42);
+        ctx.lineTo(leftForward, -radius * (0.66 + counter * 0.06));
+        ctx.lineTo(radius * (0.92 + wave * 0.08), -radius * 0.42);
+        ctx.moveTo(-radius * 0.06, radius * 0.42);
+        ctx.lineTo(rightForward, radius * (0.64 - counter * 0.06));
+      } else {
+        ctx.moveTo(-radius * 0.02, -radius * 0.42);
+        ctx.lineTo(radius * 0.7, -radius * 0.55);
+        ctx.lineTo(radius * 0.92, -radius * 0.28);
+        ctx.moveTo(-radius * 0.02, radius * 0.42);
+        ctx.lineTo(radius * 0.7, radius * 0.55);
+        ctx.lineTo(radius * 0.92, radius * 0.28);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = style.cloth;
+      roundRect(ctx, -radius * 0.92, -radius * 0.43, radius * 1.36, radius * 0.86, 4);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.48)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = style.vest;
+      roundRect(ctx, -radius * 0.68, -radius * 0.33, radius * 0.82, radius * 0.66, 3.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.45)";
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.09)";
+      roundRect(ctx, -radius * 0.38, -radius * 0.28, radius * 0.22, radius * 0.56, 2);
+      ctx.fill();
+
+      ctx.fillStyle = style.patchDim;
+      roundRect(ctx, -radius * 0.12, -radius * 0.48, radius * 0.28, radius * 0.11, 1.5);
+      ctx.fill();
+
+      ctx.fillStyle = style.helmet;
+      ctx.beginPath();
+      ctx.ellipse(radius * 1.0, 0, Math.max(3.8, radius * 0.36), Math.max(3.5, radius * 0.35), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5, 8, 6, 0.62)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(9, 13, 10, 0.38)";
+      ctx.beginPath();
+      ctx.ellipse(radius * 1.11, 0, radius * 0.16, radius * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = style.patch;
+      roundRect(ctx, radius * 0.92, -radius * 0.07, radius * 0.18, radius * 0.13, 1.2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.08)";
+      roundRect(ctx, radius * 0.88, -radius * 0.04, radius * 0.24, radius * 0.08, 1);
+      ctx.fill();
+    }
+
     isScopedInfantryPose(game, unit, weapon) {
       if (unit === game.player && (weapon.id === "machinegun" || weapon.id === "lmg")) {
         return Boolean(game.isPlayerMachineGunAimMode?.());
@@ -1089,58 +1389,126 @@
         Math.abs(unit.speed || 0) < 14;
     }
 
-    drawInfantryWeapon(ctx, unit, weapon, scoped) {
+    drawInfantryWeapon(ctx, unit, weapon, pose = "stand-move", scoped = false, phase = 0) {
       const width = weapon.visualWidth || 5;
       const length = weapon.visualLength || 16;
       const rpg = weapon.id === "rpg";
       const machineGun = weapon.id === "machinegun" || weapon.id === "lmg";
-      const sideOffset = scoped || rpg && unit.rpgAim ? 0 : rpg ? 7 : 6;
-      const forwardOffset = scoped ? 3 : 2;
+      const crawling = pose === "prone-crawl";
+      const proneFire = pose === "prone-fire";
+      const standingFire = pose === "stand-fire";
+      const aimed = scoped || proneFire || standingFire || (rpg && unit.rpgAim);
+      let sideOffset = rpg ? 7 : 8.4;
+      let forwardOffset = -5.3;
+      let weaponAngle = -0.52;
+
+      if (crawling) {
+        sideOffset = rpg ? 8.5 : 7.2 + Math.sin(phase) * 0.65;
+        forwardOffset = rpg ? -1.5 : -2;
+        weaponAngle = -0.36 + Math.cos(phase * 0.7) * 0.04;
+      } else if (proneFire || scoped || (rpg && unit.rpgAim)) {
+        sideOffset = 0.35;
+        forwardOffset = scoped ? 4 : 3.2;
+        weaponAngle = 0;
+      } else if (standingFire) {
+        sideOffset = rpg ? 3.8 : 3.1;
+        forwardOffset = 2.3;
+        weaponAngle = -0.04;
+      }
+
       const stockLength = Math.max(4, length * 0.24);
-      const recoil = (unit.gunKick || 0) * (machineGun ? 3.4 : 1.8);
+      const displayLength = aimed || rpg ? length : length * 0.68;
+      const recoil = (unit.gunKick || 0) * (machineGun ? 3.4 : 1.8) * (aimed ? 1 : 0.7);
       const bodyX = forwardOffset - recoil;
 
+      ctx.save();
+      ctx.translate(0, sideOffset);
+      ctx.rotate(weaponAngle);
+
       ctx.fillStyle = "rgba(19, 24, 19, 0.72)";
-      roundRect(ctx, bodyX - stockLength, sideOffset - Math.max(2, width * 0.42), stockLength + 6, Math.max(4, width * 0.85), 2);
+      roundRect(ctx, bodyX - stockLength, -Math.max(2, width * 0.42), stockLength + 6, Math.max(4, width * 0.85), 2);
       ctx.fill();
 
       ctx.fillStyle = rpg ? "#2f3b2d" : "#243222";
-      roundRect(ctx, bodyX, sideOffset - width / 2, length, width, 2);
+      roundRect(ctx, bodyX, -width / 2, displayLength, width, 2);
       ctx.fill();
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.2)";
-      roundRect(ctx, bodyX + length - 1, sideOffset - Math.max(1, width * 0.28), 5, Math.max(2, width * 0.56), 1);
+      roundRect(ctx, bodyX + displayLength - 1, -Math.max(1, width * 0.28), 5, Math.max(2, width * 0.56), 1);
       ctx.fill();
 
       if (rpg) {
         ctx.fillStyle = "rgba(255, 180, 92, 0.68)";
         ctx.beginPath();
-        ctx.moveTo(bodyX + length + 8, sideOffset);
-        ctx.lineTo(bodyX + length - 2, sideOffset - width * 0.72);
-        ctx.lineTo(bodyX + length - 2, sideOffset + width * 0.72);
+        ctx.moveTo(bodyX + displayLength + 8, 0);
+        ctx.lineTo(bodyX + displayLength - 2, -width * 0.72);
+        ctx.lineTo(bodyX + displayLength - 2, width * 0.72);
         ctx.closePath();
         ctx.fill();
 
         ctx.fillStyle = "rgba(237, 244, 239, 0.18)";
-        roundRect(ctx, bodyX + length * 0.36, sideOffset - width / 2 - 3, 10, 2, 1);
+        roundRect(ctx, bodyX + displayLength * 0.36, -width / 2 - 3, 10, 2, 1);
         ctx.fill();
       }
 
       if (machineGun) {
         ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-        roundRect(ctx, bodyX + 9, sideOffset + width * 0.42, 8, 3, 1);
+        roundRect(ctx, bodyX + 9, width * 0.42, 8, 3, 1);
         ctx.fill();
         ctx.fillStyle = "rgba(15, 19, 16, 0.54)";
-        roundRect(ctx, bodyX + length * 0.42, sideOffset - width * 0.88, 9, 3, 1);
+        roundRect(ctx, bodyX + displayLength * 0.42, -width * 0.88, 9, 3, 1);
         ctx.fill();
       }
 
       if (unit.weaponId === "sniper") {
         ctx.fillStyle = "rgba(120, 214, 140, 0.45)";
-        roundRect(ctx, bodyX + 7, sideOffset - width / 2 - 3, 8, 2, 1);
+        roundRect(ctx, bodyX + 7, -width / 2 - 3, 8, 2, 1);
         ctx.fill();
       }
 
+      ctx.restore();
+    }
+
+    drawInfantryDroneController(ctx, drone) {
+      const weakSignal = Boolean(drone?.isSignalWeak?.());
+      const screenColor = weakSignal ? "rgba(255, 209, 102, 0.72)" : "rgba(107, 188, 255, 0.68)";
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(28, 34, 30, 0.88)";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(-2, -6);
+      ctx.lineTo(9, -8);
+      ctx.moveTo(-2, 6);
+      ctx.lineTo(9, 8);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(15, 19, 18, 0.9)";
+      roundRect(ctx, 7, -9, 15, 18, 2.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.2)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, 7, -9, 15, 18, 2.5);
+      ctx.stroke();
+
+      ctx.fillStyle = screenColor;
+      roundRect(ctx, 9.5, -6.5, 10, 9, 1.5);
+      ctx.fill();
+      ctx.fillStyle = "rgba(237, 244, 239, 0.28)";
+      roundRect(ctx, 10, 4.5, 9, 2, 1);
+      ctx.fill();
+
+      ctx.strokeStyle = weakSignal ? "rgba(255, 209, 102, 0.72)" : "rgba(142, 216, 255, 0.62)";
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(20, -7);
+      ctx.lineTo(26, -12);
+      ctx.moveTo(20, 7);
+      ctx.lineTo(26, 12);
+      ctx.stroke();
+      ctx.restore();
     }
 
     drawCrewMember(game, crew) {
@@ -1154,6 +1522,7 @@
     }
 
     drawInfantryUnit(game, unit) {
+      if (unit.inVehicle) return;
       if (!unit.alive) {
         this.drawInfantryCorpse(unit);
         return;
@@ -1162,23 +1531,409 @@
       this.drawInfantry(game, unit, { color, showPrompt: false });
       this.drawInfantryHealth(unit);
       this.drawInfantrySuppression(unit);
+      this.drawInfantryThought(unit);
+    }
+
+    drawReconDrone(game, drone) {
+      if (!drone.alive) return;
+
+      const ctx = this.ctx;
+      const controlled = game.player.controlledDrone === drone;
+      const attackDrone = drone.droneRole === "attack";
+      const signalStrength = drone.signalStrength?.() ?? 1;
+      const weakSignal = Boolean(drone.isSignalWeak?.());
+      const criticalSignal = signalStrength <= 0.08;
+      const pulse = 0.5 + Math.sin((game.matchTime || 0) * 7 + drone.rotorPhase) * 0.5;
+      const bodyColor = attackDrone ? "#7b6040" : "#52665d";
+      const bodyTop = attackDrone ? "#9a7045" : "#667c72";
+      const armColor = attackDrone ? "#2f3128" : "#26342f";
+      const signalColor = weakSignal
+        ? criticalSignal ? "rgba(226, 93, 74, 0.88)" : "rgba(255, 209, 102, 0.8)"
+        : attackDrone ? "rgba(203, 112, 62, 0.8)" : "rgba(103, 155, 154, 0.72)";
+
+      ctx.save();
+      ctx.globalAlpha = controlled ? 0.13 : attackDrone ? 0.1 : 0.055;
+      ctx.strokeStyle = attackDrone
+        ? "rgba(186, 108, 61, 0.5)"
+        : controlled ? "rgba(100, 154, 151, 0.4)" : "rgba(180, 194, 181, 0.18)";
+      ctx.lineWidth = controlled ? 2 : 1;
+      ctx.setLineDash([14, 18]);
+      ctx.beginPath();
+      ctx.arc(drone.x, drone.y, attackDrone ? drone.splash || 120 : drone.scanRange, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (drone.owner && drone.owner.hp > 0) {
+        ctx.globalAlpha = controlled ? weakSignal ? 0.38 : 0.24 : 0.1;
+        ctx.strokeStyle = weakSignal
+          ? criticalSignal ? "rgba(226, 93, 74, 0.62)" : "rgba(255, 209, 102, 0.58)"
+          : attackDrone ? "rgba(173, 124, 73, 0.48)" : "rgba(91, 137, 134, 0.5)";
+        ctx.lineWidth = 1.2;
+        if (weakSignal) ctx.setLineDash([7, 9]);
+        ctx.beginPath();
+        ctx.moveTo(drone.owner.x, drone.owner.y);
+        ctx.lineTo(drone.x, drone.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (!attackDrone && drone.roofLocked && drone.roofLockPoint) {
+        const roofActive = Boolean(game.droneHasRoofCover?.(drone));
+        const lockRadius = 18 + pulse * 3;
+        ctx.globalAlpha = roofActive ? 0.74 : 0.46;
+        ctx.strokeStyle = roofActive ? "rgba(143, 222, 207, 0.88)" : "rgba(143, 222, 207, 0.46)";
+        ctx.lineWidth = roofActive ? 1.8 : 1.2;
+        ctx.setLineDash(roofActive ? [] : [5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(drone.x, drone.y);
+        ctx.lineTo(drone.roofLockPoint.x, drone.roofLockPoint.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(drone.roofLockPoint.x, drone.roofLockPoint.y, lockRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = "800 9px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = roofActive ? "rgba(197, 244, 231, 0.96)" : "rgba(183, 223, 213, 0.72)";
+        ctx.fillText(roofActive ? "ROOF LOCK" : "ROOF", drone.roofLockPoint.x, drone.roofLockPoint.y - lockRadius - 10);
+      }
+
+      if (attackDrone) {
+        const lock = drone.lockPosition?.();
+        const lockTarget = lock?.target || drone.lockTarget;
+        const lockRadius = lockTarget?.radius || 18;
+        if (lock) {
+          ctx.globalAlpha = drone.diveActive ? 0.82 : 0.62;
+          ctx.strokeStyle = drone.diveActive ? "rgba(255, 123, 72, 0.92)" : "rgba(255, 209, 102, 0.82)";
+          ctx.lineWidth = drone.diveActive ? 2.2 : 1.5;
+          ctx.setLineDash(drone.diveActive ? [] : [6, 7]);
+          ctx.beginPath();
+          ctx.moveTo(drone.x, drone.y);
+          ctx.lineTo(lock.x, lock.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          const markerRadius = lockRadius + (drone.diveActive ? 26 : 18) + pulse * 4;
+          ctx.beginPath();
+          ctx.arc(lock.x, lock.y, markerRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(lock.x - markerRadius - 8, lock.y);
+          ctx.lineTo(lock.x - markerRadius + 3, lock.y);
+          ctx.moveTo(lock.x + markerRadius - 3, lock.y);
+          ctx.lineTo(lock.x + markerRadius + 8, lock.y);
+          ctx.moveTo(lock.x, lock.y - markerRadius - 8);
+          ctx.lineTo(lock.x, lock.y - markerRadius + 3);
+          ctx.moveTo(lock.x, lock.y + markerRadius - 3);
+          ctx.lineTo(lock.x, lock.y + markerRadius + 8);
+          ctx.stroke();
+
+          ctx.font = "800 10px Inter, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = drone.diveActive ? "rgba(255, 220, 184, 0.96)" : "rgba(255, 235, 172, 0.94)";
+          ctx.fillText(drone.diveActive ? "STRIKE" : "TARGET", lock.x, lock.y - markerRadius - 13);
+        }
+
+        if (controlled && !lock) {
+          const lockOptions = game.suicideDroneLockOptions?.(drone) || [];
+          for (const item of lockOptions.slice(0, 5)) {
+            const target = item.target;
+            if (!target) continue;
+            const radius = (target.radius || 10) + (item.lockable ? 18 : 12) + pulse * (item.lockable ? 3 : 1);
+            ctx.globalAlpha = item.lockable ? 0.82 : 0.36;
+            ctx.strokeStyle = item.lockable ? "rgba(255, 209, 102, 0.86)" : "rgba(255, 190, 104, 0.42)";
+            ctx.lineWidth = item.lockable ? 1.7 : 1;
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        const lockRatio = drone.lockRatio?.() || 0;
+        if (controlled && lockRatio > 0.01) {
+          const attemptTarget = drone.lockAttemptTarget;
+          const attemptPoint = attemptTarget
+            ? { x: attemptTarget.x, y: attemptTarget.y, radius: attemptTarget.radius || 12 }
+            : drone.lockAttemptPoint || { x: game.input.mouse.worldX, y: game.input.mouse.worldY, radius: 12 };
+          const radius = (attemptPoint.radius || 12) + 28 + pulse * 4;
+          ctx.globalAlpha = 0.88;
+          ctx.lineWidth = 2.8;
+          ctx.strokeStyle = "rgba(42, 39, 28, 0.74)";
+          ctx.beginPath();
+          ctx.arc(attemptPoint.x, attemptPoint.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255, 209, 102, 0.94)";
+          ctx.beginPath();
+          ctx.arc(attemptPoint.x, attemptPoint.y, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * lockRatio);
+          ctx.stroke();
+          ctx.font = "800 10px Inter, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(255, 239, 184, 0.96)";
+          ctx.fillText(`ATTACK ${Math.round(lockRatio * 100)}%`, attemptPoint.x, attemptPoint.y - radius - 14);
+        }
+
+        if (controlled && drone.lockFailureTimer > 0 && drone.lockFailureReason) {
+          const alpha = clamp(drone.lockFailureTimer / 0.9, 0, 1);
+          ctx.globalAlpha = 0.42 + alpha * 0.44;
+          ctx.fillStyle = "rgba(245, 95, 82, 0.95)";
+          ctx.font = "800 10px Inter, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`FAIL: ${drone.lockFailureReason}`, drone.x, drone.y - 52);
+        }
+
+        if (drone.detectedTimer > 0) {
+          const alpha = clamp(drone.detectedTimer / 1.25, 0, 1);
+          const warnRadius = drone.radius + 20 + pulse * 7;
+          ctx.globalAlpha = 0.32 + alpha * 0.48;
+          ctx.strokeStyle = "rgba(255, 93, 82, 0.92)";
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([4, 5]);
+          ctx.beginPath();
+          ctx.arc(drone.x, drone.y, warnRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.font = "900 9px Inter, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(255, 190, 184, 0.96)";
+          ctx.fillText("\uBC1C\uAC01", drone.x, drone.y - warnRadius - 10);
+        }
+      }
+
+      const designation = game.droneDesignatedContact?.();
+      const designatedHere = designation?.drone === drone ? designation : null;
+      const showDesignationOptions = !attackDrone && game.reconDroneDesignationUiDrone?.() === drone;
+      const designationOptions = showDesignationOptions
+        ? game.reconDroneDesignationOptions?.(drone) || []
+        : [];
+      if (designatedHere?.target) {
+        const target = designatedHere.target;
+        const ttlPct = clamp(designatedHere.ttl / Math.max(0.001, designatedHere.maxTtl || 1), 0, 1);
+        ctx.globalAlpha = 0.4 + ttlPct * 0.28;
+        ctx.strokeStyle = "rgba(143, 222, 207, 0.82)";
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(drone.x, drone.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.74;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, (target.radius || 10) + 16 + (1 - ttlPct) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (designationOptions.length > 0) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "10px Rajdhani, sans-serif";
+
+        for (const item of designationOptions) {
+          const target = item.target;
+          if (!target || target === designatedHere?.target) continue;
+
+          const hot = Boolean(item.lockable);
+          const radius = target.radius || 10;
+          const markerRadius = radius + (hot ? 16 : 12) + pulse * (hot ? 4 : 1.5);
+          const label = hot ? controlled ? "LOCK" : "MARK" : "TARGET";
+          const labelWidth = hot ? controlled ? 42 : 46 : 50;
+          const labelHeight = 17;
+          const labelX = item.markerX;
+          const labelY = item.markerY;
+
+          ctx.globalAlpha = hot ? 0.92 : 0.52;
+          ctx.strokeStyle = hot ? "rgba(255, 209, 102, 0.94)" : "rgba(143, 222, 207, 0.52)";
+          ctx.lineWidth = hot ? 1.7 : 1.1;
+          ctx.beginPath();
+          ctx.arc(target.x, target.y, markerRadius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(target.x - markerRadius - 7, target.y);
+          ctx.lineTo(target.x - markerRadius + 1, target.y);
+          ctx.moveTo(target.x + markerRadius - 1, target.y);
+          ctx.lineTo(target.x + markerRadius + 7, target.y);
+          ctx.moveTo(target.x, target.y - markerRadius - 7);
+          ctx.lineTo(target.x, target.y - markerRadius + 1);
+          ctx.moveTo(target.x, target.y + markerRadius - 1);
+          ctx.lineTo(target.x, target.y + markerRadius + 7);
+          ctx.stroke();
+
+          ctx.globalAlpha = hot ? 0.95 : 0.66;
+          ctx.fillStyle = hot ? "rgba(42, 35, 15, 0.82)" : "rgba(10, 24, 23, 0.7)";
+          roundRect(ctx, labelX - labelWidth / 2, labelY - labelHeight / 2, labelWidth, labelHeight, 3);
+          ctx.fill();
+          ctx.strokeStyle = hot ? "rgba(255, 209, 102, 0.9)" : "rgba(143, 222, 207, 0.44)";
+          ctx.lineWidth = 1;
+          roundRect(ctx, labelX - labelWidth / 2, labelY - labelHeight / 2, labelWidth, labelHeight, 3);
+          ctx.stroke();
+
+          ctx.fillStyle = hot ? "rgba(255, 235, 172, 0.96)" : "rgba(183, 223, 213, 0.75)";
+          ctx.fillText(label, labelX, labelY + 0.5);
+
+          if (hot) {
+            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = "rgba(255, 209, 102, 0.72)";
+            ctx.setLineDash([4, 5]);
+            ctx.beginPath();
+            ctx.moveTo(labelX, labelY + labelHeight / 2 + 2);
+            ctx.lineTo(target.x, target.y - markerRadius + 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(drone.angle || 0);
+
+      if (attackDrone && drone.boosting) {
+        ctx.save();
+        ctx.globalAlpha = drone.diveActive ? 0.68 : 0.46;
+        ctx.strokeStyle = drone.diveActive ? "rgba(255, 135, 78, 0.78)" : "rgba(255, 209, 102, 0.68)";
+        ctx.lineWidth = drone.diveActive ? 3.2 : 2.4;
+        ctx.lineCap = "round";
+        for (const offset of [-6, 0, 6]) {
+          ctx.beginPath();
+          ctx.moveTo(-10, offset * 0.55);
+          ctx.lineTo(-36 - pulse * 10, offset);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+      ctx.beginPath();
+      ctx.ellipse(2, 6, 16, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = armColor;
+      ctx.lineWidth = 3.2;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(-7, side * 4);
+        ctx.lineTo(-18, side * 12);
+        ctx.moveTo(7, side * 4);
+        ctx.lineTo(18, side * 12);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = attackDrone ? "rgba(32, 34, 28, 0.86)" : "rgba(28, 39, 35, 0.86)";
+      ctx.lineWidth = 1.5;
+      const rotors = [
+        [-20, -13],
+        [20, -13],
+        [-20, 13],
+        [20, 13]
+      ];
+      for (const [rx, ry] of rotors) {
+        ctx.beginPath();
+        ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.2 + pulse * 0.16;
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, 8, 2.2, Math.PI / 7, 0, Math.PI * 2);
+        ctx.ellipse(rx, ry, 8, 2.2, -Math.PI / 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = bodyColor;
+      roundRect(ctx, -9, -5.5, 18, 11, 3);
+      ctx.fill();
+
+      ctx.fillStyle = bodyTop;
+      roundRect(ctx, -5.5, -3.2, 11, 6.4, 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(15, 20, 18, 0.82)";
+      roundRect(ctx, 4, -2.8, 5.5, 5.6, 1.5);
+      ctx.fill();
+
+      if (attackDrone) {
+        ctx.fillStyle = "rgba(64, 35, 25, 0.92)";
+        roundRect(ctx, -7, 4.8, 14, 5, 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(16, 18, 14, 0.58)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-4, 7.2);
+        ctx.lineTo(4, 7.2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = signalColor;
+      ctx.beginPath();
+      ctx.arc(-5.8, -5.9, 1.6, 0, Math.PI * 2);
+      ctx.arc(5.8, -5.9, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(drone.x, drone.y - 32);
+      const width = 38;
+      const pct = drone.batteryLimit
+        ? clamp(drone.battery / Math.max(1, drone.maxBattery), 0, 1)
+        : clamp(drone.hp / Math.max(1, drone.maxHp), 0, 1);
+      ctx.fillStyle = "rgba(9, 15, 13, 0.64)";
+      roundRect(ctx, -width / 2, -3, width, 5, 2.5);
+      ctx.fill();
+      ctx.fillStyle = pct > 0.28
+        ? attackDrone ? "rgba(188, 103, 60, 0.86)" : "rgba(93, 149, 146, 0.86)"
+        : "rgba(220, 112, 98, 0.82)";
+      roundRect(ctx, -width / 2, -3, width * pct, 5, 2.5);
+      ctx.fill();
+      if (controlled && weakSignal) {
+        ctx.fillStyle = criticalSignal ? "rgba(255, 146, 116, 0.9)" : "rgba(255, 209, 102, 0.88)";
+        ctx.font = "800 8px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("SIG", 0, -10);
+      }
+      ctx.restore();
     }
 
     drawInfantryCorpse(unit) {
       const ctx = this.ctx;
+      const now = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
+      const age = unit.deathTime ? Math.max(0, now - unit.deathTime) : 1;
+      const fall = clamp(age / 0.3, 0, 1);
+      const poseAngle = unit.deathPoseAngle || unit.angle + Math.PI / 2;
+      const angle = lerp(unit.angle || 0, poseAngle, fall);
+      const radius = unit.radius || 10;
+      const color = unit.team === TEAM.BLUE ? "#48697c" : "#76504e";
       ctx.save();
       ctx.translate(unit.x, unit.y);
-      ctx.rotate(unit.angle + Math.PI / 2);
-      ctx.globalAlpha = 0.62;
+      ctx.rotate(angle);
+      ctx.globalAlpha = 0.84 - fall * 0.2;
       ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
       ctx.beginPath();
-      ctx.ellipse(2, 4, 13, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(-1, 4, 17, 7, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = unit.team === TEAM.BLUE ? "#48697c" : "#76504e";
-      roundRect(ctx, -10, -5, 20, 10, 5);
+
+      ctx.fillStyle = color;
+      roundRect(ctx, -radius * 1.08, -radius * 0.45, radius * 2, radius * 0.9, 5);
       ctx.fill();
+
+      ctx.fillStyle = "rgba(15, 19, 16, 0.46)";
+      roundRect(ctx, -radius * 1.38, -radius * 0.24, radius * 0.42, radius * 0.48, 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#9aa496";
+      ctx.beginPath();
+      ctx.arc(radius * 1.03, 0, Math.max(3.3, radius * 0.32), 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.fillStyle = "#252b25";
-      roundRect(ctx, 5, -2, 13, 4, 2);
+      roundRect(ctx, radius * 0.04, -2, radius * 1.25, 4, 2);
       ctx.fill();
       ctx.restore();
     }
@@ -1215,6 +1970,44 @@
       ctx.arc(0, 0, 15 + pct * 8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    drawInfantryThought(unit) {
+      const thought = unit.ai?.thoughtText || "";
+      const timer = unit.ai?.thoughtTimer || 0;
+      if (!thought || timer <= 0) return;
+
+      const ctx = this.ctx;
+      const alpha = clamp(timer / 0.35, 0, 1);
+      const y = unit.y - (unit.isProne ? 38 : 46);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = "800 9px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const width = Math.min(122, Math.max(42, ctx.measureText(thought).width + 15));
+      const height = 17;
+      const x = unit.x - width / 2;
+      const bg = unit.team === TEAM.BLUE ? "rgba(9, 24, 28, 0.78)" : "rgba(31, 14, 14, 0.78)";
+      const stroke = unit.team === TEAM.BLUE ? "rgba(182, 220, 255, 0.68)" : "rgba(255, 176, 171, 0.68)";
+
+      ctx.fillStyle = bg;
+      roundRect(ctx, x, y - height / 2, width, height, 5);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(unit.x - 4, y + height / 2 - 1);
+      ctx.lineTo(unit.x + 4, y + height / 2 - 1);
+      ctx.lineTo(unit.x, y + height / 2 + 5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y - height / 2, width, height, 5);
+      ctx.stroke();
+      ctx.fillStyle = "#edf4ef";
+      ctx.fillText(thought, unit.x, y + 0.5);
       ctx.restore();
     }
 
@@ -1427,9 +2220,20 @@
       }
 
       for (const unit of game.infantry || []) {
-        if (!unit.alive) continue;
+        if (!unit.alive || unit.inVehicle) continue;
         ctx.fillStyle = TEAM_COLORS[unit.team] || "#edf4ef";
         ctx.fillRect(x + unit.x * sx - 1.8, y + unit.y * sy - 1.8, 3.6, 3.6);
+      }
+
+      for (const drone of game.drones || []) {
+        if (!drone.alive) continue;
+        const attackDrone = drone.droneRole === "attack";
+        ctx.fillStyle = attackDrone
+          ? "#ff9148"
+          : game.player.controlledDrone === drone ? "#8ed8ff" : "rgba(142, 216, 255, 0.82)";
+        ctx.beginPath();
+        ctx.arc(x + drone.x * sx, y + drone.y * sy, attackDrone ? 3.2 : 2.8, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       if (!game.player.inTank && game.player.hp > 0) {
@@ -1465,8 +2269,13 @@
         this.drawAiTankDebug(game, tank);
       }
 
+      for (const humvee of game.humvees || []) {
+        if (!humvee.ai || !humvee.alive || !humvee.isOperational()) continue;
+        this.drawAiTankDebug(game, humvee);
+      }
+
       for (const unit of game.infantry || []) {
-        if (!unit.ai || !unit.alive) continue;
+        if (!unit.ai || !unit.alive || unit.inVehicle) continue;
         this.drawInfantryDebug(game, unit);
       }
 
@@ -1529,15 +2338,43 @@
         secure: "확보",
         idle: "대기",
         fire: "사격",
+        grenade: "수류탄",
         cover: "엄폐",
         suppressed: "제압",
         "rpg-attack": "RPG",
+        "rpg-position": "RPG각",
+        "report-move": "보고위치",
+        "harass-tank": "차량견제",
+        "evade-tank": "차량회피",
         "repair-tank": "수리",
         "avoid-fire-lane": "사선회피",
+        "support-fire": "엄호",
+        "support-position": "엄호위치",
+        "prone-fire": "누워쏴",
+        "pre-assault": "공격준비",
+        "pre-assault-position": "준비위치",
+        "hold-wall": "벽방어",
+        "hold-wall-position": "방어위치",
+        "squad-fallback": "분대후퇴",
+        "squad-regroup": "재집결",
+        "rally-tank": "전차합류",
+        "board-transport": "탑승",
+        "reboard-transport": "재탑승",
+        "mounted-transport": "차량탑승",
         "recon-move": "정찰이동",
         "recon-watch": "감시",
         "recon-snipe": "저격",
         "recon-evade": "정찰후퇴"
+      };
+      const tacticalLabels = {
+        advance: "",
+        hold: "방어",
+        "support-fire": "엄호",
+        "pre-assault": "공격준비",
+        "hold-wall": "벽방어",
+        fallback: "후퇴",
+        regroup: "재집결",
+        "rally-with-tank": "전차합류"
       };
       const pressure = debug.suppression > 5 ? ` S${Math.round(debug.suppression)}` : "";
       const weapon = INFANTRY_WEAPONS[debug.weaponId] || INFANTRY_WEAPONS[unit.weaponId] || INFANTRY_WEAPONS.rifle;
@@ -1548,11 +2385,19 @@
         scout: "정찰"
       };
       const role = debug.squadRole ? ` ${roleLabels[debug.squadRole] || debug.squadRole}` : "";
+      const tactical = tacticalLabels[debug.tacticalMode] ? ` ${tacticalLabels[debug.tacticalMode]}` : "";
+      const tacticalTimer = debug.tacticalMode === "pre-assault" && debug.tacticalTimerRemaining > 0
+        ? ` ${Math.ceil(debug.tacticalTimerRemaining)}s`
+        : "";
+      const prone = debug.isProne ? " 엎드림" : "";
+      const request = debug.supportRequest ? ` !${debug.supportRequest}` : "";
+      const transport = debug.transportVehicleId ? ` @${debug.transportVehicleId}` : "";
       const squad = debug.squadId ? `${debug.squadId}/` : "";
       const coverQuality = debug.coverQuality > 0 ? ` Q${Math.round(debug.coverQuality)}` : "";
       const reports = debug.scoutReports > 0 ? ` R${debug.scoutReports}` : "";
+      const grenades = debug.grenadeAmmo > 0 ? ` G${debug.grenadeAmmo}` : "";
       const repairs = debug.repairAmmo > 0 ? ` K${debug.repairAmmo}` : "";
-      const label = `${squad}${unit.callSign} ${weapon.shortName}${role} ${stateLabels[debug.state] || debug.state || unit.ai.state}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${repairs}`;
+      const label = `${squad}${unit.callSign} ${weapon.shortName}${role}${tactical}${tacticalTimer}${prone} ${stateLabels[debug.state] || debug.state || unit.ai.state}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${grenades}${repairs}${request}${transport}`;
       const labelWidth = Math.max(72, label.length * 7.2);
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(9, 15, 13, 0.78)";
@@ -1676,7 +2521,20 @@
         engage: "교전",
         overwatch: "엄호",
         retreat: "후퇴",
-        hold: "방어"
+        hold: "방어",
+        support: "지원",
+        escort: "분대동행",
+        "escort-fire": "동행사격",
+        "fire-support": "화력지원",
+        "request-fire": "요청지원",
+        transport: "수송",
+        "transport-pickup": "승차지점",
+        "transport-load": "탑승대기",
+        "transport-run": "수송중",
+        "transport-dismount": "하차",
+        "transport-overwatch": "하차엄호",
+        skirmish: "견제",
+        evade: "회피"
       };
       const recovery = debug.recoveryTimer > 0 ? " 복구" : "";
       const unsafeLine = debug.unsafeLine ? " 사선위험" : "";
@@ -1684,10 +2542,12 @@
       const goalText = debug.goal ? `>${debug.goal}` : "";
       const stateText = stateLabels[debug.state || ai.state] || debug.state || ai.state;
       const paired = ai.currentOrder?.pairedSquadId ? `+${ai.currentOrder.pairedSquadId}` : "";
-      const label = `${tank.callSign}${paired} ${stateText}${goalText}${pathText}${recovery}${unsafeLine}`;
+      const requestText = debug.supportRequest ? ` !${debug.supportRequest}` : "";
+      const passengerText = tank.vehicleType === "humvee" && debug.passengers > 0 ? ` P${debug.passengers}` : "";
+      const label = `${tank.callSign}${paired} ${stateText}${goalText}${pathText}${recovery}${unsafeLine}${requestText}${passengerText}`;
       const labelWidth = Math.max(86, label.length * 7.4);
       const labelX = tank.x - labelWidth / 2;
-      const labelY = tank.y - 76;
+      const labelY = tank.y - (tank.vehicleType === "humvee" ? 68 : 76);
 
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(9, 15, 13, 0.82)";
@@ -1729,6 +2589,8 @@
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, camera.width, camera.height);
 
+      this.drawPlayerDamageOverlay(game);
+
       if (game.result) {
         ctx.save();
         ctx.fillStyle = "rgba(5, 9, 8, 0.54)";
@@ -1745,6 +2607,93 @@
         ctx.fillText(reason, camera.width / 2, camera.height / 2 + 28);
         ctx.restore();
       }
+    }
+
+    drawPlayerDamageOverlay(game) {
+      const ctx = this.ctx;
+      const camera = this.camera;
+      const flash = clamp(game.playerDamageFlash || 0, 0, 1);
+
+      if (flash > 0.01) {
+        ctx.save();
+        const gradient = ctx.createRadialGradient(
+          camera.width / 2,
+          camera.height / 2,
+          Math.min(camera.width, camera.height) * 0.22,
+          camera.width / 2,
+          camera.height / 2,
+          Math.max(camera.width, camera.height) * 0.68
+        );
+        gradient.addColorStop(0, `rgba(128, 18, 16, ${0.03 * flash})`);
+        gradient.addColorStop(0.62, `rgba(180, 32, 28, ${0.1 * flash})`);
+        gradient.addColorStop(1, `rgba(220, 42, 36, ${0.32 * flash})`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, camera.width, camera.height);
+        ctx.restore();
+      }
+
+      const indicators = [
+        ...(game.playerDangerWarnings || []),
+        ...(game.playerDamageIndicators || [])
+      ].slice(-5);
+
+      if (indicators.length > 0) {
+        const cx = camera.width / 2;
+        const cy = camera.height / 2;
+        const radius = Math.min(camera.width, camera.height) * 0.31;
+
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const item of indicators) {
+          const alpha = clamp(item.ttl / Math.max(0.001, item.maxTtl || 1), 0, 1);
+          const dangerOnly = !item.amount;
+          const angle = item.angle || 0;
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          const size = dangerOnly ? 13 : 17;
+
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(angle + Math.PI / 2);
+          ctx.globalAlpha = dangerOnly ? 0.2 + alpha * 0.42 : 0.28 + alpha * 0.58;
+          ctx.fillStyle = dangerOnly ? "rgba(255, 209, 102, 0.95)" : "rgba(255, 90, 78, 0.96)";
+          ctx.beginPath();
+          ctx.moveTo(0, -size);
+          ctx.lineTo(size * 0.72, size * 0.58);
+          ctx.lineTo(0, size * 0.28);
+          ctx.lineTo(-size * 0.72, size * 0.58);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          if (alpha > 0.35) {
+            ctx.globalAlpha = dangerOnly ? 0.45 + alpha * 0.34 : 0.5 + alpha * 0.42;
+            ctx.fillStyle = dangerOnly ? "rgba(255, 231, 158, 0.96)" : "rgba(255, 206, 198, 0.97)";
+            ctx.font = dangerOnly ? "800 11px Inter, sans-serif" : "900 12px Inter, sans-serif";
+            ctx.fillText(item.label || "\uC704\uD5D8", x, y + size + 14);
+          }
+        }
+        ctx.restore();
+      }
+
+      if (!game.playerDowned || game.playerDeathActive || game.result) return;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(5, 7, 7, 0.44)";
+      ctx.fillRect(0, 0, camera.width, camera.height);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255, 210, 198, 0.96)";
+      ctx.font = "900 38px Inter, sans-serif";
+      ctx.fillText("\uC804\uD22C \uBD88\uB2A5", camera.width / 2, camera.height / 2 - 28);
+      ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
+      ctx.font = "800 15px Inter, sans-serif";
+      ctx.fillText(game.playerPendingDeathReason || "\uD53C\uACA9 \uC6D0\uC778 \uD655\uC778 \uC911", camera.width / 2, camera.height / 2 + 12, camera.width * 0.86);
+      ctx.fillStyle = "rgba(255, 209, 102, 0.88)";
+      ctx.font = "800 13px Inter, sans-serif";
+      ctx.fillText(`\uC0C1\uD669 \uD655\uC778 ${Math.max(0, game.playerDownedTimer || 0).toFixed(1)}s`, camera.width / 2, camera.height / 2 + 42);
+      ctx.restore();
     }
 
     drawStartCountdown(game) {
@@ -1863,6 +2812,148 @@
       ctx.moveTo(sx, sy + 4);
       ctx.lineTo(sx, sy + 14);
       ctx.stroke();
+
+      const designation = game.droneDesignatedContact?.();
+      const activeDrone = game.activeReconDroneForSniper?.();
+      const weapon = game.player?.getWeapon?.();
+      const designatedTarget = designation?.drone === activeDrone ? designation.target : null;
+      const targetAlive = designatedTarget?.alive !== undefined ? designatedTarget?.alive : designatedTarget?.hp > 0;
+      const showDesignatedRange = Boolean(designatedTarget && targetAlive && weapon?.id === "sniper");
+      if (showDesignatedRange) {
+        const range = game.observedSniperRange?.(weapon, activeDrone, true) || weapon.range || 980;
+        const rangeDistance = distXY(game.player.x, game.player.y, designatedTarget.x, designatedTarget.y);
+        const inRange = rangeDistance <= range;
+        const px = (game.player.x - camera.x) * zoom;
+        const py = (game.player.y - camera.y) * zoom;
+        const txRaw = (designatedTarget.x - camera.x) * zoom;
+        const tyRaw = (designatedTarget.y - camera.y) * zoom;
+        const margin = 42;
+        const tx = clamp(txRaw, margin, camera.width - margin);
+        const ty = clamp(tyRaw, 52, camera.height - 52);
+        const offscreen = Math.abs(tx - txRaw) > 0.5 || Math.abs(ty - tyRaw) > 0.5;
+        const pulse = 0.5 + Math.sin((game.matchTime || 0) * 8.5) * 0.5;
+        const rangeColor = inRange ? "255, 209, 102" : "226, 93, 74";
+
+        ctx.strokeStyle = `rgba(${rangeColor}, ${inRange ? 0.34 : 0.42})`;
+        ctx.lineWidth = inRange ? 1.7 : 1.4;
+        ctx.setLineDash(inRange ? [10, 9] : [5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = `rgba(${rangeColor}, ${0.72 + pulse * 0.18})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(tx, ty, offscreen ? 14 + pulse * 3 : 25 + pulse * 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (offscreen) {
+          const arrowAngle = angleTo(px, py, txRaw, tyRaw);
+          ctx.save();
+          ctx.translate(tx, ty);
+          ctx.rotate(arrowAngle);
+          ctx.fillStyle = `rgba(${rangeColor}, 0.78)`;
+          ctx.beginPath();
+          ctx.moveTo(16, 0);
+          ctx.lineTo(2, -6);
+          ctx.lineTo(2, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        const label = inRange ? "관측 사거리" : "사거리 밖";
+        const rangeText = `${Math.round(rangeDistance)} / ${Math.round(range)}`;
+        const labelWidth = 86;
+        const labelX = clamp(tx + 48, 50, camera.width - 50);
+        const labelY = clamp(ty - 26, 48, camera.height - 48);
+        ctx.fillStyle = inRange ? "rgba(37, 32, 16, 0.78)" : "rgba(42, 18, 16, 0.78)";
+        roundRect(ctx, labelX - labelWidth / 2, labelY - 17, labelWidth, 34, 4);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(${rangeColor}, 0.64)`;
+        ctx.lineWidth = 1;
+        roundRect(ctx, labelX - labelWidth / 2, labelY - 17, labelWidth, 34, 4);
+        ctx.stroke();
+        ctx.fillStyle = inRange ? "rgba(255, 231, 150, 0.94)" : "rgba(255, 167, 142, 0.94)";
+        ctx.font = "700 11px Rajdhani, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, labelX, labelY - 5);
+        ctx.fillStyle = "rgba(237, 244, 239, 0.76)";
+        ctx.font = "700 10px Rajdhani, sans-serif";
+        ctx.fillText(rangeText, labelX, labelY + 8);
+      }
+
+      const observedContacts = game.reconDroneObservedContacts?.({ sniperOnly: true }) || [];
+      const observed = game.findObservedSniperTarget?.();
+      if (observedContacts.length > 0) {
+        ctx.lineWidth = 1.1;
+        for (const target of observedContacts) {
+          if (observed?.target === target) continue;
+          const tx = (target.x - camera.x) * zoom;
+          const ty = (target.y - camera.y) * zoom;
+          const markerRadius = 13;
+          ctx.strokeStyle = "rgba(143, 222, 207, 0.38)";
+          ctx.beginPath();
+          ctx.arc(tx, ty, markerRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(237, 244, 239, 0.34)";
+          ctx.beginPath();
+          ctx.moveTo(tx - markerRadius - 6, ty);
+          ctx.lineTo(tx - markerRadius - 1, ty);
+          ctx.moveTo(tx + markerRadius + 1, ty);
+          ctx.lineTo(tx + markerRadius + 6, ty);
+          ctx.moveTo(tx, ty - markerRadius - 6);
+          ctx.lineTo(tx, ty - markerRadius - 1);
+          ctx.moveTo(tx, ty + markerRadius + 1);
+          ctx.lineTo(tx, ty + markerRadius + 6);
+          ctx.stroke();
+        }
+      }
+      if (observed?.target) {
+        const tx = (observed.target.x - camera.x) * zoom;
+        const ty = (observed.target.y - camera.y) * zoom;
+        const dx = (observed.drone.x - camera.x) * zoom;
+        const dy = (observed.drone.y - camera.y) * zoom;
+        const pulse = 0.5 + Math.sin((game.matchTime || 0) * 7) * 0.5;
+        const designated = Boolean(observed.designated);
+
+        ctx.strokeStyle = designated
+          ? `rgba(255, 209, 102, ${0.54 + pulse * 0.26})`
+          : `rgba(143, 222, 207, ${0.42 + pulse * 0.26})`;
+        ctx.lineWidth = designated ? 1.5 : 1.1;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath();
+        ctx.moveTo(dx, dy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = designated ? "rgba(255, 209, 102, 0.92)" : "rgba(143, 222, 207, 0.88)";
+        ctx.lineWidth = designated ? 2.2 : 1.8;
+        ctx.beginPath();
+        ctx.arc(tx, ty, (designated ? 21 : 17) + pulse * 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(237, 244, 239, 0.72)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(tx - 22, ty - 8);
+        ctx.lineTo(tx - 22, ty - 16);
+        ctx.lineTo(tx - 14, ty - 16);
+        ctx.moveTo(tx + 22, ty - 8);
+        ctx.lineTo(tx + 22, ty - 16);
+        ctx.lineTo(tx + 14, ty - 16);
+        ctx.moveTo(tx - 22, ty + 8);
+        ctx.lineTo(tx - 22, ty + 16);
+        ctx.lineTo(tx - 14, ty + 16);
+        ctx.moveTo(tx + 22, ty + 8);
+        ctx.lineTo(tx + 22, ty + 16);
+        ctx.lineTo(tx + 14, ty + 16);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 

@@ -1,0 +1,13 @@
+{
+  "name": "iron-line-2d-tank-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static 2D tank and infantry prototype.",
+  "scripts": {
+    "start": "node tools/static-server.cjs",
+    "check": "node tools/check-syntax.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -21,14 +21,25 @@
       this.navigation = new IronLine.NavigationAgent(vehicle, game);
       this.state = "support";
       this.target = null;
+      this.currentOrder = null;
       this.strafeSide = Math.random() < 0.5 ? -1 : 1;
       this.strafeTimer = 1.2 + Math.random() * 1.8;
+      this.transportBoardingTimer = 0;
+      this.transportDismountTimer = 0;
+      this.transportPickupCooldown = 0;
+      this.transportPickupOrderId = "";
       this.debug = {
         state: this.state,
+        goal: "",
         target: null,
         moveTarget: null,
         path: [],
-        stuckTimer: 0
+        pathIndex: 0,
+        stuckTimer: 0,
+        recoveryTimer: 0,
+        supportRequest: "",
+        supportRequestId: "",
+        passengers: 0
       };
     }
 
@@ -36,6 +47,7 @@
       if (!this.vehicle.alive) return;
 
       this.strafeTimer -= dt;
+      this.transportPickupCooldown = Math.max(0, this.transportPickupCooldown - dt);
       if (this.strafeTimer <= 0) {
         this.strafeSide *= -1;
         this.strafeTimer = 1.4 + Math.random() * 2.2;
@@ -43,12 +55,15 @@
 
       const beforeX = this.vehicle.x;
       const beforeY = this.vehicle.y;
-      const target = this.findTarget();
+      const order = this.resolveOrder();
+      const target = this.findTarget(order);
       const heavyThreat = this.findHeavyThreat();
       let moveTarget = null;
+      this.currentOrder = order;
+      const autoDismountPoint = this.autoDismountPoint(order, heavyThreat, target);
 
       if (target) {
-        this.state = "fire-support";
+        this.state = order?.role === "escort" ? "escort-fire" : "fire-support";
         this.target = target;
         this.aimAndFire(target, dt);
       } else {
@@ -60,15 +75,34 @@
         );
       }
 
-      if (heavyThreat) {
+      if ((this.vehicle.repairHoldTimer || 0) > 0) {
+        this.state = target ? "repair-cover" : "repair-hold";
+        moveTarget = this.vehicle;
+        this.vehicle.drive(this.game, dt, 0, 0, {
+          brake: true,
+          dust: false,
+          collisionSpeedRetain: 0.32
+        });
+      } else if (autoDismountPoint) {
+        this.state = "transport-dismount";
+        this.vehicle.dismountPassengers(this.game, {
+          point: autoDismountPoint,
+          cooldown: 5.6
+        });
+        this.transportDismountTimer = 1.1;
+        moveTarget = autoDismountPoint;
+        this.applyDrive(dt, 0, 0);
+      } else if (heavyThreat) {
         this.state = target ? "skirmish" : "evade";
         moveTarget = heavyThreat;
         this.driveAwayFrom(dt, heavyThreat.x, heavyThreat.y, 0.88);
+      } else if (order?.role === "transport") {
+        moveTarget = this.handleTransportOrder(dt, order, target);
       } else if (target && distXY(this.vehicle.x, this.vehicle.y, target.x, target.y) < 270) {
         moveTarget = target;
         this.orbitTarget(dt, target);
       } else {
-        const order = this.createObjectiveOrder();
+        if (!target) this.state = this.stateForOrder(order);
         moveTarget = this.navigation.update(dt, order);
         if (moveTarget) this.driveTo(dt, moveTarget.x, moveTarget.y, moveTarget.stopDistance ?? 86);
         else this.applyDrive(dt, 0, 0);
@@ -76,7 +110,21 @@
 
       const tryingToMove = moveTarget && distXY(this.vehicle.x, this.vehicle.y, moveTarget.x, moveTarget.y) > 90;
       this.navigation.recordMovement(dt, beforeX, beforeY, tryingToMove);
-      this.updateDebug(moveTarget);
+      this.updateDebug(moveTarget, order);
+    }
+
+    resolveOrder() {
+      const commander = this.game.commanders?.[this.vehicle.team];
+      return commander?.getOrderFor(this.vehicle) || this.createObjectiveOrder();
+    }
+
+    stateForOrder(order) {
+      if (!order) return "support";
+      if (order.supportRequestType === "need-fire-support") return "request-fire";
+      if (order.role === "transport" || order.stance === "squad-transport") return "transport";
+      if (order.role === "escort" || order.stance === "squad-escort") return "escort";
+      if (order.role === "hold") return "hold";
+      return "support";
     }
 
     createObjectiveOrder() {
@@ -138,10 +186,15 @@
         .sort((a, b) => a.score - b.score)[0]?.point || null;
     }
 
-    findTarget() {
+    findTarget(order = null) {
       const weapon = this.vehicle.machineGunWeapon();
       const muzzle = this.vehicle.machineGunMuzzlePoint();
       const candidates = [];
+      const pairedSquad = order?.pairedSquadId
+        ? (this.game.squads || []).find((squad) => squad.callSign === order.pairedSquadId)
+        : null;
+      const squadCenter = pairedSquad?.status?.center || null;
+      const focusPoint = order?.point || null;
 
       const add = (target, priority = 0) => {
         if (!target || !target.alive || target.team === this.vehicle.team) return;
@@ -152,13 +205,17 @@
           target.classId === "engineer" || target.weaponId === "rpg" ? 210 :
           target.weaponId === "machinegun" || target.weaponId === "lmg" ? 120 :
           0;
+        const squadBonus = squadCenter && distXY(target.x, target.y, squadCenter.x, squadCenter.y) < 620 ? 130 : 0;
+        const objectiveBonus = focusPoint && distXY(target.x, target.y, focusPoint.x, focusPoint.y) < (focusPoint.radius || 160) + 260 ? 90 : 0;
         candidates.push({
           target,
-          score: distance - threatBonus - priority
+          score: distance - threatBonus - priority - squadBonus - objectiveBonus
         });
       };
 
-      for (const unit of this.game.infantry || []) add(unit, 110);
+      for (const unit of this.game.infantry || []) {
+        if (!unit.inVehicle) add(unit, 110);
+      }
       for (const crew of this.game.crews || []) {
         if (!crew.inTank) add(crew, 60);
       }
@@ -169,6 +226,175 @@
       }
 
       return candidates.sort((a, b) => a.score - b.score)[0]?.target || null;
+    }
+
+    handleTransportOrder(dt, order, target) {
+      const squad = this.findPairedSquad(order);
+      const passengerCount = this.vehicle.passengerCount?.() || 0;
+      if (this.transportPickupOrderId !== order.id) {
+        this.transportPickupOrderId = order.id;
+        this.transportBoardingTimer = 0;
+        this.transportPickupCooldown = 0;
+      }
+
+      if (passengerCount > 0) {
+        const pickupPoint = this.transportPickupPoint(order, squad);
+        const desiredPassengerCount = Math.min(order.passengerIds?.length || this.vehicle.passengerCapacity || 1, this.vehicle.passengerCapacity || 1);
+        const waitingPassengers = squad?.activeUnits?.().filter((unit) => (
+          order.passengerIds?.includes(unit.callSign) &&
+          unit.alive &&
+          unit.inVehicle !== this.vehicle &&
+          ((unit.transportCooldown || 0) <= 0 || squad.tacticalMode === "fallback" || squad.tacticalMode === "regroup")
+        )) || [];
+        const nearPickup = distXY(this.vehicle.x, this.vehicle.y, pickupPoint.x, pickupPoint.y) <= (pickupPoint.stopDistance || 94) + 28;
+        if (nearPickup && passengerCount < desiredPassengerCount && waitingPassengers.length > 0 && this.transportBoardingTimer < 2.4) {
+          this.state = "transport-load";
+          this.transportBoardingTimer += dt;
+          this.applyDrive(dt, 0, 0);
+          return pickupPoint;
+        }
+
+        this.transportBoardingTimer = 0;
+        const deliveryPoint = this.transportDeliveryPoint(order, squad);
+        const deliveryOrder = this.transportNavigationOrder(order, deliveryPoint, "deliver", 102);
+        const moveTarget = this.navigation.update(dt, deliveryOrder);
+        const distance = distXY(this.vehicle.x, this.vehicle.y, deliveryPoint.x, deliveryPoint.y);
+        this.state = distance <= (deliveryPoint.stopDistance || 104) + 22 ? "transport-dismount" : "transport-run";
+
+        if (this.state === "transport-dismount") {
+          this.vehicle.dismountPassengers(this.game, {
+            point: deliveryPoint,
+            cooldown: squad && (squad.tacticalMode === "fallback" || squad.tacticalMode === "regroup") ? 1.4 : 6.2
+          });
+          this.transportDismountTimer = 1.1;
+          this.applyDrive(dt, 0, 0);
+          return deliveryPoint;
+        }
+
+        if (moveTarget) this.driveTo(dt, moveTarget.x, moveTarget.y, moveTarget.stopDistance ?? 92);
+        else this.applyDrive(dt, 0, 0);
+        return moveTarget;
+      }
+
+      if (this.transportPickupCooldown <= 0 && this.squadWantsPickup(squad, order)) {
+        const pickupPoint = this.transportPickupPoint(order, squad);
+        const pickupOrder = this.transportNavigationOrder(order, pickupPoint, "pickup", 92);
+        const moveTarget = this.navigation.update(dt, pickupOrder);
+        const distance = distXY(this.vehicle.x, this.vehicle.y, pickupPoint.x, pickupPoint.y);
+
+        if (distance <= (pickupPoint.stopDistance || 92) + 18) {
+          if (this.transportBoardingTimer > 3.2) {
+            this.transportPickupCooldown = 5.5;
+            this.transportBoardingTimer = 0;
+            return this.transportOverwatch(dt, order, target);
+          }
+          this.state = "transport-load";
+          this.transportBoardingTimer += dt;
+          this.applyDrive(dt, 0, 0);
+          return pickupPoint;
+        }
+
+        this.state = "transport-pickup";
+        this.transportBoardingTimer = 0;
+        if (moveTarget) this.driveTo(dt, moveTarget.x, moveTarget.y, moveTarget.stopDistance ?? 92);
+        else this.applyDrive(dt, 0, 0);
+        return moveTarget;
+      }
+
+      return this.transportOverwatch(dt, order, target);
+    }
+
+    transportOverwatch(dt, order, target) {
+      const supportPoint = order.supportPoint || order.dropoffPoint || order.point;
+      const supportOrder = this.transportNavigationOrder(order, supportPoint, "overwatch", supportPoint?.stopDistance || 96);
+      const moveTarget = this.navigation.update(dt, supportOrder);
+      this.state = this.transportDismountTimer > 0 ? "transport-overwatch" : this.stateForOrder(order);
+      this.transportDismountTimer = Math.max(0, this.transportDismountTimer - dt);
+
+      if (target && distXY(this.vehicle.x, this.vehicle.y, target.x, target.y) < 310 && this.transportDismountTimer <= 0) {
+        this.orbitTarget(dt, target);
+        return target;
+      }
+
+      if (moveTarget) this.driveTo(dt, moveTarget.x, moveTarget.y, moveTarget.stopDistance ?? 96);
+      else this.applyDrive(dt, 0, 0);
+      return moveTarget;
+    }
+
+    findPairedSquad(order) {
+      if (!order?.pairedSquadId) return null;
+      return (this.game.squads || []).find((squad) => squad.callSign === order.pairedSquadId) || null;
+    }
+
+    squadWantsPickup(squad, order) {
+      if (!squad || !order?.passengerIds?.length) return false;
+      const mode = squad.tacticalMode;
+      const evac = mode === "fallback" || mode === "regroup";
+      const longMove = (squad.status?.objectiveDistance || 0) > 860 && (squad.status?.avgSuppression || 0) < 44;
+      if (!evac && !longMove) return false;
+
+      return squad.activeUnits().some((unit) => (
+        order.passengerIds.includes(unit.callSign) &&
+        unit.alive &&
+        unit.inVehicle !== this.vehicle &&
+        (evac || (unit.transportCooldown || 0) <= 0)
+      ));
+    }
+
+    transportPickupPoint(order, squad) {
+      const center = squad?.status?.center || squad?.leaderUnit?.() || order.pickupPoint || order.point;
+      return {
+        name: order.pickupPoint?.name || `${order.pairedSquadId || "squad"}-pickup`,
+        x: center.x,
+        y: center.y,
+        radius: 92,
+        stopDistance: 94
+      };
+    }
+
+    transportDeliveryPoint(order, squad) {
+      if (squad && (squad.tacticalMode === "fallback" || squad.tacticalMode === "regroup")) {
+        const point = squad.tacticalPoint || squad.status?.center || order.pickupPoint || order.dropoffPoint || order.point;
+        return {
+          name: `${order.pairedSquadId || "squad"}-${squad.tacticalMode}`,
+          x: point.x,
+          y: point.y,
+          radius: point.radius || 96,
+          stopDistance: 104
+        };
+      }
+
+      return order.dropoffPoint || order.supportPoint || order.point;
+    }
+
+    transportNavigationOrder(order, point, phase, stopDistance) {
+      return {
+        ...order,
+        id: `${order.id}:${phase}`,
+        point,
+        supportPoint: {
+          ...point,
+          stopDistance
+        }
+      };
+    }
+
+    autoDismountPoint(order, heavyThreat, target) {
+      if ((this.vehicle.passengerCount?.() || 0) <= 0) return null;
+      if (!order || order.role === "transport") return null;
+      if (heavyThreat && distXY(this.vehicle.x, this.vehicle.y, heavyThreat.x, heavyThreat.y) < 520) return null;
+      if (target && distXY(this.vehicle.x, this.vehicle.y, target.x, target.y) < 230) return null;
+
+      const point = order.dropoffPoint || order.supportPoint || order.point;
+      if (!point) return null;
+      const stopDistance = point.stopDistance || Math.min(130, (point.radius || 120) * 0.78);
+      const distance = distXY(this.vehicle.x, this.vehicle.y, point.x, point.y);
+      if (distance > stopDistance + 34) return null;
+
+      return {
+        ...point,
+        stopDistance
+      };
     }
 
     findHeavyThreat() {
@@ -191,7 +417,7 @@
       if (aimError < 0.18) this.vehicle.fireMachineGun(this.game, target.x, target.y, { target });
     }
 
-    driveTo(dt, x, y, stopDistance = 0) {
+    driveTo(dt, x, y, stopDistance = 0, options = {}) {
       const dx = x - this.vehicle.x;
       const dy = y - this.vehicle.y;
       const distance = Math.hypot(dx, dy);
@@ -200,7 +426,9 @@
         return;
       }
       const intensity = clamp((distance - stopDistance) / 260, 0.34, 1);
-      this.driveVector(dt, dx / Math.max(distance, 1), dy / Math.max(distance, 1), intensity);
+      this.driveVector(dt, dx / Math.max(distance, 1), dy / Math.max(distance, 1), intensity, {
+        allowReverse: options.allowReverse ?? false
+      });
     }
 
     driveAwayFrom(dt, x, y, intensity = 0.8) {
@@ -224,7 +452,10 @@
     driveVector(dt, vx, vy, intensity, options = {}) {
       const recovery = this.navigation.getRecoveryDrive();
       if (recovery) {
-        this.applyDrive(dt, recovery.throttle, recovery.turn);
+        const throttle = options.allowReverse === false
+          ? Math.max(0.14, Math.abs(recovery.throttle) * 0.35)
+          : recovery.throttle;
+        this.applyDrive(dt, throttle, recovery.turn);
         return;
       }
 
@@ -281,13 +512,19 @@
       });
     }
 
-    updateDebug(moveTarget) {
+    updateDebug(moveTarget, order) {
       const navDebug = this.navigation.debugState();
       this.debug.state = this.state;
+      this.debug.goal = order?.objectiveName || "";
       this.debug.target = this.target;
       this.debug.moveTarget = moveTarget || navDebug.moveTarget;
       this.debug.path = navDebug.path;
+      this.debug.pathIndex = navDebug.pathIndex;
       this.debug.stuckTimer = navDebug.stuckTimer;
+      this.debug.recoveryTimer = navDebug.recoveryTimer;
+      this.debug.supportRequest = order?.supportRequestType || "";
+      this.debug.supportRequestId = order?.supportRequestId || "";
+      this.debug.passengers = this.vehicle.passengerCount?.() || 0;
     }
   }
 

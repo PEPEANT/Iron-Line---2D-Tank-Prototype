@@ -60,7 +60,16 @@
       this.targetPoint = order?.point || null;
       this.targetTank = decision.target;
 
-      if (decision.mode === "retreat" && decision.target) {
+      if ((this.tank.repairHoldTimer || 0) > 0) {
+        this.state = decision.target ? "repair-cover" : "repair-hold";
+        moveTarget = this.tank;
+        this.tank.drive(this.game, dt, 0, 0, {
+          brake: true,
+          dust: false,
+          coastScale: 0.9,
+          coastDrag: 1.35
+        });
+      } else if (decision.mode === "retreat" && decision.target) {
         this.state = "retreat";
         moveTarget = decision.target;
         this.driveAwayFrom(dt, decision.target.x, decision.target.y, 0.95);
@@ -92,7 +101,91 @@
         order = commander.getOrderFor(this.tank) || order;
       }
 
+      order = this.resolveStaleSupportOrder(order);
       return order || this.createFallbackOrder();
+    }
+
+    resolveStaleSupportOrder(order) {
+      if (!order || order.role !== "support" || !order.point) return order;
+
+      const reason = this.staleSupportReason(order);
+      if (!reason) return order;
+
+      const point = order.point;
+      return {
+        ...order,
+        id: `${order.id}:armor-capture:${reason}`,
+        role: "attack",
+        stance: "armor-capture",
+        supportPoint: null,
+        pairedSquadId: "",
+        leashRadius: Math.max(order.leashRadius || 0, AI_CONFIG.objectiveLeashRadius),
+        threatRadius: Math.max(order.threatRadius || 0, (point.radius || 150) + AI_CONFIG.objectiveThreatExtra),
+        soloReason: reason
+      };
+    }
+
+    staleSupportReason(order) {
+      const point = order.point;
+      const pointRadius = point.radius || 150;
+      const tankObjectiveDistance = distXY(this.tank.x, this.tank.y, point.x, point.y);
+      const commander = this.game.commanders?.[this.tank.team];
+      const request = order.supportRequestId ? commander?.supportRequests?.get(order.supportRequestId) : null;
+
+      if (order.supportRequestId && !request) return "request-expired";
+      if (request?.sourceSquad?.activeUnits?.().length === 0) return "squad-lost";
+      if (
+        request &&
+        this.game.matchTime - (request.createdAt || 0) > 11.5 &&
+        tankObjectiveDistance < pointRadius + 760
+      ) {
+        return "support-timeout";
+      }
+
+      if (order.supportPoint && this.nearWorldEdge(order.supportPoint, 104)) return "edge-support";
+      if (order.supportPoint && distXY(order.supportPoint.x, order.supportPoint.y, point.x, point.y) > pointRadius + 520) {
+        return "wide-support";
+      }
+
+      const pairedSquad = order.pairedSquadId
+        ? (this.game.squads || []).find((squad) => squad.team === this.tank.team && squad.callSign === order.pairedSquadId)
+        : null;
+      const pairedUnits = pairedSquad?.activeUnits?.() || [];
+      if (order.pairedSquadId && (!pairedSquad || pairedUnits.length === 0)) return "squad-lost";
+
+      if (pairedSquad?.status?.center) {
+        const center = pairedSquad.status.center;
+        const squadObjectiveDistance = distXY(center.x, center.y, point.x, point.y);
+        const squadTankDistance = distXY(center.x, center.y, this.tank.x, this.tank.y);
+        if (tankObjectiveDistance < pointRadius + 640 && squadObjectiveDistance > pointRadius + 780) return "squad-too-far";
+        if (tankObjectiveDistance < pointRadius + 620 && squadTankDistance > 920) return "squad-separated";
+      }
+
+      if (
+        tankObjectiveDistance < pointRadius + 620 &&
+        this.friendlyInfantryNear(point, pointRadius + 430) === 0
+      ) {
+        return "no-infantry";
+      }
+
+      return "";
+    }
+
+    friendlyInfantryNear(point, radius) {
+      return (this.game.infantry || []).filter((unit) => (
+        unit.alive &&
+        unit.team === this.tank.team &&
+        !unit.inVehicle &&
+        unit.classId !== "scout" &&
+        distXY(unit.x, unit.y, point.x, point.y) <= radius
+      )).length;
+    }
+
+    nearWorldEdge(point, margin) {
+      return point.x < margin ||
+        point.y < margin ||
+        point.x > this.game.world.width - margin ||
+        point.y > this.game.world.height - margin;
     }
 
     createFallbackOrder() {
@@ -162,7 +255,7 @@
         return this.handleObjective(dt, order);
       }
 
-      if (decision.blockedShot) {
+      if (decision.blockedShot || decision.unsafeLine) {
         this.driveForLineOfFire(dt, target);
         return target;
       }
@@ -193,7 +286,7 @@
         return this.handleObjective(dt, order);
       }
 
-      if (decision.blockedShot) {
+      if (decision.blockedShot || decision.unsafeLine) {
         this.driveForLineOfFire(dt, target);
         return target;
       }
@@ -263,7 +356,10 @@
     driveVector(dt, vx, vy, intensity, options = {}) {
       const recovery = this.navigation.getRecoveryDrive();
       if (recovery) {
-        this.applyDrive(dt, recovery.throttle, recovery.turn);
+        const throttle = options.allowReverse === false
+          ? Math.max(0.14, Math.abs(recovery.throttle) * 0.35)
+          : recovery.throttle;
+        this.applyDrive(dt, throttle, recovery.turn);
         return;
       }
 
@@ -356,6 +452,8 @@
       this.debug.recoveryTimer = navDebug.recoveryTimer;
       this.debug.visible = Boolean(decision.visible);
       this.debug.unsafeLine = Boolean(decision.unsafeLine);
+      this.debug.supportRequest = order?.supportRequestType || "";
+      this.debug.supportRequestId = order?.supportRequestId || "";
     }
   }
 

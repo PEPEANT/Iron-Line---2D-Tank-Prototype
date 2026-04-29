@@ -28,8 +28,16 @@
       this.morale = 1;
       this.suppressionTimer = 0;
       this.lastThreat = null;
+      this.isProne = false;
+      this.proneCooldown = 0;
+      this.proneHoldTimer = 0;
+      this.deathTime = 0;
+      this.deathPoseAngle = 0;
       this.alive = true;
       this.ai = null;
+      this.inVehicle = null;
+      this.transportVehicle = null;
+      this.transportCooldown = 0;
     }
 
     getWeapon() {
@@ -44,8 +52,24 @@
 
     update(game, dt) {
       if (!this.alive) return;
+      this.transportCooldown = Math.max(0, (this.transportCooldown || 0) - dt);
+      this.proneCooldown = Math.max(0, (this.proneCooldown || 0) - dt);
+      this.proneHoldTimer = Math.max(0, (this.proneHoldTimer || 0) - dt);
+      if (this.inVehicle) {
+        if (!this.inVehicle.alive) {
+          this.inVehicle = null;
+          this.transportVehicle = null;
+        } else {
+          this.x = this.inVehicle.x;
+          this.y = this.inVehicle.y;
+          this.angle = this.inVehicle.angle;
+          this.speed = 0;
+          this.updateSuppression(dt);
+          return;
+        }
+      }
       this.updateSuppression(dt);
-      if (this.ai && game.matchStarted !== false) this.ai.update(dt);
+      if (this.ai && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
     }
 
     updateSuppression(dt) {
@@ -77,6 +101,8 @@
         this.hp = 0;
         this.alive = false;
         this.speed = 0;
+        this.deathTime = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
+        this.deathPoseAngle = this.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.42;
       }
     }
   }

@@ -9,6 +9,7 @@
   </head>
   <body>
     <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
+    <button type="button" class="admin-button" id="adminButton" aria-label="관리자 패널 열기" title="관리자">관리자</button>
 
     <button type="button" class="settings-button" id="settingsButton" aria-label="설정 열기" title="설정">&#9881;</button>
 
@@ -39,6 +40,103 @@
         <p>WASD 이동 · E 탑승/하차 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
         <strong>모바일 조작</strong>
         <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼</p>
+      </div>
+    </section>
+
+    <section class="admin-panel hidden" id="adminPanel" aria-label="관리자 패널">
+      <div class="admin-head">
+        <div>
+          <strong>관리자 패널</strong>
+          <span id="adminStatus">테스트 준비</span>
+        </div>
+        <button type="button" id="adminClose" aria-label="관리자 패널 닫기">&times;</button>
+      </div>
+
+      <div class="admin-tabs" role="tablist" aria-label="관리자 탭">
+        <button type="button" class="active" data-admin-tab="player">플레이어</button>
+        <button type="button" data-admin-tab="spawn">스폰</button>
+        <button type="button" data-admin-tab="ai">AI</button>
+      </div>
+
+      <div class="admin-page active" data-admin-page="player">
+        <span class="admin-section-label">병과</span>
+        <div class="admin-button-row">
+          <button type="button" data-admin-class="infantry">보병</button>
+          <button type="button" data-admin-class="engineer">공병</button>
+          <button type="button" data-admin-class="scout">정찰병</button>
+        </div>
+
+        <label class="admin-field">
+          <span>병기 선택</span>
+          <select id="adminWeaponSelect">
+            <option value="machinegun">기관총</option>
+            <option value="rifle">소총</option>
+            <option value="sniper">저격총</option>
+            <option value="rpg">RPG</option>
+            <option value="grenade">수류탄</option>
+            <option value="repairKit">수리킷</option>
+            <option value="reconDrone">정찰드론</option>
+            <option value="kamikazeDrone">자폭드론</option>
+            <option value="pistol">권총</option>
+          </select>
+        </label>
+
+        <div class="admin-grid-actions">
+          <button type="button" data-admin-action="refill-player">체력/탄약 보충</button>
+          <button type="button" data-admin-action="reset-player">플레이어 위치 초기화</button>
+          <button type="button" data-admin-action="enter-test-lab">테스트랩 시작</button>
+          <button type="button" data-admin-action="reset-test-lab">테스트랩 리셋</button>
+        </div>
+      </div>
+
+      <div class="admin-page" data-admin-page="spawn">
+        <div class="admin-form-grid">
+          <label class="admin-field">
+            <span>팀</span>
+            <select id="adminSpawnTeam">
+              <option value="red">적군</option>
+              <option value="blue">아군</option>
+            </select>
+          </label>
+          <label class="admin-field">
+            <span>유닛</span>
+            <select id="adminSpawnUnit">
+              <option value="infantry">보병</option>
+              <option value="engineer">공병</option>
+              <option value="scout">저격/정찰병</option>
+              <option value="tank">전차</option>
+              <option value="humvee">험비</option>
+              <option value="reconDrone">정찰드론</option>
+              <option value="kamikazeDrone">자폭드론</option>
+            </select>
+          </label>
+          <label class="admin-field">
+            <span>수량</span>
+            <input id="adminSpawnCount" type="number" min="1" max="12" step="1" value="1">
+          </label>
+          <label class="admin-field">
+            <span>위치</span>
+            <select id="adminSpawnLocation">
+              <option value="mouse">마우스 위치</option>
+              <option value="player">플레이어 근처</option>
+              <option value="roof">건물 지붕</option>
+              <option value="objective-a">A 거점</option>
+              <option value="objective-b">B 거점</option>
+              <option value="objective-c">C 거점</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" class="admin-primary" data-admin-action="spawn-selected">스폰 실행</button>
+      </div>
+
+      <div class="admin-page" data-admin-page="ai">
+        <div class="admin-grid-actions">
+          <button type="button" data-admin-action="toggle-ai">AI 정지/재개</button>
+          <button type="button" data-admin-action="clear-effects">이펙트 삭제</button>
+          <button type="button" data-admin-action="debug-ai">AI 생각 표시</button>
+          <button type="button" data-admin-action="debug-nav">경로 그래프 표시</button>
+        </div>
+        <p class="admin-hint">전술 요청/엄폐 슬롯/잔해 디버그는 다음 단계에서 이 탭에 이어 붙이면 됩니다.</p>
       </div>
     </section>
 
@@ -75,7 +173,7 @@
           <div class="deployment-map" id="deploymentMap"></div>
         </section>
         <section class="deployment-panel">
-          <div>
+          <div class="deployment-header">
             <span class="deployment-kicker">Iron Line</span>
             <h1>전투 준비</h1>
           </div>
@@ -86,51 +184,53 @@
                 <strong>섬멸전</strong>
                 <span>거점 장악 또는 적 전투력 제거</span>
               </button>
-              <button type="button" class="deployment-mode locked" data-mode-id="flags" disabled>
-                <strong>깃발전</strong>
-                <span>점수전 · 리스폰 준비 중</span>
+            </div>
+          </div>
+          <div class="deployment-pick-section">
+            <span class="deployment-section-label">병과</span>
+            <div class="deployment-class-list" id="deploymentClassList">
+              <button type="button" class="deployment-class" data-class-id="infantry">
+                <strong>보병</strong>
+                <span>기관총 · 수류탄</span>
+              </button>
+              <button type="button" class="deployment-class" data-class-id="engineer">
+                <strong>공병</strong>
+                <span>RPG · 수리</span>
+              </button>
+              <button type="button" class="deployment-class" data-class-id="scout">
+                <strong>정찰</strong>
+                <span>저격 · 감시</span>
               </button>
             </div>
           </div>
-          <div class="deployment-class-list" id="deploymentClassList">
-            <button type="button" class="deployment-class" data-class-id="infantry">
-              <strong>보병</strong>
-              <span>기관총 · 권총 · 수류탄</span>
-            </button>
-            <button type="button" class="deployment-class" data-class-id="engineer">
-              <strong>공병</strong>
-              <span>기관총 · RPG · 수리킷</span>
-            </button>
-            <button type="button" class="deployment-class" data-class-id="scout">
-              <strong>정찰</strong>
-              <span>저격총 · 권총</span>
-            </button>
-          </div>
-          <div class="deployment-settings" id="deploymentSettings">
-            <label class="deployment-setting">
-              <span>난이도</span>
-              <select data-setting="difficulty">
-                <option value="easy">쉬움</option>
-                <option value="normal" selected>보통</option>
-                <option value="hard">어려움</option>
-              </select>
-            </label>
-            <label class="deployment-setting">
-              <span>아군 AI 전차</span>
-              <input type="number" data-setting="blueAiTanks" min="0" max="6" step="1" value="3">
-            </label>
-            <label class="deployment-setting">
-              <span>아군 보병</span>
-              <input type="number" data-setting="blueInfantry" min="4" max="30" step="1" value="14">
-            </label>
-            <label class="deployment-setting">
-              <span>적 전차</span>
-              <input type="number" data-setting="redTanks" min="1" max="8" step="1" value="4">
-            </label>
-            <label class="deployment-setting">
-              <span>적 보병</span>
-              <input type="number" data-setting="redInfantry" min="4" max="34" step="1" value="14">
-            </label>
+          <div class="deployment-pick-section">
+            <span class="deployment-section-label">전장 설정</span>
+            <div class="deployment-settings" id="deploymentSettings">
+              <label class="deployment-setting">
+                <span>난이도</span>
+                <select data-setting="difficulty">
+                  <option value="easy">쉬움</option>
+                  <option value="normal" selected>보통</option>
+                  <option value="hard">어려움</option>
+                </select>
+              </label>
+              <label class="deployment-setting">
+                <span>아군 AI 전차</span>
+                <input type="number" data-setting="blueAiTanks" min="0" max="6" step="1" value="3">
+              </label>
+              <label class="deployment-setting">
+                <span>아군 보병</span>
+                <input type="number" data-setting="blueInfantry" min="4" max="30" step="1" value="14">
+              </label>
+              <label class="deployment-setting">
+                <span>적 전차</span>
+                <input type="number" data-setting="redTanks" min="1" max="8" step="1" value="4">
+              </label>
+              <label class="deployment-setting">
+                <span>적 보병</span>
+                <input type="number" data-setting="redInfantry" min="4" max="34" step="1" value="14">
+              </label>
+            </div>
           </div>
           <button type="button" class="deployment-start" id="deploymentStart">출격 시작</button>
         </section>
@@ -156,24 +256,6 @@
 
     <div class="hud hud-top">
       <div class="objective-strip" id="objectiveStrip" aria-label="거점 상황"></div>
-      <div class="hud-details" id="hudDetails">
-        <div class="hud-block">
-          <span class="hud-label">상태</span>
-          <strong id="statusText">출격 준비</strong>
-        </div>
-        <div class="hud-block">
-          <span class="hud-label">보병</span>
-          <strong id="playerHealth">100</strong>
-        </div>
-        <div class="hud-block">
-          <span class="hud-label">전차</span>
-          <strong id="tankHealth">100</strong>
-        </div>
-        <div class="hud-block wide">
-          <span class="hud-label">작전</span>
-          <strong id="objectiveText">거점 점령</strong>
-        </div>
-      </div>
     </div>
 
     <div class="hud hud-bottom hidden">
@@ -214,6 +296,8 @@
     <script src="src/systems/physics.js"></script>
     <script src="src/systems/cover-slots.js"></script>
     <script src="src/entities/player.js"></script>
+    <script src="src/entities/recon-drone.js"></script>
+    <script src="src/entities/suicide-drone.js"></script>
     <script src="src/entities/tank.js"></script>
     <script src="src/entities/humvee.js"></script>
     <script src="src/entities/crew-member.js"></script>

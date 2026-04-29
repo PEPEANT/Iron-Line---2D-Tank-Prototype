@@ -104,7 +104,8 @@
     }
 
     onKeyDown(event) {
-      if (["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
+      const testLabHotkey = /^F[1-7]$/.test(event.code) && global.IronLine?.game?.testLab;
+      if (testLabHotkey || ["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
         event.preventDefault();
       }
 
