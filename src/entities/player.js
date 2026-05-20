@@ -52,6 +52,8 @@
       deathTime: 0,
       deathPoseAngle: 0,
       classId: "infantry",
+      factionId: "korea",
+      skinId: "korea",
       activeSlot: 0,
       activeDrone: null,
       controlledDrone: null,

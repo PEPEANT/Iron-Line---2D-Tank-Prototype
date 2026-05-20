@@ -12,6 +12,8 @@
       this.y = options.y;
       this.team = options.team;
       this.callSign = options.callSign;
+      this.factionId = options.factionId || options.skinId || "";
+      this.skinId = this.factionId;
       this.angle = options.angle || 0;
       this.turretAngle = this.angle;
       this.radius = options.radius || 38;

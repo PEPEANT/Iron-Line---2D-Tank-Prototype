@@ -1,0 +1,102 @@
+.role-change-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 132px;
+  z-index: 23;
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  padding: 9px 12px;
+  border: 1px solid rgba(107, 188, 255, 0.42);
+  border-radius: 7px;
+  background: rgba(8, 13, 11, 0.86);
+  color: #eef3ec;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.role-change-prompt.hidden,
+.role-change-panel.hidden,
+#deathRoleChangeHint.hidden,
+#deathRoleChangeButton.hidden {
+  display: none !important;
+}
+
+.role-change-prompt span {
+  color: #b8c8ba;
+  font-size: 12px;
+}
+
+.role-change-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 45;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid rgba(238, 243, 236, 0.16);
+  border-radius: 8px;
+  background: rgba(12, 18, 15, 0.96);
+  color: #eef3ec;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+}
+
+.role-change-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.role-change-head button,
+.role-change-list button,
+#deathRoleChangeButton {
+  border: 1px solid rgba(238, 243, 236, 0.16);
+  border-radius: 7px;
+  background: rgba(238, 243, 236, 0.08);
+  color: #eef3ec;
+  font: inherit;
+  cursor: pointer;
+}
+
+#roleChangeHint {
+  margin: 10px 0 12px;
+  color: #b8c8ba;
+  font-size: 13px;
+}
+
+.role-change-list {
+  display: grid;
+  gap: 8px;
+}
+
+.role-change-list button {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  text-align: left;
+}
+
+.role-change-list button.active {
+  border-color: rgba(107, 188, 255, 0.75);
+  background: rgba(107, 188, 255, 0.16);
+}
+
+.role-change-list span {
+  color: #b8c8ba;
+  font-size: 12px;
+}
+
+#deathRoleChangeButton {
+  margin-top: 10px;
+  padding: 9px 12px;
+}
+
+#deathRoleChangeHint {
+  display: block;
+  margin-top: 10px;
+  color: #b8c8ba;
+  font-size: 12px;
+}

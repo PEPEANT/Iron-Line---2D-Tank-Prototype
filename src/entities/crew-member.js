@@ -3,7 +3,7 @@
 (function registerCrewMember(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM } = IronLine.constants;
-  const { distXY, angleTo, approach } = IronLine.math;
+  const { clamp, distXY, angleTo, approach, circleRectCollision } = IronLine.math;
   const { tryMoveCircle } = IronLine.physics;
 
   class CrewMember {
@@ -12,6 +12,8 @@
       this.y = options.y;
       this.team = options.team || TEAM.NEUTRAL;
       this.callSign = options.callSign;
+      this.factionId = options.factionId || options.skinId || "";
+      this.skinId = this.factionId;
       this.radius = 10;
       this.hp = options.hp || 45;
       this.maxHp = this.hp;
@@ -49,8 +51,8 @@
       }
 
       if (this.targetTank.vehicleType === "humvee" && this.targetTank.playerControlled) {
-        this.state = "idle";
-        this.speed = approach(this.speed, 0, 220 * dt);
+        this.state = "vehicle-taken-cover";
+        this.moveAwayFromControlledVehicle(game, dt);
         this.mountTimer = 0;
         return;
       }
@@ -92,6 +94,48 @@
       this.state = "mounted";
       this.speed = 0;
       return true;
+    }
+
+    moveAwayFromControlledVehicle(game, dt) {
+      const tank = this.targetTank;
+      if (!tank) {
+        this.speed = approach(this.speed, 0, 220 * dt);
+        return;
+      }
+      const safeDistance = (tank.radius || 30) + this.radius + 78;
+      const currentDistance = distXY(this.x, this.y, tank.x, tank.y);
+      if (currentDistance >= safeDistance) {
+        this.angle = angleTo(this.x, this.y, tank.x, tank.y);
+        this.speed = approach(this.speed, 0, 220 * dt);
+        return;
+      }
+      const awayAngle = angleTo(tank.x, tank.y, this.x, this.y);
+      const candidate = this.findCrewCoverPoint(game, tank, awayAngle, safeDistance);
+      this.angle = angleTo(this.x, this.y, candidate.x, candidate.y);
+      this.speed = approach(this.speed, this.maxSpeed * 0.82, 300 * dt);
+      tryMoveCircle(
+        game,
+        this,
+        Math.cos(this.angle) * this.speed,
+        Math.sin(this.angle) * this.speed,
+        this.radius,
+        dt,
+        { blockTanks: true, padding: 5 }
+      );
+    }
+
+    findCrewCoverPoint(game, tank, baseAngle, distance) {
+      const angles = [baseAngle, baseAngle + Math.PI / 3, baseAngle - Math.PI / 3, baseAngle + Math.PI / 2, baseAngle - Math.PI / 2];
+      for (const angle of angles) {
+        const x = clamp(tank.x + Math.cos(angle) * distance, this.radius, game.world.width - this.radius);
+        const y = clamp(tank.y + Math.sin(angle) * distance, this.radius, game.world.height - this.radius);
+        const blocked = (game.world.obstacles || []).some((obstacle) => circleRectCollision(x, y, this.radius + 2, obstacle));
+        if (!blocked) return { x, y };
+      }
+      return {
+        x: clamp(tank.x + Math.cos(baseAngle) * distance, this.radius, game.world.width - this.radius),
+        y: clamp(tank.y + Math.sin(baseAngle) * distance, this.radius, game.world.height - this.radius)
+      };
     }
 
     dismount(game) {

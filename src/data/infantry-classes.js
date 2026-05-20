@@ -10,7 +10,7 @@
       name: "보병",
       shortName: "보병",
       equipment: ["machinegun", "pistol", "grenade"],
-      defaultAmmo: { grenade: 2 },
+      defaultAmmo: { grenade: 3 },
       description: "점령과 제압"
     },
     engineer: {

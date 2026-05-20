@@ -62,14 +62,18 @@
         </label>
         <label class="field">
           <span>종류</span>
-          <select id="obstacleKindSelect">
-            <option value="building">건물</option>
-            <option value="concrete">콘크리트</option>
-            <option value="base-wall">기지 벽</option>
-          </select>
+          <select id="obstacleKindSelect"></select>
+        </label>
+        <label class="field">
+          <span>디자인</span>
+          <select id="obstacleVariantSelect"></select>
+        </label>
+        <label class="check-row">
+          <input id="obstacleDestructibleToggle" type="checkbox">
+          <span>부술 수 있는 오브젝트로 표시</span>
         </label>
         <div class="button-row">
-          <button type="button" id="newObstacleButton">새 건물</button>
+          <button type="button" id="newObstacleButton">새 오브젝트</button>
           <button type="button" id="deleteObstacleButton">삭제</button>
         </div>
       </section>
@@ -123,8 +127,10 @@
     </aside>
 
     <script src="src/core/math.js"></script>
+    <script src="src/data/scenery-catalog.js"></script>
     <script src="src/data/map01.js"></script>
     <script src="src/data/map01-custom-layout.js"></script>
+    <script src="src/tools/map-editor-utils.js"></script>
     <script src="src/tools/map-editor.js"></script>
   </body>
 </html>

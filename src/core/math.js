@@ -21,19 +21,24 @@
   }
 
   function angleTo(x1, y1, x2, y2) {
+    if (![x1, y1, x2, y2].every(Number.isFinite)) return 0;
     return Math.atan2(y2 - y1, x2 - x1);
   }
 
   function normalizeAngle(angle) {
-    while (angle > Math.PI) angle -= Math.PI * 2;
-    while (angle < -Math.PI) angle += Math.PI * 2;
-    return angle;
+    if (!Number.isFinite(angle)) return 0;
+    const fullTurn = Math.PI * 2;
+    const normalized = ((angle + Math.PI) % fullTurn + fullTurn) % fullTurn - Math.PI;
+    return normalized === -Math.PI ? Math.PI : normalized;
   }
 
   function rotateTowards(current, target, maxStep) {
-    const diff = normalizeAngle(target - current);
-    if (Math.abs(diff) <= maxStep) return target;
-    return current + Math.sign(diff) * maxStep;
+    const safeCurrent = Number.isFinite(current) ? current : 0;
+    const safeTarget = Number.isFinite(target) ? target : safeCurrent;
+    const safeStep = Math.max(0, Number.isFinite(maxStep) ? maxStep : 0);
+    const diff = normalizeAngle(safeTarget - safeCurrent);
+    if (Math.abs(diff) <= safeStep) return normalizeAngle(safeTarget);
+    return normalizeAngle(safeCurrent + Math.sign(diff) * safeStep);
   }
 
   function pointInRect(x, y, rect) {

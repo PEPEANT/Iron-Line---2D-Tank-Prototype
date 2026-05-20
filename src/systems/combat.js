@@ -15,8 +15,129 @@
 
   function pushLimited(list, item, max = 180) {
     if (!list) return;
-    if (list.length > max) list.shift();
+    if (list.length >= max) list.shift();
     list.push(item);
+  }
+
+  function trimOldest(list, max) {
+    if (!Array.isArray(list) || list.length <= max) return;
+    list.splice(0, list.length - max);
+  }
+
+  function sceneryCenter(item) {
+    if (!item) return { x: 0, y: 0, radius: 0 };
+    if (item.shape === "rect" || Number.isFinite(item.w) || Number.isFinite(item.h)) {
+      const w = Number(item.w) || 0;
+      const h = Number(item.h) || 0;
+      return {
+        x: (Number(item.x) || 0) + w * 0.5,
+        y: (Number(item.y) || 0) + h * 0.5,
+        radius: Math.max(w, h) * 0.5
+      };
+    }
+    return {
+      x: Number(item.x) || 0,
+      y: Number(item.y) || 0,
+      radius: Number(item.r) || Number(item.radius) || 0
+    };
+  }
+
+  function activeDestructibleScenery(game) {
+    return (game.world?.scenery || []).filter((item) => item?.destructible && !item.destroyed);
+  }
+
+  function projectileHitsScenery(shell, item) {
+    if (!shell || !item?.stopsProjectiles || item.destroyed) return false;
+    if (item.shape === "rect" || Number.isFinite(item.w) || Number.isFinite(item.h)) {
+      const rect = {
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        w: Number(item.w) || 0,
+        h: Number(item.h) || 0
+      };
+      return circleRectCollision(shell.x, shell.y, shell.radius, rect) ||
+        lineIntersectsRect(shell.previousX, shell.previousY, shell.x, shell.y, rect);
+    }
+    const center = sceneryCenter(item);
+    const d = segmentDistanceToPoint(shell.previousX, shell.previousY, shell.x, shell.y, center.x, center.y);
+    return d <= center.radius + shell.radius;
+  }
+
+  function findProjectileSceneryHit(game, shell) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const item of activeDestructibleScenery(game)) {
+      if (!projectileHitsScenery(shell, item)) continue;
+      const center = sceneryCenter(item);
+      const d = distXY(shell.previousX, shell.previousY, center.x, center.y);
+      if (d < bestDistance) {
+        best = item;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  function emitSceneryBreak(game, item) {
+    if (!game?.effects || !item) return;
+    const center = sceneryCenter(item);
+    const dustPuffs = game.effects.dustPuffs || (game.effects.dustPuffs = []);
+    const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
+    const radius = Math.max(18, center.radius || 24);
+
+    dustPuffs.push({
+      x: center.x,
+      y: center.y,
+      radius: Math.min(44, radius * 0.55),
+      maxRadius: Math.min(96, radius * 1.25),
+      life: 0.7,
+      maxLife: 0.7,
+      alpha: 0.24,
+      color: item.type === "tree" ? "#66734b" : "#b1a077"
+    });
+
+    const sparkCount = item.type === "tree" ? 7 : 10;
+    for (let i = 0; i < sparkCount; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 55 + Math.random() * 120;
+      const life = 0.16 + Math.random() * 0.22;
+      blastSparks.push({
+        x: center.x,
+        y: center.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        length: 5 + Math.random() * 9,
+        life,
+        maxLife: life,
+        color: item.type === "tree" ? "rgba(128, 100, 58, 0.72)" : "rgba(238, 194, 107, 0.7)"
+      });
+    }
+  }
+
+  function damageScenery(game, item, amount) {
+    if (!item?.destructible || item.destroyed) return false;
+    item.maxHp = item.maxHp || item.baseHp || item.hp || Math.max(1, amount);
+    item.hp = Math.max(0, (item.hp ?? item.maxHp) - amount);
+    item.damageFlash = Math.max(item.damageFlash || 0, 0.34);
+    if (item.hp > 0) return false;
+    item.destroyed = true;
+    item.stopsProjectiles = false;
+    emitSceneryBreak(game, item);
+    game.aiObservatory?.recordEvent?.({
+      type: "scenery_destroyed",
+      unitId: item.id || item.type,
+      aiType: "world",
+      reason: item.type || "scenery"
+    });
+    return true;
+  }
+
+  function expandEffectRadius(effect) {
+    const maxLife = Math.max(0.001, Number.isFinite(effect.maxLife) ? effect.maxLife : 1);
+    const t = clamp(1 - effect.life / maxLife, 0, 1);
+    const radius = Math.max(0, Number.isFinite(effect.radius) ? effect.radius : 0);
+    const maxRadius = Math.max(radius, Number.isFinite(effect.maxRadius) ? effect.maxRadius : radius);
+    effect.radius = lerp(radius, maxRadius, t);
   }
 
   function smallArmsRangeScale(shooter, weapon) {
@@ -466,12 +587,23 @@
 
   function throwGrenade(game, shooter, aimX, aimY, options = {}) {
     const weapon = options.weapon || INFANTRY_WEAPONS.grenade;
+    const aimedDistance = distXY(shooter.x, shooter.y, aimX, aimY);
+    const throwTime = clamp(
+      (weapon.throwTime || 0.78) * (0.86 + aimedDistance / Math.max(1, weapon.range || 360) * 0.24),
+      0.48,
+      1.05
+    );
     return launchInfantryProjectile(game, shooter, aimX, aimY, {
       ...weapon,
       id: "grenade",
       color: "#ffd166",
       maxDistance: weapon.range,
-      fuseExtra: 0.12
+      fuseExtra: 0,
+      fuseTime: weapon.fuseTime || 2.15,
+      throwTime,
+      impactDetonate: weapon.impactDetonate === true,
+      bounceDamping: weapon.bounceDamping ?? 0.18,
+      groundDrag: weapon.groundDrag ?? 0.08
     });
   }
 
@@ -502,7 +634,10 @@
     const aimedDistance = distXY(shooter.x, shooter.y, aimX, aimY);
     if (ammo.minDistance && aimedDistance < ammo.minDistance) return false;
     const travelDistance = clamp(aimedDistance, 44, ammo.maxDistance || ammo.range || 420);
-    const speed = ammo.speed || 420;
+    const speed = ammo.throwTime
+      ? travelDistance / Math.max(0.2, ammo.throwTime)
+      : ammo.speed || 420;
+    const life = ammo.fuseTime || Math.max(0.12, travelDistance / (ammo.speed || 420) + (ammo.fuseExtra || 0));
 
     game.projectiles.push({
       x: startX,
@@ -514,7 +649,10 @@
       team: shooter.team,
       owner: shooter,
       ammo,
-      life: Math.max(0.12, travelDistance / speed + (ammo.fuseExtra || 0)),
+      life,
+      age: 0,
+      travelTime: ammo.throwTime || 0,
+      landed: false,
       radius: ammo.shellRadius || 5
     });
 
@@ -690,12 +828,45 @@
     }
   }
 
+  function isDelayedGrenade(shell) {
+    return shell?.ammo?.id === "grenade" && shell.ammo.impactDetonate !== true;
+  }
+
+  function settleDelayedGrenade(shell) {
+    const damping = shell.ammo.bounceDamping ?? 0.18;
+    shell.x = shell.previousX;
+    shell.y = shell.previousY;
+    shell.vx *= -damping;
+    shell.vy *= -damping;
+    shell.landed = true;
+    shell.travelTime = 0;
+    if (Math.hypot(shell.vx, shell.vy) < 28) {
+      shell.vx = 0;
+      shell.vy = 0;
+    }
+  }
+
   function updateProjectiles(game, dt) {
     const projectiles = game.projectiles;
 
     for (let i = projectiles.length - 1; i >= 0; i -= 1) {
       const shell = projectiles[i];
       shell.life -= dt;
+      shell.age = (shell.age || 0) + dt;
+
+      if (isDelayedGrenade(shell) && shell.travelTime && shell.age >= shell.travelTime) {
+        shell.landed = true;
+        shell.travelTime = 0;
+        shell.vx *= 0.2;
+        shell.vy *= 0.2;
+      }
+
+      if (isDelayedGrenade(shell) && shell.landed) {
+        const drag = Math.pow(shell.ammo.groundDrag ?? 0.08, dt);
+        shell.vx *= drag;
+        shell.vy *= drag;
+      }
+
       shell.previousX = shell.x;
       shell.previousY = shell.y;
       shell.x += shell.vx * dt;
@@ -748,10 +919,15 @@
       }
 
       if (!hit) {
+        const sceneryHit = findProjectileSceneryHit(game, shell);
+        if (sceneryHit) hit = { scenery: sceneryHit };
+      }
+
+      if (!hit) {
         for (const tank of vehicleTargets(game)) {
           const wreck = isVehicleWreck(tank);
           if (tank === shell.owner) continue;
-          if (!wreck && (!tank.alive || tank.team === shell.team)) continue;
+          if (!wreck && !tank.alive) continue;
           const shellDistance = segmentDistanceToPoint(
             shell.previousX,
             shell.previousY,
@@ -761,7 +937,9 @@
             tank.y
           );
           if (shellDistance <= tank.radius + shell.radius) {
-            hit = wreck ? { wreck: tank } : { tank };
+            hit = wreck
+              ? { wreck: tank }
+              : tank.team === shell.team ? { friendlyTank: tank } : { tank };
             break;
           }
         }
@@ -800,16 +978,27 @@
       }
 
       if (hit) {
-        resolveImpact(game, shell, hit.tank || null, hit.infantry || false, hit.infantryUnit || null);
+        if (isDelayedGrenade(shell)) {
+          settleDelayedGrenade(shell);
+          continue;
+        }
+
+        if (hit.scenery && shell.ammo.id !== "smoke") {
+          damageScenery(game, hit.scenery, (shell.ammo.directDamage || shell.ammo.damage || 36) * 0.9);
+        }
+        resolveImpact(game, shell, hit.tank || hit.friendlyTank || null, hit.infantry || false, hit.infantryUnit || null, {
+          friendlyVehicle: Boolean(hit.friendlyTank)
+        });
         projectiles.splice(i, 1);
       }
     }
   }
 
-  function resolveImpact(game, shell, hitTank, hitInfantry = false, hitInfantryUnit = null) {
+  function resolveImpact(game, shell, hitTank, hitInfantry = false, hitInfantryUnit = null, options = {}) {
     const ammo = shell.ammo;
     const x = shell.x;
     const y = shell.y;
+    const friendlyVehicle = Boolean(options.friendlyVehicle);
 
     if (ammo.id === "smoke") {
       game.effects.smokeClouds.push({
@@ -833,9 +1022,11 @@
     }
 
     if (ammo.id === "he" || ammo.id === "grenade" || ammo.id === "rpg") {
-      if (ammo.id === "rpg" && hitTank) {
+      if (ammo.id === "rpg" && hitTank && !friendlyVehicle) {
         const damage = directTankDamage(game, hitTank, ammo.directDamage || ammo.damage, shell);
         hitTank.takeDamage(game, damage);
+      } else if (hitTank && friendlyVehicle) {
+        emitFriendlyArmorBlock(game, hitTank, shell);
       }
 
       damageRadius(game, x, y, ammo.splash, ammo.damage, shell.team, {
@@ -848,7 +1039,9 @@
       return;
     }
 
-    if (hitTank) {
+    if (hitTank && friendlyVehicle) {
+      emitFriendlyArmorBlock(game, hitTank, shell);
+    } else if (hitTank) {
       const damage = directTankDamage(game, hitTank, ammo.damage, shell);
       hitTank.takeDamage(game, damage);
     }
@@ -873,6 +1066,20 @@
       color: "rgba(255, 242, 168, 0.85)"
     });
     game.effects.scorchMarks.push({ x, y, radius: (ammo.directScorchRadius || 16) + Math.random() * 8, alpha: 0.12 });
+  }
+
+  function emitFriendlyArmorBlock(game, tank, shell) {
+    const source = directArmorSource(shell, tank);
+    const profile = directArmorProfile(tank, source.x, source.y, shell.ammo?.id);
+    tank.lastArmorHit = {
+      zone: profile.zone,
+      multiplier: 0,
+      ammoId: shell.ammo?.id || "",
+      friendlyBlock: true,
+      time: game?.matchTime || 0
+    };
+    emitDirectArmorFeedback(game, tank, shell.x, shell.y, profile, shell.ammo);
+    if (tank.impactShake !== undefined) tank.impactShake = Math.max(tank.impactShake || 0, 0.14);
   }
 
   function emitBlastEffect(game, x, y, ammo) {
@@ -1015,6 +1222,18 @@
     return clamp(0.35 + exposure * 0.65, 0.26, 1);
   }
 
+  function proneBlastDamageScale(target, distance, radius, ammo = {}) {
+    if (!target?.isProne) return 1;
+    const blastRadius = Math.max(1, radius || ammo.splash || 1);
+    const t = clamp(distance / blastRadius, 0, 1);
+    const ammoId = ammo.id || "";
+    const closeScale = ammoId === "he" ? 0.88 : ammoId === "grenade" ? 0.8 : 0.86;
+    const farScale = ammoId === "he" ? 0.58 : ammoId === "grenade" ? 0.62 : 0.68;
+    if (t < 0.22) return closeScale;
+    if (t > 0.72) return farScale;
+    return closeScale + (farScale - closeScale) * ((t - 0.22) / 0.5);
+  }
+
   function damageRadius(game, x, y, radius, damage, team, ammo = {}) {
     for (const tank of vehicleTargets(game)) {
       if (tank === ammo.excludeTarget) continue;
@@ -1049,7 +1268,8 @@
         ((ammo.suppressionBase ?? 18) + (ammo.suppressionMax ?? 42) * falloff) * blastSuppressionExposure(exposure),
         { x, y, team }
       );
-      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure);
+      const proneScale = proneBlastDamageScale(unit, d, radius + unit.radius, ammo);
+      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale);
     }
 
     for (const drone of game.drones || []) {
@@ -1067,6 +1287,15 @@
       drone.takeDamage(damage * droneScale * falloff * exposure);
     }
 
+    for (const item of activeDestructibleScenery(game)) {
+      const center = sceneryCenter(item);
+      const d = distXY(x, y, center.x, center.y);
+      if (d > radius + center.radius) continue;
+      const falloff = clamp(1 - d / Math.max(1, radius + center.radius), 0.18, 1);
+      const sceneryScale = item.type === "tree" ? 0.48 : item.type === "wood-fence" ? 0.72 : 0.58;
+      damageScenery(game, item, damage * (ammo.sceneryDamageScale ?? sceneryScale) * falloff);
+    }
+
     if (!game.player.inTank && game.player.hp > 0 && team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
       const d = distXY(x, y, game.player.x, game.player.y);
       if (d < radius + game.player.radius) {
@@ -1077,7 +1306,8 @@
           minimum: 0.1,
           nearRadius: 26
         });
-        const playerDamage = damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure;
+        const proneScale = proneBlastDamageScale(game.player, d, radius + game.player.radius, ammo);
+        const playerDamage = damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale;
         const source = { x, y, team, owner: ammo.owner || ammo.source || null };
         game.applyPlayerDamage?.(playerDamage, source, ammo.id || "explosion", {
           x,
@@ -1099,6 +1329,21 @@
     const trackScuffs = game.effects.trackScuffs || (game.effects.trackScuffs = []);
     const muzzleFlashes = game.effects.muzzleFlashes || (game.effects.muzzleFlashes = []);
     const gunSmokePuffs = game.effects.gunSmokePuffs || (game.effects.gunSmokePuffs = []);
+
+    trimOldest(tracers, 260);
+    trimOldest(muzzleFlashes, 120);
+    trimOldest(blastRings, 180);
+    trimOldest(blastSparks, 360);
+    trimOldest(dustPuffs, 260);
+    trimOldest(trackScuffs, 180);
+    trimOldest(gunSmokePuffs, 240);
+    trimOldest(explosions, 260);
+    trimOldest(smokeClouds, 80);
+    trimOldest(scorchMarks, 240);
+
+    for (const item of game.world?.scenery || []) {
+      if (item.damageFlash > 0) item.damageFlash = Math.max(0, item.damageFlash - dt * 1.8);
+    }
 
     for (let i = tracers.length - 1; i >= 0; i -= 1) {
       tracers[i].life -= dt;
@@ -1133,8 +1378,7 @@
       puff.life -= dt;
       puff.x += (puff.vx || 0) * dt;
       puff.y += (puff.vy || 0) * dt;
-      const t = 1 - puff.life / puff.maxLife;
-      puff.radius = lerp(puff.radius, puff.maxRadius, t);
+      expandEffectRadius(puff);
       if (puff.life <= 0) dustPuffs.splice(i, 1);
     }
 
@@ -1150,8 +1394,7 @@
       puff.y += (puff.vy || 0) * dt;
       puff.vx *= Math.max(0, 1 - 1.2 * dt);
       puff.vy *= Math.max(0, 1 - 1.2 * dt);
-      const t = 1 - puff.life / puff.maxLife;
-      puff.radius = lerp(puff.radius, puff.maxRadius, t);
+      expandEffectRadius(puff);
       if (puff.life <= 0) gunSmokePuffs.splice(i, 1);
     }
 

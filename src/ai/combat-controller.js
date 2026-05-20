@@ -53,10 +53,25 @@
       const desiredRange = AI_CONFIG.desiredRange[ammoId] || AI_CONFIG.desiredRange.fallback;
       const mode = this.tank.hp < this.tank.maxHp * AI_CONFIG.retreatHealthRatio ? "retreat" : "engage";
 
-      if (visible && shotClear && shotSafe && this.tank.canFire()) {
-        const targetAngle = angleTo(this.tank.x, this.tank.y, target.x, target.y);
-        const aimDiff = Math.abs(normalizeAngle(this.tank.turretAngle - targetAngle));
-        if (aimDiff < 0.075) this.tank.fire(this.game, { target });
+      const weaponReady = this.tank.canFire();
+      const targetAngle = angleTo(this.tank.x, this.tank.y, target.x, target.y);
+      const aimDiff = Math.abs(normalizeAngle(this.tank.turretAngle - targetAngle));
+      const aimAligned = aimDiff < 0.075;
+      const fireDecision = this.scoreFireDecision({
+        target,
+        distance,
+        visible,
+        shotClear,
+        ammoSafe,
+        lineSafe,
+        shotSafe,
+        weaponReady,
+        aimAligned,
+        aimDiff
+      });
+
+      if (visible && shotClear && shotSafe && weaponReady && aimAligned) {
+        this.tank.fire(this.game, { target });
       }
 
       this.lastDecision = {
@@ -65,10 +80,18 @@
         distance,
         visible,
         shotClear: shotClear && shotSafe,
+        rawShotClear: shotClear,
         blockedShot: visible && !shotClear && distance < AI_CONFIG.blockedShotRepositionRange,
         unsafeShot: visible && shotClear && !shotSafe,
         unsafeLine: visible && shotClear && !lineSafe,
-        desiredRange
+        ammoSafe,
+        lineSafe,
+        weaponReady,
+        aimDiff,
+        aimAligned,
+        ammoId,
+        desiredRange,
+        decision: fireDecision
       };
       return this.lastDecision;
     }
@@ -231,6 +254,11 @@
       const endY = target.y;
       const laneWidth = (ammo.id === "he" ? 34 : 24) + (ammo.shellRadius || 4);
 
+      for (const vehicle of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
+        if (vehicle === this.tank || !vehicle.alive || vehicle.team !== this.tank.team) continue;
+        if (segmentDistanceToPoint(startX, startY, endX, endY, vehicle.x, vehicle.y) <= laneWidth + vehicle.radius) return false;
+      }
+
       for (const unit of this.game.infantry || []) {
         if (!unit.alive || unit.inVehicle || unit.team !== this.tank.team) continue;
         if (segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y) <= laneWidth + unit.radius) return false;
@@ -312,10 +340,73 @@
         distance: 0,
         visible: false,
         shotClear: false,
+        rawShotClear: false,
         blockedShot: false,
         unsafeShot: false,
         unsafeLine: false,
+        ammoSafe: true,
+        lineSafe: true,
+        weaponReady: false,
+        aimDiff: Math.PI,
+        aimAligned: false,
+        ammoId: "",
+        decision: this.scoreFireDecision({ reason: "no_target" }),
         desiredRange: AI_CONFIG.desiredRange.fallback
+      };
+    }
+
+    scoreFireDecision(profile = {}) {
+      const target = profile.target || null;
+      const visible = Boolean(profile.visible);
+      const shotClear = Boolean(profile.shotClear);
+      const ammoSafe = profile.ammoSafe !== false;
+      const lineSafe = profile.lineSafe !== false;
+      const weaponReady = Boolean(profile.weaponReady);
+      const aimAligned = Boolean(profile.aimAligned);
+      const shotSafe = profile.shotSafe !== false && ammoSafe && lineSafe;
+      const score = clamp(
+        (target ? 0.1 : 0) +
+        (visible ? 0.25 : 0) +
+        (shotClear ? 0.22 : 0) +
+        (shotSafe ? 0.18 : -0.32) +
+        (weaponReady ? 0.13 : 0) +
+        (aimAligned ? 0.12 : 0),
+        0,
+        1
+      );
+
+      let reason = profile.reason || "no_target";
+      let decision = "hold_fire";
+      if (!target) reason = "no_target";
+      else if (!visible) reason = "no_line_of_sight";
+      else if (!shotClear) reason = "no_line_of_sight";
+      else if (!lineSafe) reason = "friendly_in_line";
+      else if (!ammoSafe) reason = "friendly_splash_risk";
+      else if (!weaponReady) reason = "weapon_not_ready";
+      else if (!aimAligned) reason = "not_facing";
+      else {
+        reason = "fire_ready";
+        decision = "fire";
+      }
+
+      return {
+        decision,
+        reason,
+        score: Math.round(score * 100) / 100,
+        scores: {
+          fire: Math.round(score * 100) / 100
+        },
+        facts: {
+          targetId: target?.callSign || target?.id || "",
+          visible,
+          shotClear,
+          ammoSafe,
+          lineSafe,
+          weaponReady,
+          aimAligned,
+          aimDiff: Math.round((profile.aimDiff || 0) * 100) / 100,
+          distance: Math.round(profile.distance || 0)
+        }
       };
     }
   }

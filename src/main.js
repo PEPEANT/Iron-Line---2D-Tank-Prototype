@@ -43,8 +43,28 @@
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
+      this.matchPhase = "deployment";
+      this.lobbyOpen = false;
       this.testLab = this.requestedTestLab();
-      this.adminEnabled = this.requestedAdminMode();
+      this.spectatorMode = false;
+      this.casterMode = false;
+      this.adminObserverMode = this.requestedObserverMode();
+      this.adminCamera = IronLine.AdminObserverCamera ? new IronLine.AdminObserverCamera(this) : null;
+      this.adminEnabled = this.requestedAdminMode() || this.adminObserverMode;
+      this.localProfile = this.loadLocalProfile();
+      this.entryOpen = !this.adminObserverMode && !this.testLab;
+      this.onlineSession = this.createLocalSession();
+      this.commandBus = new IronLine.CommandBus(this);
+      this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
+      this.observerBridge = IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
+      this.battlefieldEvents = IronLine.BattlefieldEvents ? new IronLine.BattlefieldEvents(this) : null;
+      this.adminOps = IronLine.AdminOps ? new IronLine.AdminOps(this) : null;
+      this.chat = !this.adminObserverMode && IronLine.ChatSystem ? new IronLine.ChatSystem(this) : null;
+      this.roleChange = !this.adminObserverMode && IronLine.RoleChangeSystem ? new IronLine.RoleChangeSystem(this) : null;
+      this.observerSnapshot = null;
+      this.conquest = this.defaultConquestState();
+      this.respawnTimers = new WeakMap();
+      this.playerRespawnTimer = 0;
       this.testLabAiPaused = false;
       this.testLabSpawnIndex = 0;
       this.testLabRoofPoint = null;
@@ -88,6 +108,7 @@
       this.infantry = [];
       this.drones = [];
       this.squads = [];
+      this.commandPings = [];
       this.coverSlots = new IronLine.CoverSlotManager();
       this.teamReports = {
         [TEAM.BLUE]: new Map(),
@@ -95,16 +116,18 @@
       };
       this.capturePoints = [];
       this.player = IronLine.createPlayer(this.world.spawns.player);
+      this.applyLocalProfile();
       this.playerTank = null;
       this.result = "";
       this.resultReason = "";
       this.playerDeathActive = false;
       this.playerDeathReason = "";
       this.resetPlayerFeedbackState();
-      this.deploymentOpen = true;
+      this.deploymentOpen = !this.entryOpen;
       this.countdownStarted = false;
       this.matchStarted = false;
       this.startCountdown = 5;
+      this.startLoading = this.defaultStartLoadingState();
       this.matchTime = 0;
       this.objectiveHoldDuration = 12;
       this.objectiveHold = {
@@ -113,35 +136,13 @@
       };
       this.lastTime = performance.now();
 
+      this.resetWorldSceneryState();
       this.setupScenario();
+      this.syncOnlineSlotAssets();
       if (this.testLab) this.activateTestLab(this.testLab);
+      if (this.adminObserverMode) this.enterAdminObserverMode();
       window.addEventListener("resize", () => this.renderer.resize());
       requestAnimationFrame((now) => this.loop(now));
-    }
-
-    requestedTestLab() {
-      const params = new URLSearchParams(window.location.search || "");
-      if (!params.has("testLab") && !params.has("lab")) return "";
-      const value = params.get("testLab") || params.get("lab") || "drone";
-      return String(value).toLowerCase() || "drone";
-    }
-
-    requestedAdminMode() {
-      const params = new URLSearchParams(window.location.search || "");
-      const value = params.get("admin") || params.get("debugAdmin") || "";
-      return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
-    }
-
-    defaultMatchConfig() {
-      const spawns = this.world.spawns;
-      return {
-        mode: "annihilation",
-        difficulty: "normal",
-        blueAiTanks: spawns.blue.length,
-        blueInfantry: spawns.infantryBlue.length,
-        redTanks: spawns.red.length,
-        redInfantry: spawns.infantryRed.length
-      };
     }
 
     createCommanders() {
@@ -210,6 +211,22 @@
       return true;
     }
 
+    resetWorldSceneryState() {
+      for (const item of this.world?.scenery || []) {
+        if (!item.destructible) {
+          item.destroyed = false;
+          item.damageFlash = 0;
+          continue;
+        }
+        item.maxHp = item.maxHp || item.baseHp || item.hp || 1;
+        item.baseHp = item.baseHp || item.maxHp;
+        item.hp = item.maxHp;
+        item.destroyed = false;
+        item.damageFlash = 0;
+        item.stopsProjectiles = item.stopsProjectiles !== false;
+      }
+    }
+
     setupScenario() {
       const config = this.matchConfig || this.defaultMatchConfig();
       const difficulty = this.difficultyProfile(config.difficulty);
@@ -223,6 +240,7 @@
         y: playerSpawn.y,
         team: TEAM.BLUE,
         callSign: "RAVEN",
+        factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.BLUE),
         angle: playerSpawn.angle,
         isPlayerTank: true,
         ammo: { ap: 14, he: 9, smoke: 1 },
@@ -232,6 +250,7 @@
         turnRate: 1.9,
         turretTurnRate: 1.45
       });
+      this.tagRespawn(this.playerTank, "vehicle", playerSpawn);
       this.playerTank.ai = new IronLine.TankAI(this.playerTank, this);
       this.tanks.push(this.playerTank);
       this.spawnCrewForTank(this.playerTank, {
@@ -247,8 +266,10 @@
           y: spawn.y,
           team: TEAM.BLUE,
           callSign: spawn.callSign,
+          factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.BLUE),
           angle: spawn.angle
         });
+        this.tagRespawn(tank, "vehicle", spawn);
         tank.ai = new IronLine.TankAI(tank, this);
         this.tanks.push(tank);
         this.spawnCrewForTank(tank);
@@ -266,11 +287,13 @@
           y: spawn.y,
           team: TEAM.RED,
           callSign: spawn.callSign,
+          factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
           angle: spawn.angle,
           maxHp: Math.round(110 * difficulty.enemyTankHp),
           maxSpeed: 145 * difficulty.enemyTankSpeed,
           turretTurnRate: 1.65 * difficulty.enemyTankAim
         });
+        this.tagRespawn(tank, "vehicle", spawn);
         tank.ai = new IronLine.TankAI(tank, this);
         this.tanks.push(tank);
         this.spawnCrewForTank(tank);
@@ -282,6 +305,7 @@
       const redInfantry = this.spawnInfantry(redInfantrySpawns, TEAM.RED, difficulty);
       this.createSquads(TEAM.RED, redInfantry, "R-SQD");
       this.spawnHumvees(difficulty);
+      IronLine.factionVisuals?.syncGame?.(this);
     }
 
     spawnHumvees(difficulty = this.difficultyProfile()) {
@@ -334,8 +358,10 @@
         const humvee = new IronLine.Humvee({
           ...spawn,
           x: point.x,
-          y: point.y
+          y: point.y,
+          factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, spawn.team)
         });
+        this.tagRespawn(humvee, "vehicle", { ...spawn, x: point.x, y: point.y });
         humvee.ai = new IronLine.HumveeAI(humvee, this);
         this.humvees.push(humvee);
         this.spawnCrewForTank(humvee, {
@@ -354,6 +380,7 @@
           y: spawn.y,
           team,
           callSign: spawn.callSign,
+          factionId: spawn.factionId || IronLine.factionVisuals?.factionIdForTeam?.(this, team),
           angle: spawn.angle,
           weaponId: spawn.weaponId,
           classId: spawn.classId,
@@ -367,11 +394,24 @@
           unit.maxHp = unit.hp;
           unit.maxSpeed *= difficulty.enemyInfantrySpeed;
         }
+        this.tagRespawn(unit, "infantry", spawn);
         unit.ai = new IronLine.InfantryAI(unit, this);
         this.infantry.push(unit);
         created.push(unit);
       }
       return created;
+    }
+
+    tagRespawn(entity, kind, spawn) {
+      if (!entity || !spawn) return entity;
+      entity.respawn = {
+        kind,
+        x: Math.round(spawn.x),
+        y: Math.round(spawn.y),
+        angle: spawn.angle || entity.angle || 0,
+        ammo: entity.ammo ? { ...entity.ammo } : null
+      };
+      return entity;
     }
 
     prepareInfantrySpawns(spawns) {
@@ -406,7 +446,7 @@
       for (const spawn of prepared) {
         const classId = spawn.classId || "infantry";
         if (classId !== "infantry") continue;
-        const grenadeAmmo = Math.max(1, Number(spawn.grenadeAmmo ?? spawn.equipmentAmmo?.grenade ?? 0) || 0);
+        const grenadeAmmo = Math.max(3, Number(spawn.grenadeAmmo ?? spawn.equipmentAmmo?.grenade ?? 0) || 0);
         spawn.grenadeAmmo = grenadeAmmo;
         spawn.equipmentAmmo = {
           ...(spawn.equipmentAmmo || {}),
@@ -499,15 +539,19 @@
 
     createSquads(team, units, prefix) {
       const size = 5;
+      const created = [];
       for (let i = 0; i < units.length; i += size) {
         const squadUnits = units.slice(i, i + size);
         if (squadUnits.length === 0) continue;
-        this.squads.push(new IronLine.SquadAI(this, {
+        const squad = new IronLine.SquadAI(this, {
           team,
           callSign: `${prefix}-${Math.floor(i / size) + 1}`,
           units: squadUnits
-        }));
+        });
+        this.squads.push(squad);
+        created.push(squad);
       }
+      return created;
     }
 
     spawnCrewForTank(tank, options = {}) {
@@ -517,6 +561,7 @@
         y: spawn.y,
         team: tank.team,
         callSign: options.callSign || `${tank.callSign}-CREW`,
+        factionId: options.factionId || tank.factionId || IronLine.factionVisuals?.factionIdForTeam?.(this, tank.team),
         angle: tank.angle,
         maxSpeed: options.maxSpeed,
         role: options.role,
@@ -554,30 +599,65 @@
     }
 
     loop(now) {
-      const dt = Math.min(0.033, (now - this.lastTime) / 1000);
+      const rawDt = (now - this.lastTime) / 1000;
+      const dt = Number.isFinite(rawDt) ? Math.min(0.033, Math.max(0, rawDt)) : 0;
       this.lastTime = now;
-      this.update(dt);
-      this.renderer.draw(this);
-      this.input.endFrame();
+      try {
+        this.update(dt);
+        this.renderer.draw(this);
+        this.input.endFrame();
+      } catch (error) {
+        this.handleLoopError(error);
+      }
       requestAnimationFrame((next) => this.loop(next));
+    }
+
+    handleLoopError(error) {
+      const now = performance.now();
+      if (!this.lastLoopErrorAt || now - this.lastLoopErrorAt > 1500) {
+        console.error("Iron Line frame error", error);
+        this.lastLoopErrorAt = now;
+      }
+      this.input.clear();
     }
 
     update(dt) {
       this.input.updateWorld(this.camera);
       this.updateDebugToggles();
       this.updateTestLabHotkeys();
+      this.updateCommandRadioHotkey();
       this.updateAdminMessage(dt);
       this.updateCombatFeedback(dt);
+      this.observerBridge?.update(dt);
+      this.chat?.update?.(dt);
+      this.roleChange?.update?.(dt);
+      this.battlefieldEvents?.update?.(dt);
 
-      if (this.deploymentOpen) {
+      if (this.adminObserverMode) {
+        this.updateBattlefield(dt);
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
+
+      if (this.entryOpen || this.deploymentOpen || this.lobbyOpen) {
         this.updatePlayerSafeZone();
         this.updateCamera(dt);
         this.hud.update(this);
         return;
       }
 
-      if (this.playerDowned && !this.playerDeathActive) {
+      if (this.result) {
         IronLine.combat.updateEffects(this, dt);
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
+
+      if (this.playerDowned && !this.playerDeathActive) {
+        const battleContinues = this.isConquestMode() && this.matchStarted;
+        if (battleContinues) this.updateBattlefield(dt);
+        else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
@@ -585,7 +665,9 @@
 
       if (this.playerDeathActive) {
         this.updateDeathRestartInput();
-        IronLine.combat.updateEffects(this, dt);
+        const battleContinues = this.isConquestMode() && this.matchStarted;
+        if (battleContinues) this.updateBattlefield(dt);
+        else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
@@ -594,13 +676,17 @@
       this.updatePlayer(dt);
       this.updatePlayerDeathState();
       if (this.playerDowned && !this.playerDeathActive) {
-        IronLine.combat.updateEffects(this, dt);
+        const battleContinues = this.isConquestMode() && this.matchStarted;
+        if (battleContinues) this.updateBattlefield(dt);
+        else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
       }
       if (this.playerDeathActive) {
-        IronLine.combat.updateEffects(this, dt);
+        const battleContinues = this.isConquestMode() && this.matchStarted;
+        if (battleContinues) this.updateBattlefield(dt);
+        else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
@@ -616,12 +702,34 @@
         return;
       }
 
+      this.updateBattlefield(dt);
+      this.updatePlayerDeathState();
+      if (this.playerDowned && !this.playerDeathActive) {
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
+      if (this.playerDeathActive) {
+        this.updateCamera(dt);
+        this.hud.update(this);
+        return;
+      }
+
+      this.updateCamera(dt);
+      this.hud.update(this);
+    }
+
+    updateBattlefield(dt) {
+      if (!this.matchStarted || this.result) return;
+
       this.matchTime += dt;
       this.updateDroneDesignation(dt);
+      this.updateConquestRespawns(dt);
       for (const crew of this.crews) crew.update(this, dt);
       if (!this.testLabAiPaused) {
         for (const commander of Object.values(this.commanders)) commander.update(dt);
       }
+      this.refreshFollowPlayerOrders();
       this.coverSlots.update(dt);
       if (!this.testLabAiPaused) {
         for (const squad of this.squads) squad.update(dt);
@@ -636,377 +744,220 @@
 
       IronLine.combat.updateProjectiles(this, dt);
       IronLine.combat.updateEffects(this, dt);
-      this.updatePlayerDeathState();
-      if (this.playerDowned && !this.playerDeathActive) {
-        this.updateCamera(dt);
-        this.hud.update(this);
-        return;
-      }
-      if (this.playerDeathActive) {
-        this.updateCamera(dt);
-        this.hud.update(this);
-        return;
-      }
 
       for (const point of this.capturePoints) point.update(this, dt);
+      this.updateConquestScoring(dt);
 
       resolveTankSpacing(this, dt);
       resolveInfantryTankSpacing(this);
-      this.updateCamera(dt);
       this.updateResult(dt);
-      this.hud.update(this);
+      this.aiObservatory?.update?.(dt);
+    }
+
+    refreshFollowPlayerOrders() {
+      const player = this.player;
+      if (!player || player.hp <= 0) return;
+      const updatePoint = (order) => {
+        if (!order?.followPlayer || !order.point) return;
+        order.point.x = player.x;
+        order.point.y = player.y;
+        order.point.name = "플레이어";
+      };
+      for (const squad of this.squads || []) updatePoint(squad.order);
+      for (const vehicle of [...(this.tanks || []), ...(this.humvees || [])]) {
+        const order = this.commanders?.[vehicle.team]?.assignments?.get(vehicle);
+        updatePoint(order);
+      }
+    }
+
+    updateConquestScoring(dt) {
+      if (!this.isConquestMode() || !this.matchStarted || this.result) return;
+      this.conquest.remaining = Math.max(0, this.conquest.duration - this.matchTime);
+      for (const point of this.capturePoints) {
+        if (point.owner !== TEAM.BLUE && point.owner !== TEAM.RED) continue;
+        if (point.contested) continue;
+        this.conquest.score[point.owner] += this.conquest.scoreRate * dt;
+      }
+    }
+
+    updateConquestRespawns(dt) {
+      if (!this.isConquestMode() || !this.matchStarted || this.result) return;
+
+      if (this.playerDeathActive || this.playerDowned) {
+        this.playerRespawnTimer = Math.max(0, (this.playerRespawnTimer || this.conquest.respawnDelay.player) - dt);
+        if (this.playerRespawnTimer <= 0 && this.playerDeathActive) this.respawnPlayerForConquest();
+      }
+
+      for (const unit of this.infantry) {
+        if (unit.alive) {
+          this.respawnTimers.delete(unit);
+          continue;
+        }
+        this.tickRespawn(unit, dt, this.conquest.respawnDelay.infantry, () => this.respawnInfantryUnit(unit));
+      }
+
+      for (const vehicle of [...this.tanks, ...(this.humvees || [])]) {
+        if (vehicle.isPlayerTank) continue;
+        if (vehicle.alive || vehicle.destructionPending) {
+          if (vehicle.alive) this.respawnTimers.delete(vehicle);
+          continue;
+        }
+        this.tickRespawn(vehicle, dt, this.conquest.respawnDelay.vehicle, () => this.respawnVehicle(vehicle));
+      }
+    }
+
+    tickRespawn(entity, dt, delay, respawn) {
+      const current = this.respawnTimers.has(entity) ? this.respawnTimers.get(entity) : delay;
+      const next = Math.max(0, current - dt);
+      if (next > 0) {
+        this.respawnTimers.set(entity, next);
+        return false;
+      }
+      this.respawnTimers.delete(entity);
+      respawn();
+      return true;
+    }
+
+    respawnInfantryUnit(unit) {
+      const spawn = unit.respawn || this.respawnPointForTeam(unit.team);
+      const point = this.findOpenSpawnNear(spawn, 0, 0, unit.radius || 10);
+      unit.x = point.x;
+      unit.y = point.y;
+      unit.angle = spawn.angle || unit.angle || 0;
+      unit.hp = unit.maxHp;
+      unit.alive = true;
+      unit.deathTime = 0;
+      unit.deathPoseAngle = 0;
+      unit.speed = 0;
+      unit.suppression = 0;
+      unit.suppressed = false;
+      unit.suppressionTimer = 0;
+      unit.lastThreat = null;
+      unit.inVehicle = null;
+      unit.transportVehicle = null;
+      unit.transportCooldown = 1.2;
+      IronLine.factionVisuals?.syncEntity?.(this, unit);
+      unit.ai = new IronLine.InfantryAI(unit, this);
+    }
+
+    respawnVehicle(vehicle) {
+      const spawn = vehicle.respawn || this.respawnPointForTeam(vehicle.team);
+      const point = this.findOpenSpawnNear(spawn, 0, 0, vehicle.radius || 34);
+      vehicle.x = point.x;
+      vehicle.y = point.y;
+      vehicle.angle = spawn.angle || vehicle.angle || 0;
+      vehicle.turretAngle = vehicle.angle;
+      vehicle.machineGunAngle = vehicle.angle;
+      vehicle.hp = vehicle.maxHp;
+      vehicle.alive = true;
+      vehicle.speed = 0;
+      vehicle.turnVelocity = 0;
+      vehicle.wreckTimer = 0;
+      vehicle.destructionPending = false;
+      vehicle.destructionTimer = 0;
+      vehicle.loadedAmmo = null;
+      vehicle.reload = vehicle.reload || { active: false, ammoId: null, progress: 0, duration: 1 };
+      vehicle.reload.active = false;
+      vehicle.reload.ammoId = null;
+      vehicle.reload.progress = 0;
+      vehicle.weaponMode = vehicle.vehicleType === "humvee" ? "mg" : "cannon";
+      if (spawn.ammo) vehicle.ammo = { ...spawn.ammo };
+      if (Array.isArray(vehicle.passengers)) {
+        for (const passenger of vehicle.passengers) {
+          if (passenger?.inVehicle === vehicle) passenger.inVehicle = null;
+        }
+        vehicle.passengers = [];
+      }
+      if (vehicle.vehicleType === "humvee") vehicle.ai = new IronLine.HumveeAI(vehicle, this);
+      else vehicle.ai = new IronLine.TankAI(vehicle, this);
+      IronLine.factionVisuals?.syncEntity?.(this, vehicle);
+      this.respawnCrewForVehicle(vehicle);
+    }
+
+    respawnCrewForVehicle(vehicle) {
+      let crew = this.crews.find((item) => item.targetTank === vehicle || item.callSign === `${vehicle.callSign}-DRV` || item.callSign === `${vehicle.callSign}-CREW`);
+      if (!crew) {
+        this.spawnCrewForTank(vehicle, {
+          callSign: vehicle.vehicleType === "humvee" ? `${vehicle.callSign}-DRV` : `${vehicle.callSign}-CREW`,
+          role: vehicle.vehicleType === "humvee" ? "driver" : "crew"
+        });
+        return;
+      }
+
+      const spawn = this.findCrewSpawn(vehicle);
+      if (crew.inTank) crew.inTank.leaveCrew?.(crew);
+      vehicle.crew = null;
+      crew.x = spawn.x;
+      crew.y = spawn.y;
+      crew.angle = vehicle.angle;
+      crew.hp = crew.maxHp;
+      crew.alive = true;
+      crew.deathTime = 0;
+      crew.deathPoseAngle = 0;
+      crew.speed = 0;
+      crew.targetTank = vehicle;
+      crew.inTank = null;
+      crew.state = "mounting";
+      crew.mountTimer = 0;
+      IronLine.factionVisuals?.syncEntity?.(this, crew);
+    }
+
+    respawnPlayerForConquest(immediate = false) {
+      if (!this.isConquestMode()) return false;
+      const spawn = this.world.spawns.player || this.respawnPointForTeam(TEAM.BLUE);
+      const point = this.findOpenSpawnNear(spawn, 0, 0, this.player.radius || 10);
+      if (this.player.inTank) {
+        this.player.inTank.playerControlled = false;
+        this.player.inTank = null;
+      }
+      this.exitPlayerDroneControl();
+      this.player.x = point.x;
+      this.player.y = point.y;
+      this.player.angle = spawn.angle || this.player.angle || 0;
+      this.player.hp = this.player.maxHp;
+      this.player.alive = true;
+      this.player.deathTime = 0;
+      this.player.deathPoseAngle = 0;
+      this.player.speed = 0;
+      this.playerRespawnTimer = 0;
+      this.playerDeathActive = false;
+      this.playerDeathReason = "";
+      this.resetPlayerFeedbackState();
+      this.player.setClass?.(this.player.classId || "infantry");
+      IronLine.factionVisuals?.syncEntity?.(this, this.player);
+      this.applyPlayerLoadoutOverrides();
+      if (immediate) this.input.clear();
+      return true;
+    }
+
+    respawnPointForTeam(team) {
+      const exits = this.world.baseExitPoints || {};
+      if (team === TEAM.RED) return exits.red || this.world.spawns.red?.[0] || { x: this.world.width - 420, y: 420, angle: Math.PI };
+      return exits.blue || this.world.spawns.player || { x: 420, y: this.world.height - 420, angle: 0 };
     }
 
     updateStartCountdown(dt) {
-      if (this.matchStarted || this.deploymentOpen || !this.countdownStarted) return;
+      if (this.matchStarted || this.deploymentOpen || this.lobbyOpen || !this.countdownStarted) return;
+      if (this.matchPhase === "loading") {
+        const loading = this.startLoading || this.defaultStartLoadingState();
+        loading.active = true;
+        loading.remaining = Math.max(0, (loading.remaining || loading.duration || 0) - dt);
+        const progress = 1 - loading.remaining / Math.max(0.1, loading.duration || 1);
+        loading.stepIndex = Math.min(
+          (loading.steps || []).length - 1,
+          Math.max(0, Math.floor(progress * Math.max(1, (loading.steps || []).length)))
+        );
+        this.startLoading = loading;
+        if (loading.remaining > 0) return;
+        loading.active = false;
+        this.matchPhase = "countdown";
+      }
       this.startCountdown = Math.max(0, this.startCountdown - dt);
-      if (this.startCountdown <= 0) this.matchStarted = true;
-    }
-
-    updateAdminMessage(dt) {
-      if (this.adminMessageTimer <= 0) return;
-      this.adminMessageTimer = Math.max(0, this.adminMessageTimer - dt);
-      if (this.adminMessageTimer <= 0) this.adminMessage = "";
-    }
-
-    adminNotify(message, ttl = 2.6) {
-      this.adminMessage = message || "";
-      this.adminMessageTimer = this.adminMessage ? ttl : 0;
-      return Boolean(this.adminMessage);
-    }
-
-    adminTeam(teamId = "red") {
-      return teamId === "blue" ? TEAM.BLUE : TEAM.RED;
-    }
-
-    adminTeamLabel(team) {
-      return team === TEAM.BLUE || team === "blue" ? "아군" : "적군";
-    }
-
-    adminClassLabel(classId) {
-      if (classId === "engineer") return "공병";
-      if (classId === "scout") return "정찰병";
-      return "보병";
-    }
-
-    adminWeaponLabel(weaponId) {
-      const labels = {
-        rifle: "소총",
-        smg: "기관단총",
-        lmg: "분대지원화기",
-        machinegun: "기관총",
-        pistol: "권총",
-        sniper: "저격총",
-        grenade: "수류탄",
-        rpg: "RPG",
-        repairKit: "수리킷",
-        reconDrone: "정찰드론",
-        kamikazeDrone: "자폭드론"
-      };
-      return labels[weaponId] || weaponId || "병기";
-    }
-
-    adminCompatibleClassForWeapon(weaponId) {
-      if (weaponId === "sniper" || weaponId === "reconDrone") return "scout";
-      if (weaponId === "rpg" || weaponId === "repairKit" || weaponId === "kamikazeDrone") return "engineer";
-      return null;
-    }
-
-    adminSetPlayerClass(classId) {
-      if (!INFANTRY_CLASSES[classId] || !this.player) return false;
-      const changed = this.player.setClass(classId);
-      this.applyPlayerLoadoutOverrides();
-      this.adminEnsurePlayerAmmo();
-      this.player.rifleCooldown = 0;
-      this.adminNotify(`${this.adminClassLabel(classId)}으로 변경`);
-      return changed;
-    }
-
-    adminSetPlayerWeapon(weaponId) {
-      const weapon = INFANTRY_WEAPONS[weaponId];
-      if (!weapon || !this.player) return false;
-
-      const compatibleClass = this.adminCompatibleClassForWeapon(weaponId);
-      if (compatibleClass && this.player.classId !== compatibleClass) {
-        this.player.setClass(compatibleClass);
-        this.applyPlayerLoadoutOverrides();
+      if (this.startCountdown <= 0) {
+        this.matchStarted = true;
+        this.matchPhase = "live";
+        if (this.startLoading) this.startLoading.active = false;
       }
-
-      const inventory = this.player.weaponInventory || (this.player.weaponInventory = []);
-      let slotIndex = inventory.indexOf(weaponId);
-      if (slotIndex < 0) {
-        slotIndex = clamp(this.player.activeSlot || 0, 0, 2);
-        inventory[slotIndex] = weaponId;
-      }
-
-      this.player.activeSlot = slotIndex;
-      this.player.setWeapon(weaponId);
-      this.adminEnsurePlayerAmmo(weapon);
-      this.player.rifleCooldown = 0;
-      this.adminNotify(`병기 변경: ${this.adminWeaponLabel(weaponId)}`);
-      return true;
-    }
-
-    adminEnsurePlayerAmmo(weapon = null) {
-      if (!this.player) return false;
-      const ammo = this.player.equipmentAmmo || (this.player.equipmentAmmo = {});
-      for (const item of Object.values(INFANTRY_WEAPONS || {})) {
-        if (!item?.ammoKey) continue;
-        if (item.type === "gun") ammo[item.ammoKey] = Math.max(ammo[item.ammoKey] || 0, item.defaultAmmo ?? 90);
-      }
-      ammo.grenade = Math.max(ammo.grenade || 0, 6);
-      ammo.rpg = Math.max(ammo.rpg || 0, 6);
-      ammo.repairKit = Math.max(ammo.repairKit || 0, 4);
-      ammo.reconDrone = Math.max(ammo.reconDrone || 0, 2);
-      ammo.kamikazeDrone = Math.max(ammo.kamikazeDrone || 0, 3);
-      if (weapon?.ammoKey) ammo[weapon.ammoKey] = Math.max(ammo[weapon.ammoKey] || 0, weapon.defaultAmmo ?? 1);
-      return true;
-    }
-
-    handleAdminAction(action) {
-      if (action === "refill-player") {
-        this.refillTestLabPlayer();
-        this.adminEnsurePlayerAmmo();
-        this.adminNotify("플레이어 보급 완료");
-        return true;
-      }
-      if (action === "reset-player") return this.adminResetPlayerPosition();
-      if (action === "enter-test-lab") {
-        this.activateTestLab(this.testLab || "drone");
-        this.adminNotify("테스트랩 시작");
-        return true;
-      }
-      if (action === "reset-test-lab") {
-        this.activateTestLab(this.testLab || "drone");
-        this.adminNotify("테스트랩 리셋");
-        return true;
-      }
-      if (action === "toggle-ai") {
-        this.testLabAiPaused = !this.testLabAiPaused;
-        this.adminNotify(this.testLabAiPaused ? "AI 정지" : "AI 재개");
-        return true;
-      }
-      if (action === "clear-effects") {
-        this.adminClearEffects();
-        this.adminNotify("이펙트 삭제");
-        return true;
-      }
-      if (action === "debug-ai") {
-        this.debug.ai = !this.debug.ai;
-        this.adminNotify(this.debug.ai ? "AI 생각 표시 켬" : "AI 생각 표시 끔");
-        return true;
-      }
-      if (action === "debug-nav") {
-        this.debug.navGraph = !this.debug.navGraph;
-        this.adminNotify(this.debug.navGraph ? "경로 그래프 켬" : "경로 그래프 끔");
-        return true;
-      }
-      return false;
-    }
-
-    adminResetPlayerPosition() {
-      if (!this.player) return false;
-      const spawn = this.testLab ? { x: 2320, y: 3000 } : this.world.spawns.player;
-      if (this.player.inTank) this.dismountTank(this.player.inTank);
-      this.exitPlayerDroneControl();
-      this.player.x = spawn.x;
-      this.player.y = spawn.y;
-      this.player.hp = this.player.maxHp || 100;
-      this.player.alive = true;
-      this.player.rifleCooldown = 0;
-      this.adminNotify("플레이어 위치 초기화");
-      return true;
-    }
-
-    adminClearEffects() {
-      for (const key of Object.keys(this.effects || {})) {
-        if (Array.isArray(this.effects[key])) this.effects[key] = [];
-      }
-      this.projectiles = [];
-      return true;
-    }
-
-    adminRemovePlayerDrones() {
-      const player = this.player;
-      const before = this.drones.length;
-      this.exitPlayerDroneControl();
-      this.drones = (this.drones || []).filter((drone) => {
-        const owned = drone.owner === player || drone === player?.activeDrone;
-        if (owned) drone.alive = false;
-        return !owned;
-      });
-      if (player) {
-        player.activeDrone = null;
-        player.controlledDrone = null;
-      }
-      this.adminNotify(`플레이어 드론 ${Math.max(0, before - this.drones.length)}기 제거`);
-      return true;
-    }
-
-    adminSpawnPoint(location = "mouse", index = 0, total = 1) {
-      let base = null;
-      if (location === "player") base = { x: this.player.x + 92, y: this.player.y };
-      else if (location === "roof") base = this.testLabRoofPoint || { x: 2680, y: 2680 };
-      else if (location.startsWith("objective-")) {
-        const objectiveIndex = { "objective-a": 0, "objective-b": 1, "objective-c": 2 }[location] ?? 0;
-        const point = this.capturePoints[objectiveIndex] || this.world.capturePoints?.[objectiveIndex];
-        base = point ? { x: point.x, y: point.y } : null;
-      } else {
-        base = { x: this.input.mouse.worldX, y: this.input.mouse.worldY };
-      }
-
-      if (!base) base = { x: this.player.x + 92, y: this.player.y };
-      const ring = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, total))));
-      const angle = index / Math.max(1, total) * Math.PI * 2;
-      const spread = total <= 1 ? 0 : 34 + Math.floor(index / ring) * 18;
-      return {
-        x: clamp(base.x + Math.cos(angle) * spread, 42, this.world.width - 42),
-        y: clamp(base.y + Math.sin(angle) * spread, 42, this.world.height - 42)
-      };
-    }
-
-    adminSpawnTestUnit(options = {}) {
-      const team = this.adminTeam(options.team);
-      const unitType = options.unitType || "infantry";
-      const count = clamp(Math.round(Number(options.count) || 1), 1, 12);
-      const location = options.location || "mouse";
-      const createdInfantry = [];
-      let created = 0;
-
-      for (let i = 0; i < count; i += 1) {
-        const airborne = unitType === "reconDrone" || unitType === "kamikazeDrone";
-        const point = this.adminSpawnPoint(location === "roof" && !airborne ? "player" : location, i, count);
-        if (unitType === "tank") this.adminSpawnTank(team, point);
-        else if (unitType === "humvee") this.adminSpawnHumvee(team, point);
-        else if (airborne) this.adminSpawnDrone(team, unitType, point, location);
-        else {
-          const unit = this.adminSpawnInfantry(team, unitType, point);
-          if (unit) createdInfantry.push(unit);
-        }
-        created += 1;
-      }
-
-      if (createdInfantry.length > 0) {
-        const prefix = `${team === TEAM.BLUE ? "B" : "R"}-ADM-${++this.adminSpawnSerial}`;
-        this.createSquads(team, createdInfantry, prefix);
-      }
-
-      this.adminNotify(`${this.adminTeamLabel(team)} ${this.adminUnitLabel(unitType)} ${created}개 생성`);
-      return true;
-    }
-
-    adminUnitLabel(unitType) {
-      const labels = {
-        infantry: "보병",
-        engineer: "공병",
-        scout: "정찰병",
-        tank: "전차",
-        humvee: "험비",
-        reconDrone: "정찰드론",
-        kamikazeDrone: "자폭드론"
-      };
-      return labels[unitType] || unitType || "유닛";
-    }
-
-    adminSpawnInfantry(team, unitType, point) {
-      const classId = unitType === "engineer" ? "engineer" : unitType === "scout" ? "scout" : "infantry";
-      const weaponId = classId === "scout" ? "sniper" : classId === "engineer" ? "rifle" : "machinegun";
-      const unit = new IronLine.InfantryUnit({
-        x: point.x,
-        y: point.y,
-        team,
-        callSign: `${team === TEAM.BLUE ? "B" : "R"}-ADM-INF-${this.infantry.length + 1}`,
-        angle: angleTo(point.x, point.y, this.player.x, this.player.y),
-        classId,
-        weaponId,
-        equipmentAmmo: {
-          grenade: classId === "infantry" ? 2 : 1,
-          rpg: classId === "engineer" ? 3 : 0,
-          repairKit: classId === "engineer" ? 3 : 0,
-          reconDrone: classId === "scout" ? 1 : 0
-        },
-        grenadeAmmo: classId === "infantry" ? 2 : 1,
-        rpgAmmo: classId === "engineer" ? 3 : 0,
-        repairKitAmmo: classId === "engineer" ? 3 : 0
-      });
-      unit.ai = new IronLine.InfantryAI(unit, this);
-      this.infantry.push(unit);
-      return unit;
-    }
-
-    adminSpawnTank(team, point) {
-      const tank = new IronLine.Tank({
-        x: point.x,
-        y: point.y,
-        team,
-        callSign: `${team === TEAM.BLUE ? "B" : "R"}-ADM-TNK-${this.tanks.length + 1}`,
-        angle: team === TEAM.BLUE ? 0 : Math.PI
-      });
-      tank.ai = new IronLine.TankAI(tank, this);
-      this.tanks.push(tank);
-      this.spawnCrewForTank(tank, {
-        callSign: `${tank.callSign}-DRV`,
-        boardImmediately: true
-      });
-      return tank;
-    }
-
-    adminSpawnHumvee(team, point) {
-      const humvee = new IronLine.Humvee({
-        x: point.x,
-        y: point.y,
-        team,
-        callSign: `${team === TEAM.BLUE ? "B" : "R"}-ADM-HMV-${(this.humvees || []).length + 1}`,
-        angle: team === TEAM.BLUE ? 0 : Math.PI
-      });
-      humvee.ai = new IronLine.HumveeAI(humvee, this);
-      this.humvees.push(humvee);
-      this.spawnCrewForTank(humvee, {
-        callSign: `${humvee.callSign}-DRV`,
-        role: "driver",
-        boardImmediately: true
-      });
-      return humvee;
-    }
-
-    adminSpawnDrone(team, unitType, point, location = "mouse") {
-      const attack = unitType === "kamikazeDrone";
-      const weapon = {
-        ...(attack ? INFANTRY_WEAPONS.kamikazeDrone : INFANTRY_WEAPONS.reconDrone),
-        batteryLimit: false,
-        maxControlRange: 2600
-      };
-      const owner = team === TEAM.BLUE ? this.player : null;
-      const drone = attack
-        ? new IronLine.SuicideDrone({
-          x: point.x,
-          y: point.y,
-          angle: team === TEAM.BLUE ? 0 : Math.PI,
-          team,
-          owner,
-          weapon,
-          targetX: point.x,
-          targetY: point.y,
-          callSign: `${team === TEAM.BLUE ? "B" : "R"}-ADM-FPV-${this.drones.length + 1}`
-        })
-        : new IronLine.ReconDrone({
-          x: point.x,
-          y: point.y,
-          angle: 0,
-          team,
-          owner,
-          weapon,
-          targetX: point.x,
-          targetY: point.y,
-          callSign: `${team === TEAM.BLUE ? "B" : "R"}-ADM-UAV-${this.drones.length + 1}`
-        });
-
-      drone.recallable = team === TEAM.BLUE;
-      if (!attack && location === "roof") this.setReconDroneWaypoint(drone, point.x, point.y);
-      else drone.setWaypoint?.(point.x, point.y);
-      this.drones.push(drone);
-      if (owner) owner.activeDrone = drone;
-      return drone;
     }
 
     selectDeploymentClass(classId) {
@@ -1074,9 +1025,11 @@
     }
 
     setMatchMode(mode) {
-      if (!this.deploymentOpen || this.countdownStarted || this.matchStarted) return false;
-      if (mode !== "annihilation") return false;
+      if ((!this.deploymentOpen && !this.lobbyOpen) || this.countdownStarted || this.matchStarted) return false;
+      if (!["annihilation", "conquest"].includes(mode)) return false;
       this.matchConfig.mode = mode;
+      this.conquest = this.defaultConquestState();
+      this.hud?.invalidateDeploymentMap?.();
       return true;
     }
 
@@ -1107,14 +1060,89 @@
       };
     }
 
+    enterLobby() {
+      if (this.matchStarted || this.countdownStarted) return false;
+      this.resetScenarioForMatch();
+      this.deploymentOpen = false;
+      this.lobbyOpen = true;
+      this.matchPhase = "lobby";
+      this.onlineSession.localReady = false;
+      for (const player of this.onlineSession.players || []) player.ready = false;
+      this.result = "";
+      this.resultReason = "";
+      this.hud?.toggleSettingsPanel?.(false);
+      this.hud?.invalidateDeploymentMap?.();
+      this.hud?.update?.(this);
+      this.canvas.focus();
+      return true;
+    }
+
+    returnToDeployment() {
+      if (this.matchStarted || this.countdownStarted) return false;
+      this.lobbyOpen = false;
+      this.deploymentOpen = !this.entryOpen;
+      this.matchPhase = "deployment";
+      this.result = "";
+      this.resultReason = "";
+      this.startLoading = this.defaultStartLoadingState();
+      this.hud?.invalidateDeploymentMap?.();
+      this.hud?.update?.(this);
+      this.canvas.focus();
+      return true;
+    }
+
+    toggleLocalReady() {
+      if (!this.lobbyOpen || this.matchStarted || this.countdownStarted) return false;
+      this.onlineSession.localReady = !this.onlineSession.localReady;
+      const player = this.localSessionPlayer();
+      if (player) player.ready = this.onlineSession.localReady;
+      this.hud?.update?.(this);
+      return true;
+    }
+
+    toggleLocalTeam() {
+      if (!this.lobbyOpen || this.matchStarted || this.countdownStarted) return false;
+      const player = this.localSessionPlayer();
+      if (!player) return false;
+      const currentSlot = this.sessionSlotById(player.slotId);
+      const nextSide = player.team === TEAM.BLUE ? "red" : "blue";
+      const roleId = currentSlot?.roleId || player.roleId || "infantry";
+      return this.assignPlayerToSlot(player.id, `${nextSide}-${roleId}`);
+    }
+
+    submitLocalCommand(type, options = {}) {
+      const player = this.localSessionPlayer();
+      if (!player) return { accepted: false, reason: "missing-player" };
+      const slot = this.sessionSlotById(player.slotId);
+      if (!slot) return { accepted: false, reason: "missing-slot" };
+      return this.commandBus.submit({
+        ...options,
+        type,
+        issuerPlayerId: player.id,
+        team: player.team,
+        slotId: slot.id,
+        slotRole: slot.role,
+        authority: "owned_squad"
+      });
+    }
+
     beginDeploymentCountdown() {
-      if (this.matchStarted) return;
+      if (this.matchStarted) return false;
+      if (this.deploymentOpen) return this.enterLobby();
+      if (!this.lobbyOpen) return false;
       this.requestMobileFullscreen();
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
+      this.lobbyOpen = false;
+      this.matchPhase = "loading";
       this.countdownStarted = true;
-      this.startCountdown = 5;
+      this.startCountdown = 4;
+      this.startLoading = this.defaultStartLoadingState();
+      this.startLoading.active = true;
+      this.startLoading.remaining = this.startLoading.duration;
+      this.startLoading.stepIndex = 0;
       this.canvas.focus();
+      return true;
     }
 
     resetPlayerFeedbackState() {
@@ -1283,6 +1311,7 @@
       this.infantry = [];
       this.drones = [];
       this.squads = [];
+      this.commandPings = [];
       this.coverSlots = new IronLine.CoverSlotManager();
       this.teamReports = {
         [TEAM.BLUE]: new Map(),
@@ -1290,6 +1319,7 @@
       };
       this.capturePoints = [];
       this.player = IronLine.createPlayer(this.world.spawns.player);
+      this.applyLocalProfile();
       this.player.setClass(selectedClass);
       this.applyPlayerLoadoutOverrides();
       this.playerTank = null;
@@ -1299,13 +1329,21 @@
       this.playerDeathReason = "";
       this.resetPlayerFeedbackState();
       this.matchTime = 0;
+      this.startLoading = this.defaultStartLoadingState();
+      this.conquest = this.defaultConquestState();
+      this.respawnTimers = new WeakMap();
+      this.playerRespawnTimer = 0;
       this.droneDesignation = null;
       this.objectiveHold = {
         [TEAM.BLUE]: 0,
         [TEAM.RED]: 0
       };
       this.createCommanders();
+      this.resetWorldSceneryState();
       this.setupScenario();
+      this.syncOnlineSlotAssets();
+      this.commandBus?.resetMatch();
+      this.aiObservatory?.reset?.();
       if (this.testLab) this.activateTestLab(this.testLab);
       this.scenarioDirty = false;
       this.hud?.invalidateDeploymentMap?.();
@@ -1328,6 +1366,10 @@
       this.resetDroneInteractHold();
       const interactPressed = this.input.consumePress("KeyE");
       if (interactPressed) {
+        if (this.roleChange?.handleInteractPressed?.()) {
+          this.updatePlayerSafeZone();
+          return;
+        }
         if (this.pickupPlayerDrone()) {
           this.updatePlayerSafeZone();
           return;
@@ -1398,6 +1440,9 @@
       this.playerDowned = false;
       this.playerDeathActive = true;
       this.playerDeathReason = reason;
+      if (this.isConquestMode() && this.matchStarted) {
+        this.playerRespawnTimer = this.conquest.respawnDelay.player;
+      }
       this.input.clear();
       this.hud?.toggleSettingsPanel?.(false);
     }
@@ -1410,6 +1455,9 @@
 
     restartMatchAfterDeath() {
       if (!this.playerDeathActive) return false;
+      if (this.isConquestMode() && this.matchStarted) {
+        return this.respawnPlayerForConquest(true);
+      }
       this.input.clear();
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
@@ -1420,9 +1468,36 @@
       return true;
     }
 
+    returnToMainMenu() {
+      this.input.clear();
+      this.testLab = "";
+      this.resetScenarioForMatch();
+      this.deploymentOpen = false;
+      this.lobbyOpen = true;
+      this.matchPhase = "ended";
+      this.countdownStarted = false;
+      this.matchStarted = false;
+      this.startCountdown = 5;
+      this.startLoading = this.defaultStartLoadingState();
+      this.result = "";
+      this.resultReason = "";
+      this.playerDeathActive = false;
+      this.playerDeathReason = "";
+      this.onlineSession.localReady = false;
+      for (const player of this.onlineSession.players || []) player.ready = false;
+      this.resetPlayerFeedbackState();
+      this.hud?.toggleSettingsPanel?.(false);
+      this.hud?.invalidateDeploymentMap?.();
+      this.hud?.update?.(this);
+      this.canvas.focus();
+      return true;
+    }
+
     activateTestLab(id = "drone") {
       this.testLab = id || "drone";
       this.deploymentOpen = false;
+      this.lobbyOpen = false;
+      this.matchPhase = "live";
       this.countdownStarted = true;
       this.matchStarted = true;
       this.startCountdown = 0;
@@ -1583,9 +1658,10 @@
         y,
         team: TEAM.RED,
         callSign: spawn.callSign || `LAB-INF-${index + 1}`,
+        factionId: spawn.factionId || IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: angleTo(x, y, this.player.x, this.player.y),
         equipmentAmmo: {
-          grenade: spawn.grenadeAmmo ?? 2,
+          grenade: spawn.grenadeAmmo ?? 3,
           rpg: spawn.rpgAmmo ?? (spawn.classId === "engineer" ? 2 : 0)
         }
       });
@@ -1601,6 +1677,7 @@
         y: 2720,
         team: TEAM.RED,
         callSign: `LAB-TNK-${this.tanks.length + 1}`,
+        factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: Math.PI,
         maxHp: 110
       });
@@ -1620,6 +1697,7 @@
         y: 2920,
         team: TEAM.RED,
         callSign: `LAB-HMV-${(this.humvees || []).length + 1}`,
+        factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: Math.PI,
         maxHp: 68
       });
@@ -1647,6 +1725,19 @@
       if (this.input.consumePress("F7")) this.debug.ai = !this.debug.ai;
     }
 
+    updateCommandRadioHotkey() {
+      if (!this.input.consumePress("Digit4")) return;
+      const canUseRadio = this.matchStarted &&
+        !this.deploymentOpen &&
+        !this.lobbyOpen &&
+        !this.entryOpen &&
+        !this.result &&
+        !this.playerDeathActive &&
+        !this.adminObserverMode;
+      if (!canUseRadio) return;
+      this.hud?.toggleCommandRadio?.();
+    }
+
     updatePlayerSafeZone() {
       this.player.inSafeZone = this.isPlayerInSafeZone();
     }
@@ -1660,6 +1751,53 @@
         (!team || !zone.team || zone.team === team) &&
         distXY(x, y, zone.x, zone.y) <= zone.radius
       ));
+    }
+
+    playerRoleChangeZone() {
+      if (!this.isConquestMode() || !this.matchStarted || !this.player || this.player.inTank) return null;
+      const player = this.player;
+      if (this.isPointInSafeZone(player.x, player.y, TEAM.BLUE)) {
+        return { reason: "base", label: "아군 본진" };
+      }
+
+      const spawnPoints = [
+        this.world.spawns?.player,
+        this.world.baseExitPoints?.blue,
+        ...(this.world.spawns?.blue || [])
+      ].filter(Boolean);
+      for (const point of spawnPoints) {
+        if (distXY(player.x, player.y, point.x, point.y) <= 220) {
+          return { reason: "spawn", label: "아군 스폰 지점" };
+        }
+      }
+
+      for (const point of this.capturePoints || []) {
+        const commandPost = point.commandPost || point.roleChangeZone || point.isCommandPost;
+        if (commandPost && point.owner === TEAM.BLUE && distXY(player.x, player.y, point.x, point.y) <= 260) {
+          return { reason: "command", label: "아군 사령부 거점" };
+        }
+      }
+      return null;
+    }
+
+    applyConquestRoleChange(classId, reason = "") {
+      if (!this.isConquestMode() || !this.matchStarted || !INFANTRY_CLASSES[classId]) return false;
+      const deathReady = this.playerDeathActive || this.playerDowned;
+      if (!deathReady && !this.playerRoleChangeZone()) return false;
+      const changed = this.player.setClass(classId);
+      IronLine.factionVisuals?.syncEntity?.(this, this.player);
+      this.applyPlayerLoadoutOverrides();
+      this.player.rifleCooldown = 0;
+      this.droneDesignation = null;
+      this.chat?.addSystemMessage?.(`${this.roleChangeLabel(classId)} 역할로 변경했습니다.`);
+      this.hud?.update?.(this);
+      return changed;
+    }
+
+    roleChangeLabel(classId) {
+      if (classId === "engineer") return "공병";
+      if (classId === "scout") return "정찰";
+      return "보병";
     }
 
     boostKeyDown() {
@@ -1690,1496 +1828,6 @@
       }
 
       return entity.boosting;
-    }
-
-    findDroneRoofLockPoint(x, y, margin = 18) {
-      const obstacle = (this.world.obstacles || []).find((item) => (
-        item.kind === "building" &&
-        pointInRect(x, y, item)
-      ));
-      if (!obstacle) return null;
-
-      const pad = Math.max(8, margin || 0);
-      const minX = obstacle.x + pad;
-      const maxX = obstacle.x + obstacle.w - pad;
-      const minY = obstacle.y + pad;
-      const maxY = obstacle.y + obstacle.h - pad;
-      return {
-        x: minX <= maxX ? clamp(x, minX, maxX) : obstacle.x + obstacle.w / 2,
-        y: minY <= maxY ? clamp(y, minY, maxY) : obstacle.y + obstacle.h / 2,
-        obstacle
-      };
-    }
-
-    setReconDroneWaypoint(drone, x, y) {
-      if (!drone?.alive) return false;
-      if (drone.droneRole !== "attack") {
-        const roof = this.findDroneRoofLockPoint(x, y, (drone.radius || 10) + 8);
-        if (roof) {
-          drone.setRoofLock?.(roof.x, roof.y, roof.obstacle);
-          drone.recallable = true;
-          return true;
-        }
-      }
-
-      drone.clearRoofLock?.();
-      drone.setWaypoint?.(x, y);
-      return false;
-    }
-
-    droneHasRoofCover(drone) {
-      if (!drone?.isDrone || !drone.alive) return false;
-      let x = drone.x;
-      let y = drone.y;
-      if (drone.roofLocked && drone.roofLockPoint) {
-        const lockDistance = distXY(drone.x, drone.y, drone.roofLockPoint.x, drone.roofLockPoint.y);
-        if (lockDistance <= (drone.radius || 0) + 14) {
-          x = drone.roofLockPoint.x;
-          y = drone.roofLockPoint.y;
-        }
-      }
-
-      return (this.world.obstacles || []).some((obstacle) => (
-        obstacle.kind === "building" &&
-        pointInRect(x, y, obstacle)
-      ));
-    }
-
-    droneSightOptions(drone, options = {}) {
-      return this.droneHasRoofCover(drone)
-        ? { ...options, ignoreObstacleContainingA: true }
-        : options;
-    }
-
-    canEnemyDetectDrone(observer, drone, options = {}) {
-      if (!observer || !drone?.isDrone || !drone.alive) return false;
-      if (observer.team === drone.team) return true;
-      if (this.droneHasRoofCover(drone)) return false;
-      let detected = false;
-      if (typeof drone.canBeDetectedBy === "function") {
-        detected = drone.canBeDetectedBy(observer, this, options);
-      } else {
-        const range = options.range ?? Infinity;
-        detected = distXY(observer.x, observer.y, drone.x, drone.y) <=
-          range + (observer.radius || 0) + (drone.radius || 0);
-      }
-
-      if (detected) this.markPlayerDroneDetected(drone, observer);
-      return detected;
-    }
-
-    markPlayerDroneDetected(drone, observer) {
-      if (!drone?.alive || drone.team !== this.player?.team || observer?.team === drone.team) return;
-      if (drone.droneRole !== "attack") return;
-      drone.detectedTimer = Math.max(drone.detectedTimer || 0, drone.diveActive ? 1.25 : 0.95);
-      drone.detectedBy = observer || null;
-      if ((drone.detectedWarningCooldown || 0) > 0) return;
-      drone.detectedWarningCooldown = 0.7;
-      this.playerDangerWarnings.push({
-        key: `drone-detected-${drone.callSign || "fpv"}`,
-        source: observer,
-        x: observer?.x ?? drone.x,
-        y: observer?.y ?? drone.y,
-        angle: angleTo(this.player.x, this.player.y, observer?.x ?? drone.x, observer?.y ?? drone.y),
-        kind: "droneDetected",
-        label: "\uC790\uD3ED\uB4DC\uB860 \uBC1C\uAC01",
-        ttl: 1.15,
-        maxTtl: 1.15
-      });
-      if (this.playerDangerWarnings.length > 5) this.playerDangerWarnings.shift();
-    }
-
-    updateDebugToggles() {
-      if (this.input.consumePress("KeyG")) {
-        this.debug.ai = !this.debug.ai;
-      }
-
-      if (this.input.consumePress("KeyN")) {
-        this.debug.navGraph = !this.debug.navGraph;
-      }
-    }
-
-    updateMountedPlayer(dt) {
-      const vehicle = this.player.inTank;
-      if (vehicle?.vehicleType === "humvee") {
-        this.updateMountedHumvee(vehicle, dt);
-        return;
-      }
-
-      const tank = vehicle;
-      this.player.x = tank.x;
-      this.player.y = tank.y;
-      this.applyVirtualAim(tank, this.input.mouse.rightDown ? 1250 : 860);
-
-      if (!tank.alive) {
-        this.player.inTank = null;
-        tank.playerControlled = false;
-        this.applyPlayerDamage(44, tank, "vehicle", {
-          deathReason: "\uD0D1\uC2B9 \uC804\uCC28 \uD30C\uAD34\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-        });
-        return;
-      }
-
-      if (!this.matchStarted) {
-        tank.drive(this, dt, 0, 0, { dust: false, coastScale: 0.76, coastDrag: 1.05 });
-        const mouse = this.input.mouse;
-        const targetTurret = angleTo(tank.x, tank.y, mouse.worldX, mouse.worldY);
-        tank.turretAngle = rotateTowards(tank.turretAngle, targetTurret, tank.turretTurnRate * dt);
-        tank.aimTargetAngle = targetTurret;
-        tank.aimError = Math.abs(normalizeAngle(tank.turretAngle - targetTurret));
-        return;
-      }
-
-      this.mobileAutoLoadTank(tank);
-
-      const turnInput = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
-      const throttle = this.input.axis("KeyS", "ArrowDown", "KeyW", "ArrowUp");
-      const mobileStickX = this.input.virtual.axisX || 0;
-      const mobileStickY = this.input.virtual.axisY || 0;
-      const mobileDriveAmount = Math.min(1, Math.hypot(mobileStickX, mobileStickY));
-      const useMobileDriveAssist = Boolean(this.settings?.mobileControls && this.input.virtual.enabled && mobileDriveAmount > 0.16);
-
-      let driveThrottle = throttle;
-      let driveTurn = turnInput;
-
-      if (useMobileDriveAssist) {
-        const desiredAngle = Math.atan2(mobileStickY, mobileStickX);
-        const forwardDiff = normalizeAngle(desiredAngle - tank.angle);
-        const reverseDiff = normalizeAngle(desiredAngle - normalizeAngle(tank.angle + Math.PI));
-        if (Math.abs(forwardDiff) > 2.2 && Math.abs(reverseDiff) < Math.abs(forwardDiff) - 0.28) {
-          driveThrottle = -mobileDriveAmount * 0.48;
-          driveTurn = clamp(reverseDiff * 1.15, -1, 1);
-        } else {
-          const alignment = clamp((Math.cos(forwardDiff) + 0.2) / 1.2, 0, 1);
-          driveThrottle = mobileDriveAmount * (0.34 + alignment * 0.66);
-          driveTurn = clamp(forwardDiff * 1.18, -1, 1);
-        }
-      }
-
-      const boosting = this.updateBoostState(tank, dt, driveThrottle > 0.08, {
-        drainTime: 1.05,
-        recoverTime: 2.8,
-        recoverDelay: 0.75
-      });
-
-      tank.drive(this, dt, driveThrottle, driveTurn, {
-        brake: this.input.keyDown("Space") && Math.abs(driveThrottle) < 0.01,
-        turnAccel: 3.9,
-        driveDrag: boosting ? 0.12 : 0.18,
-        speedScale: boosting ? 1.22 : 1,
-        accelScale: boosting ? 1.28 : 1
-      });
-
-      if (this.input.consumePress("Digit1") || this.input.consumePress("Numpad1")) {
-        this.clearTankFireOrder(tank);
-        tank.weaponMode = "cannon";
-        tank.beginLoad("ap");
-      }
-      if (this.input.consumePress("Digit2") || this.input.consumePress("Numpad2")) {
-        this.clearTankFireOrder(tank);
-        tank.weaponMode = "cannon";
-        tank.beginLoad("he");
-      }
-      if (this.input.consumePress("Digit3") || this.input.consumePress("Numpad3")) {
-        this.clearTankFireOrder(tank);
-        if (tank.hasMachineGunner() && (tank.ammo.mg || 0) > 0) tank.weaponMode = "mg";
-      }
-      if (this.input.consumePress("KeyQ")) {
-        this.clearTankFireOrder(tank);
-        tank.deploySmoke(this);
-      }
-
-      const mouse = this.input.mouse;
-      const heOrder = tank.fireOrder?.ammoId === "he" ? tank.fireOrder : null;
-      if (tank.weaponMode === "mg") {
-        const targetGun = angleTo(tank.x, tank.y, mouse.worldX, mouse.worldY);
-        tank.machineGunAngle = rotateTowards(tank.machineGunAngle, targetGun, tank.machineGunTurnRate * dt);
-        tank.aimTargetAngle = targetGun;
-        tank.aimError = Math.abs(normalizeAngle(tank.machineGunAngle - targetGun));
-      } else {
-        const aimX = heOrder ? heOrder.currentX || heOrder.x : mouse.worldX;
-        const aimY = heOrder ? heOrder.currentY || heOrder.y : mouse.worldY;
-        const targetTurret = angleTo(tank.x, tank.y, aimX, aimY);
-        tank.turretAngle = rotateTowards(tank.turretAngle, targetTurret, tank.turretTurnRate * dt);
-        tank.aimTargetAngle = targetTurret;
-        tank.aimError = Math.abs(normalizeAngle(tank.turretAngle - targetTurret));
-      }
-
-      if (tank.weaponMode === "mg") {
-        if (mouse.leftDown) this.fireTankMachineGun(tank, mouse.worldX, mouse.worldY);
-        this.input.consumeMousePress(0);
-      } else if (this.input.consumeMousePress(0)) {
-        if (tank.loadedAmmo === "he") this.queueHeFire(tank, mouse.worldX, mouse.worldY);
-        else {
-          this.clearTankFireOrder(tank);
-          tank.fire(this, { aimError: tank.aimError });
-        }
-      }
-
-      this.updatePlayerTankMachineGunner(tank, dt);
-      this.updateHeFireOrder(tank, dt);
-    }
-
-    updateMountedHumvee(humvee, dt) {
-      this.player.x = humvee.x;
-      this.player.y = humvee.y;
-      this.applyVirtualAim(humvee, this.input.mouse.rightDown ? 1050 : 760);
-
-      if (!humvee.alive) {
-        this.player.inTank = null;
-        humvee.playerControlled = false;
-        this.applyPlayerDamage(28, humvee, "vehicle", {
-          deathReason: "\uD0D1\uC2B9 \uCC28\uB7C9 \uD30C\uAD34\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-        });
-        return;
-      }
-
-      const mouse = this.input.mouse;
-      const targetGun = angleTo(humvee.x, humvee.y, mouse.worldX, mouse.worldY);
-      humvee.machineGunAngle = rotateTowards(humvee.machineGunAngle, targetGun, humvee.machineGunTurnRate * dt);
-
-      if (!this.matchStarted) {
-        humvee.drive(this, dt, 0, 0, { dust: false, collisionSpeedRetain: 0.34 });
-        return;
-      }
-
-      const turnInput = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
-      const throttle = this.input.axis("KeyS", "ArrowDown", "KeyW", "ArrowUp");
-      const mobileStickX = this.input.virtual.axisX || 0;
-      const mobileStickY = this.input.virtual.axisY || 0;
-      const mobileDriveAmount = Math.min(1, Math.hypot(mobileStickX, mobileStickY));
-      const useMobileDriveAssist = Boolean(this.settings?.mobileControls && this.input.virtual.enabled && mobileDriveAmount > 0.16);
-
-      let driveThrottle = throttle;
-      let driveTurn = turnInput;
-
-      if (useMobileDriveAssist) {
-        const desiredAngle = Math.atan2(mobileStickY, mobileStickX);
-        const forwardDiff = normalizeAngle(desiredAngle - humvee.angle);
-        const reverseDiff = normalizeAngle(desiredAngle - normalizeAngle(humvee.angle + Math.PI));
-        if (Math.abs(forwardDiff) > 2.18 && Math.abs(reverseDiff) < Math.abs(forwardDiff) - 0.28) {
-          driveThrottle = -mobileDriveAmount * 0.46;
-          driveTurn = clamp(reverseDiff * 1.16, -1, 1);
-        } else {
-          const alignment = clamp((Math.cos(forwardDiff) + 0.15) / 1.15, 0, 1);
-          driveThrottle = mobileDriveAmount * (0.3 + alignment * 0.7);
-          driveTurn = clamp(forwardDiff * 1.22, -1, 1);
-        }
-      }
-
-      const boosting = this.updateBoostState(humvee, dt, driveThrottle > 0.08, {
-        drainTime: 1.2,
-        recoverTime: 2.25,
-        recoverDelay: 0.55
-      });
-
-      humvee.drive(this, dt, driveThrottle, driveTurn, {
-        brake: this.input.keyDown("Space") && Math.abs(driveThrottle) < 0.01,
-        turnScale: boosting ? 0.98 : 1.03,
-        collisionSpeedRetain: 0.34,
-        speedScale: boosting ? 1.35 : 1,
-        accelScale: boosting ? 1.24 : 1
-      });
-
-      if (mouse.leftDown) this.fireTankMachineGun(humvee, mouse.worldX, mouse.worldY);
-      this.input.consumeMousePress(0);
-    }
-
-    mobileAutoLoadTank(tank) {
-      if (!this.settings?.mobileControls || !tank || tank.loadedAmmo || tank.reload.active) return false;
-      const ammoId = tank.ammo.ap > 0 ? "ap" : tank.ammo.he > 0 ? "he" : null;
-      return ammoId ? tank.beginLoad(ammoId) : false;
-    }
-
-    cycleMobileWeapon() {
-      if (this.result || this.deploymentOpen || !this.player?.alive) return false;
-      if (this.player.inTank) return this.cycleMobileTankAmmo(this.player.inTank);
-      return this.cyclePlayerEquipment();
-    }
-
-    cycleMobileTankAmmo(tank) {
-      if (!tank?.alive) return false;
-      if (tank.vehicleType === "humvee") return true;
-      this.clearTankFireOrder(tank);
-      const choices = ["ap", "he"].filter((ammoId) => (tank.ammo?.[ammoId] || 0) > 0);
-      if (tank.hasMachineGunner?.() && (tank.ammo?.mg || 0) > 0) choices.push("mg");
-      if (!choices.length) return false;
-
-      const current = tank.weaponMode === "mg" ? "mg" : tank.reload.active ? tank.reload.ammoId : tank.loadedAmmo;
-      const currentIndex = choices.indexOf(current);
-      const nextAmmo = choices[(currentIndex + 1 + choices.length) % choices.length];
-      if (nextAmmo === "mg") {
-        tank.weaponMode = "mg";
-        return true;
-      }
-      tank.weaponMode = "cannon";
-      return tank.beginLoad(nextAmmo);
-    }
-
-    cyclePlayerEquipment() {
-      const inventory = this.player?.weaponInventory || [];
-      if (!inventory.length) return false;
-
-      for (let step = 1; step <= inventory.length; step += 1) {
-        const nextSlot = (this.player.activeSlot + step) % inventory.length;
-        if (this.player.setEquipmentSlot(nextSlot)) {
-          this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
-          return true;
-        }
-      }
-      return false;
-    }
-
-    clearTankFireOrder(tank) {
-      if (tank) tank.fireOrder = null;
-    }
-
-    fireTankMachineGun(tank, targetX, targetY) {
-      if (!tank?.canFireMachineGun?.()) return false;
-      const target = this.findTankMachineGunTarget(tank, targetX, targetY);
-      return tank.fireMachineGun(this, targetX, targetY, { target });
-    }
-
-    updatePlayerTankMachineGunner(tank, dt) {
-      if (!tank?.hasMachineGunner?.() || (tank.ammo?.mg || 0) <= 0) return false;
-      if (tank.weaponMode === "mg") return false;
-
-      const target = this.findAutoTankMachineGunTarget(tank);
-      if (!target) {
-        tank.machineGunAngle = rotateTowards(
-          tank.machineGunAngle,
-          tank.turretAngle,
-          tank.machineGunTurnRate * 0.7 * dt
-        );
-        return false;
-      }
-
-      const targetAngle = angleTo(tank.x, tank.y, target.x, target.y);
-      tank.machineGunAngle = rotateTowards(tank.machineGunAngle, targetAngle, tank.machineGunTurnRate * dt);
-      const aimError = Math.abs(normalizeAngle(tank.machineGunAngle - targetAngle));
-      if (aimError > 0.16) return false;
-      return tank.fireMachineGun(this, target.x, target.y, { target });
-    }
-
-    findAutoTankMachineGunTarget(tank) {
-      const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
-      const muzzle = tank.machineGunMuzzlePoint?.() || { x: tank.x, y: tank.y };
-      const range = weapon.range || 740;
-      const candidates = [];
-
-      const addTarget = (target, priority = 1) => {
-        if (!target || !target.alive || target.team === tank.team) return;
-        const distance = distXY(muzzle.x, muzzle.y, target.x, target.y);
-        if (distance > range) return;
-        if (!hasLineOfSight(this, muzzle, target, { padding: 4 })) return;
-        const threatBonus =
-          target.classId === "engineer" ? 220 :
-          target.weaponId === "machinegun" || target.weaponId === "lmg" ? 120 :
-          target.weaponId === "rpg" ? 180 :
-          0;
-        candidates.push({
-          target,
-          score: distance - threatBonus - priority * 80
-        });
-      };
-
-      for (const unit of this.infantry || []) {
-        if (!unit.inVehicle) addTarget(unit, unit.classId === "engineer" ? 3 : 2);
-      }
-      for (const crew of this.crews || []) {
-        if (crew.inTank) continue;
-        addTarget(crew, 1);
-      }
-
-      if (tank.team === TEAM.RED && !this.player.inTank && this.player.hp > 0 && !this.isPlayerInSafeZone?.()) {
-        addTarget(this.player, 2);
-      }
-
-      return candidates.sort((a, b) => a.score - b.score)[0]?.target || null;
-    }
-
-    findTankMachineGunTarget(tank, targetX, targetY) {
-      const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
-      const muzzle = tank.machineGunMuzzlePoint?.() || { x: tank.x, y: tank.y };
-      const range = weapon.range || 740;
-      const enemies = [];
-
-      for (const unit of this.infantry || []) {
-        if (!unit.alive || unit.inVehicle || unit.team === tank.team) continue;
-        enemies.push(unit);
-      }
-
-      for (const crew of this.crews || []) {
-        if (!crew.alive || crew.inTank || crew.team === tank.team) continue;
-        enemies.push(crew);
-      }
-
-      if (!this.player.inTank && this.player.hp > 0 && tank.team === TEAM.RED && !this.isPlayerInSafeZone?.()) {
-        enemies.push(this.player);
-      }
-
-      return enemies
-        .map((target) => {
-          const rangeDistance = distXY(muzzle.x, muzzle.y, target.x, target.y);
-          if (rangeDistance > range) return null;
-          const laneDistance = segmentDistanceToPoint(muzzle.x, muzzle.y, targetX, targetY, target.x, target.y);
-          const cursorDistance = distXY(targetX, targetY, target.x, target.y);
-          if (laneDistance > 42 + target.radius || cursorDistance > 120) return null;
-          if (!hasLineOfSight(this, muzzle, target, { padding: 4 })) return null;
-          return {
-            target,
-            score: laneDistance * 1.25 + cursorDistance * 0.55 + rangeDistance * 0.02
-          };
-        })
-        .filter(Boolean)
-        .sort((a, b) => a.score - b.score)[0]?.target || null;
-    }
-
-    applyVirtualAim(focus, distance) {
-      const point = this.input.virtualAimPoint(focus, distance);
-      if (!point) return;
-      this.input.mouse.worldX = point.x;
-      this.input.mouse.worldY = point.y;
-    }
-
-    queueHeFire(tank, targetX, targetY) {
-      if (!tank || tank.loadedAmmo !== "he") return false;
-      const ammo = AMMO.he;
-      const solution = this.resolveTankGroundAim(tank, targetX, targetY, ammo);
-      tank.fireOrder = {
-        ammoId: "he",
-        x: solution.x,
-        y: solution.y,
-        currentX: solution.x,
-        currentY: solution.y,
-        requestedX: targetX,
-        requestedY: targetY,
-        blocked: solution.blocked,
-        rangeClamped: solution.rangeClamped,
-        ready: false,
-        timer: 4.2
-      };
-      return true;
-    }
-
-    updateHeFireOrder(tank, dt) {
-      const order = tank.fireOrder;
-      if (!order) return false;
-      order.timer -= dt;
-
-      if (!tank.alive || tank.loadedAmmo !== order.ammoId || order.timer <= 0) {
-        this.clearTankFireOrder(tank);
-        return false;
-      }
-
-      const ammo = AMMO[order.ammoId] || AMMO.he;
-      const solution = this.resolveTankGroundAim(tank, order.x, order.y, ammo);
-      order.currentX = solution.x;
-      order.currentY = solution.y;
-      order.blocked = solution.blocked;
-      order.rangeClamped = solution.rangeClamped;
-
-      const targetAngle = angleTo(tank.x, tank.y, solution.x, solution.y);
-      const aimError = Math.abs(normalizeAngle(tank.turretAngle - targetAngle));
-      order.ready = aimError <= 0.075;
-      tank.aimTargetAngle = targetAngle;
-      tank.aimError = aimError;
-
-      if (!order.ready || !tank.canFire()) return false;
-
-      const muzzle = this.tankMuzzlePoint(tank);
-      const fuseDistance = distXY(muzzle.x, muzzle.y, solution.x, solution.y);
-      const fired = tank.fire(this, { aimError, fuseDistance });
-      if (fired) this.clearTankFireOrder(tank);
-      return fired;
-    }
-
-    tankMuzzlePoint(tank) {
-      const muzzleDistance = tank.radius + 28;
-      return {
-        x: tank.x + Math.cos(tank.turretAngle) * muzzleDistance,
-        y: tank.y + Math.sin(tank.turretAngle) * muzzleDistance
-      };
-    }
-
-    resolveTankGroundAim(tank, targetX, targetY, ammo = AMMO.he) {
-      const muzzle = this.tankMuzzlePoint(tank);
-      const range = ammo.range || 1900;
-      const rawDistance = distXY(muzzle.x, muzzle.y, targetX, targetY);
-      const angle = rawDistance > 1
-        ? angleTo(muzzle.x, muzzle.y, targetX, targetY)
-        : tank.turretAngle;
-      const travelDistance = clamp(rawDistance, 90, range);
-      let lastX = muzzle.x;
-      let lastY = muzzle.y;
-
-      for (let distance = 16; distance <= travelDistance; distance += 16) {
-        const x = muzzle.x + Math.cos(angle) * distance;
-        const y = muzzle.y + Math.sin(angle) * distance;
-        if (x < 0 || y < 0 || x > this.world.width || y > this.world.height) {
-          return { x: lastX, y: lastY, blocked: true, rangeClamped: rawDistance > range };
-        }
-
-        const blocked = this.world.obstacles.some((obstacle) => lineIntersectsRect(lastX, lastY, x, y, obstacle));
-        if (blocked) return { x: lastX, y: lastY, blocked: true, rangeClamped: rawDistance > range };
-
-        lastX = x;
-        lastY = y;
-      }
-
-      return {
-        x: muzzle.x + Math.cos(angle) * travelDistance,
-        y: muzzle.y + Math.sin(angle) * travelDistance,
-        blocked: false,
-        rangeClamped: rawDistance > range
-      };
-    }
-
-    clearPlayerProneState() {
-      if (!this.player) return;
-      this.player.isProne = false;
-      this.player.proneTransitionTimer = 0;
-      this.player.proneTargetState = false;
-    }
-
-    updatePlayerProneTransition(dt) {
-      const player = this.player;
-      if (!player) return;
-      player.proneTransitionTimer = Math.max(0, (player.proneTransitionTimer || 0) - dt);
-      if (player.proneTransitionTimer <= 0) {
-        player.isProne = Boolean(player.proneTargetState);
-      }
-    }
-
-    requestPlayerProneToggle() {
-      const player = this.player;
-      if (!player || player.inTank || player.controlledDrone || player.hp <= 0) return false;
-      if ((player.proneTransitionTimer || 0) > 0) return false;
-
-      player.proneTargetState = !player.isProne;
-      player.proneTransitionTimer = player.proneTransitionDuration || 0.3;
-      player.boosting = false;
-      player.boostRecoverDelay = Math.max(player.boostRecoverDelay || 0, 0.36);
-      return true;
-    }
-
-    isPlayerProneTransitioning() {
-      return (this.player?.proneTransitionTimer || 0) > 0;
-    }
-
-    isPlayerProneLike() {
-      return Boolean(this.player?.isProne || this.isPlayerProneTransitioning());
-    }
-
-    updateInfantryPlayer(dt) {
-      this.player.rifleCooldown = Math.max(0, this.player.rifleCooldown - dt);
-      this.player.gunKick = Math.max(0, (this.player.gunKick || 0) - dt * 11);
-      this.updateInfantryWeaponInput();
-      this.updatePlayerProneTransition(dt);
-      if (this.input.consumePress("KeyC")) {
-        this.requestPlayerProneToggle();
-      }
-      const scoutAimMode = this.isPlayerScoutAimMode();
-      const rpgAimMode = this.isPlayerRpgAimMode();
-      const machineGunAimMode = this.isPlayerMachineGunAimMode();
-      this.player.scoutAim = scoutAimMode;
-      this.player.rpgAim = rpgAimMode;
-      this.player.machineGunAim = machineGunAimMode;
-      this.player.rpgAimTime = rpgAimMode ? Math.min((this.player.rpgAimTime || 0) + dt, 0.7) : 0;
-      const moveX = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
-      const moveY = this.input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
-      const length = Math.hypot(moveX, moveY);
-      const prone = this.isPlayerProneLike();
-      const baseInfantrySpeed = prone
-        ? scoutAimMode ? 0 : rpgAimMode ? 34 : machineGunAimMode ? 38 : 46
-        : scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 82 : 155;
-      const sprinting = this.updateBoostState(this.player, dt, length > 0.05, {
-        disabled: prone || scoutAimMode || rpgAimMode || machineGunAimMode,
-        drainTime: 1.18,
-        recoverTime: 2,
-        recoverDelay: 0.45
-      });
-      const infantrySpeed = baseInfantrySpeed * (sprinting ? 1.42 : 1);
-      const vx = length > 0 ? (moveX / length) * infantrySpeed : 0;
-      const vy = length > 0 ? (moveY / length) * infantrySpeed : 0;
-
-      tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, padding: 5 });
-      this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : 650);
-      if (scoutAimMode) this.applyDroneDesignationAimAssist(dt);
-
-      const mouse = this.input.mouse;
-      this.player.angle = angleTo(this.player.x, this.player.y, mouse.worldX, mouse.worldY);
-      this.player.interactPulse += dt;
-
-      const weapon = this.player.getWeapon();
-      const primaryPressed = this.input.consumeMousePress(0);
-      const markerDesignatePressed = this.input.consumePress("KeyQ") || this.input.consumeMousePress(1);
-      if (markerDesignatePressed && this.tryDesignateReconDroneFromMarker()) return;
-      const wantsUse = mouse.leftDown || primaryPressed || this.input.keyDown("Space");
-      if (wantsUse && this.player.rifleCooldown <= 0) {
-        this.player.lastShotCooldownScale = 1;
-        const fired = this.usePlayerEquipment(weapon, mouse.worldX, mouse.worldY);
-        if (fired) {
-          const cooldownScale = this.player.lastShotCooldownScale || 1;
-          this.player.rifleCooldown = (weapon?.cooldown || 0.35) * cooldownScale;
-          this.player.lastShotCooldownScale = 1;
-        }
-      }
-    }
-
-    isPlayerScoutAimMode() {
-      if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
-      const weapon = this.player.getWeapon?.();
-      return this.player.classId === "scout" && weapon?.id === "sniper";
-    }
-
-    isPlayerRpgAimMode() {
-      if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
-      const weapon = this.player.getWeapon?.();
-      return this.player.classId === "engineer" && weapon?.id === "rpg";
-    }
-
-    isPlayerMachineGunAimMode() {
-      if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
-      const weapon = this.player.getWeapon?.();
-      return weapon?.id === "machinegun" || weapon?.id === "lmg";
-    }
-
-    updateInfantryWeaponInput() {
-      const keys = [
-        ["Digit1", "Numpad1"],
-        ["Digit2", "Numpad2"],
-        ["Digit3", "Numpad3"]
-      ];
-
-      for (let i = 0; i < keys.length; i += 1) {
-        if (!keys[i].some((code) => this.input.consumePress(code))) continue;
-
-        if (!this.matchStarted && this.player.inSafeZone) {
-          const classId = PLAYER_CLASS_ORDER[i];
-          if (classId && this.player.setClass(classId)) {
-            this.applyPlayerLoadoutOverrides();
-            this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
-          }
-          continue;
-        }
-
-        if (this.player.setEquipmentSlot(i)) {
-          this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
-        }
-      }
-    }
-
-    activePlayerDrone() {
-      const drone = this.player?.activeDrone;
-      return drone?.alive ? drone : null;
-    }
-
-    activeReconDroneForSniper() {
-      const drone = this.activePlayerDrone();
-      if (!drone || drone.droneRole === "attack" || drone.autoReturn) return null;
-      if (this.player?.controlledDrone === drone) return null;
-      if (drone.owner && drone.owner !== this.player) return null;
-      if ((drone.signalStrength?.() ?? 1) <= 0.08) return null;
-      return drone;
-    }
-
-    reconDroneDesignationUiDrone() {
-      const controlledDrone = this.player?.controlledDrone;
-      if (controlledDrone?.alive && controlledDrone.droneRole !== "attack") return controlledDrone;
-
-      const drone = this.activePlayerDrone();
-      if (!drone || drone.droneRole === "attack" || drone.autoReturn) return null;
-      if (drone.owner && drone.owner !== this.player) return null;
-      if ((drone.signalStrength?.() ?? 1) <= 0.08) return null;
-      return drone;
-    }
-
-    nearbyPlayerDroneForPickup(maxDistance = 62) {
-      const drone = this.activePlayerDrone();
-      if (!drone || this.player.controlledDrone === drone || !drone.recallable) return null;
-      const distance = distXY(this.player.x, this.player.y, drone.x, drone.y);
-      return distance <= maxDistance + (drone.radius || 0) + this.player.radius ? drone : null;
-    }
-
-    pickupPlayerDrone() {
-      const drone = this.nearbyPlayerDroneForPickup();
-      if (!drone) return false;
-      return this.recoverPlayerDrone(drone);
-    }
-
-    recoverPlayerDrone(drone) {
-      if (!drone) return false;
-      this.exitPlayerDroneControl();
-      const weapon = drone.weapon || INFANTRY_WEAPONS[drone.weaponId];
-      if (weapon?.ammoKey) {
-        const current = this.player.equipmentAmmo?.[weapon.ammoKey] || 0;
-        const maxAmmo = weapon.defaultAmmo ?? 1;
-        this.player.equipmentAmmo[weapon.ammoKey] = Math.min(maxAmmo, current + 1);
-      }
-
-      drone.alive = false;
-      drone.autoReturn = false;
-      drone.clearRoofLock?.();
-      drone.pendingDestroyEffect = false;
-      if (this.player.activeDrone === drone) this.player.activeDrone = null;
-      this.drones = (this.drones || []).filter((item) => item !== drone);
-      this.effects.explosions.push({
-        x: this.player.x,
-        y: this.player.y,
-        radius: 4,
-        maxRadius: 18,
-        life: 0.16,
-        maxLife: 0.16,
-        color: "rgba(180, 194, 181, 0.34)"
-      });
-      return true;
-    }
-
-    droneCloseEnoughToRecover(drone, maxDistance = 34) {
-      if (!drone?.alive || !this.player || this.player.hp <= 0) return false;
-      const distance = distXY(this.player.x, this.player.y, drone.x, drone.y);
-      return distance <= maxDistance + (drone.radius || 0) + this.player.radius;
-    }
-
-    deployReconDrone(weapon, targetX, targetY) {
-      if (!this.matchStarted || this.player.inTank || this.player.classId !== "scout") return false;
-
-      const existing = this.activePlayerDrone();
-      if (existing) {
-        existing.autoReturn = false;
-        this.setReconDroneWaypoint(existing, targetX, targetY);
-        return true;
-      }
-
-      if (!this.consumePlayerEquipmentAmmo(weapon)) return false;
-
-      const angle = angleTo(this.player.x, this.player.y, targetX, targetY);
-      const drone = new IronLine.ReconDrone({
-        x: clamp(this.player.x + Math.cos(angle) * 34, 12, this.world.width - 12),
-        y: clamp(this.player.y + Math.sin(angle) * 34, 12, this.world.height - 12),
-        angle,
-        team: this.player.team,
-        owner: this.player,
-        weapon,
-        targetX,
-        targetY
-      });
-      this.setReconDroneWaypoint(drone, targetX, targetY);
-
-      this.drones.push(drone);
-      this.player.activeDrone = drone;
-      if (this.player.activeSlot === 2) this.player.setEquipmentSlot?.(0);
-      this.effects.explosions.push({
-        x: drone.x,
-        y: drone.y,
-        radius: 4,
-        maxRadius: 22,
-        life: 0.18,
-        maxLife: 0.18,
-        color: "rgba(150, 220, 255, 0.42)"
-      });
-      return true;
-    }
-
-    deploySuicideDrone(weapon, targetX, targetY) {
-      if (!this.matchStarted || this.player.inTank || this.player.classId !== "engineer") return false;
-
-      const existing = this.activePlayerDrone();
-      if (existing) {
-        existing.autoReturn = false;
-        existing.setWaypoint(targetX, targetY);
-        return true;
-      }
-
-      if (!this.consumePlayerEquipmentAmmo(weapon)) return false;
-
-      const angle = angleTo(this.player.x, this.player.y, targetX, targetY);
-      const drone = new IronLine.SuicideDrone({
-        x: clamp(this.player.x + Math.cos(angle) * 34, 12, this.world.width - 12),
-        y: clamp(this.player.y + Math.sin(angle) * 34, 12, this.world.height - 12),
-        angle,
-        team: this.player.team,
-        owner: this.player,
-        weapon,
-        targetX,
-        targetY
-      });
-
-      this.drones.push(drone);
-      this.player.activeDrone = drone;
-      this.effects.explosions.push({
-        x: drone.x,
-        y: drone.y,
-        radius: 5,
-        maxRadius: 24,
-        life: 0.2,
-        maxLife: 0.2,
-        color: "rgba(255, 190, 104, 0.42)"
-      });
-      return true;
-    }
-
-    suicideDroneLockCandidates(drone = this.player?.controlledDrone, options = {}) {
-      if (!drone?.alive || drone.droneRole !== "attack") return [];
-      const targets = [];
-
-      for (const vehicle of [...(this.tanks || []), ...(this.humvees || [])]) {
-        if (vehicle.alive && vehicle.team !== drone.team) targets.push(vehicle);
-      }
-      for (const unit of this.infantry || []) {
-        if (unit.alive && !unit.inVehicle && unit.team !== drone.team) targets.push(unit);
-      }
-      for (const crew of this.crews || []) {
-        if (crew.alive && !crew.inTank && crew.team !== drone.team) targets.push(crew);
-      }
-      if (!this.player.inTank && this.player.hp > 0 && this.player.team !== drone.team && !this.isPlayerInSafeZone?.()) {
-        targets.push(this.player);
-      }
-
-      const range = drone.lockAcquireRange || 720;
-      const requireLineOfSight = options.requireLineOfSight !== false;
-      return targets.filter((target) => (
-        distXY(drone.x, drone.y, target.x, target.y) <= range + (target.radius || 0) &&
-        (!requireLineOfSight || hasLineOfSight(this, drone, target, this.droneSightOptions(drone, { padding: 1 })))
-      ));
-    }
-
-    suicideDroneLockOptions(drone = this.player?.controlledDrone, options = {}) {
-      if (!drone?.alive || drone.droneRole !== "attack") return [];
-      const mouse = this.input.mouse;
-      const cursorTolerance = drone.lockCursorTolerance || 76;
-      const aimTolerance = drone.lockAimTolerance || 48;
-
-      return this.suicideDroneLockCandidates(drone, options)
-        .map((target) => {
-          const radius = target.radius || 10;
-          const droneDistance = distXY(drone.x, drone.y, target.x, target.y);
-          const cursorDistance = distXY(mouse.worldX, mouse.worldY, target.x, target.y);
-          const aimDistance = segmentDistanceToPoint(
-            drone.x,
-            drone.y,
-            mouse.worldX,
-            mouse.worldY,
-            target.x,
-            target.y
-          );
-          const lockable = cursorDistance <= radius + cursorTolerance || aimDistance <= radius + aimTolerance;
-          return {
-            target,
-            droneDistance,
-            cursorDistance,
-            aimDistance,
-            lockable,
-            score: cursorDistance * 0.7 + aimDistance * 0.55 + droneDistance * 0.018 - (lockable ? 130 : 0)
-          };
-        })
-        .sort((a, b) => a.score - b.score);
-    }
-
-    findSuicideDroneLockTarget(drone = this.player?.controlledDrone) {
-      return this.suicideDroneLockOptions(drone).filter((item) => item.lockable)[0]?.target || null;
-    }
-
-    lockSuicideDroneTarget(drone = this.player?.controlledDrone) {
-      if (!drone?.alive || drone.droneRole !== "attack") return false;
-      const target = this.findSuicideDroneLockTarget(drone);
-      const locked = target ? drone.lockOn?.(target) : drone.lockGround?.(this.input.mouse.worldX, this.input.mouse.worldY);
-      if (!locked) return false;
-
-      const point = target || drone.lockPoint;
-      this.effects.blastRings?.push({
-        x: point.x,
-        y: point.y,
-        radius: target ? (target.radius || 12) + 10 : 10,
-        maxRadius: target ? (target.radius || 12) + 34 : 34,
-        life: 0.24,
-        maxLife: 0.24,
-        color: target ? "rgba(255, 209, 102, 0.74)" : "rgba(255, 190, 104, 0.45)",
-        width: 2.4
-      });
-      return true;
-    }
-
-    emitSuicideDroneLockFeedback(drone, target = null) {
-      const point = target || drone?.lockPoint || drone?.lockPosition?.();
-      if (!point) return;
-      this.effects.blastRings?.push({
-        x: point.x,
-        y: point.y,
-        radius: target ? (target.radius || 12) + 10 : 10,
-        maxRadius: target ? (target.radius || 12) + 34 : 36,
-        life: 0.24,
-        maxLife: 0.24,
-        color: target ? "rgba(255, 209, 102, 0.74)" : "rgba(255, 190, 104, 0.45)",
-        width: 2.4
-      });
-    }
-
-    completeSuicideDroneLock(drone, target = null, point = null) {
-      if (!drone?.alive) return false;
-      const locked = target ? drone.lockOn?.(target) : drone.lockGround?.(point.x, point.y);
-      if (!locked) return false;
-      this.emitSuicideDroneLockFeedback(drone, target);
-      return true;
-    }
-
-    updateSuicideDroneLocking(drone, dt) {
-      if (!drone?.alive || drone.droneRole !== "attack") return false;
-      if (drone.diveActive) {
-        drone.clearLockAttempt?.();
-        return false;
-      }
-
-      const freshLockPress = Boolean(this.input.mouse.pressedButtons?.has?.(0));
-      if (drone.hasLock?.() && this.input.mouse.leftDown && !freshLockPress) return false;
-      if (drone.hasLock?.() && freshLockPress) drone.clearLock?.();
-
-      if (!this.input.mouse.leftDown) {
-        if (drone.lockProgress > 0) drone.lockProgress = Math.max(0, drone.lockProgress - dt * 1.6);
-        if (drone.lockProgress <= 0.001) drone.clearLockAttempt?.();
-        return false;
-      }
-
-      this.input.consumeMousePress(0);
-
-      if ((drone.signalStrength?.() ?? 1) <= 0.04) {
-        drone.failLock?.("\uC2E0\uD638 \uB04A\uAE40");
-        return false;
-      }
-
-      const target = this.findSuicideDroneLockTarget(drone);
-      if (target) {
-        drone.beginLockAttempt?.("target", target, { x: target.x, y: target.y }, drone.lockAcquireTime);
-        if (drone.advanceLock?.(dt)) return this.completeSuicideDroneLock(drone, target);
-        return false;
-      }
-
-      const blockedTarget = this.suicideDroneLockOptions(drone, { requireLineOfSight: false })
-        .filter((item) => item.lockable)[0]?.target || null;
-      if (blockedTarget) {
-        drone.failLock?.("\uC2DC\uC57C \uCC28\uB2E8");
-        return false;
-      }
-
-      const mouse = this.input.mouse;
-      const range = drone.lockAcquireRange || 720;
-      const pointDistance = distXY(drone.x, drone.y, mouse.worldX, mouse.worldY);
-      if (pointDistance > range) {
-        drone.failLock?.("\uAC70\uB9AC \uCD08\uACFC");
-        return false;
-      }
-
-      const point = { x: mouse.worldX, y: mouse.worldY };
-      drone.beginLockAttempt?.("ground", null, point, drone.groundLockAcquireTime || drone.lockAcquireTime);
-      if (drone.advanceLock?.(dt * 0.86)) return this.completeSuicideDroneLock(drone, null, point);
-      return false;
-    }
-
-    startSuicideDroneAttack(drone = this.player?.controlledDrone) {
-      if (!drone?.alive || drone.droneRole !== "attack" || drone.diveActive) return false;
-      drone.clearLockAttempt?.();
-
-      if ((drone.signalStrength?.() ?? 1) <= 0.04) {
-        drone.failLock?.("\uC2E0\uD638 \uB04A\uAE40");
-        return false;
-      }
-
-      const target = this.findSuicideDroneLockTarget(drone);
-      const mouse = this.input.mouse;
-      let attackPoint = target ? null : { x: mouse.worldX, y: mouse.worldY };
-      if (!target) {
-        const range = drone.lockAcquireRange || 720;
-        if (distXY(drone.x, drone.y, attackPoint.x, attackPoint.y) > range) {
-          drone.failLock?.("\uAC70\uB9AC \uCD08\uACFC");
-          return false;
-        }
-      }
-
-      const locked = target ? drone.lockOn?.(target) : drone.lockGround?.(attackPoint.x, attackPoint.y);
-      if (!locked || !drone.startAttackDive?.(this)) return false;
-
-      this.addScreenShake(7.5, 14);
-      this.effects.blastRings?.push({
-        x: drone.x,
-        y: drone.y,
-        radius: 8,
-        maxRadius: 42,
-        life: 0.18,
-        maxLife: 0.18,
-        color: "rgba(255, 123, 72, 0.68)",
-        width: 2.8
-      });
-      this.emitSuicideDroneLockFeedback(drone, target);
-      return true;
-    }
-
-    togglePlayerDroneControl() {
-      if (this.player.inTank) return false;
-      if (this.player.controlledDrone) {
-        this.exitPlayerDroneControl();
-        return true;
-      }
-
-      const drone = this.activePlayerDrone();
-      if (!drone) return false;
-
-      drone.autoReturn = false;
-      drone.clearRoofLock?.();
-      this.player.controlledDrone = drone;
-      drone.controlled = true;
-      this.droneInteractReleaseRequired = true;
-      this.resetDroneInteractHold();
-      this.input.clearVirtual?.();
-      return true;
-    }
-
-    exitPlayerDroneControl() {
-      const drone = this.player?.controlledDrone;
-      if (drone) {
-        drone.controlled = false;
-        drone.recallable = true;
-        this.setReconDroneWaypoint(drone, drone.x, drone.y);
-      }
-      if (this.player) this.player.controlledDrone = null;
-      this.droneInteractReleaseRequired = false;
-    }
-
-    resetDroneInteractHold() {
-      this.droneInteractHoldTime = 0;
-      this.droneInteractHoldConsumed = false;
-      this.droneInteractWasDown = false;
-    }
-
-    updateControlledDroneInteraction(dt) {
-      const drone = this.player.controlledDrone;
-      const interactPressed = this.input.consumePress("KeyE");
-      const interactDown = this.input.keyDown("KeyE");
-
-      if (this.droneInteractReleaseRequired) {
-        if (!interactDown) {
-          this.droneInteractReleaseRequired = false;
-          this.resetDroneInteractHold();
-        }
-        this.updateControlledDronePlayer(dt);
-        return;
-      }
-
-      if (interactPressed && !interactDown) {
-        this.exitPlayerDroneControl();
-        this.resetDroneInteractHold();
-        return;
-      }
-
-      if (interactDown) {
-        this.droneInteractHoldTime = this.droneInteractWasDown ? this.droneInteractHoldTime + dt : dt;
-        this.droneInteractWasDown = true;
-        if (!this.droneInteractHoldConsumed && this.droneInteractHoldTime >= this.droneRecallHoldDuration) {
-          this.droneInteractHoldConsumed = true;
-          this.recallPlayerDrone(drone);
-          this.resetDroneInteractHold();
-          return;
-        }
-      } else if (this.droneInteractWasDown) {
-        if (!this.droneInteractHoldConsumed) this.exitPlayerDroneControl();
-        this.resetDroneInteractHold();
-        return;
-      }
-
-      this.updateControlledDronePlayer(dt);
-    }
-
-    recallPlayerDrone(drone = this.activePlayerDrone()) {
-      if (!drone?.alive || !this.player || this.player.hp <= 0) return false;
-      if (this.player.controlledDrone === drone) this.exitPlayerDroneControl();
-      drone.controlled = false;
-      drone.autoReturn = true;
-      drone.recallable = false;
-      drone.clearRoofLock?.();
-      drone.setWaypoint?.(this.player.x, this.player.y);
-      this.effects.explosions.push({
-        x: drone.x,
-        y: drone.y,
-        radius: 3,
-        maxRadius: 15,
-        life: 0.14,
-        maxLife: 0.14,
-        color: "rgba(255, 209, 102, 0.28)"
-      });
-      return true;
-    }
-
-    updateControlledDronePlayer(dt) {
-      const drone = this.player.controlledDrone;
-      if (!drone?.alive) {
-        this.exitPlayerDroneControl();
-        return;
-      }
-
-      const moveX = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
-      const moveY = this.input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
-      const length = Math.hypot(moveX, moveY);
-      const attackDrone = drone.droneRole === "attack";
-      const droneBoosting = attackDrone && this.updateBoostState(drone, dt, true, {
-        drainTime: 0.62,
-        recoverTime: 1.45,
-        recoverDelay: 0.32
-      });
-      const boostOnlyMove = droneBoosting && length <= 0.05 && !drone.diveActive;
-      if ((length > 0 || boostOnlyMove) && !drone.diveActive) {
-        drone.clearRoofLock?.();
-        const signalRatio = drone.signalRatio?.() ?? 0;
-        const signalSlowdown = lerp(1, 0.58, clamp((signalRatio - 0.82) / 0.18, 0, 1));
-        const boostScale = droneBoosting ? drone.boostSpeedMultiplier || 1.7 : 1;
-        const speed = drone.speed * signalSlowdown * (this.input.mouse.rightDown ? 0.58 : 1) * boostScale;
-        const dirX = boostOnlyMove ? Math.cos(drone.angle) : moveX / length;
-        const dirY = boostOnlyMove ? Math.sin(drone.angle) : moveY / length;
-        drone.setPosition(
-          drone.x + dirX * speed * dt,
-          drone.y + dirY * speed * dt,
-          this
-        );
-      }
-      if (droneBoosting) this.addScreenShake(drone.diveActive ? 4.2 : 2.1, drone.diveActive ? 10 : 6);
-
-      this.applyVirtualAim(drone, 620);
-      if (!drone.diveActive) {
-        drone.angle = angleTo(drone.x, drone.y, this.input.mouse.worldX, this.input.mouse.worldY);
-        drone.setWaypoint(drone.x, drone.y);
-      }
-
-      if (drone.droneRole !== "attack") {
-        const primaryDesignate = this.input.consumeMousePress(0) || this.input.consumePress("Space");
-        const secondaryDesignate = this.input.mouse.pressedButtons.has(2);
-        if (primaryDesignate || secondaryDesignate) {
-          const target = this.findReconDroneDesignationTarget(drone);
-          if (target) {
-            this.input.consumeMousePress(2);
-            this.designateReconDroneTarget(target, drone);
-          }
-          return;
-        }
-      }
-
-      if (drone.droneRole === "attack") {
-        if (this.input.consumeMousePress(0)) this.startSuicideDroneAttack(drone);
-      }
-    }
-
-    updateDrones(dt) {
-      for (const drone of this.drones || []) {
-        if (drone.alive && drone.autoReturn && this.player.hp > 0) {
-          drone.setWaypoint?.(this.player.x, this.player.y);
-        }
-        if (drone.alive) drone.update(this, dt);
-        if (drone.alive && drone.autoReturn && this.droneCloseEnoughToRecover(drone)) {
-          this.recoverPlayerDrone(drone);
-        }
-        if (!drone.alive && drone.pendingDestroyEffect) drone.emitDestroyEffect(this);
-      }
-
-      if (this.player.controlledDrone && !this.player.controlledDrone.alive) this.exitPlayerDroneControl();
-      if (this.player.activeDrone && !this.player.activeDrone.alive) this.player.activeDrone = null;
-      this.drones = (this.drones || []).filter((drone) => drone.alive);
-    }
-
-    reconDroneTargetCandidates(drone, options = {}) {
-      if (!drone?.alive || drone.droneRole === "attack") return [];
-      const sniperOnly = options.sniperOnly !== false;
-      const targets = [];
-
-      for (const unit of this.infantry || []) {
-        if (unit.alive && !unit.inVehicle && unit.team !== drone.team) targets.push(unit);
-      }
-      for (const crew of this.crews || []) {
-        if (crew.alive && !crew.inTank && crew.team !== drone.team) targets.push(crew);
-      }
-      if (!sniperOnly) {
-        for (const enemyDrone of this.drones || []) {
-          if (enemyDrone.alive && enemyDrone.team !== drone.team) targets.push(enemyDrone);
-        }
-      }
-
-      return targets.filter((target) => (
-        distXY(drone.x, drone.y, target.x, target.y) <= (drone.scanRange || 0) + (target.radius || 0) + 32 &&
-        hasLineOfSight(this, drone, target, this.droneSightOptions(drone, { padding: 1 }))
-      ));
-    }
-
-    reconDroneDesignationOptions(drone = this.reconDroneDesignationUiDrone(), options = {}) {
-      if (!drone?.alive || drone.droneRole === "attack") return [];
-
-      const mouse = this.input.mouse;
-      const aimTolerance = options.aimTolerance ?? 34;
-      const markerTolerance = options.markerTolerance ?? 58;
-      return this.reconDroneTargetCandidates(drone, { sniperOnly: true })
-        .map((target) => {
-          const radius = target.radius || 10;
-          const markerX = target.x;
-          const markerY = target.y - radius - 30;
-          const droneDistance = distXY(drone.x, drone.y, target.x, target.y);
-          const aimDistance = segmentDistanceToPoint(
-            drone.x,
-            drone.y,
-            mouse.worldX,
-            mouse.worldY,
-            target.x,
-            target.y
-          );
-          const cursorDistance = distXY(mouse.worldX, mouse.worldY, target.x, target.y);
-          const labelDistance = distXY(mouse.worldX, mouse.worldY, markerX, markerY);
-          const markerDistance = Math.min(cursorDistance, labelDistance);
-          const hovered = markerDistance <= markerTolerance;
-          const aimLocked = aimDistance <= aimTolerance;
-          return {
-            target,
-            markerX,
-            markerY,
-            droneDistance,
-            aimDistance,
-            cursorDistance,
-            labelDistance,
-            markerDistance,
-            hovered,
-            aimLocked,
-            lockable: hovered || aimLocked,
-            score: markerDistance * 0.65 + aimDistance * 0.45 + droneDistance * 0.018 - (hovered ? 120 : 0) - (aimLocked ? 54 : 0)
-          };
-        })
-        .sort((a, b) => a.score - b.score);
-    }
-
-    findReconDroneDesignationTarget(drone = this.reconDroneDesignationUiDrone()) {
-      const options = this.reconDroneDesignationOptions(drone) || [];
-      return options.filter((item) => item.lockable)[0]?.target || null;
-    }
-
-    tryDesignateReconDroneFromMarker(drone = this.reconDroneDesignationUiDrone()) {
-      if (!drone?.alive || this.player?.controlledDrone === drone || drone.droneRole === "attack") return false;
-      const target = this.findReconDroneDesignationTarget(drone);
-      return target ? this.designateReconDroneTarget(target, drone) : false;
-    }
-
-    designateReconDroneTarget(target, drone = this.player?.controlledDrone) {
-      if (!target || !drone?.alive || drone.droneRole === "attack") return false;
-      const alive = target.alive !== undefined ? target.alive : target.hp > 0;
-      if (!alive || target.team === this.player.team || target.vehicleType || target.inTank) return false;
-      if (!hasLineOfSight(this, drone, target, this.droneSightOptions(drone, { padding: 1 }))) return false;
-
-      this.droneDesignation = {
-        target,
-        drone,
-        ttl: this.droneDesignationDuration,
-        maxTtl: this.droneDesignationDuration
-      };
-      this.reportContact?.(this.player.team, target, drone, this.droneDesignationDuration);
-      this.exitPlayerDroneControl();
-      this.player.setEquipmentSlot?.(0);
-      this.player.rifleCooldown = Math.max(this.player.rifleCooldown || 0, 0.16);
-      this.input.mouse.leftDown = false;
-      this.input.mouse.down = false;
-      this.input.mouse.pressedButtons.delete(0);
-      this.effects.explosions.push({
-        x: target.x,
-        y: target.y,
-        radius: 3,
-        maxRadius: 18,
-        life: 0.18,
-        maxLife: 0.18,
-        color: "rgba(143, 222, 207, 0.34)"
-      });
-      return true;
-    }
-
-    updateDroneDesignation(dt) {
-      const designation = this.droneDesignation;
-      if (!designation) return;
-
-      designation.ttl -= dt;
-      const { target, drone } = designation;
-      const alive = target?.alive !== undefined ? target.alive : target?.hp > 0;
-      const observed = Boolean(
-        alive &&
-        drone?.alive &&
-        target.team !== this.player.team &&
-        !target.vehicleType &&
-        !target.inTank &&
-        distXY(drone.x, drone.y, target.x, target.y) <= (drone.scanRange || 0) + (target.radius || 0) + 42 &&
-        hasLineOfSight(this, drone, target, this.droneSightOptions(drone, { padding: 1 }))
-      );
-
-      if (!observed || designation.ttl <= 0) {
-        this.droneDesignation = null;
-        return;
-      }
-
-      this.reportContact?.(this.player.team, target, drone, Math.max(0.3, designation.ttl));
-    }
-
-    droneDesignatedContact() {
-      return this.droneDesignation?.target ? this.droneDesignation : null;
-    }
-
-    observedSniperRange(weapon, drone, designated = false) {
-      const base = weapon?.range || INFANTRY_WEAPONS.sniper.range || 980;
-      const control = drone?.maxControlRange || base * 2.25;
-      const scanBonus = drone?.scanRange || 0;
-      return designated
-        ? Math.min(base * 2.85, control + scanBonus * 0.75)
-        : Math.min(base * 2.45, control + scanBonus * 0.45);
-    }
-
-    scoutObservationCameraTarget() {
-      if (!this.isPlayerScoutAimMode?.()) return null;
-      const weapon = this.player?.getWeapon?.();
-      if (!weapon || weapon.id !== "sniper") return null;
-
-      const drone = this.activeReconDroneForSniper();
-      if (!drone) return null;
-
-      const designation = this.droneDesignatedContact();
-      const designatedAlive = designation?.target?.alive !== undefined
-        ? designation.target.alive
-        : designation?.target?.hp > 0;
-      if (designation?.drone === drone && designatedAlive) {
-        const distance = distXY(this.player.x, this.player.y, designation.target.x, designation.target.y);
-        return {
-          x: designation.target.x,
-          y: designation.target.y,
-          drone,
-          target: designation.target,
-          designated: true,
-          distance
-        };
-      }
-
-      const observed = this.findObservedSniperTarget?.();
-      if (observed?.target) {
-        return {
-          x: observed.target.x,
-          y: observed.target.y,
-          drone,
-          target: observed.target,
-          designated: Boolean(observed.designated),
-          distance: observed.rangeDistance ?? distXY(this.player.x, this.player.y, observed.target.x, observed.target.y)
-        };
-      }
-
-      const contacts = (this.reconDroneObservedContacts?.({ sniperOnly: true }) || [])
-        .filter((target) => target && (target.alive !== false) && (target.hp === undefined || target.hp > 0));
-      if (contacts.length > 0) {
-        const mouse = this.input.mouse;
-        const target = contacts
-          .map((contact) => ({
-            contact,
-            score: distXY(mouse.worldX, mouse.worldY, contact.x, contact.y) * 0.68 +
-              distXY(drone.x, drone.y, contact.x, contact.y) * 0.18 +
-              distXY(this.player.x, this.player.y, contact.x, contact.y) * 0.035
-          }))
-          .sort((a, b) => a.score - b.score)[0]?.contact;
-        if (target) {
-          return {
-            x: target.x,
-            y: target.y,
-            drone,
-            target,
-            designated: false,
-            distance: distXY(this.player.x, this.player.y, target.x, target.y)
-          };
-        }
-      }
-
-      const distance = distXY(this.player.x, this.player.y, drone.x, drone.y);
-      if (distance < 680) return null;
-      return {
-        x: drone.x,
-        y: drone.y,
-        drone,
-        target: null,
-        designated: false,
-        distance
-      };
-    }
-
-    scoutObservationCameraZoom(observation) {
-      if (!observation) return 0.72;
-      const dx = Math.abs((observation.x || 0) - this.player.x);
-      const dy = Math.abs((observation.y || 0) - this.player.y);
-      const fitZoom = Math.min(
-        (this.camera.width - 180) / Math.max(360, dx + 360),
-        (this.camera.height - 150) / Math.max(320, dy + 320)
-      );
-      return clamp(fitZoom, observation.target ? 0.5 : 0.54, 0.72);
-    }
-
-    scoutObservationCameraFocus(observation) {
-      if (!observation) return null;
-      const distance = observation.distance ?? distXY(this.player.x, this.player.y, observation.x, observation.y);
-      const fitZoom = this.scoutObservationCameraZoom(observation);
-      const canFrameBoth = fitZoom > 0.54 || distance < 1900;
-      const weight = canFrameBoth
-        ? 0.5
-        : observation.target
-          ? clamp((distance - 1100) / 1900, 0.64, 0.86)
-          : clamp((distance - 1100) / 1900, 0.56, 0.78);
-      return {
-        x: lerp(this.player.x, observation.x, weight),
-        y: lerp(this.player.y, observation.y, weight),
-        zoom: fitZoom
-      };
-    }
-
-    applyDroneDesignationAimAssist(dt, strengthScale = 1) {
-      const designation = this.droneDesignatedContact();
-      if (!designation?.target || !this.isPlayerScoutAimMode?.()) return false;
-      const weapon = this.player?.getWeapon?.();
-      if (!weapon || weapon.id !== "sniper") return false;
-
-      const { target, drone } = designation;
-      const range = this.observedSniperRange(weapon, drone, true);
-      if (distXY(this.player.x, this.player.y, target.x, target.y) > range) return false;
-
-      const cursorDistance = distXY(this.input.mouse.worldX, this.input.mouse.worldY, target.x, target.y);
-      const closeAssist = clamp(1 - cursorDistance / 190, 0, 1);
-      if (closeAssist <= 0) return false;
-
-      const blend = clamp(dt * (1.1 + closeAssist * 1.9) * strengthScale, 0, 0.045);
-      this.input.mouse.worldX = lerp(this.input.mouse.worldX, target.x, blend);
-      this.input.mouse.worldY = lerp(this.input.mouse.worldY, target.y, blend);
-      return true;
-    }
-
-    usePlayerEquipment(weapon, targetX, targetY) {
-      if (!weapon) return false;
-      const proneBusy = this.isPlayerProneTransitioning?.();
-      const prone = Boolean(this.player?.isProne);
-      if (proneBusy && (weapon.type === "grenade" || weapon.type === "rpg" || weapon.type === "drone" || weapon.type === "repair")) {
-        return false;
-      }
-
-      if (weapon.type === "drone") {
-        if (weapon.droneRole === "attack" || weapon.id === "kamikazeDrone") {
-          return this.deploySuicideDrone(weapon, targetX, targetY);
-        }
-        return this.deployReconDrone(weapon, targetX, targetY);
-      }
-
-      if (weapon.type === "grenade") {
-        if (!this.consumePlayerEquipmentAmmo(weapon)) return false;
-        const thrown = IronLine.combat.throwGrenade(this, this.player, targetX, targetY, { weapon });
-        if (thrown && prone) this.player.lastShotCooldownScale = Math.max(this.player.lastShotCooldownScale || 1, 1.45);
-        return thrown;
-      }
-
-      if (weapon.type === "rpg") {
-        return this.firePlayerRpg(weapon, targetX, targetY);
-      }
-
-      if (weapon.type === "repair") {
-        return this.repairFriendlyTank(weapon);
-      }
-
-      return this.firePlayerGun(weapon, targetX, targetY);
     }
 
     firePlayerRpg(weapon, targetX, targetY) {
@@ -3612,6 +2260,7 @@
     }
 
     updateCamera(dt) {
+      if (this.adminCamera?.update(dt)) return;
       const controlledDrone = this.player.controlledDrone?.alive ? this.player.controlledDrone : null;
       const focus = this.player.inTank || controlledDrone || this.player;
       const tankAimMode = Boolean(this.player.inTank && this.input.mouse.rightDown);
@@ -3662,9 +2311,25 @@
 
     updateResult(dt) {
       if (this.result) return;
-      if (this.playerDeathActive) return;
-      if (this.matchConfig.mode !== "annihilation") return;
+      if (this.playerDeathActive && this.matchConfig.mode !== "conquest") return;
+      if (this.matchConfig.mode === "conquest") {
+        this.updateConquestResult();
+        return;
+      }
       this.updateAnnihilationResult(dt);
+    }
+
+    updateConquestResult() {
+      if ((this.conquest?.remaining ?? 0) > 0) return;
+      const blueScore = Math.floor(this.conquest.score[TEAM.BLUE] || 0);
+      const redScore = Math.floor(this.conquest.score[TEAM.RED] || 0);
+      if (blueScore > redScore) {
+        this.finishGame("BLUE VICTORY", `점령전 종료: 아군 ${blueScore}점 / 적군 ${redScore}점`);
+      } else if (redScore > blueScore) {
+        this.finishGame("MISSION LOST", `점령전 종료: 아군 ${blueScore}점 / 적군 ${redScore}점`);
+      } else {
+        this.finishGame("DRAW", `점령전 종료: 양 팀 ${blueScore}점`);
+      }
     }
 
     updateAnnihilationResult(dt) {
@@ -3707,62 +2372,21 @@
       return tankAlive || humveeAlive || infantryAlive || playerAlive;
     }
 
-    reportContact(team, target, reporter, ttl = 3.4) {
-      if (!target || target.team === team) return;
-      if (target.inVehicle) return;
-      const alive = target.alive !== undefined ? target.alive : target.hp > 0;
-      if (!alive) return;
-
-      const reports = this.teamReports?.[team];
-      if (!reports) return;
-
-      const current = reports.get(target);
-      const confidence = reporter?.classId === "scout" ? 1 : 0.68;
-      reports.set(target, {
-        target,
-        x: target.x,
-        y: target.y,
-        ttl: Math.max(ttl, current?.ttl || 0),
-        reporter,
-        confidence: Math.max(confidence, current?.confidence || 0)
-      });
-    }
-
-    isReportedEnemy(team, target) {
-      const report = this.teamReports?.[team]?.get(target);
-      if (!report || report.ttl <= 0) return false;
-      const alive = target?.alive !== undefined ? target.alive : target?.hp > 0;
-      return Boolean(alive && !target.inVehicle && target.team !== team);
-    }
-
-    getReportedContact(team, target) {
-      const report = this.teamReports?.[team]?.get(target);
-      return this.isReportedEnemy(team, target) ? report : null;
-    }
-
-    getReportedContacts(team) {
-      const reports = this.teamReports?.[team];
-      if (!reports) return [];
-      return Array.from(reports.values())
-        .filter((report) => this.isReportedEnemy(team, report.target));
-    }
-
-    updateTeamReports(dt) {
-      for (const reports of Object.values(this.teamReports || {})) {
-        for (const [target, report] of reports) {
-          report.ttl -= dt;
-          const alive = target?.alive !== undefined ? target.alive : target?.hp > 0;
-          if (!alive || report.ttl <= 0) reports.delete(target);
-        }
-      }
-    }
-
     finishGame(result, reason) {
       this.result = result;
       this.resultReason = reason;
+      this.matchStarted = false;
+      this.countdownStarted = false;
+      this.matchPhase = "ended";
+      this.input.clear();
     }
   }
 
+  IronLine.installGameSessionState?.(Game);
+  IronLine.installGameAdminActions?.(Game);
+  IronLine.installGameDroneSystem?.(Game);
+  IronLine.installGamePlayerControl?.(Game);
+  IronLine.installFogOfWar?.(Game);
   IronLine.Game = Game;
   IronLine.game = new Game();
 })(window);

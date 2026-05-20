@@ -481,6 +481,12 @@
       }
       if (status.casualtyRatio >= 0.48 || status.avgSuppression >= 68 || status.maxSuppression >= 92) return "fallback";
       if (status.cohesion > 245 && status.alive > 1) return "regroup";
+      if (
+        this.order.forcedTacticalMode &&
+        (!this.order.forcedTacticalUntil || performance.now() < this.order.forcedTacticalUntil)
+      ) {
+        return this.order.forcedTacticalMode;
+      }
       if (status.avgSuppression > 34 || status.armorThreat?.distance < 680 || this.supportRequest?.type === "need-fire-support") {
         return "support-fire";
       }

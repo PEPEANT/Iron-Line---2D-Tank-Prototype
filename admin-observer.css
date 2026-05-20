@@ -1,0 +1,366 @@
+.admin-standalone-page {
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #07100b;
+  color: #eef5ee;
+}
+
+.admin-standalone-page #game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  cursor: grab;
+}
+
+.admin-standalone-page #game:active {
+  cursor: grabbing;
+}
+
+.admin-standalone-page #entryScreen,
+.admin-standalone-page #deploymentScreen,
+.admin-standalone-page #lobbyScreen,
+.admin-standalone-page #commandRadio,
+.admin-standalone-page #commandRadioToggle,
+.admin-standalone-page #chatPanel,
+.admin-standalone-page #roleChangePanel,
+.admin-standalone-page #roleChangePrompt,
+.admin-standalone-page .mobile-controls,
+.admin-standalone-page .player-only,
+.admin-standalone-page .hud-bottom {
+  display: none !important;
+}
+
+.admin-standalone-page .admin-panel,
+.admin-standalone-page .admin-panel.hidden {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex !important;
+  width: min(520px, 38vw);
+  max-width: calc(100vw - 28px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(169, 204, 169, 0.28);
+  border-radius: 12px;
+  background: rgba(7, 12, 9, 0.93);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.admin-standalone-page .admin-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(169, 204, 169, 0.16);
+  background: linear-gradient(180deg, rgba(37, 55, 42, 0.78), rgba(10, 17, 12, 0.68));
+}
+
+.admin-standalone-page .admin-head strong {
+  display: block;
+  color: #f3f7ec;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.admin-standalone-page .admin-head span {
+  color: rgba(223, 235, 218, 0.68);
+}
+
+.admin-standalone-page #adminClose {
+  display: none;
+}
+
+.admin-standalone-page .admin-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(169, 204, 169, 0.14);
+  background: rgba(8, 13, 10, 0.78);
+}
+
+.admin-standalone-page .admin-tabs button {
+  min-height: 34px;
+  border: 1px solid rgba(169, 204, 169, 0.22);
+  border-radius: 7px;
+  background: rgba(25, 34, 27, 0.82);
+  color: rgba(238, 245, 238, 0.78);
+  font-weight: 800;
+}
+
+.admin-standalone-page .admin-tabs button.active {
+  border-color: rgba(129, 190, 255, 0.68);
+  background: rgba(39, 83, 114, 0.62);
+  color: #f4fbff;
+}
+
+.admin-standalone-page .admin-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 18px;
+}
+
+.admin-standalone-page .admin-observer-block {
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid rgba(169, 204, 169, 0.14);
+  border-radius: 8px;
+  background: rgba(16, 23, 18, 0.78);
+}
+
+.admin-standalone-page .admin-section-label {
+  display: block;
+  margin: 0 0 8px;
+  color: #ffd66e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-standalone-page .admin-observer-map {
+  height: 230px;
+  border-radius: 8px;
+}
+
+.admin-standalone-page .admin-observer-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-standalone-page .admin-observer-list {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.admin-standalone-page .admin-observer-row.selected {
+  border-color: rgba(129, 190, 255, 0.62);
+  background: rgba(39, 83, 114, 0.34);
+}
+
+.admin-standalone-page .admin-observer-row[data-phase="playing"] {
+  box-shadow: inset 3px 0 0 rgba(129, 190, 255, 0.7);
+}
+
+.admin-standalone-page .admin-observer-row[data-phase="loading"] {
+  box-shadow: inset 3px 0 0 rgba(255, 209, 102, 0.72);
+}
+
+.admin-standalone-page .admin-observer-row[data-phase="ended"] {
+  box-shadow: inset 3px 0 0 rgba(255, 109, 102, 0.58);
+}
+
+.admin-standalone-page .admin-ops-events {
+  max-height: 220px;
+}
+
+.admin-standalone-page .admin-event-row {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 6px;
+  padding: 8px 9px;
+  border: 1px solid rgba(169, 204, 169, 0.14);
+  border-radius: 7px;
+  background: rgba(238, 245, 238, 0.045);
+  box-shadow: inset 3px 0 0 rgba(169, 204, 169, 0.22);
+}
+
+.admin-standalone-page .admin-event-row[data-severity="major"] {
+  border-color: rgba(255, 209, 102, 0.24);
+  box-shadow: inset 3px 0 0 rgba(255, 209, 102, 0.72);
+}
+
+.admin-standalone-page .admin-event-row[data-severity="warning"] {
+  border-color: rgba(255, 109, 102, 0.26);
+  box-shadow: inset 3px 0 0 rgba(255, 109, 102, 0.58);
+}
+
+.admin-standalone-page .admin-event-row[data-severity="spectator"] {
+  border-color: rgba(190, 170, 255, 0.26);
+  box-shadow: inset 3px 0 0 rgba(190, 170, 255, 0.58);
+}
+
+.admin-standalone-page .admin-event-row strong {
+  color: #f5f8ee;
+  font-size: 12px;
+}
+
+.admin-standalone-page .admin-event-row span {
+  color: rgba(238, 245, 238, 0.64);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.admin-standalone-page .admin-playtest-notes {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-standalone-page #adminPlaytestNotesInput {
+  min-height: 180px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid rgba(169, 204, 169, 0.18);
+  border-radius: 7px;
+  background: rgba(5, 9, 7, 0.84);
+  color: #eef5ee;
+  font: 12px/1.45 Consolas, "Cascadia Mono", monospace;
+  outline: none;
+}
+
+.admin-standalone-page #adminPlaytestNotesInput:focus {
+  border-color: rgba(129, 190, 255, 0.68);
+  box-shadow: 0 0 0 2px rgba(129, 190, 255, 0.12);
+}
+
+.admin-standalone-page .admin-note-actions {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-standalone-page .admin-ai-network {
+  min-height: 150px;
+}
+
+.admin-standalone-page .admin-ai-network-graph {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-standalone-page .admin-ai-network-column {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.admin-standalone-page .admin-ai-network-column > strong {
+  color: rgba(238, 245, 238, 0.62);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-standalone-page .admin-ai-node {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(169, 204, 169, 0.14);
+  border-radius: 999px;
+  background: rgba(238, 245, 238, 0.045);
+}
+
+.admin-standalone-page .admin-ai-node.active {
+  border-color: rgba(91, 214, 164, 0.72);
+  background: rgba(55, 170, 125, 0.18);
+  box-shadow: 0 0 18px rgba(55, 170, 125, 0.12);
+}
+
+.admin-standalone-page .admin-ai-node.muted {
+  opacity: 0.55;
+}
+
+.admin-standalone-page .admin-ai-node span {
+  color: rgba(238, 245, 238, 0.66);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-standalone-page .admin-ai-node em {
+  color: #f6fbf0;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.admin-standalone-page .admin-room-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-standalone-page .admin-room-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-standalone-page .admin-room-control-grid label {
+  display: grid;
+  gap: 5px;
+  color: rgba(238, 245, 238, 0.7);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-standalone-page .admin-room-control-grid input,
+.admin-standalone-page .admin-room-control-grid select {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid rgba(169, 204, 169, 0.18);
+  border-radius: 6px;
+  background: rgba(5, 9, 7, 0.84);
+  color: #eef5ee;
+  font: inherit;
+}
+
+.admin-standalone-page .admin-room-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-standalone-page [data-admin-action="room-start"] {
+  border-color: rgba(255, 209, 102, 0.56);
+  background: rgba(255, 209, 102, 0.15);
+  color: #fff3bd;
+}
+
+.admin-standalone-page [data-admin-action="room-end"],
+.admin-standalone-page [data-admin-action="room-reset"],
+.admin-standalone-page [data-admin-action="room-delete"] {
+  border-color: rgba(255, 109, 102, 0.36);
+  background: rgba(95, 28, 26, 0.34);
+  color: #ffd7d3;
+}
+
+.admin-standalone-page .admin-hint {
+  color: rgba(235, 242, 232, 0.72);
+}
+
+.admin-observer-help {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 12;
+  min-width: 248px;
+  padding: 10px 12px;
+  border: 1px solid rgba(169, 204, 169, 0.2);
+  border-radius: 8px;
+  background: rgba(4, 8, 6, 0.82);
+  color: rgba(238, 245, 238, 0.78);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.admin-observer-help strong {
+  display: block;
+  color: #f6f9ef;
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .admin-standalone-page .admin-panel,
+  .admin-standalone-page .admin-panel.hidden {
+    left: 12px;
+    width: auto;
+  }
+
+  .admin-observer-help {
+    display: none;
+  }
+
+  .admin-standalone-page .admin-room-control-grid,
+  .admin-standalone-page .admin-room-actions,
+  .admin-standalone-page .admin-ai-network-graph {
+    grid-template-columns: 1fr;
+  }
+}

@@ -10,7 +10,14 @@
       this.deploymentMapBuilt = false;
       this.deploymentClassesBuilt = false;
       this.deploymentLoadoutOpen = false;
-      this.nodes = {
+      this.adminInspectTarget = { kind: "squad", id: "" };
+      this.nodes = this.collectNodes();
+      this.setupHudModules();
+      this.bindHudControls();
+    }
+
+    collectNodes() {
+      return {
         objectiveStrip: document.getElementById("objectiveStrip"),
         bottomHud: document.querySelector(".hud-bottom"),
         settingsButton: document.getElementById("settingsButton"),
@@ -29,6 +36,22 @@
         adminSpawnUnit: document.getElementById("adminSpawnUnit"),
         adminSpawnCount: document.getElementById("adminSpawnCount"),
         adminSpawnLocation: document.getElementById("adminSpawnLocation"),
+        adminOpsStats: document.getElementById("adminOpsStats"),
+        adminOpsRooms: document.getElementById("adminOpsRooms"),
+        adminOpsEvents: document.getElementById("adminOpsEvents"),
+        adminPlaytestNotes: document.getElementById("adminPlaytestNotes"),
+        adminPlaytestNotesInput: document.getElementById("adminPlaytestNotesInput"),
+        adminOpsBackup: document.getElementById("adminOpsBackup"),
+        adminBackupFile: document.getElementById("adminBackupFile"),
+        adminObserverMap: document.getElementById("adminObserverMap"),
+        adminObserverStats: document.getElementById("adminObserverStats"),
+        adminObserverSlots: document.getElementById("adminObserverSlots"),
+        adminObserverSquads: document.getElementById("adminObserverSquads"),
+        adminObserverDetails: document.getElementById("adminObserverDetails"),
+        adminObserverCommands: document.getElementById("adminObserverCommands"),
+        adminAiStats: document.getElementById("adminAiStats"),
+        adminAiUnits: document.getElementById("adminAiUnits"),
+        adminAiEvents: document.getElementById("adminAiEvents"),
         debugControls: Array.from(document.querySelectorAll("[data-debug-option]")),
         mobileControlsToggle: document.querySelector("[data-mobile-controls]"),
         mobileControls: document.getElementById("mobileControls"),
@@ -49,9 +72,35 @@
         deploymentLoadoutSlots: document.getElementById("deploymentLoadoutSlots"),
         deploymentLoadoutSummary: document.getElementById("deploymentLoadoutSummary"),
         deploymentClassBack: document.getElementById("deploymentClassBack"),
+        lobbyScreen: document.getElementById("lobbyScreen"),
+        lobbyMap: document.getElementById("lobbyMap"),
+        lobbyModeTitle: document.getElementById("lobbyModeTitle"),
+        lobbyStatus: document.getElementById("lobbyStatus"),
+        lobbyRoomCode: document.getElementById("lobbyRoomCode"),
+        lobbySlots: document.getElementById("lobbySlots"),
+        lobbySummary: document.getElementById("lobbySummary"),
+        lobbyTeamButton: document.getElementById("lobbyTeamButton"),
+        lobbyReadyButton: document.getElementById("lobbyReadyButton"),
+        lobbyStartButton: document.getElementById("lobbyStartButton"),
+        lobbyBackButton: document.getElementById("lobbyBackButton"),
+        commandPanel: document.getElementById("commandPanel"),
+        commandRadioToggle: document.getElementById("commandRadioToggle"),
+        commandRole: document.getElementById("commandRole"),
+        commandStatus: document.getElementById("commandStatus"),
+        commandAssets: document.getElementById("commandAssets"),
+        commandButtons: [],
+        commandSpecials: document.getElementById("commandSpecials"),
+        commandMap: document.getElementById("commandMap"),
+        commandLog: document.getElementById("commandLog"),
         deathScreen: document.getElementById("deathScreen"),
         deathReason: document.getElementById("deathReason"),
         deathRestartButton: document.getElementById("deathRestartButton"),
+        resultScreen: document.getElementById("resultScreen"),
+        resultCard: document.querySelector("#resultScreen .result-card"),
+        resultKicker: document.getElementById("resultKicker"),
+        resultTitle: document.getElementById("resultTitle"),
+        resultReason: document.getElementById("resultReason"),
+        resultMainButton: document.getElementById("resultMainButton"),
         modeButtons: Array.from(document.querySelectorAll("[data-mode-id]")),
         settingControls: Array.from(document.querySelectorAll("[data-setting]")),
         classButtons: Array.from(document.querySelectorAll("[data-class-id]")),
@@ -81,11 +130,36 @@
           smoke: document.getElementById("ammo-smoke")
         }
       };
+    }
 
+    setupHudModules() {
+      this.sessionFlow = IronLine.SessionFlow ? new IronLine.SessionFlow(this) : null;
+      this.entryFlow = IronLine.EntryFlow ? new IronLine.EntryFlow(this) : null;
+      this.entryFlow?.ensure();
+      this.commandRadio = IronLine.CommandRadio ? new IronLine.CommandRadio(this) : null;
+      this.commandRadio?.ensure();
+      this.overlayController = IronLine.OverlayController ? new IronLine.OverlayController(this) : null;
+      this.deploymentUI = IronLine.DeploymentUI ? new IronLine.DeploymentUI(this) : null;
+      this.lobbyUI = IronLine.LobbyUI ? new IronLine.LobbyUI(this) : null;
       this.ensureDeploymentLoadoutPanel();
+      this.ensureLobbyScreen();
+      this.ensureAdminOpsPanel();
+      this.ensureAdminObserverPanel();
+      this.ensureAdminAiLabPanel();
       this.ensureProneIndicator();
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
+    }
 
+    bindHudControls() {
+      this.bindDeploymentControls();
+      this.bindSettingsControls();
+      this.bindAdminControls();
+      this.bindMobileControls();
+      this.bindLobbyControls();
+      this.bindResultControls();
+    }
+
+    bindDeploymentControls() {
       this.nodes.classButtons.forEach((button) => {
         button.addEventListener("click", () => {
           const game = IronLine.game;
@@ -107,8 +181,21 @@
         });
       });
 
+      this.nodes.deploymentStart?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (game) {
+          this.toggleSettingsPanel(false);
+          if (!this.sessionFlow?.startFromDeployment(game)) game.enterLobby();
+        }
+      });
+    }
+
+    bindSettingsControls() {
       this.nodes.settingsButton?.addEventListener("click", () => this.toggleSettingsPanel());
       this.nodes.settingsClose?.addEventListener("click", () => this.toggleSettingsPanel(false));
+    }
+
+    bindAdminControls() {
       this.nodes.adminButton?.addEventListener("click", () => this.toggleAdminPanel());
       this.nodes.adminClose?.addEventListener("click", () => this.toggleAdminPanel(false));
       [this.nodes.adminButton, this.nodes.adminClose].forEach((node) => {
@@ -141,6 +228,17 @@
         button.addEventListener("click", () => this.runAdminAction(button.dataset.adminAction));
       });
 
+      this.nodes.adminRoomSelect?.addEventListener("change", () => this.runAdminAction("room-select"));
+
+      this.nodes.adminBackupFile?.addEventListener("change", async () => {
+        const game = IronLine.game;
+        const file = this.nodes.adminBackupFile.files?.[0] || null;
+        if (!game?.adminOps || !file) return;
+        const result = await game.adminOps.importBackupFile(file);
+        game.adminNotify?.(result.message || (result.ok ? "백업을 불러왔습니다." : "백업을 불러오지 못했습니다."));
+        this.nodes.adminBackupFile.value = "";
+      });
+
       this.nodes.debugControls.forEach((control) => {
         control.addEventListener("change", () => {
           const game = IronLine.game;
@@ -152,23 +250,62 @@
         const game = IronLine.game;
         if (game) game.setMobileControls(this.nodes.mobileControlsToggle.checked);
       });
+    }
 
+    bindMobileControls() {
       this.bindVirtualStick(this.nodes.moveStick, "move");
       this.bindVirtualStick(this.nodes.aimStick, "aim");
       this.bindVirtualButtons();
+    }
 
-      this.nodes.deploymentStart?.addEventListener("click", () => {
-        const game = IronLine.game;
-        if (game) {
-          this.toggleSettingsPanel(false);
-          game.beginDeploymentCountdown();
-        }
-      });
+    bindLobbyControls() {
+      if (this.nodes.lobbyReadyButton?.dataset.bound !== "1") {
+        this.nodes.lobbyReadyButton?.addEventListener("click", () => {
+          const game = IronLine.game;
+          if (game) game.toggleLocalReady();
+        });
+      }
 
+      if (this.nodes.lobbyTeamButton?.dataset.bound !== "1") {
+        this.nodes.lobbyTeamButton?.addEventListener("click", () => {
+          const game = IronLine.game;
+          if (game) game.toggleLocalTeam();
+        });
+      }
+
+      if (this.nodes.lobbyStartButton?.dataset.bound !== "1") {
+        this.nodes.lobbyStartButton?.addEventListener("click", () => {
+          const game = IronLine.game;
+          if (game) game.beginDeploymentCountdown();
+        });
+      }
+
+      if (this.nodes.lobbyBackButton?.dataset.bound !== "1") {
+        this.nodes.lobbyBackButton?.addEventListener("click", () => {
+          const game = IronLine.game;
+          if (game && !this.sessionFlow?.backFromLobby(game)) game.returnToDeployment();
+        });
+      }
+    }
+
+    bindResultControls() {
       this.nodes.deathRestartButton?.addEventListener("click", () => {
         const game = IronLine.game;
         if (game) game.restartMatchAfterDeath();
       });
+
+      this.nodes.resultMainButton?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (game) game.returnToMainMenu();
+      });
+    }
+
+    get selectedCommandSquads() {
+      return this.commandRadio?.selectedSquads || new Set();
+    }
+
+    get selectedCommandVehicles() {
+      return this.commandRadio?.selectedVehicles || new Set();
     }
 
     createMobileWeaponButton() {
@@ -198,297 +335,25 @@
     }
 
     ensureDeploymentLoadoutPanel() {
-      const ui = this.nodes;
-      if (ui.deploymentLoadout || !ui.deploymentClassList) return;
-
-      const panel = document.createElement("div");
-      panel.id = "deploymentLoadout";
-      panel.className = "deployment-loadout hidden";
-
-      const head = document.createElement("div");
-      head.className = "deployment-loadout-head";
-      const titleWrap = document.createElement("span");
-      const eyebrow = document.createElement("small");
-      eyebrow.textContent = "로드아웃";
-      const title = document.createElement("strong");
-      title.id = "deploymentLoadoutTitle";
-      const role = document.createElement("em");
-      role.id = "deploymentLoadoutRole";
-      titleWrap.append(eyebrow, title);
-      const backButton = document.createElement("button");
-      backButton.id = "deploymentClassBack";
-      backButton.type = "button";
-      backButton.className = "deployment-loadout-change";
-      backButton.textContent = "병과 변경";
-      head.append(titleWrap, role, backButton);
-
-      const slots = document.createElement("div");
-      slots.id = "deploymentLoadoutSlots";
-      slots.className = "deployment-loadout-slots";
-
-      const summary = document.createElement("p");
-      summary.id = "deploymentLoadoutSummary";
-      summary.className = "deployment-loadout-summary";
-
-      panel.append(head, slots, summary);
-      ui.deploymentClassList.insertAdjacentElement("afterend", panel);
-      ui.deploymentLoadout = panel;
-      ui.deploymentLoadoutTitle = title;
-      ui.deploymentLoadoutRole = role;
-      ui.deploymentLoadoutSlots = slots;
-      ui.deploymentLoadoutSummary = summary;
-      ui.deploymentClassBack = backButton;
-      backButton.addEventListener("click", () => this.setDeploymentLoadoutOpen(false));
+      return this.deploymentUI?.ensureLoadoutPanel();
     }
 
-    setDeploymentLoadoutOpen(open) {
-      this.deploymentLoadoutOpen = Boolean(open);
-      this.nodes.deploymentClassList?.classList.toggle("hidden", this.deploymentLoadoutOpen);
-      this.nodes.deploymentLoadout?.classList.toggle("hidden", !this.deploymentLoadoutOpen);
+    ensureLobbyScreen() {
+      return this.lobbyUI?.ensureScreen();
     }
 
-    toggleSettingsPanel(force = null) {
-      const panel = this.nodes.settingsPanel;
-      if (!panel) return;
-      const open = force === null ? panel.classList.contains("hidden") : Boolean(force);
-      panel.classList.toggle("hidden", !open);
+    ensureCommandPanel() {
+      return this.commandRadio?.ensure();
     }
 
-    toggleAdminPanel(force = null) {
-      if (!IronLine.game?.adminEnabled) return;
-      const panel = this.nodes.adminPanel;
-      if (!panel) return;
-      const open = force === null ? panel.classList.contains("hidden") : Boolean(force);
-      panel.classList.toggle("hidden", !open);
-      if (open) this.toggleSettingsPanel(false);
-    }
-
-    selectAdminTab(tabId = "player") {
-      const activeId = tabId || "player";
-      this.nodes.adminTabs.forEach((button) => {
-        button.classList.toggle("active", button.dataset.adminTab === activeId);
-      });
-      this.nodes.adminPages.forEach((page) => {
-        page.classList.toggle("active", page.dataset.adminPage === activeId);
-      });
-    }
-
-    runAdminAction(action) {
-      const game = IronLine.game;
-      if (!game?.adminEnabled) return false;
-      if (!game || !action) return false;
-      if (action === "spawn-selected") {
-        return game.adminSpawnTestUnit({
-          team: this.nodes.adminSpawnTeam?.value || "red",
-          unitType: this.nodes.adminSpawnUnit?.value || "infantry",
-          count: this.nodes.adminSpawnCount?.value || 1,
-          location: this.nodes.adminSpawnLocation?.value || "mouse"
-        });
-      }
-      return game.handleAdminAction(action);
-    }
-
-    bindVirtualStick(stick, type) {
-      if (!stick) return;
-      const knob = stick.querySelector("span");
-      let pointerId = null;
-
-      const update = (event) => {
-        const game = IronLine.game;
-        if (!game?.input?.virtual.enabled) return;
-        const rect = stick.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const max = rect.width * 0.34;
-        const rawX = event.clientX - centerX;
-        const rawY = event.clientY - centerY;
-        const length = Math.hypot(rawX, rawY);
-        const scale = length > max ? max / Math.max(length, 1) : 1;
-        const x = rawX * scale;
-        const y = rawY * scale;
-        if (knob) knob.style.transform = `translate(${x}px, ${y}px)`;
-
-        if (type === "move") game.input.setVirtualAxis(x / max, y / max);
-        else game.input.setVirtualAim(x / max, y / max);
-      };
-
-      const reset = () => {
-        if (type === "move") {
-          const game = IronLine.game;
-          game?.input?.setVirtualAxis(0, 0);
-          if (knob) knob.style.transform = "";
-        }
-        pointerId = null;
-      };
-
-      stick.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        pointerId = event.pointerId;
-        stick.setPointerCapture?.(pointerId);
-        update(event);
-      });
-      stick.addEventListener("pointermove", (event) => {
-        if (pointerId !== event.pointerId) return;
-        event.preventDefault();
-        update(event);
-      });
-      stick.addEventListener("pointerup", (event) => {
-        if (pointerId !== event.pointerId) return;
-        event.preventDefault();
-        reset();
-      });
-      stick.addEventListener("pointercancel", reset);
-    }
-
-    bindVirtualButtons() {
-      const bindHold = (button, onDown, onUp) => {
-        let pointerId = null;
-        button.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          pointerId = event.pointerId;
-          button.setPointerCapture?.(pointerId);
-          onDown();
-        });
-        const release = (event) => {
-          if (pointerId !== null && event?.pointerId !== undefined && event.pointerId !== pointerId) return;
-          event?.preventDefault?.();
-          pointerId = null;
-          onUp();
-        };
-        button.addEventListener("pointerup", release);
-        button.addEventListener("pointercancel", release);
-        button.addEventListener("pointerleave", release);
-      };
-
-      const bindTap = (button, onTap) => {
-        if (!button) return;
-        let pointerId = null;
-        button.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          pointerId = event.pointerId;
-          button.setPointerCapture?.(pointerId);
-          button.classList.add("pressed");
-          onTap();
-        });
-        const release = (event) => {
-          if (pointerId !== null && event?.pointerId !== undefined && event.pointerId !== pointerId) return;
-          event?.preventDefault?.();
-          pointerId = null;
-          button.classList.remove("pressed");
-        };
-        button.addEventListener("pointerup", release);
-        button.addEventListener("pointercancel", release);
-        button.addEventListener("pointerleave", release);
-      };
-
-      this.nodes.mobileKeyButtons.forEach((button) => {
-        const code = button.dataset.mobileKey;
-        bindHold(
-          button,
-          () => IronLine.game?.input?.setVirtualKey(code, true),
-          () => IronLine.game?.input?.setVirtualKey(code, false)
-        );
-      });
-
-      this.nodes.mobileMouseButtons.forEach((button) => {
-        const buttonId = Number(button.dataset.mobileMouse);
-        bindHold(
-          button,
-          () => IronLine.game?.input?.setVirtualMouseButton(buttonId, true),
-          () => IronLine.game?.input?.setVirtualMouseButton(buttonId, false)
-        );
-      });
-
-      bindTap(this.nodes.mobileWeaponButton, () => IronLine.game?.cycleMobileWeapon?.());
-    }
-
-    update(game) {
-      const ui = this.nodes;
-
-      this.updateObjectiveStrip(game);
-      this.updateDeployment(game);
-      this.updateDeathScreen(game);
-      this.updateScoreboard(game);
-      this.updateSettings(game);
-      this.updateAdminPanel(game);
-      this.updateMobileControls(game);
-
-      const inTank = Boolean(game.player.inTank);
-      const showWeaponPanel = !game.deploymentOpen && !game.result && !game.playerDeathActive && game.player.hp > 0 && !this.mobileControlsVisible;
-      ui.bottomHud?.classList.toggle("hidden", !showWeaponPanel);
-      ui.bottomHud?.classList.toggle("infantry-weapons", showWeaponPanel && !inTank);
-      this.updateProneIndicator(game, showWeaponPanel && !inTank);
-      if (!showWeaponPanel) return;
-
-      if (inTank) this.updateTankWeapons(game.player.inTank);
-      else this.updateInfantryWeapons(game.player, game);
-    }
-
-    updateProneIndicator(game, visible) {
-      const indicator = this.nodes.proneIndicator;
-      if (!indicator) return;
-      const player = game.player;
-      const transitioning = (player.proneTransitionTimer || 0) > 0;
-      const active = visible && !player.controlledDrone && (player.isProne || transitioning);
-      indicator.classList.toggle("hidden", !active);
-      indicator.classList.toggle("transitioning", transitioning);
-      if (!active) return;
-      indicator.textContent = transitioning
-        ? player.proneTargetState ? "PRONE" : "STAND"
-        : "PRONE";
-    }
-
-    updateSettings(game) {
-      this.nodes.debugControls.forEach((control) => {
-        const key = control.dataset.debugOption;
-        if (key) control.checked = Boolean(game.debug?.[key]);
-      });
-
-      if (this.nodes.mobileControlsToggle) {
-        this.nodes.mobileControlsToggle.checked = Boolean(game.settings?.mobileControls);
-      }
-
-      this.nodes.settingsButton?.setAttribute(
-        "aria-expanded",
-        String(!this.nodes.settingsPanel?.classList.contains("hidden"))
-      );
-    }
-
-    updateAdminPanel(game) {
-      const ui = this.nodes;
-      if (!game.adminEnabled) {
-        ui.adminButton?.classList.add("hidden");
-        ui.adminButton?.setAttribute("aria-hidden", "true");
-        ui.adminPanel?.classList.add("hidden");
-        return;
-      }
-      ui.adminButton?.classList.remove("hidden");
-      ui.adminButton?.setAttribute("aria-hidden", "false");
-      ui.adminButton?.setAttribute(
-        "aria-expanded",
-        String(!ui.adminPanel?.classList.contains("hidden"))
-      );
-
-      if (ui.adminStatus) {
-        const mode = game.testLab ? `테스트랩 ${game.testLab}` : game.matchStarted ? "실전 실행중" : "배치 준비";
-        const ai = game.testLabAiPaused ? "AI 정지" : "AI 작동";
-        ui.adminStatus.textContent = game.adminMessage || `${mode} · ${ai}`;
-      }
-
-      ui.adminClassButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.adminClass === game.player?.classId);
-      });
-
-      if (ui.adminWeaponSelect && document.activeElement !== ui.adminWeaponSelect) {
-        const weaponId = game.player?.weaponId || "machinegun";
-        if (ui.adminWeaponSelect.value !== weaponId) ui.adminWeaponSelect.value = weaponId;
-      }
+    toggleCommandRadio(forceOpen = null) {
+      return this.commandRadio?.toggle(forceOpen);
     }
 
     updateMobileControls(game) {
       const enabled = Boolean(game.settings?.mobileControls);
       const portrait = window.innerHeight > window.innerWidth;
-      const showControls = enabled && !portrait && !game.deploymentOpen && !game.result && !game.playerDeathActive && !game.playerDowned && game.player.hp > 0;
+      const showControls = enabled && !portrait && !game.entryOpen && !game.deploymentOpen && !game.lobbyOpen && !game.result && !game.playerDeathActive && !game.playerDowned && game.player.hp > 0;
       const inTank = Boolean(game.player?.inTank);
       const controlledDrone = Boolean(game.player?.controlledDrone);
       const canPickupDrone = Boolean(game.nearbyPlayerDroneForPickup?.());
@@ -591,12 +456,12 @@
           ui.weaponState.textContent = "기관총 사수 없음";
           ui.reloadBar.style.width = "0%";
         } else if ((tank.ammo.mg || 0) <= 0) {
-          ui.weaponState.textContent = "기관총 탄 없음";
+          ui.weaponState.textContent = "기관총 탄약 없음";
           ui.reloadBar.style.width = "0%";
         } else {
           const weapon = tank.machineGunWeapon?.() || { cooldown: 0.075 };
           const pct = IronLine.math.clamp(1 - (tank.machineGunCooldown || 0) / Math.max(weapon.cooldown || 0.075, 0.001), 0, 1);
-          ui.weaponState.textContent = `기관총 ${tank.ammo.mg}발`;
+          ui.weaponState.textContent = `MG ${tank.ammo.mg}`;
           ui.reloadBar.style.width = `${pct * 100}%`;
         }
       } else if (tank.reload.active) {
@@ -641,6 +506,7 @@
 
     updateInfantryWeapons(player, game = null) {
       const ui = this.nodes;
+      if (!ui.weaponState || !ui.reloadBar) return;
       const slotIds = ["ap", "he", "mg"];
       const inventory = player.weaponInventory || [];
 
@@ -655,8 +521,8 @@
         if (!weapon) continue;
 
         const ammo = this.weaponAmmoCount(player, weapon);
-        ui.slotLabels[slotId].textContent = `${i + 1} ${weapon.shortName || weapon.name}`;
-        ui.ammo[slotId].textContent = this.weaponAmmoText(player, weapon);
+        if (ui.slotLabels[slotId]) ui.slotLabels[slotId].textContent = `${i + 1} ${weapon.shortName || weapon.name}`;
+        if (ui.ammo[slotId]) ui.ammo[slotId].textContent = this.weaponAmmoText(player, weapon);
         slot.classList.toggle("empty", ammo !== null && ammo <= 0);
         slot.classList.toggle("active", player.activeSlot === i);
       }
@@ -687,17 +553,17 @@
         let attackText = "";
         let barPct = pct;
         if (attackDrone) {
-          const detectedSuffix = drone.detectedTimer > 0 ? " · 적 감지" : "";
+          const detectedSuffix = drone.detectedTimer > 0 ? " · 감지됨" : "";
           const failureSuffix = drone.lockFailureTimer > 0 && drone.lockFailureReason ? ` · 실패: ${drone.lockFailureReason}` : "";
           barPct = boostPct;
-          if (drone.diveActive) attackText = `자폭드론 돌입중 · Shift 강습직격${signalSuffix}${detectedSuffix}`;
-          else attackText = `자폭드론 준비 · 좌클릭 공격 / Shift 강습가속${failureSuffix}${signalSuffix}${detectedSuffix}`;
+          if (drone.diveActive) attackText = `자폭드론 돌입중 · Shift 가속${signalSuffix}${detectedSuffix}`;
+          else attackText = `FPV ready · left click attack / Shift boost${failureSuffix}${signalSuffix}${detectedSuffix}`;
         }
         ui.weaponState.textContent = attackDrone
           ? attackText
           : designationCandidate
-            ? `정찰드론 표적 지정${signalSuffix}`
-            : drone.batteryLimit ? `정찰드론 ${Math.ceil(drone.battery)}초${signalSuffix}` : `정찰드론 운용중${signalSuffix}`;
+            ? `Recon drone marking${signalSuffix}`
+            : drone.batteryLimit ? `Recon drone ${Math.ceil(drone.battery)}s${signalSuffix}` : `Recon drone active${signalSuffix}`;
         ui.reloadBar.style.width = `${barPct * 100}%`;
         return;
       }
@@ -705,13 +571,13 @@
       if (returningDrone?.autoReturn) {
         const distance = IronLine.math.distXY(player.x, player.y, returningDrone.x, returningDrone.y);
         const pct = 1 - IronLine.math.clamp(distance / Math.max(120, returningDrone.maxControlRange || 1200), 0, 1);
-        ui.weaponState.textContent = returningDrone.droneRole === "attack" ? "자폭드론 자동 복귀중" : "정찰드론 자동 복귀중";
+        ui.weaponState.textContent = returningDrone.droneRole === "attack" ? "FPV auto returning" : "Recon drone auto returning";
         ui.reloadBar.style.width = `${pct * 100}%`;
         return;
       }
       const pickupDrone = game?.nearbyPlayerDroneForPickup?.();
       if (pickupDrone) {
-        ui.weaponState.textContent = pickupDrone.droneRole === "attack" ? "자폭드론 회수 가능" : "정찰드론 회수 가능";
+        ui.weaponState.textContent = pickupDrone.droneRole === "attack" ? "FPV retrieve ready" : "Recon drone retrieve ready";
         ui.reloadBar.style.width = "100%";
         return;
       }
@@ -723,7 +589,7 @@
         const signalSuffix = weakSignal ? ` · 신호 약함 ${Math.round(signalStrength * 100)}%` : "";
         if (attackDrone) {
           const pct = IronLine.math.clamp(activeDrone.boostCharge ?? 1, 0, 1);
-          ui.weaponState.textContent = `자폭드론 준비 · E 조종 후 좌클릭 공격${signalSuffix}`;
+          ui.weaponState.textContent = `자폭드론 준비 · E 조종 · 좌클릭 공격${signalSuffix}`;
           ui.reloadBar.style.width = `${pct * 100}%`;
           return;
         }
@@ -748,7 +614,7 @@
         ui.weaponState.textContent = "무기 없음";
         ui.reloadBar.style.width = "0%";
       } else if (ammo !== null && ammo <= 0) {
-        ui.weaponState.textContent = `${weapon.name} 탄 없음`;
+        ui.weaponState.textContent = `${weapon.name} 탄약 없음`;
         ui.reloadBar.style.width = "0%";
       } else if (observedSniperTarget?.designated) {
         const ttl = Math.max(0, Math.ceil(designatedTarget?.ttl || 0));
@@ -764,7 +630,7 @@
         ui.weaponState.textContent = `정찰드론 표적 ${reconDesignationOptions.length} · 마커 클릭`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0 && game?.isPlayerScoutAimMode?.()) {
-        ui.weaponState.textContent = `드론 관측 ${reconObservedContacts.length} · 조준선 맞추기`;
+        ui.weaponState.textContent = `Recon observed ${reconObservedContacts.length} · align aim`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0) {
         ui.weaponState.textContent = `드론 관측 ${reconObservedContacts.length}`;
@@ -790,190 +656,118 @@
     }
 
     classLoadout(classId, game = null) {
-      const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
-      const equipment = game?.deploymentEquipmentForClass?.(classId) || infantryClass?.equipment || [];
-      return {
-        infantryClass,
-        slots: [0, 1, 2].map((index) => {
-          const weaponId = equipment[index];
-          const weapon = weaponId ? INFANTRY_WEAPONS[weaponId] : null;
-          const choices = game?.equipmentChoiceOptions?.(classId, index) ||
-            infantryClass?.equipmentChoices?.[index] ||
-            infantryClass?.equipmentChoices?.[String(index)] ||
-            [];
-          return {
-            index,
-            weaponId,
-            weapon,
-            choices,
-            label: ["1", "2", "3"][index],
-            role: this.loadoutSlotRole(index, weapon),
-            ammo: this.loadoutAmmoText(infantryClass, weapon)
-          };
-        })
-      };
+      return this.deploymentUI?.classLoadout(classId, game) || { infantryClass: null, slots: [] };
     }
 
     loadoutSlotRole(index, weapon) {
-      if (!weapon) return index === 2 ? "장비" : "빈 슬롯";
-      if (weapon.type === "rpg") return "대전차";
-      if (weapon.type === "repair") return "지원";
-      if (weapon.type === "grenade") return "투척";
-      if (weapon.type === "drone") return weapon.droneRole === "attack" ? "타격" : "정찰";
-      if (index === 0) return "주무기";
-      if (index === 1) return "보조";
-      return "장비";
+      return this.deploymentUI?.loadoutSlotRole(index, weapon) || "";
     }
 
     loadoutAmmoText(infantryClass, weapon) {
-      if (!weapon?.ammoKey) return "";
-      const configured = infantryClass?.defaultAmmo?.[weapon.ammoKey];
-      const ammo = configured ?? (weapon.type === "gun" ? weapon.defaultAmmo : weapon.defaultAmmo ?? 0);
-      if (ammo === undefined || ammo === null) return "";
-      if (weapon.type === "repair") return `${ammo}회`;
-      if (weapon.type === "grenade") return `${ammo}개`;
-      if (weapon.type === "drone") return `${ammo}기`;
-      return `${ammo}발`;
+      return this.deploymentUI?.loadoutAmmoText(infantryClass, weapon) || "";
     }
 
     loadoutSummaryText(classId) {
-      if (classId === "engineer") return "RPG, 수리, 고속 돌입 자폭드론 운용";
-      if (classId === "scout") return "긴 사거리 관측과 표적 보고에 특화";
-      return "화력 유지와 근거리 제압에 특화";
+      return this.deploymentUI?.loadoutSummaryText(classId) || "";
     }
 
     renderDeploymentClassCards(game) {
-      const ui = this.nodes;
-      ui.classButtons.forEach((button) => {
-        const classId = button.dataset.classId;
-        const { infantryClass, slots } = this.classLoadout(classId, game);
-        if (!infantryClass) return;
-
-        button.textContent = "";
-        const head = document.createElement("span");
-        head.className = "deployment-class-head";
-
-        const name = document.createElement("strong");
-        name.textContent = infantryClass.name || classId;
-        const summary = document.createElement("em");
-        summary.textContent = this.loadoutSummaryText(classId);
-        head.append(name, summary);
-
-        const slotRow = document.createElement("span");
-        slotRow.className = "deployment-class-slots";
-        for (const slot of slots) {
-          const item = document.createElement("span");
-          item.className = `deployment-mini-slot${slot.weapon ? "" : " empty"}`;
-          const key = document.createElement("b");
-          key.textContent = slot.label;
-          const weapon = document.createElement("span");
-          weapon.textContent = slot.weapon?.shortName || "비어 있음";
-          item.append(key, weapon);
-          slotRow.append(item);
-        }
-
-        button.append(head, slotRow);
-      });
-
-      this.deploymentClassesBuilt = true;
-      this.updateDeploymentLoadout(game);
+      return this.deploymentUI?.renderClassCards(game);
     }
 
     updateDeploymentLoadout(game) {
-      const ui = this.nodes;
-      if (!ui.deploymentLoadoutSlots) return;
-
-      const classId = game.player.classId || "infantry";
-      const { infantryClass, slots } = this.classLoadout(classId, game);
-      if (!infantryClass) return;
-      const signature = `${classId}:${slots.map((slot) => `${slot.weaponId || ""}:${slot.ammo || ""}:${(slot.choices || []).join("|")}`).join(",")}`;
-      if (ui.deploymentLoadoutSlots.dataset.signature === signature) return;
-
-      if (ui.deploymentLoadoutTitle) ui.deploymentLoadoutTitle.textContent = infantryClass.name || classId;
-      if (ui.deploymentLoadoutRole) ui.deploymentLoadoutRole.textContent = this.loadoutSummaryText(classId);
-      if (ui.deploymentLoadoutSummary) ui.deploymentLoadoutSummary.textContent = infantryClass.description || "";
-
-      ui.deploymentLoadoutSlots.textContent = "";
-      ui.deploymentLoadoutSlots.dataset.signature = signature;
-      for (const slot of slots) {
-        const row = document.createElement("div");
-        row.className = `deployment-loadout-slot${slot.weapon ? "" : " empty"}`;
-
-        const key = document.createElement("span");
-        key.className = "loadout-key";
-        key.textContent = slot.label;
-
-        const body = document.createElement("span");
-        body.className = "loadout-body";
-        const role = document.createElement("small");
-        role.textContent = slot.role;
-        const weapon = document.createElement("strong");
-        weapon.textContent = slot.weapon?.name || "비어 있음";
-        body.append(role, weapon);
-
-        const actions = document.createElement("span");
-        actions.className = "loadout-actions";
-
-        const ammo = document.createElement("span");
-        ammo.className = "loadout-ammo";
-        ammo.textContent = slot.ammo || "-";
-        actions.append(ammo);
-
-        if (slot.choices?.length > 1) {
-          const swap = document.createElement("button");
-          swap.type = "button";
-          swap.className = "loadout-swap";
-          swap.textContent = "\uAD50\uCCB4";
-          swap.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (game.cycleDeploymentEquipmentChoice?.(slot.index)) this.updateDeploymentLoadout(game);
-          });
-          actions.append(swap);
-        }
-
-        row.append(key, body, actions);
-        ui.deploymentLoadoutSlots.append(row);
-      }
+      return this.deploymentUI?.updateLoadout(game);
     }
 
     updateDeployment(game) {
-      const ui = this.nodes;
-      if (!ui.deploymentScreen) return;
-
-      ui.deploymentScreen.classList.toggle("hidden", !game.deploymentOpen);
-
-      if (!this.deploymentClassesBuilt) this.renderDeploymentClassCards(game);
-      if (!game.deploymentOpen) this.deploymentLoadoutOpen = false;
-      this.setDeploymentLoadoutOpen(this.deploymentLoadoutOpen && game.deploymentOpen);
-
-      if (!this.deploymentMapBuilt) {
-        this.buildDeploymentMap(game);
-        this.deploymentMapBuilt = true;
-      }
-
-      ui.classButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.classId === game.player.classId);
-      });
-      this.updateDeploymentLoadout(game);
-
-      ui.modeButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.modeId === game.matchConfig.mode);
-      });
-
-      ui.settingControls.forEach((control) => {
-        const key = control.dataset.setting;
-        if (!key || document.activeElement === control) return;
-        const value = game.matchConfig[key];
-        if (value !== undefined) control.value = value;
-      });
+      return this.deploymentUI?.update(game);
     }
 
     updateDeathScreen(game) {
       const visible = Boolean(game.playerDeathActive && !game.result);
       this.nodes.deathScreen?.classList.toggle("hidden", !visible);
       if (this.nodes.deathReason) {
-        this.nodes.deathReason.textContent = game.playerDeathReason || "적 공격으로 쓰러졌습니다.";
+        const respawn = game.matchConfig?.mode === "conquest" && Number.isFinite(game.playerRespawnTimer)
+          ? ` respawn ${Math.max(0, Math.ceil(game.playerRespawnTimer))}s`
+          : "";
+        this.nodes.deathReason.textContent = `${game.playerDeathReason || "전투 불능 상태입니다."}${respawn}`;
       }
+      if (this.nodes.deathRestartButton) {
+        this.nodes.deathRestartButton.textContent = game.matchConfig?.mode === "conquest" ? "즉시 리스폰" : "다시 시작";
+      }
+    }
+
+    updateResultScreen(game) {
+      const visible = Boolean(game.result);
+      const victory = game.result === "BLUE VICTORY";
+      const draw = game.result === "DRAW";
+      this.nodes.resultScreen?.classList.toggle("hidden", !visible);
+      this.nodes.resultCard?.classList.toggle("lost", visible && !victory && !draw);
+      if (!visible) return;
+      if (this.nodes.resultKicker) this.nodes.resultKicker.textContent = draw ? "작전 종료" : victory ? "작전 성공" : "작전 실패";
+      if (this.nodes.resultTitle) this.nodes.resultTitle.textContent = draw ? "무승부" : victory ? "승리" : "패배";
+      if (this.nodes.resultReason) this.nodes.resultReason.textContent = game.resultReason || "전투 종료";
+      if (this.nodes.resultMainButton) this.nodes.resultMainButton.textContent = "로비로 돌아가기";
+    }
+
+    updateLobby(game) {
+      return this.lobbyUI?.update(game);
+    }
+
+    createLobbyPlayerCard(player, session = {}) {
+      return this.lobbyUI?.createPlayerCard(player, session) || document.createElement("div");
+    }
+
+    createLobbyEmptySlot(index) {
+      return this.lobbyUI?.createEmptySlot(index) || document.createElement("div");
+    }
+
+    playerInitials(name) {
+      return this.lobbyUI?.playerInitials(name) || "?";
+    }
+
+    updateLobbySlots(game) {
+      return this.lobbyUI?.updateSlots(game);
+    }
+
+    renderLobbyTeam(parent, options) {
+      return this.lobbyUI?.renderTeam(parent, options);
+    }
+
+    createLobbyRoleSlotCard(slot, players, session = {}) {
+      return this.lobbyUI?.createRoleSlotCard(slot, players, session) || document.createElement("div");
+    }
+
+    roleInitial(roleId) {
+      return this.lobbyUI?.roleInitial(roleId) || "?";
+    }
+
+    slotAssetText(slot) {
+      return this.lobbyUI?.slotAssetText(slot) || "";
+    }
+
+    lobbyPlayerBadges(flags) {
+      return this.lobbyUI?.playerBadges(flags) || "";
+    }
+
+    updateLobbySummary(game) {
+      return this.lobbyUI?.updateSummary(game);
+    }
+
+    updateCommandPanel(game) {
+      return this.commandRadio?.update(game);
+    }
+
+    commandLabel(type) {
+      return this.commandRadio?.commandLabel(type) || type;
+    }
+
+    submitCurrentCommand(game, point, objectiveName = "", extra = {}) {
+      return this.commandRadio?.submitCurrentCommand(game, point, objectiveName, extra) || { accepted: false, reason: "radio_unavailable" };
+    }
+
+    showCommandResult(result) {
+      return this.commandRadio?.showCommandResult(result);
     }
 
     invalidateDeploymentMap() {
@@ -982,70 +776,132 @@
 
     buildDeploymentMap(game) {
       const map = this.nodes.deploymentMap;
-      if (!map) return;
+      this.buildMapMarkers(game, map);
+    }
 
+    buildAdminSnapshotMap(snapshot, map) {
+      if (!snapshot || !map) return;
+      const now = performance.now();
+      if (map.dataset.snapshotReady === "1" && now < Number(map.dataset.nextSnapshotRefresh || 0)) return;
+      map.dataset.snapshotReady = "1";
+      map.dataset.nextSnapshotRefresh = String(now + 450);
       map.textContent = "";
-      const width = game.world.width || 1;
-      const height = game.world.height || 1;
 
-      const addMarker = (kind, label, x, y) => {
+      const width = snapshot.world?.width || 1;
+      const height = snapshot.world?.height || 1;
+      const addMarker = (kind, label, x, y, inspectKind = "", inspectId = "") => {
         const marker = document.createElement("span");
         marker.className = `map-marker ${kind}`;
         marker.textContent = label;
         marker.style.left = `${IronLine.math.clamp(x / width, 0, 1) * 100}%`;
         marker.style.top = `${IronLine.math.clamp(y / height, 0, 1) * 100}%`;
+        if (inspectKind && inspectId) {
+          marker.classList.add("inspectable");
+          marker.classList.toggle("selected", this.isAdminInspectSelected(inspectKind, inspectId));
+          marker.title = `${inspectKind} ${inspectId}`;
+          marker.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectAdminInspectTarget(inspectKind, inspectId);
+          });
+        }
         map.appendChild(marker);
       };
 
-      for (const point of game.capturePoints) {
-        addMarker("objective", point.name, point.x, point.y);
+      for (const point of snapshot.capturePoints || []) {
+        addMarker("objective", point.name, point.x, point.y, "objective", point.name);
       }
+      for (const zone of snapshot.world?.safeZones || []) {
+        addMarker(`base-${zone.team === TEAM.BLUE ? "blue" : "red"}`, "기지", zone.x, zone.y);
+      }
+      for (const squad of snapshot.squads || []) {
+        if (!Number.isFinite(squad.x) || !Number.isFinite(squad.y)) continue;
+        addMarker(`unit-${squad.team === TEAM.BLUE ? "blue" : "red"}`, "", squad.x, squad.y, "squad", squad.id);
+      }
+      for (const vehicle of snapshot.vehicles || []) {
+        addMarker(`unit-${vehicle.team === TEAM.BLUE ? "blue" : "red"}`, "", vehicle.x, vehicle.y, "vehicle", vehicle.id);
+      }
+    }
+
+    buildMapMarkers(game, map) {
+      if (!map) return;
+
+      const lobbyMap = map === this.nodes.lobbyMap;
+      const commandMap = map === this.nodes.commandMap;
+      const observerMap = map === this.nodes.adminObserverMap;
+      const now = performance.now();
+      const refreshMs = commandMap ? 650 : observerMap ? 700 : lobbyMap ? 1000 : 0;
+      if (refreshMs > 0 && map.dataset.markersReady === "1" && now < Number(map.dataset.nextMarkerRefresh || 0)) {
+        return;
+      }
+      if (refreshMs > 0) {
+        map.dataset.markersReady = "1";
+        map.dataset.nextMarkerRefresh = String(now + refreshMs);
+      }
+
+      map.textContent = "";
+      const width = game.world.width || 1;
+      const height = game.world.height || 1;
+
+      const addMarker = (kind, label, x, y, inspectKind = "", inspectId = "") => {
+        const marker = document.createElement("span");
+        marker.className = `map-marker ${kind}`;
+        marker.textContent = label;
+        marker.style.left = `${IronLine.math.clamp(x / width, 0, 1) * 100}%`;
+        marker.style.top = `${IronLine.math.clamp(y / height, 0, 1) * 100}%`;
+        if (observerMap && inspectKind && inspectId) {
+          marker.classList.add("inspectable");
+          marker.classList.toggle("selected", this.isAdminInspectSelected(inspectKind, inspectId));
+          marker.title = `${inspectKind} ${inspectId}`;
+          marker.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectAdminInspectTarget(inspectKind, inspectId);
+          });
+        }
+        map.appendChild(marker);
+        return marker;
+      };
+
+      game.capturePoints.forEach((point, index) => {
+        const marker = addMarker("objective", lobbyMap ? String(index + 1) : point.name, point.x, point.y, "objective", point.name);
+        if (commandMap) {
+          marker.dataset.objectiveName = point.name;
+          marker.title = `${point.name} 거점 명령`;
+          marker.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const result = this.submitCurrentCommand(game, null, point.name);
+            this.showCommandResult(result);
+            if (result?.accepted) {
+              this.commandRadio?.handleObjectiveAccepted(game);
+            }
+          });
+        }
+      });
 
       for (const zone of game.world.safeZones || []) {
         addMarker(`base-${zone.team === TEAM.BLUE ? "blue" : "red"}`, "기지", zone.x, zone.y);
       }
 
-      for (const tank of game.tanks) {
-        if (!tank.alive) continue;
-        addMarker(`unit-${tank.team === TEAM.BLUE ? "blue" : "red"}`, "", tank.x, tank.y);
+      if (observerMap) {
+        for (const squad of this.localSquadSnapshots(game)) {
+          if (!Number.isFinite(squad.x) || !Number.isFinite(squad.y)) continue;
+          addMarker(`unit-${squad.team === TEAM.BLUE ? "blue" : "red"}`, "", squad.x, squad.y, "squad", squad.id);
+        }
       }
 
-      for (const humvee of game.humvees || []) {
-        if (!humvee.alive) continue;
-        addMarker(`unit-${humvee.team === TEAM.BLUE ? "blue" : "red"}`, "", humvee.x, humvee.y);
+      if (!commandMap) {
+        for (const tank of game.tanks) {
+          if (!tank.alive) continue;
+          addMarker(`unit-${tank.team === TEAM.BLUE ? "blue" : "red"}`, "", tank.x, tank.y, "vehicle", tank.callSign);
+        }
+
+        for (const humvee of game.humvees || []) {
+          if (!humvee.alive) continue;
+          addMarker(`unit-${humvee.team === TEAM.BLUE ? "blue" : "red"}`, "", humvee.x, humvee.y, "vehicle", humvee.callSign);
+        }
       }
-    }
-
-    updateScoreboard(game) {
-      const visible = Boolean(game.input?.keyDown("Tab"));
-      const board = this.nodes.scoreboard;
-      if (!board) return;
-
-      board.classList.toggle("visible", visible);
-
-      const blue = this.teamStats(game, TEAM.BLUE);
-      const red = this.teamStats(game, TEAM.RED);
-      blue.kills = red.deaths;
-      red.kills = blue.deaths;
-
-      if (this.nodes.scoreboardTitle) {
-        this.nodes.scoreboardTitle.textContent = `${this.modeLabel(game)} 현황`;
-      }
-      this.nodes.scoreboardTimer.textContent = this.formatTime(game.matchTime || 0);
-      this.nodes.scoreboardGrid.innerHTML = [
-        this.scoreCell("팀", "header"),
-        this.scoreCell("생존", "header"),
-        this.scoreCell("전차", "header"),
-        this.scoreCell("보병", "header"),
-        this.scoreCell("K", "header"),
-        this.scoreCell("D", "header"),
-        ...this.teamRow("아군", blue, "blue"),
-        ...this.teamRow("적군", red, "red")
-      ].join("");
-    }
-
-    modeLabel(game) {
-      return game.matchConfig?.mode === "flags" ? "깃발전" : "섬멸전";
     }
 
     teamStats(game, team) {
@@ -1071,20 +927,76 @@
       };
     }
 
-    teamRow(label, stats, teamClass) {
-      return [
-        this.scoreCell(label, `team-${teamClass}`),
+    scoreCell(value, extraClass = "") {
+      const className = `scoreboard-cell ${extraClass}`.trim();
+      return `<div class="${className}">${value}</div>`;
+    }
+
+    updateScoreboard(game) {
+      const visible = Boolean(game.input?.keyDown("Tab"));
+      const board = this.nodes.scoreboard;
+      if (!board) return;
+
+      board.classList.toggle("visible", visible);
+
+      const conquest = game.matchConfig?.mode === "conquest";
+      const blue = this.teamStats(game, TEAM.BLUE);
+      const red = this.teamStats(game, TEAM.RED);
+      blue.kills = red.deaths;
+      red.kills = blue.deaths;
+
+      if (this.nodes.scoreboardTitle) {
+        this.nodes.scoreboardTitle.textContent = `${this.modeLabel(game)} 현황`;
+      }
+      if (this.nodes.scoreboardTimer) {
+        const seconds = conquest ? game.conquest?.remaining ?? 0 : game.matchTime || 0;
+        this.nodes.scoreboardTimer.textContent = this.formatTime(seconds);
+      }
+      if (this.nodes.scoreboardGrid) {
+        this.nodes.scoreboardGrid.classList.toggle("conquest", conquest);
+        this.nodes.scoreboardGrid.style.gridTemplateColumns = conquest ? "repeat(7, 1fr)" : "";
+        this.nodes.scoreboardGrid.innerHTML = conquest
+          ? [
+              this.scoreCell("팀", "header"),
+              this.scoreCell("점수", "header"),
+              this.scoreCell("생존", "header"),
+              this.scoreCell("차량", "header"),
+              this.scoreCell("보병", "header"),
+              this.scoreCell("K", "header"),
+              this.scoreCell("D", "header"),
+              ...this.teamRow("청팀", blue, "blue", game.conquest?.score?.[TEAM.BLUE] || 0),
+              ...this.teamRow("홍팀", red, "red", game.conquest?.score?.[TEAM.RED] || 0)
+            ].join("")
+          : [
+              this.scoreCell("팀", "header"),
+              this.scoreCell("생존", "header"),
+              this.scoreCell("차량", "header"),
+              this.scoreCell("보병", "header"),
+              this.scoreCell("K", "header"),
+              this.scoreCell("D", "header"),
+              ...this.teamRow("청팀", blue, "blue"),
+              ...this.teamRow("홍팀", red, "red")
+            ].join("");
+      }
+    }
+
+    modeLabel(game) {
+      return game.matchConfig?.mode === "conquest" ? "점령전" : "섬멸전";
+    }
+
+    teamRow(label, stats, teamClass, score = null) {
+      const row = [
+        this.scoreCell(label, `team-${teamClass}`)
+      ];
+      if (score !== null) row.push(this.scoreCell(Math.floor(score)));
+      row.push(
         this.scoreCell(`${stats.alive}/${stats.total}`),
         this.scoreCell(stats.tanks),
         this.scoreCell(stats.infantry),
         this.scoreCell(stats.kills),
         this.scoreCell(stats.deaths)
-      ];
-    }
-
-    scoreCell(value, extraClass = "") {
-      const className = `scoreboard-cell ${extraClass}`.trim();
-      return `<div class="${className}">${value}</div>`;
+      );
+      return row;
     }
 
     updateObjectiveStrip(game) {
@@ -1127,14 +1039,20 @@
     }
 
     holdText(game) {
+      if (game.matchConfig?.mode === "conquest") {
+        const blue = Math.floor(game.conquest?.score?.[TEAM.BLUE] || 0);
+        const red = Math.floor(game.conquest?.score?.[TEAM.RED] || 0);
+        return `점령전 ${blue} : ${red}`;
+      }
+
       if ((game.objectiveHold?.[TEAM.BLUE] || 0) > 0) {
         const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.BLUE]));
-        return `아군 거점 유지 ${remaining}초`;
+        return `청팀 거점 장악 ${remaining}s`;
       }
 
       if ((game.objectiveHold?.[TEAM.RED] || 0) > 0) {
         const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.RED]));
-        return `적군 거점 유지 ${remaining}초`;
+        return `홍팀 거점 장악 ${remaining}s`;
       }
 
       return "";
@@ -1147,6 +1065,8 @@
       return `${minutes}:${rest}`;
     }
   }
+
+  IronLine.installHudAdminUi?.(Hud);
 
   IronLine.Hud = Hud;
 })(window);

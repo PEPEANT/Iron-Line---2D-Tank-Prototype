@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <title>Iron Line - 관리자 관전센터</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin-observer.css">
+  </head>
+  <body class="admin-standalone-page">
+    <canvas id="game" tabindex="0" aria-label="Iron Line 관리자 전장 관전 화면"></canvas>
+
+    <section class="admin-panel hidden" id="adminPanel" aria-label="관리자 관전 패널">
+      <div class="admin-head">
+        <div>
+          <strong>Iron Line 운영센터</strong>
+          <span id="adminStatus">관전 준비</span>
+        </div>
+        <button type="button" id="adminClose" aria-label="관리자 패널 닫기">&times;</button>
+      </div>
+
+      <div class="admin-tabs" role="tablist" aria-label="관리자 탭">
+        <button type="button" class="active" data-admin-tab="player">접속자</button>
+        <button type="button" data-admin-tab="spawn">스폰</button>
+        <button type="button" data-admin-tab="ai">AI 연구실</button>
+      </div>
+
+      <div class="admin-page active" data-admin-page="player">
+        <p class="admin-hint">관리자는 플레이어로 접속하지 않고 전장 상태와 방 상태만 관전합니다.</p>
+      </div>
+
+      <div class="admin-page" data-admin-page="spawn">
+        <p class="admin-hint">운영 테스트용 스폰 제어입니다. 관전/실험 중에만 사용합니다.</p>
+      </div>
+
+      <div class="admin-page" data-admin-page="ai">
+        <div class="admin-grid-actions">
+          <button type="button" data-admin-action="toggle-ai">AI 정지/재개</button>
+          <button type="button" data-admin-action="clear-effects">이펙트 제거</button>
+          <button type="button" data-admin-action="debug-ai">AI 생각 표시</button>
+          <button type="button" data-admin-action="debug-nav">경로 그래프 표시</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="src/core/math.js"></script>
+    <script src="src/data/constants.js"></script>
+    <script src="src/data/infantry-weapons.js"></script>
+    <script src="src/data/infantry-classes.js"></script>
+    <script src="src/data/player-skins.js"></script>
+    <script src="src/systems/faction-visuals.js"></script>
+    <script src="src/data/scenery-catalog.js"></script>
+    <script src="src/data/map01.js"></script>
+    <script src="src/data/map01-custom-layout.js"></script>
+    <script src="src/core/input.js"></script>
+    <script src="src/systems/admin-camera.js"></script>
+    <script src="src/systems/physics.js"></script>
+    <script src="src/systems/cover-slots.js"></script>
+    <script src="src/systems/command-bus.js"></script>
+    <script src="src/systems/ai-observatory.js"></script>
+    <script src="src/systems/observer-bridge.js"></script>
+    <script src="src/systems/battlefield-events.js"></script>
+    <script src="src/systems/room-registry.js"></script>
+    <script src="src/systems/admin-ops.js"></script>
+    <script src="src/entities/player.js"></script>
+    <script src="src/entities/recon-drone.js"></script>
+    <script src="src/entities/suicide-drone.js"></script>
+    <script src="src/entities/tank.js"></script>
+    <script src="src/entities/humvee.js"></script>
+    <script src="src/entities/crew-member.js"></script>
+    <script src="src/entities/infantry-unit.js"></script>
+    <script src="src/entities/capture-point.js"></script>
+    <script src="src/ai/pathfinding.js"></script>
+    <script src="src/ai/squad-ai.js"></script>
+    <script src="src/ai/commander-ai.js"></script>
+    <script src="src/ai/navigation-agent.js"></script>
+    <script src="src/ai/humvee-ai.js"></script>
+    <script src="src/ai/combat-controller.js"></script>
+    <script src="src/ai/infantry-ai.js"></script>
+    <script src="src/ai/infantry-debug-state.js"></script>
+    <script src="src/ai/infantry-tactical-decision.js"></script>
+    <script src="src/ai/infantry-repair-decision.js"></script>
+    <script src="src/ai/infantry-weapon-decision.js"></script>
+    <script src="src/ai/tank-ai.js"></script>
+    <script src="src/systems/combat.js"></script>
+    <script src="src/systems/hud-admin-labels.js"></script>
+    <script src="src/systems/overlay-controller.js"></script>
+    <script src="src/systems/hud-admin-ui.js"></script>
+    <script src="src/systems/hud.js"></script>
+    <script src="src/systems/renderer.js"></script>
+    <script src="src/systems/renderer-vehicle.js"></script>
+    <script src="src/systems/renderer-scenery.js"></script>
+    <script src="src/systems/renderer-drone.js"></script>
+    <script src="src/systems/renderer-minimap.js"></script>
+    <script src="src/systems/renderer-debug.js"></script>
+    <script src="src/systems/game-session-state.js"></script>
+    <script src="src/systems/game-admin-actions.js"></script>
+    <script src="src/systems/game-drone-system.js"></script>
+    <script src="src/systems/game-player-control.js"></script>
+    <script src="src/systems/fog-of-war.js"></script>
+    <script src="src/main.js"></script>
+  </body>
+</html>

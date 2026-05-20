@@ -37,8 +37,10 @@
     grenadeVehicleThreatRange: 150,
     grenadeFriendlySafety: 56,
     grenadeScoreThreshold: 2,
-    grenadeCooldownMin: 5.4,
-    grenadeCooldownMax: 8.2,
+    grenadeCooldownMin: 8.8,
+    grenadeCooldownMax: 13.4,
+    grenadeAimMin: 0.42,
+    grenadeAimMax: 0.95,
     repairSearchRange: 760,
     repairUnsafeEnemyRange: 540,
     repairHoldDistance: 58,
@@ -57,6 +59,8 @@
     reactionDelayMax: 0.82,
     fireFacingTolerance: 0.42
   };
+
+  IronLine.InfantryAIConfig = INFANTRY_CONFIG;
 
   class InfantryAI {
     constructor(unit, game) {
@@ -90,6 +94,12 @@
       this.rpgAimTime = 0;
       this.rpgAimRequired = 0;
       this.rpgHoldReason = "";
+      this.grenadeAimTargetKey = "";
+      this.grenadeAimTime = 0;
+      this.grenadeAimRequired = 0;
+      this.grenadePreparing = false;
+      this.repairDecision = null;
+      this.tacticalDecision = null;
       this.moveHeading = unit.angle;
       this.seed = this.hash(unit.callSign);
       this.thoughtText = "";
@@ -108,6 +118,12 @@
         rpgAim: 0,
         rpgAimRequired: 0,
         rpgHoldReason: "",
+        grenadeAim: 0,
+        grenadeAimRequired: 0,
+        grenadePreparing: false,
+        decision: null,
+        repairDecision: null,
+        tacticalDecision: null,
         grenadeAmmo: this.unit.equipmentAmmo?.grenade || 0,
         repairAmmo: this.unit.equipmentAmmo?.repairKit || 0,
         squadId: "",
@@ -205,6 +221,8 @@
       this.coverTimer = Math.max(0, this.coverTimer - dt);
       this.reportTimer = Math.max(0, this.reportTimer - dt);
       this.rpgHoldReason = "";
+      this.repairDecision = null;
+      this.tacticalDecision = null;
 
       const order = this.resolveOrder();
       this.order = order;
@@ -231,7 +249,15 @@
       const pressureThreat = this.unit.suppression >= INFANTRY_CONFIG.suppressedThreshold
         ? contact || tankThreat || this.unit.lastThreat
         : null;
-      if (pressureThreat) {
+      this.tacticalDecision = this.evaluateTacticalDecision?.(order, contact, tankThreat, {
+        pressureThreat,
+        reportedVehicleThreat,
+        reportedContact
+      }) || null;
+
+      if (this.executeTacticalSpread?.(dt, this.tacticalDecision, tankThreat || pressureThreat, beforeX, beforeY)) return;
+
+      if (pressureThreat && !(pressureThreat.vehicleType && this.tacticalDecision?.decision === "advance")) {
         const coverTarget = this.resolveCoverTarget(pressureThreat);
         this.state = "suppressed";
         this.target = contact || tankThreat || pressureThreat;
@@ -279,18 +305,21 @@
       if (repairTarget) {
         const weapon = INFANTRY_WEAPONS.repairKit;
         const repairDistance = distXY(this.unit.x, this.unit.y, repairTarget.x, repairTarget.y);
-        const repairHoldRange = (weapon.range || 72) + repairTarget.radius + 150;
+        const repairRange = this.repairWorkRange(repairTarget);
+        const repairActionRange = repairRange + 20;
+        const repairHoldRange = repairActionRange + 130;
         this.state = "repair-tank";
         this.target = repairTarget;
         this.faceContact(repairTarget, dt);
         if (repairDistance <= repairHoldRange) {
           repairTarget.requestRepairHold?.(this.unit, {
-            duration: repairDistance <= (weapon.range || 72) + repairTarget.radius + 18 ? 0.82 : 0.48
+            duration: repairDistance <= repairActionRange ? 0.9 : 0.48
           });
         }
 
-        if (repairDistance > (weapon.range || 72) + repairTarget.radius - 6) {
+        if (repairDistance > repairActionRange) {
           const repairMoveTarget = this.repairMoveTarget(repairTarget);
+          this.repairDecision = this.repairDecisionFor(repairTarget, repairDistance, repairActionRange, "approaching");
           this.moveTo(dt, repairMoveTarget);
           this.recordMovement(dt, beforeX, beforeY, repairMoveTarget);
           this.updateDebug(repairMoveTarget);
@@ -298,170 +327,27 @@
         }
 
         this.unit.speed = approach(this.unit.speed, 0, 260 * dt);
-        this.tryRepairTank(repairTarget);
+        this.tryRepairTank(repairTarget, { rangeBonus: 20 });
         this.updateDebug(null);
         return;
       }
 
       const grenadeTarget = this.selectGrenadeTarget(contact, tankThreat);
-      if (grenadeTarget && this.tryThrowGrenade(grenadeTarget)) {
-        this.state = "grenade";
-        this.target = grenadeTarget.target || contact;
+      if (grenadeTarget) {
         this.faceContact(grenadeTarget, dt);
-        this.unit.speed = approach(this.unit.speed, 0, 260 * dt);
-        this.updateDebug(grenadeTarget);
-        return;
-      }
-
-      if (tankThreat) {
-        const tankDistance = distXY(this.unit.x, this.unit.y, tankThreat.x, tankThreat.y);
-        const hasRpg = this.hasRpg();
-        const pressureCount = hasRpg ? this.rpgPressureCount(tankThreat) : 0;
-        let coverResolved = false;
-        let coverTarget = null;
-        let evadeResolved = false;
-        let evadeTarget = null;
-        const getCoverTarget = () => {
-          if (!coverResolved) {
-            coverTarget = this.resolveCoverTarget(tankThreat);
-            coverResolved = true;
-          }
-          return coverTarget;
-        };
-        const getEvadeTarget = () => {
-          if (!evadeResolved) {
-            evadeTarget = this.vehicleEvadeTarget(tankThreat, order);
-            evadeResolved = true;
-          }
-          return evadeTarget;
-        };
-
-        if (tankDistance < (hasRpg ? INFANTRY_CONFIG.rpgDangerRange : 330)) {
-          const closeEvadeTarget = getEvadeTarget();
-          if (closeEvadeTarget) {
-            this.state = "evade-tank";
-            this.target = tankThreat;
-            this.faceContact(tankThreat, dt);
-            this.moveTo(dt, closeEvadeTarget);
-            this.recordMovement(dt, beforeX, beforeY, closeEvadeTarget);
-            this.updateDebug(closeEvadeTarget);
-            return;
-          }
-        }
-
-        if (hasRpg) {
-          const canFireRpg = this.canFireRpgAtTank(tankThreat, tankDistance);
-          const rpgProfile = this.rpgShotProfile(tankThreat, tankDistance, pressureCount);
-          const wantsBetterPosition = !canFireRpg ||
-            tankDistance < INFANTRY_CONFIG.rpgPreferredMin ||
-            tankDistance > INFANTRY_CONFIG.rpgPreferredMax ||
-            rpgProfile.frontArmorHold;
-          const rpgPosition = wantsBetterPosition
-            ? this.rpgFirePosition(tankThreat, order, pressureCount)
-            : null;
-
-          if (canFireRpg) {
-            this.state = "rpg-attack";
-            this.target = tankThreat;
-            this.faceContact(tankThreat, dt);
-            this.tryFireRpgAtTank(tankThreat, dt, rpgProfile);
-
-            if (
-              rpgPosition &&
-              distXY(this.unit.x, this.unit.y, rpgPosition.x, rpgPosition.y) > (rpgPosition.stopDistance || 18) + 12
-            ) {
-              this.moveTo(dt, rpgPosition);
-              this.recordMovement(dt, beforeX, beforeY, rpgPosition);
-              this.updateDebug(rpgPosition);
-              return;
-            }
-
-            if (tankDistance < INFANTRY_CONFIG.rpgPanicRange) {
-              const coverTarget = getCoverTarget();
-              if (coverTarget) {
-                this.moveTo(dt, coverTarget);
-                this.recordMovement(dt, beforeX, beforeY, coverTarget);
-                this.updateDebug(coverTarget);
-                return;
-              }
-            }
-
-            this.unit.speed = approach(this.unit.speed, 0, 220 * dt);
-            this.updateDebug(null);
-            return;
-          }
-
-          if (rpgPosition) {
-            this.state = "rpg-position";
-            this.target = tankThreat;
-            this.faceContact(tankThreat, dt);
-            this.moveTo(dt, rpgPosition);
-            this.recordMovement(dt, beforeX, beforeY, rpgPosition);
-            this.updateDebug(rpgPosition);
-            return;
-          }
-        }
-
-        if (!hasRpg && (!contact || tankDistance < INFANTRY_CONFIG.tankEvadeRange)) {
-          const fallbackEvadeTarget = getEvadeTarget();
-          if (fallbackEvadeTarget) {
-            this.state = "evade-tank";
-            this.target = tankThreat;
-            this.faceContact(tankThreat, dt);
-            this.moveTo(dt, fallbackEvadeTarget);
-            this.recordMovement(dt, beforeX, beforeY, fallbackEvadeTarget);
-            this.updateDebug(fallbackEvadeTarget);
-            return;
-          }
-        }
-
-        const canHarassTank = this.canHarassTank(tankThreat, tankDistance);
-        if (canHarassTank) {
-          this.state = "harass-tank";
-          this.target = tankThreat;
-          this.faceContact(tankThreat, dt);
-          this.tryFireTank(tankThreat);
-
-          if (tankDistance < 420) {
-            const coverTarget = getCoverTarget();
-            if (coverTarget) {
-              this.moveTo(dt, coverTarget);
-              this.recordMovement(dt, beforeX, beforeY, coverTarget);
-              this.updateDebug(coverTarget);
-              return;
-            }
-          }
-
-          this.unit.speed = approach(this.unit.speed, 0, 220 * dt);
-          this.updateDebug(null);
+        const grenadeThrown = this.tryThrowGrenade(grenadeTarget, dt);
+        if (grenadeThrown || this.grenadePreparing) {
+          this.state = grenadeThrown ? "grenade" : "grenade-aim";
+          this.target = grenadeTarget.target || contact;
+          this.unit.speed = approach(this.unit.speed, 0, 260 * dt);
+          this.updateDebug(grenadeTarget);
           return;
         }
-
-        if (!contact || tankDistance < 520) {
-          const coverTarget = getCoverTarget();
-          if (coverTarget) {
-            this.state = "cover";
-            this.target = contact || tankThreat;
-            this.faceContact(this.target, dt);
-            if (contact) this.tryFire(contact);
-            this.moveTo(dt, coverTarget);
-            this.recordMovement(dt, beforeX, beforeY, coverTarget);
-            this.updateDebug(coverTarget);
-            return;
-          }
-        }
-
-        const lateEvadeTarget = getEvadeTarget();
-        if (lateEvadeTarget && (!contact || tankDistance < INFANTRY_CONFIG.tankEvadeRange)) {
-          this.state = "evade-tank";
-          this.target = tankThreat;
-          this.faceContact(tankThreat, dt);
-          this.moveTo(dt, lateEvadeTarget);
-          this.recordMovement(dt, beforeX, beforeY, lateEvadeTarget);
-          this.updateDebug(lateEvadeTarget);
-          return;
-        }
+      } else if (this.grenadePreparing) {
+        this.grenadePreparing = false;
       }
+
+      if (this.handleTankThreat(dt, order, contact, tankThreat, beforeX, beforeY)) return;
 
       if (reportedVehicleThreat) {
         if (this.handleReportedVehicleThreat(dt, order, reportedVehicleThreat, contact, beforeX, beforeY)) return;
@@ -499,7 +385,7 @@
           return;
         }
 
-        if (this.enterProne({ mode: "contact", weapon, distance, hold: 1.2 })) {
+        if (this.tacticalDecision?.decision === "prone" && this.enterProne({ mode: "contact", weapon, distance, hold: 1.2 })) {
           this.state = "prone-fire";
         } else if ((this.unit.proneHoldTimer || 0) <= 0 && this.unit.isProne) {
           this.clearProne(1.35);
@@ -528,6 +414,160 @@
       this.moveTo(dt, moveTarget);
       this.recordMovement(dt, beforeX, beforeY, moveTarget);
       this.updateDebug(moveTarget);
+    }
+
+    handleTankThreat(dt, order, contact, tankThreat, beforeX, beforeY) {
+      if (tankThreat) {
+        const tankDistance = distXY(this.unit.x, this.unit.y, tankThreat.x, tankThreat.y);
+        const hasRpg = this.hasRpg();
+        const pressureCount = hasRpg ? this.rpgPressureCount(tankThreat) : 0;
+        let coverResolved = false;
+        let coverTarget = null;
+        let evadeResolved = false;
+        let evadeTarget = null;
+        const getCoverTarget = () => {
+          if (!coverResolved) {
+            coverTarget = this.resolveCoverTarget(tankThreat);
+            coverResolved = true;
+          }
+          return coverTarget;
+        };
+        const getEvadeTarget = () => {
+          if (!evadeResolved) {
+            evadeTarget = this.vehicleEvadeTarget(tankThreat, order);
+            evadeResolved = true;
+          }
+          return evadeTarget;
+        };
+
+        if (tankDistance < (hasRpg ? INFANTRY_CONFIG.rpgDangerRange : 330)) {
+          const closeEvadeTarget = getEvadeTarget();
+          if (closeEvadeTarget) {
+            this.state = "evade-tank";
+            this.target = tankThreat;
+            this.faceContact(tankThreat, dt);
+            this.moveTo(dt, closeEvadeTarget);
+            this.recordMovement(dt, beforeX, beforeY, closeEvadeTarget);
+            this.updateDebug(closeEvadeTarget);
+            return true;
+          }
+        }
+
+        if (hasRpg) {
+          const canFireRpg = this.canFireRpgAtTank(tankThreat, tankDistance);
+          const rpgProfile = this.rpgShotProfile(tankThreat, tankDistance, pressureCount);
+          const wantsBetterPosition = !canFireRpg ||
+            tankDistance < INFANTRY_CONFIG.rpgPreferredMin ||
+            tankDistance > INFANTRY_CONFIG.rpgPreferredMax ||
+            rpgProfile.frontArmorHold;
+          const rpgPosition = wantsBetterPosition
+            ? this.rpgFirePosition(tankThreat, order, pressureCount)
+            : null;
+
+          if (canFireRpg) {
+            this.state = "rpg-attack";
+            this.target = tankThreat;
+            this.faceContact(tankThreat, dt);
+            this.tryFireRpgAtTank(tankThreat, dt, rpgProfile);
+
+            if (
+              rpgPosition &&
+              distXY(this.unit.x, this.unit.y, rpgPosition.x, rpgPosition.y) > (rpgPosition.stopDistance || 18) + 12
+            ) {
+              this.moveTo(dt, rpgPosition);
+              this.recordMovement(dt, beforeX, beforeY, rpgPosition);
+              this.updateDebug(rpgPosition);
+              return true;
+            }
+
+            if (tankDistance < INFANTRY_CONFIG.rpgPanicRange) {
+              const coverTarget = getCoverTarget();
+              if (coverTarget) {
+                this.moveTo(dt, coverTarget);
+                this.recordMovement(dt, beforeX, beforeY, coverTarget);
+                this.updateDebug(coverTarget);
+                return true;
+              }
+            }
+
+            this.unit.speed = approach(this.unit.speed, 0, 220 * dt);
+            this.updateDebug(null);
+            return true;
+          }
+
+          if (rpgPosition) {
+            this.state = "rpg-position";
+            this.target = tankThreat;
+            this.faceContact(tankThreat, dt);
+            this.moveTo(dt, rpgPosition);
+            this.recordMovement(dt, beforeX, beforeY, rpgPosition);
+            this.updateDebug(rpgPosition);
+            return true;
+          }
+        }
+
+        if (!hasRpg && (!contact || tankDistance < INFANTRY_CONFIG.tankEvadeRange)) {
+          const fallbackEvadeTarget = getEvadeTarget();
+          if (fallbackEvadeTarget) {
+            this.state = "evade-tank";
+            this.target = tankThreat;
+            this.faceContact(tankThreat, dt);
+            this.moveTo(dt, fallbackEvadeTarget);
+            this.recordMovement(dt, beforeX, beforeY, fallbackEvadeTarget);
+            this.updateDebug(fallbackEvadeTarget);
+            return true;
+          }
+        }
+
+        const canHarassTank = this.canHarassTank(tankThreat, tankDistance);
+        if (canHarassTank) {
+          this.state = "harass-tank";
+          this.target = tankThreat;
+          this.faceContact(tankThreat, dt);
+          this.tryFireTank(tankThreat);
+
+          if (tankDistance < 420) {
+            const coverTarget = getCoverTarget();
+            if (coverTarget) {
+              this.moveTo(dt, coverTarget);
+              this.recordMovement(dt, beforeX, beforeY, coverTarget);
+              this.updateDebug(coverTarget);
+              return true;
+            }
+          }
+
+          this.unit.speed = approach(this.unit.speed, 0, 220 * dt);
+          this.updateDebug(null);
+          return true;
+        }
+
+        if (!contact || tankDistance < 520) {
+          const coverTarget = getCoverTarget();
+          if (coverTarget) {
+            this.state = "cover";
+            this.target = contact || tankThreat;
+            this.faceContact(this.target, dt);
+            if (contact) this.tryFire(contact);
+            this.moveTo(dt, coverTarget);
+            this.recordMovement(dt, beforeX, beforeY, coverTarget);
+            this.updateDebug(coverTarget);
+            return true;
+          }
+        }
+
+        const lateEvadeTarget = getEvadeTarget();
+        if (lateEvadeTarget && (!contact || tankDistance < INFANTRY_CONFIG.tankEvadeRange)) {
+          this.state = "evade-tank";
+          this.target = tankThreat;
+          this.faceContact(tankThreat, dt);
+          this.moveTo(dt, lateEvadeTarget);
+          this.recordMovement(dt, beforeX, beforeY, lateEvadeTarget);
+          this.updateDebug(lateEvadeTarget);
+          return true;
+        }
+      }
+
+      return false;
     }
 
     handleSquadTacticalOrder(dt, order, contact, tankThreat, beforeX, beforeY) {
@@ -1003,340 +1043,6 @@
       }
 
       return false;
-    }
-
-    hasGrenade() {
-      return (this.unit.equipmentAmmo?.grenade || 0) > 0 &&
-        Boolean(INFANTRY_WEAPONS.grenade);
-    }
-
-    grenadeSoftTargets() {
-      const targets = [];
-
-      for (const unit of this.game.infantry || []) {
-        if (unit === this.unit || !unit.alive || unit.inVehicle || unit.team === this.unit.team) continue;
-        targets.push(unit);
-      }
-
-      for (const crew of this.game.crews || []) {
-        if (!crew.alive || crew.inTank || crew.team === this.unit.team) continue;
-        targets.push(crew);
-      }
-
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.RED && !this.game.isPlayerInSafeZone?.()) {
-        targets.push(this.game.player);
-      }
-
-      return targets;
-    }
-
-    selectGrenadeTarget(contact, tankThreat) {
-      const weapon = INFANTRY_WEAPONS.grenade;
-      if (!weapon || !this.hasGrenade()) return null;
-      if (this.fireCooldown > 0 || this.grenadeCooldown > 0) return null;
-      if (this.unit.suppression > 64) return null;
-      if (tankThreat && distXY(this.unit.x, this.unit.y, tankThreat.x, tankThreat.y) < 340) return null;
-
-      const softTargets = this.grenadeSoftTargets();
-      let best = null;
-
-      const addCandidate = (point, target, score, reason) => {
-        const distance = distXY(this.unit.x, this.unit.y, point.x, point.y);
-        if (distance < INFANTRY_CONFIG.grenadeMinRange || distance > weapon.range) return;
-        if (!this.isGrenadePointSafe(point)) return;
-
-        const candidate = {
-          x: point.x,
-          y: point.y,
-          target,
-          score: score - distance / Math.max(weapon.range * 2.2, 1),
-          reason,
-          stopDistance: 0,
-          final: false,
-          grenade: true
-        };
-        if (!best || candidate.score > best.score) best = candidate;
-      };
-
-      for (const target of softTargets) {
-        const visible = hasLineOfSight(this.game, this.unit, target, { padding: 3 });
-        const report = visible ? null : this.game.getReportedContact?.(this.unit.team, target);
-        const aimPoint = visible || contact === target
-          ? target
-          : report
-            ? this.reportPoint(report)
-            : null;
-        if (!aimPoint) continue;
-
-        const distance = distXY(this.unit.x, this.unit.y, aimPoint.x, aimPoint.y);
-        if (distance > weapon.range + INFANTRY_CONFIG.grenadeClusterRadius) continue;
-
-        const cluster = visible
-          ? this.grenadeClusterAt(target, softTargets)
-          : this.grenadeReportedClusterAt(aimPoint);
-        const vehicleDistance = this.nearestKnownVehicleDistance(aimPoint);
-        const covered = !visible;
-        const nearVehicle = vehicleDistance <= INFANTRY_CONFIG.grenadeVehicleThreatRange;
-        const score =
-          cluster.count * 1.05 +
-          Math.max(0, cluster.count - 1) * 0.28 +
-          (covered ? 1.05 : 0) +
-          (nearVehicle ? 1.15 : 0) +
-          (target.classId === "engineer" ? 0.18 : 0);
-
-        if (score >= INFANTRY_CONFIG.grenadeScoreThreshold) {
-          addCandidate(cluster.center, target, score, covered ? "cover" : nearVehicle ? "vehicle" : "cluster");
-        }
-      }
-
-      for (const vehicle of this.vehicleTargets()) {
-        if (!vehicle.alive || vehicle.team === this.unit.team || vehicle.vehicleType !== "humvee") continue;
-        const visible = hasLineOfSight(this.game, this.unit, vehicle, { padding: 4 });
-        const report = visible ? null : this.game.getReportedContact?.(this.unit.team, vehicle);
-        const aimPoint = visible ? vehicle : report ? this.reportPoint(report) : null;
-        if (!aimPoint) continue;
-        addCandidate(aimPoint, vehicle, visible ? 2.45 : 2.22, "light-vehicle");
-      }
-
-      return best && best.score >= INFANTRY_CONFIG.grenadeScoreThreshold ? best : null;
-    }
-
-    grenadeClusterAt(target, targets) {
-      const members = targets.filter((item) => (
-        item.alive !== false &&
-        distXY(target.x, target.y, item.x, item.y) <= INFANTRY_CONFIG.grenadeClusterRadius
-      ));
-      const center = members.reduce((sum, item) => ({
-        x: sum.x + item.x,
-        y: sum.y + item.y
-      }), { x: 0, y: 0 });
-      const count = Math.max(1, members.length);
-      center.x /= count;
-      center.y /= count;
-      return { count, center };
-    }
-
-    grenadeReportedClusterAt(point) {
-      const reports = this.game.getReportedContacts?.(this.unit.team) || [];
-      const members = reports.filter((report) => (
-        !this.isVehicleTarget(report.target) &&
-        this.isAliveEnemy(report.target) &&
-        distXY(point.x, point.y, report.x, report.y) <= INFANTRY_CONFIG.grenadeClusterRadius
-      ));
-
-      if (!members.length) return { count: 1, center: { x: point.x, y: point.y } };
-
-      const center = members.reduce((sum, report) => ({
-        x: sum.x + report.x,
-        y: sum.y + report.y
-      }), { x: 0, y: 0 });
-      center.x /= members.length;
-      center.y /= members.length;
-      return { count: members.length, center };
-    }
-
-    nearestKnownVehicleDistance(point) {
-      let best = Infinity;
-
-      for (const vehicle of this.vehicleTargets()) {
-        if (!vehicle.alive) continue;
-        const visible = hasLineOfSight(this.game, this.unit, vehicle, { padding: 4 });
-        const report = visible ? null : this.game.getReportedContact?.(this.unit.team, vehicle);
-        const known = visible ? vehicle : report;
-        if (!known) continue;
-        best = Math.min(best, Math.max(0, distXY(point.x, point.y, known.x, known.y) - (vehicle.radius || 0)));
-      }
-
-      return best;
-    }
-
-    isGrenadePointSafe(point) {
-      const safety = INFANTRY_CONFIG.grenadeFriendlySafety;
-
-      for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.inVehicle || unit.team !== this.unit.team) continue;
-        if (distXY(point.x, point.y, unit.x, unit.y) <= safety) return false;
-      }
-
-      for (const crew of this.game.crews || []) {
-        if (!crew.alive || crew.inTank || crew.team !== this.unit.team) continue;
-        if (distXY(point.x, point.y, crew.x, crew.y) <= safety) return false;
-      }
-
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.BLUE) {
-        if (distXY(point.x, point.y, this.game.player.x, this.game.player.y) <= safety) return false;
-      }
-
-      return true;
-    }
-
-    tryThrowGrenade(target) {
-      const weapon = INFANTRY_WEAPONS.grenade;
-      if (!weapon || !target || !this.hasGrenade()) return false;
-      if (this.fireCooldown > 0 || this.grenadeCooldown > 0) return false;
-
-      const distance = distXY(this.unit.x, this.unit.y, target.x, target.y);
-      if (distance < INFANTRY_CONFIG.grenadeMinRange || distance > weapon.range) return false;
-
-      const fired = IronLine.combat.throwGrenade(this.game, this.unit, target.x, target.y, { weapon });
-      if (!fired) return false;
-
-      this.unit.equipmentAmmo.grenade = Math.max(0, (this.unit.equipmentAmmo.grenade || 0) - 1);
-      this.fireCooldown = weapon.cooldown + 0.38 + Math.random() * 0.28;
-      this.grenadeCooldown = INFANTRY_CONFIG.grenadeCooldownMin +
-        Math.random() * (INFANTRY_CONFIG.grenadeCooldownMax - INFANTRY_CONFIG.grenadeCooldownMin);
-      this.unit.suppress(5, target.target || target);
-      return true;
-    }
-
-    vehicleTargets() {
-      return [
-        ...(this.game.tanks || []),
-        ...(this.game.humvees || [])
-      ];
-    }
-
-    hasRpg() {
-      return this.unit.classId === "engineer" &&
-        (this.unit.equipmentAmmo?.rpg || 0) > 0 &&
-        Boolean(INFANTRY_WEAPONS.rpg);
-    }
-
-    rpgPressureCount(tank) {
-      if (!tank) return 0;
-      let count = 0;
-      const weapon = INFANTRY_WEAPONS.rpg || {};
-      const maxRange = Math.min(weapon.range || 980, INFANTRY_CONFIG.rpgPressureRadius);
-
-      for (const unit of this.game.infantry || []) {
-        if (!unit.alive || unit.inVehicle || unit.team !== this.unit.team || unit.classId !== "engineer") continue;
-        if ((unit.equipmentAmmo?.rpg || 0) <= 0) continue;
-        const distance = distXY(unit.x, unit.y, tank.x, tank.y);
-        if (distance > maxRange) continue;
-        count += 1;
-      }
-
-      return count;
-    }
-
-    rpgTargetKey(tank) {
-      if (!tank) return "";
-      return tank.callSign || `${tank.team || "veh"}:${Math.round(tank.x)}:${Math.round(tank.y)}`;
-    }
-
-    rpgShotProfile(tank, distance = null, pressureCount = null) {
-      const d = distance ?? (tank ? distXY(this.unit.x, this.unit.y, tank.x, tank.y) : Infinity);
-      const pressure = pressureCount ?? this.rpgPressureCount(tank);
-      const targetSpeed = Math.abs(tank?.speed || 0);
-      const stableLimit = tank?.vehicleType === "humvee"
-        ? INFANTRY_CONFIG.rpgStableTargetSpeed * 1.45
-        : INFANTRY_CONFIG.rpgStableTargetSpeed;
-      const fastLimit = tank?.vehicleType === "humvee"
-        ? INFANTRY_CONFIG.rpgFastTargetSpeed * 1.35
-        : INFANTRY_CONFIG.rpgFastTargetSpeed;
-      const aspectAngle = tank
-        ? Math.abs(normalizeAngle(angleTo(tank.x, tank.y, this.unit.x, this.unit.y) - (tank.angle || 0)))
-        : Math.PI / 2;
-      const armoredTarget = tank?.vehicleType !== "humvee";
-      const frontArmor = armoredTarget && aspectAngle < 0.72;
-      const sideOrRear = !armoredTarget || aspectAngle > 1.05;
-      const rearAspect = armoredTarget && aspectAngle > 2.35;
-      const frontHoldRange = pressure >= 2
-        ? INFANTRY_CONFIG.rpgFrontArmorHoldRange + 150
-        : INFANTRY_CONFIG.rpgFrontArmorHoldRange;
-      const frontArmorHold = frontArmor && d > frontHoldRange;
-      const movingFast = targetSpeed > fastLimit &&
-        !(sideOrRear && d < 520 && pressure >= 2);
-      const stableTarget = targetSpeed <= stableLimit ||
-        rearAspect ||
-        (sideOrRear && targetSpeed <= fastLimit * 0.82);
-      const jitter = ((this.seed % 7) - 3) * 0.035;
-      const aimRequired = clamp(
-        INFANTRY_CONFIG.rpgAimMin +
-          targetSpeed / Math.max(1, fastLimit) * 0.42 +
-          (frontArmor ? 0.28 : 0) -
-          (sideOrRear ? 0.16 : 0) -
-          Math.min(2, Math.max(0, pressure - 1)) * 0.08 +
-          jitter,
-        INFANTRY_CONFIG.rpgAimMin * 0.82,
-        INFANTRY_CONFIG.rpgAimMax
-      );
-
-      return {
-        distance: d,
-        pressureCount: pressure,
-        targetSpeed,
-        stableLimit,
-        fastLimit,
-        aspectAngle,
-        frontArmor,
-        sideOrRear,
-        rearAspect,
-        frontArmorHold,
-        movingFast,
-        stableTarget,
-        aimRequired,
-        holdReason: movingFast ? "fast-target" : frontArmorHold ? "front-armor" : ""
-      };
-    }
-
-    rpgVolleyBlocked(tank) {
-      const squad = this.unit.squad;
-      if (!squad) return false;
-      const until = squad.rpgVolleyUntil || 0;
-      if ((this.game.matchTime || 0) >= until) return false;
-      const key = this.rpgTargetKey(tank);
-      return !squad.rpgVolleyTargetKey || squad.rpgVolleyTargetKey === key;
-    }
-
-    markRpgVolley(tank) {
-      const squad = this.unit.squad;
-      if (!squad) return;
-      const cooldown = INFANTRY_CONFIG.rpgVolleyCooldownMin +
-        Math.random() * (INFANTRY_CONFIG.rpgVolleyCooldownMax - INFANTRY_CONFIG.rpgVolleyCooldownMin);
-      squad.rpgVolleyUntil = (this.game.matchTime || 0) + cooldown;
-      squad.rpgVolleyTargetKey = this.rpgTargetKey(tank);
-    }
-
-    resetRpgAim(reason = "") {
-      this.rpgAimTargetKey = "";
-      this.rpgAimTime = 0;
-      this.rpgAimRequired = 0;
-      if (reason) this.rpgHoldReason = reason;
-    }
-
-    updateRpgAim(tank, profile, dt = 0.033) {
-      const key = this.rpgTargetKey(tank);
-      if (!key) {
-        this.resetRpgAim();
-        return false;
-      }
-
-      if (this.rpgAimTargetKey !== key) {
-        this.rpgAimTargetKey = key;
-        this.rpgAimTime = 0;
-      }
-
-      const required = profile?.aimRequired || INFANTRY_CONFIG.rpgAimMin;
-      this.rpgAimRequired = required;
-      const facingError = Math.abs(normalizeAngle(this.unit.angle - angleTo(this.unit.x, this.unit.y, tank.x, tank.y)));
-      const facingGain = facingError < 0.16 ? 1 : facingError < 0.34 ? 0.46 : 0.14;
-      const stabilityGain = profile?.stableTarget ? 1 : 0.48;
-
-      if (profile?.holdReason) {
-        this.rpgHoldReason = profile.holdReason;
-        this.rpgAimTime = Math.min(required * 0.72, this.rpgAimTime + dt * 0.25);
-        return false;
-      }
-
-      if (this.rpgVolleyBlocked(tank)) {
-        this.rpgHoldReason = "volley-cooldown";
-        this.rpgAimTime = Math.min(required * 0.92, this.rpgAimTime + dt * 0.38);
-        return false;
-      }
-
-      this.rpgAimTime = clamp(this.rpgAimTime + dt * facingGain * stabilityGain, 0, required);
-      return this.rpgAimTime >= required;
     }
 
     selectTankThreat() {
@@ -1845,29 +1551,6 @@
         final: false,
         repair: true
       };
-    }
-
-    tryRepairTank(tank) {
-      const weapon = INFANTRY_WEAPONS.repairKit;
-      if (!weapon || !tank || !tank.alive || tank.hp >= tank.maxHp) return false;
-      if (this.fireCooldown > 0) return false;
-      if ((this.unit.equipmentAmmo?.repairKit || 0) <= 0) return false;
-      if (distXY(this.unit.x, this.unit.y, tank.x, tank.y) > (weapon.range || 72) + tank.radius) return false;
-
-      this.unit.equipmentAmmo.repairKit = Math.max(0, (this.unit.equipmentAmmo.repairKit || 0) - 1);
-      tank.hp = Math.min(tank.maxHp, tank.hp + (weapon.repairAmount || 28));
-      this.fireCooldown = (weapon.cooldown || 1.1) + 0.32 + Math.random() * 0.22;
-
-      this.game.effects.explosions.push({
-        x: tank.x,
-        y: tank.y,
-        radius: 8,
-        maxRadius: 48,
-        life: 0.34,
-        maxLife: 0.34,
-        color: "rgba(120, 214, 140, 0.68)"
-      });
-      return true;
     }
 
     faceContact(target, dt = 0) {
@@ -2582,58 +2265,6 @@
       }
 
       return null;
-    }
-
-    updateDebug(moveTarget) {
-      this.updateThoughtBubble();
-      const transportDebug = this.activeTransportDebug();
-      this.debug.state = this.state;
-      this.debug.goal = this.order?.objectiveName || "";
-      this.debug.target = this.target;
-      this.debug.coverTarget = this.coverTarget;
-      this.debug.moveTarget = moveTarget;
-      this.debug.weaponId = this.unit.weaponId;
-      this.debug.classId = this.unit.classId;
-      this.debug.rpgAmmo = this.unit.equipmentAmmo?.rpg || 0;
-      this.debug.rpgAim = this.rpgAimTime || 0;
-      this.debug.rpgAimRequired = this.rpgAimRequired || 0;
-      this.debug.rpgHoldReason = this.rpgHoldReason || "";
-      this.debug.grenadeAmmo = this.unit.equipmentAmmo?.grenade || 0;
-      this.debug.repairAmmo = this.unit.equipmentAmmo?.repairKit || 0;
-      this.debug.squadId = this.order?.squadId || this.unit.squadId || "";
-      this.debug.squadRole = this.order?.squadRole || this.unit.squadRole || "";
-      this.debug.tacticalMode = this.order?.tacticalMode || this.unit.squad?.tacticalMode || "";
-      this.debug.tacticalTimerRemaining = this.order?.tacticalTimerRemaining || 0;
-      this.debug.isProne = Boolean(this.unit.isProne);
-      this.debug.supportRequest = this.order?.supportRequest?.type || this.order?.supportRequestType || this.unit.squad?.supportRequest?.type || "";
-      this.debug.transportMode = transportDebug.mode;
-      this.debug.transportVehicleId = transportDebug.vehicleId;
-      if (this.unit.classId !== "scout") this.debug.scoutReports = 0;
-      this.debug.coverQuality = this.coverTarget?.coverQuality || 0;
-      this.debug.suppression = this.unit.suppression;
-      this.debug.morale = this.unit.morale;
-      this.debug.thought = this.thoughtText;
-      this.debug.path = this.path;
-      this.debug.pathIndex = this.pathIndex;
-      this.debug.stuckTimer = this.stuckTimer;
-    }
-
-    activeTransportDebug() {
-      if (this.unit.inVehicle) {
-        return {
-          mode: "ride",
-          vehicleId: this.unit.inVehicle.callSign || ""
-        };
-      }
-
-      if (this.state !== "board-transport" && this.state !== "reboard-transport") {
-        return { mode: "", vehicleId: "" };
-      }
-
-      return {
-        mode: this.state === "reboard-transport" ? "remount" : "mount",
-        vehicleId: this.order?.transport?.vehicleId || this.target?.callSign || ""
-      };
     }
 
     updateThoughtBubble() {

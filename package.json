@@ -5,9 +5,14 @@
   "description": "Static 2D tank and infantry prototype.",
   "scripts": {
     "start": "node tools/static-server.cjs",
-    "check": "node tools/check-syntax.cjs"
+    "check": "node tools/check-syntax.cjs && node tools/check-duplicates.cjs && node tools/check-code-health.cjs",
+    "health": "node tools/code-health-report.cjs",
+    "heal": "npm run check && npm run health"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.20.1"
   }
 }

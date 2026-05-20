@@ -6,6 +6,9 @@
     <title>Iron Line - 2D Tank Prototype</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="session-flow.css">
+    <link rel="stylesheet" href="chat.css">
+    <link rel="stylesheet" href="role-change.css">
   </head>
   <body>
     <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
@@ -184,6 +187,10 @@
                 <strong>섬멸전</strong>
                 <span>거점 장악 또는 적 전투력 제거</span>
               </button>
+              <button type="button" class="deployment-mode" data-mode-id="conquest">
+                <strong>점령전</strong>
+                <span>35분 제한, 거점 점수와 리스폰</span>
+              </button>
             </div>
           </div>
           <div class="deployment-pick-section">
@@ -246,6 +253,15 @@
       </div>
     </div>
 
+    <div class="result-screen hidden" id="resultScreen" aria-label="전투 결과">
+      <div class="result-card">
+        <span id="resultKicker">전투 종료</span>
+        <h2 id="resultTitle">승리</h2>
+        <p id="resultReason">전투 종료</p>
+        <button type="button" id="resultMainButton">메인으로 돌아가기</button>
+      </div>
+    </div>
+
     <div class="scoreboard" id="scoreboard" aria-label="전투 현황">
       <div class="scoreboard-head">
         <strong>전투 현황</strong>
@@ -290,11 +306,19 @@
     <script src="src/data/constants.js"></script>
     <script src="src/data/infantry-weapons.js"></script>
     <script src="src/data/infantry-classes.js"></script>
+    <script src="src/data/player-skins.js"></script>
+    <script src="src/systems/faction-visuals.js"></script>
+    <script src="src/data/scenery-catalog.js"></script>
     <script src="src/data/map01.js"></script>
     <script src="src/data/map01-custom-layout.js"></script>
     <script src="src/core/input.js"></script>
     <script src="src/systems/physics.js"></script>
     <script src="src/systems/cover-slots.js"></script>
+    <script src="src/systems/command-bus.js"></script>
+    <script src="src/systems/ai-observatory.js"></script>
+    <script src="src/systems/observer-bridge.js"></script>
+    <script src="src/systems/battlefield-events.js"></script>
+    <script src="src/systems/admin-ops.js"></script>
     <script src="src/entities/player.js"></script>
     <script src="src/entities/recon-drone.js"></script>
     <script src="src/entities/suicide-drone.js"></script>
@@ -310,10 +334,38 @@
     <script src="src/ai/humvee-ai.js"></script>
     <script src="src/ai/combat-controller.js"></script>
     <script src="src/ai/infantry-ai.js"></script>
+    <script src="src/ai/infantry-debug-state.js"></script>
+    <script src="src/ai/infantry-tactical-decision.js"></script>
+    <script src="src/ai/infantry-repair-decision.js"></script>
+    <script src="src/ai/infantry-weapon-decision.js"></script>
     <script src="src/ai/tank-ai.js"></script>
     <script src="src/systems/combat.js"></script>
+    <script src="src/systems/chat.js"></script>
+    <script src="src/systems/role-change.js"></script>
+    <script src="src/systems/overlay-controller.js"></script>
+    <script src="src/systems/offline-setup.js"></script>
+    <script src="src/systems/room-registry.js"></script>
+    <script src="src/systems/room-list.js"></script>
+    <script src="src/systems/online-lobby.js"></script>
+    <script src="src/systems/session-flow.js"></script>
+    <script src="src/systems/entry-flow.js"></script>
+    <script src="src/systems/command-radio.js"></script>
+    <script src="src/systems/deployment-ui.js"></script>
+    <script src="src/systems/lobby-ui.js"></script>
+    <script src="src/systems/hud-admin-labels.js"></script>
+    <script src="src/systems/hud-admin-ui.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/renderer.js"></script>
+    <script src="src/systems/renderer-vehicle.js"></script>
+    <script src="src/systems/renderer-scenery.js"></script>
+    <script src="src/systems/renderer-drone.js"></script>
+    <script src="src/systems/renderer-minimap.js"></script>
+    <script src="src/systems/renderer-debug.js"></script>
+    <script src="src/systems/game-session-state.js"></script>
+    <script src="src/systems/game-admin-actions.js"></script>
+    <script src="src/systems/game-drone-system.js"></script>
+    <script src="src/systems/game-player-control.js"></script>
+    <script src="src/systems/fog-of-war.js"></script>
     <script src="src/main.js"></script>
   </body>
 </html>

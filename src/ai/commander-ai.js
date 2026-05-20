@@ -46,11 +46,35 @@
       return this.infantryAssignments.get(unit) || null;
     }
 
+    isManualAsset(asset) {
+      const order = asset?.manualOrder;
+      if (!order) return false;
+      return order.expiresAt === Infinity || order.expiresAt > performance.now();
+    }
+
+    isManualSquad(squad) {
+      const order = squad?.manualOrder;
+      if (!order) return false;
+      return order.expiresAt === Infinity || order.expiresAt > performance.now();
+    }
+
     rebuildAssignments() {
+      const manualAssignments = new Map(
+        Array.from(this.assignments.entries())
+          .filter(([asset]) => this.isManualAsset(asset))
+      );
       this.assignments.clear();
+      for (const [asset, order] of manualAssignments) this.assignments.set(asset, order);
 
       const units = this.game.tanks
-        .filter((tank) => tank.alive && tank.ai && !tank.playerControlled && tank.team === this.team && tank.isOperational())
+        .filter((tank) => (
+          tank.alive &&
+          tank.ai &&
+          !tank.playerControlled &&
+          tank.team === this.team &&
+          tank.isOperational() &&
+          !this.isManualAsset(tank)
+        ))
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
 
       const candidates = this.objectiveOrder
@@ -138,7 +162,7 @@
       const scouts = this.teamScouts();
 
       const squads = (this.game.squads || [])
-        .filter((squad) => squad.team === this.team && squad.activeUnits().length > 0)
+        .filter((squad) => squad.team === this.team && squad.activeUnits().length > 0 && !this.isManualSquad(squad))
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
 
       if (squads.length > 0) {
@@ -723,6 +747,7 @@
           !tank.playerControlled &&
           tank.team === this.team &&
           tank.isOperational?.() &&
+          !this.isManualAsset(tank) &&
           tank.hp > tank.maxHp * 0.25
         ));
     }
@@ -735,6 +760,7 @@
           !humvee.playerControlled &&
           humvee.team === this.team &&
           humvee.isOperational?.() &&
+          !this.isManualAsset(humvee) &&
           humvee.hp > humvee.maxHp * 0.3
         ));
     }

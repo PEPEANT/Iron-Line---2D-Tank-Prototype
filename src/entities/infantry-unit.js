@@ -10,6 +10,8 @@
       this.y = options.y;
       this.team = options.team || TEAM.NEUTRAL;
       this.callSign = options.callSign;
+      this.factionId = options.factionId || options.skinId || "";
+      this.skinId = this.factionId;
       this.radius = options.radius || 10;
       this.hp = options.hp || 55;
       this.maxHp = this.hp;
@@ -20,7 +22,7 @@
       this.classId = options.classId || "infantry";
       this.equipmentAmmo = {
         rpg: options.equipmentAmmo?.rpg ?? options.rpgAmmo ?? (this.classId === "engineer" ? 2 : 0),
-        grenade: options.equipmentAmmo?.grenade ?? options.grenadeAmmo ?? 0,
+        grenade: options.equipmentAmmo?.grenade ?? options.grenadeAmmo ?? (this.classId === "infantry" ? 3 : 0),
         repairKit: options.equipmentAmmo?.repairKit ?? options.repairKitAmmo ?? (this.classId === "engineer" ? 2 : 0)
       };
       this.suppression = 0;

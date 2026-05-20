@@ -276,4 +276,108 @@
       }
     }
   });
+
+  stretchCustomLayout(IronLine.map01);
+  decorateObstacleTypes(IronLine.map01);
+  addBattlefieldScenery(IronLine.map01);
+
+  function stretchCustomLayout(world) {
+    const sourceWidth = world.width;
+    const sourceHeight = world.height;
+    const targetWidth = 8200;
+    const targetHeight = 5600;
+    const scaleX = targetWidth / sourceWidth;
+    const scaleY = targetHeight / sourceHeight;
+    const scaleRadius = (scaleX + scaleY) * 0.5;
+
+    const transformPoint = (point, scaleArea = false) => {
+      if (!point || typeof point !== "object") return;
+      if (Number.isFinite(Number(point.x))) point.x = Math.round(Number(point.x) * scaleX);
+      if (Number.isFinite(Number(point.y))) point.y = Math.round(Number(point.y) * scaleY);
+      if (scaleArea && Number.isFinite(Number(point.radius))) point.radius = Math.round(Number(point.radius) * scaleRadius);
+      if (scaleArea && Number.isFinite(Number(point.r))) point.r = Math.round(Number(point.r) * scaleRadius);
+    };
+    const transformNestedPoints = (value, scaleArea = false) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => transformNestedPoints(item, scaleArea));
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      transformPoint(value, scaleArea);
+      for (const child of Object.values(value)) transformNestedPoints(child, scaleArea);
+    };
+
+    world.width = targetWidth;
+    world.height = targetHeight;
+    world.captureRate = 0.095;
+
+    transformNestedPoints(world.roads);
+    transformNestedPoints(world.obstacles);
+    transformNestedPoints(world.terrainPatches, true);
+    transformNestedPoints(world.capturePoints);
+    transformNestedPoints(world.safeZones);
+    transformNestedPoints(world.baseExitPoints);
+    transformNestedPoints(world.spawns);
+    transformNestedPoints(world.reconPoints);
+    transformNestedPoints(world.navGraph?.nodes || []);
+  }
+
+  function decorateObstacleTypes(world) {
+    const buildingVariants = ["warehouse", "garage", "barracks", "service-block", "depot"];
+    const wallVariants = ["blast-wall", "checkpoint-wall", "retaining-wall", "roadblock-wall"];
+    let buildingIndex = 0;
+    let wallIndex = 0;
+
+    for (const obstacle of world.obstacles || []) {
+      if (obstacle.kind === "building") {
+        obstacle.variant = obstacle.variant || buildingVariants[buildingIndex % buildingVariants.length];
+        obstacle.roofTone = buildingIndex % 3;
+        buildingIndex += 1;
+      } else if (obstacle.kind === "base-wall") {
+        obstacle.variant = obstacle.variant || "fortified-base-wall";
+      } else {
+        obstacle.variant = obstacle.variant || wallVariants[wallIndex % wallVariants.length];
+        wallIndex += 1;
+      }
+    }
+  }
+
+  function addBattlefieldScenery(world) {
+    world.scenery = [
+      { id: "blue-gate-sandbags-1", type: "sandbag", shape: "rect", x: 1180, y: 4860, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.18 },
+      { id: "blue-gate-sandbags-2", type: "sandbag", shape: "rect", x: 1310, y: 5020, w: 150, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.16 },
+      { id: "blue-fence-1", type: "wood-fence", shape: "rect", x: 1560, y: 4580, w: 180, h: 24, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true, angle: 0.45 },
+      { id: "blue-brush-1", type: "brush", shape: "circle", x: 980, y: 4480, r: 82 },
+      { id: "blue-tree-1", type: "tree", shape: "circle", x: 1530, y: 4320, r: 34, hp: 46, maxHp: 46, destructible: true, stopsProjectiles: true },
+
+      { id: "a-tree-1", type: "tree", shape: "circle", x: 1030, y: 2060, r: 38, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true },
+      { id: "a-tree-2", type: "tree", shape: "circle", x: 1420, y: 2400, r: 31, hp: 44, maxHp: 44, destructible: true, stopsProjectiles: true },
+      { id: "a-brush-1", type: "brush", shape: "circle", x: 1190, y: 1910, r: 96 },
+      { id: "a-barricade-1", type: "barricade", shape: "rect", x: 1650, y: 2215, w: 172, h: 30, hp: 70, maxHp: 70, destructible: true, stopsProjectiles: true, angle: -0.35 },
+
+      { id: "mid-sandbags-1", type: "sandbag", shape: "rect", x: 2780, y: 2460, w: 160, h: 34, hp: 84, maxHp: 84, destructible: true, stopsProjectiles: true, angle: 0.1 },
+      { id: "mid-sandbags-2", type: "sandbag", shape: "rect", x: 3180, y: 2600, w: 190, h: 34, hp: 94, maxHp: 94, destructible: true, stopsProjectiles: true, angle: 0.42 },
+      { id: "mid-rubble-1", type: "rubble", shape: "circle", x: 3480, y: 2360, r: 70 },
+      { id: "mid-brush-1", type: "brush", shape: "circle", x: 3000, y: 2880, r: 92 },
+
+      { id: "c-tree-1", type: "tree", shape: "circle", x: 4630, y: 1050, r: 35, hp: 48, maxHp: 48, destructible: true, stopsProjectiles: true },
+      { id: "c-tree-2", type: "tree", shape: "circle", x: 5250, y: 1420, r: 42, hp: 56, maxHp: 56, destructible: true, stopsProjectiles: true },
+      { id: "c-brush-1", type: "brush", shape: "circle", x: 4860, y: 1510, r: 100 },
+      { id: "c-barricade-1", type: "barricade", shape: "rect", x: 5410, y: 1815, w: 165, h: 30, hp: 68, maxHp: 68, destructible: true, stopsProjectiles: true, angle: 0.25 },
+
+      { id: "d-tree-1", type: "tree", shape: "circle", x: 4550, y: 3980, r: 36, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true },
+      { id: "d-tree-2", type: "tree", shape: "circle", x: 5280, y: 4500, r: 33, hp: 45, maxHp: 45, destructible: true, stopsProjectiles: true },
+      { id: "d-brush-1", type: "brush", shape: "circle", x: 4970, y: 4210, r: 105 },
+      { id: "d-sandbags-1", type: "sandbag", shape: "rect", x: 5050, y: 3910, w: 182, h: 34, hp: 88, maxHp: 88, destructible: true, stopsProjectiles: true, angle: -0.3 },
+
+      { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 6900, y: 780, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.1 },
+      { id: "red-gate-sandbags-2", type: "sandbag", shape: "rect", x: 6600, y: 1100, w: 160, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.35 },
+      { id: "red-fence-1", type: "wood-fence", shape: "rect", x: 6270, y: 1450, w: 190, h: 24, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true, angle: -0.42 },
+      { id: "red-brush-1", type: "brush", shape: "circle", x: 6380, y: 1680, r: 96 },
+      { id: "red-tree-1", type: "tree", shape: "circle", x: 7100, y: 1220, r: 36, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true }
+    ].map((item) => ({
+      ...item,
+      baseHp: item.maxHp || item.hp || 1
+    }));
+  }
 })(window);

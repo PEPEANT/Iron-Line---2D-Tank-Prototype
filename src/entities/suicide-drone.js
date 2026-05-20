@@ -4,6 +4,7 @@
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM } = IronLine.constants;
   const { clamp, distXY, angleTo, rotateTowards, segmentDistanceToPoint } = IronLine.math;
+  const { hasLineOfSight } = IronLine.physics;
 
   class SuicideDrone extends IronLine.ReconDrone {
     constructor(options = {}) {
@@ -252,8 +253,29 @@
         range + (observer.radius || 0) + this.radius;
     }
 
-    reportContacts(_game) {
-      // Attack drones do not provide recon reports; their job is delivery.
+    reportContacts(game) {
+      const targets = [];
+      const scanRange = Math.max(320, Math.min(this.lockAcquireRange || 520, 620));
+
+      for (const vehicle of [...(game.tanks || []), ...(game.humvees || [])]) {
+        if (vehicle.alive && vehicle.team !== this.team) targets.push(vehicle);
+      }
+      for (const unit of game.infantry || []) {
+        if (unit.alive && unit.team !== this.team) targets.push(unit);
+      }
+      for (const crew of game.crews || []) {
+        if (crew.alive && !crew.inTank && crew.team !== this.team) targets.push(crew);
+      }
+      if (!game.player.inTank && game.player.hp > 0 && game.player.team !== this.team && !game.isPlayerInSafeZone?.()) {
+        targets.push(game.player);
+      }
+
+      const sightOptions = game.droneSightOptions?.(this, { padding: 1 }) || { padding: 1 };
+      for (const target of targets) {
+        if (distXY(this.x, this.y, target.x, target.y) > scanRange + (target.radius || 0)) continue;
+        if (!hasLineOfSight(game, this, target, sightOptions)) continue;
+        game.reportContact?.(this.team, target, this, Math.min(1.8, this.reportTtl || 1.8));
+      }
     }
 
     tryDetonate(game) {

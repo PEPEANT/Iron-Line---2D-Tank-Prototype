@@ -5,7 +5,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
-const sourceRoot = path.join(root, "src");
+const sourceRoots = [path.join(root, "src"), path.join(root, "server")];
 
 function collectJavaScriptFiles(directory) {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -23,7 +23,9 @@ function collectJavaScriptFiles(directory) {
   return files;
 }
 
-const files = collectJavaScriptFiles(sourceRoot);
+const files = sourceRoots.flatMap((directory) => (
+  fs.existsSync(directory) ? collectJavaScriptFiles(directory) : []
+));
 let failed = false;
 
 for (const file of files) {

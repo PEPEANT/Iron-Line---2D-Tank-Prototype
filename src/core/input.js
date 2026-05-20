@@ -104,6 +104,7 @@
     }
 
     onKeyDown(event) {
+      if (this.isEditableTarget(event.target)) return;
       const testLabHotkey = /^F[1-7]$/.test(event.code) && global.IronLine?.game?.testLab;
       if (testLabHotkey || ["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
         event.preventDefault();
@@ -123,8 +124,13 @@
     }
 
     onKeyUp(event) {
+      if (this.isEditableTarget(event.target)) return;
       this.keys.delete(event.code);
       if (event.key === " ") this.keys.delete("Space");
+    }
+
+    isEditableTarget(target) {
+      return Boolean(target?.matches?.("input, textarea, select") || target?.isContentEditable);
     }
 
     clear() {

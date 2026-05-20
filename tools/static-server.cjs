@@ -7,7 +7,8 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
 const port = Number.isFinite(requestedPort) ? requestedPort : 4173;
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
+const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -39,6 +40,11 @@ function resolveRequestPath(requestUrl) {
 }
 
 const server = http.createServer((req, res) => {
+  if ((req.url || "/") === "/health") {
+    send(res, 200, JSON.stringify({ ok: true, service: "iron-line" }), "application/json; charset=utf-8");
+    return;
+  }
+
   const filePath = resolveRequestPath(req.url || "/");
   if (!filePath) {
     send(res, 403, "Forbidden");
@@ -60,7 +66,18 @@ const server = http.createServer((req, res) => {
   });
 });
 
+let onlineSocket = null;
+try {
+  const { RoomRegistry } = require("../server/room-registry");
+  const { attachOnlineSocketServer } = require("../server/websocket");
+  onlineSocket = attachOnlineSocketServer({ server, registry: new RoomRegistry() });
+} catch (error) {
+  onlineSocket = { enabled: false, reason: error?.message || "online_socket_setup_failed" };
+}
+
 server.listen(port, host, () => {
-  console.log(`Iron Line dev server: http://${host}:${port}/index.html`);
-  console.log(`Map editor: http://${host}:${port}/editor.html`);
+  console.log(`Iron Line server: http://${displayHost}:${port}/index.html`);
+  console.log(`Map editor: http://${displayHost}:${port}/editor.html`);
+  if (onlineSocket?.enabled) console.log(`Online socket: ws://${displayHost}:${port}/ws`);
+  else console.log(`Online socket disabled: ${onlineSocket?.reason || "not available"}`);
 });

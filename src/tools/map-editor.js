@@ -3,10 +3,21 @@
 (function registerMapEditor(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const math = IronLine.math || {};
+  const editorUtils = IronLine.mapEditorUtils || {};
   const clamp = math.clamp || ((value, min, max) => Math.max(min, Math.min(max, value)));
   const distXY = math.distXY || ((x1, y1, x2, y2) => Math.hypot(x1 - x2, y1 - y2));
-  const lineIntersectsRect = math.lineIntersectsRect || fallbackLineIntersectsRect;
+  const lineIntersectsRect = math.lineIntersectsRect || editorUtils.lineIntersectsRect;
+  const cloneRoads = editorUtils.cloneRoads;
+  const collectRoadJunctions = editorUtils.collectRoadJunctions;
+  const expandRect = editorUtils.expandRect;
+  const segmentDistanceToPoint = editorUtils.segmentDistanceToPoint;
+  const closestPointOnSegment = editorUtils.closestPointOnSegment;
+  const roundedRect = editorUtils.roundedRect;
+  const pointInRect = editorUtils.pointInRect;
+  const rectIntersectsRect = editorUtils.rectIntersectsRect;
+  const hexToRgba = editorUtils.hexToRgba;
   const storageKey = "iron-line-map-editor-draft-v3";
+  const catalog = IronLine.sceneryCatalog || null;
 
   const state = {
     canvas: null,
@@ -23,6 +34,8 @@
     hoveredObstacle: null,
     hoveredHandle: null,
     hoveredLayoutItem: null,
+    hoveredWorldEdge: null,
+    hoveredRoadSegment: null,
     selectedItems: new Set(),
     selectionBox: null,
     editMode: "road",
@@ -54,6 +67,8 @@
       roadSelect: document.getElementById("roadSelect"),
       obstacleSelect: document.getElementById("obstacleSelect"),
       obstacleKindSelect: document.getElementById("obstacleKindSelect"),
+      obstacleVariantSelect: document.getElementById("obstacleVariantSelect"),
+      obstacleDestructibleToggle: document.getElementById("obstacleDestructibleToggle"),
       roadWidthRange: document.getElementById("roadWidthRange"),
       roadWidthInput: document.getElementById("roadWidthInput"),
       worldWidthInput: document.getElementById("worldWidthInput"),
@@ -161,10 +176,25 @@
       updateStatusFromState();
     });
 
+    populateObstacleKindSelect();
+
     state.controls.obstacleKindSelect.addEventListener("change", () => {
       const obstacle = getSelectedObstacle();
       if (!obstacle) return;
-      obstacle.kind = state.controls.obstacleKindSelect.value;
+      applyObstacleKind(obstacle, state.controls.obstacleKindSelect.value, true);
+      syncObstacleControls();
+      markChanged();
+    });
+    state.controls.obstacleVariantSelect?.addEventListener("change", () => {
+      const obstacle = getSelectedObstacle();
+      if (!obstacle) return;
+      obstacle.variant = state.controls.obstacleVariantSelect.value || undefined;
+      markChanged();
+    });
+    state.controls.obstacleDestructibleToggle?.addEventListener("change", () => {
+      const obstacle = getSelectedObstacle();
+      if (!obstacle) return;
+      obstacle.destructible = state.controls.obstacleDestructibleToggle.checked;
       markChanged();
     });
 
@@ -222,7 +252,7 @@
     const availableW = Math.max(320, window.innerWidth - panelReserve - 48);
     const availableH = Math.max(240, window.innerHeight - 64);
     const zoom = Math.min(availableW / state.world.width, availableH / state.world.height);
-    state.camera.zoom = clamp(zoom, 0.12, 1.4);
+    state.camera.zoom = clamp(zoom, 0.045, 1.4);
     state.camera.x = -32 / state.camera.zoom;
     state.camera.y = -32 / state.camera.zoom;
     state.initializedCamera = true;
@@ -277,6 +307,42 @@
     if (state.selectedObstacle !== null) select.value = String(state.selectedObstacle);
     const obstacle = getSelectedObstacle();
     state.controls.obstacleKindSelect.value = obstacle?.kind || "building";
+    syncObstacleVariantSelect(obstacle);
+    if (state.controls.obstacleDestructibleToggle) {
+      state.controls.obstacleDestructibleToggle.checked = Boolean(obstacle?.destructible);
+    }
+  }
+
+  function populateObstacleKindSelect() {
+    const select = state.controls.obstacleKindSelect;
+    if (!select || select.options.length) return;
+    const items = catalog?.obstacleKinds || [
+      { kind: "building", label: "건물" },
+      { kind: "concrete", label: "콘크리트" },
+      { kind: "base-wall", label: "기지 벽" }
+    ];
+    select.textContent = "";
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = item.kind;
+      option.textContent = item.group ? `${item.group} · ${item.label}` : item.label;
+      select.append(option);
+    }
+  }
+
+  function syncObstacleVariantSelect(obstacle) {
+    const select = state.controls.obstacleVariantSelect;
+    if (!select) return;
+    const kind = obstacle?.kind || state.controls.obstacleKindSelect?.value || "building";
+    const variants = catalog?.getObstacleKind?.(kind)?.variants || [["", "기본"]];
+    select.textContent = "";
+    for (const [id, label] of variants) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = label;
+      select.append(option);
+    }
+    select.value = obstacle?.variant || variants[0]?.[0] || "";
   }
 
   function syncModeControls() {
@@ -295,6 +361,8 @@
     state.hoveredObstacle = null;
     state.hoveredHandle = null;
     state.hoveredLayoutItem = null;
+    state.hoveredWorldEdge = null;
+    state.hoveredRoadSegment = null;
     state.selectionBox = null;
     state.selectedItems = new Set();
     syncControls();
@@ -309,11 +377,17 @@
   }
 
   function setWorldSize(width, height) {
-    state.world.width = clamp(Math.round(width || state.world.width), 1200, 9000);
-    state.world.height = clamp(Math.round(height || state.world.height), 1200, 7000);
+    applyWorldSize(width, height, { fit: true });
+  }
+
+  function applyWorldSize(width, height, options = {}) {
+    const minWidth = Math.min(9000, Math.max(1200, options.minWidth || 1200));
+    const minHeight = Math.min(7000, Math.max(1200, options.minHeight || 1200));
+    state.world.width = clamp(Math.round(width || state.world.width), minWidth, 9000);
+    state.world.height = clamp(Math.round(height || state.world.height), minHeight, 7000);
     clampAllLayoutToWorld();
-    fitMap();
-    markChanged();
+    if (options.fit !== false) fitMap();
+    markChanged(options.refreshExport !== false);
   }
 
   function expandWorld(factor) {
@@ -383,6 +457,9 @@
     if (segment) {
       state.selectedRoad = segment.roadIndex;
       state.selectedPoint = null;
+      selectRoadPoints(segment.roadIndex, event.shiftKey);
+      startSelectionMove(event, world);
+      state.canvas.setPointerCapture(event.pointerId);
       syncControls();
       updateStatusFromState();
       return;
@@ -419,6 +496,13 @@
   }
 
   function handleLayoutPointerDown(event, world) {
+    const edge = findWorldEdgeHandle(world.x, world.y);
+    if (edge) {
+      startWorldResize(event, world, edge);
+      state.canvas.setPointerCapture(event.pointerId);
+      return;
+    }
+
     const item = findLayoutItem(world.x, world.y);
     if (item) {
       selectSingleItem(item.key, event.shiftKey);
@@ -471,6 +555,17 @@
     };
   }
 
+  function startWorldResize(event, world, handle) {
+    const minimum = worldContentMinimum(160);
+    state.dragging = {
+      type: "world-resize",
+      handle,
+      minWidth: Math.min(state.world.width, minimum.width),
+      minHeight: Math.min(state.world.height, minimum.height)
+    };
+    state.hoveredWorldEdge = handle;
+  }
+
   function onPointerMove(event) {
     const world = screenToWorld(event.clientX, event.clientY);
 
@@ -487,6 +582,11 @@
 
     if (state.dragging?.type === "selection-move") {
       moveSelectedItems(world);
+      return;
+    }
+
+    if (state.dragging?.type === "world-resize") {
+      resizeWorldByEdge(world);
       return;
     }
 
@@ -510,17 +610,24 @@
       state.hoveredObstacle = findObstacle(world.x, world.y);
       state.hoveredPoint = null;
       state.hoveredLayoutItem = null;
+      state.hoveredWorldEdge = null;
+      state.hoveredRoadSegment = null;
     } else if (state.editMode === "layout") {
-      state.hoveredLayoutItem = findLayoutItem(world.x, world.y);
+      state.hoveredWorldEdge = findWorldEdgeHandle(world.x, world.y);
+      state.hoveredLayoutItem = state.hoveredWorldEdge ? null : findLayoutItem(world.x, world.y);
       state.hoveredPoint = null;
       state.hoveredObstacle = null;
       state.hoveredHandle = null;
+      state.hoveredRoadSegment = null;
     } else {
       state.hoveredPoint = findPoint(world.x, world.y);
+      state.hoveredRoadSegment = state.hoveredPoint ? null : findSegment(world.x, world.y);
       state.hoveredObstacle = null;
       state.hoveredHandle = null;
       state.hoveredLayoutItem = null;
+      state.hoveredWorldEdge = null;
     }
+    updateCanvasCursor();
   }
 
   function onPointerUp(event) {
@@ -535,18 +642,20 @@
       commitRoadConnection(state.dragging.roadIndex, state.dragging.pointIndex);
       markChanged();
     }
+    if (state.dragging?.type === "world-resize") markChanged();
     if (state.dragging?.type === "obstacle-move" || state.dragging?.type === "obstacle-resize") markChanged();
     state.dragging = null;
     if (state.canvas.hasPointerCapture?.(event.pointerId)) {
       state.canvas.releasePointerCapture(event.pointerId);
     }
+    updateCanvasCursor();
   }
 
   function onWheel(event) {
     event.preventDefault();
     const before = screenToWorld(event.clientX, event.clientY);
     const scale = event.deltaY < 0 ? 1.12 : 0.88;
-    state.camera.zoom = clamp(state.camera.zoom * scale, 0.12, 1.6);
+    state.camera.zoom = clamp(state.camera.zoom * scale, 0.045, 1.6);
     const after = screenToWorld(event.clientX, event.clientY);
     state.camera.x += before.x - after.x;
     state.camera.y += before.y - after.y;
@@ -587,6 +696,25 @@
     }
 
     updatePrimarySelectionFromSet();
+  }
+
+  function selectRoadPoints(roadIndex, additive = false) {
+    const road = state.roads[roadIndex];
+    if (!road) return;
+
+    const keys = road.map((_, pointIndex) => roadPointKey(roadIndex, pointIndex));
+    if (additive) {
+      const removeRoad = keys.every((key) => state.selectedItems.has(key));
+      for (const key of keys) {
+        if (removeRoad) state.selectedItems.delete(key);
+        else state.selectedItems.add(key);
+      }
+    } else {
+      state.selectedItems = new Set(keys);
+    }
+
+    state.selectedRoad = roadIndex;
+    state.selectedPoint = null;
   }
 
   function finishSelectionBox(additive = false) {
@@ -783,6 +911,23 @@
     return Math.round(value / state.gridSize) * state.gridSize;
   }
 
+  function snapWorldSize(value) {
+    if (!state.snap) return Math.round(value);
+    return Math.round(value / state.gridSize) * state.gridSize;
+  }
+
+  function resizeWorldByEdge(world) {
+    const handle = state.dragging.handle;
+    const nextWidth = handle.includes("e") ? snapWorldSize(world.x) : state.world.width;
+    const nextHeight = handle.includes("s") ? snapWorldSize(world.y) : state.world.height;
+    applyWorldSize(nextWidth, nextHeight, {
+      fit: false,
+      minWidth: state.dragging.minWidth,
+      minHeight: state.dragging.minHeight,
+      refreshExport: true
+    });
+  }
+
   function dragRoadPoint(world) {
     const point = state.roads[state.dragging.roadIndex][state.dragging.pointIndex];
     const snapped = snapEditableRoadPoint(state.dragging.roadIndex, state.dragging.pointIndex, world);
@@ -867,18 +1012,30 @@
 
   function createObstacle() {
     const center = screenToWorld(window.innerWidth * 0.42, window.innerHeight * 0.52);
-    const topLeft = snapPoint({ x: center.x - 120, y: center.y - 70 });
-    state.world.obstacles.push({
-      x: clamp(topLeft.x, 0, state.world.width - 240),
-      y: clamp(topLeft.y, 0, state.world.height - 140),
-      w: 240,
-      h: 140,
-      kind: "building"
-    });
+    const kind = state.controls.obstacleKindSelect?.value || "building";
+    const size = catalog?.defaultSize?.(kind) || { w: 240, h: 140 };
+    const topLeft = snapPoint({ x: center.x - size.w * 0.5, y: center.y - size.h * 0.5 });
+    const obstacle = {
+      x: clamp(topLeft.x, 0, Math.max(0, state.world.width - size.w)),
+      y: clamp(topLeft.y, 0, Math.max(0, state.world.height - size.h)),
+      w: size.w,
+      h: size.h,
+      kind
+    };
+    applyObstacleKind(obstacle, kind, true);
+    state.world.obstacles.push(obstacle);
     state.selectedObstacle = state.world.obstacles.length - 1;
     state.editMode = "obstacle";
     markChanged();
     syncControls();
+  }
+
+  function applyObstacleKind(obstacle, kind, resetVariant = false) {
+    const info = catalog?.getObstacleKind?.(kind);
+    obstacle.kind = kind;
+    if (resetVariant || !obstacle.variant) obstacle.variant = catalog?.defaultVariant?.(kind) || undefined;
+    if (info?.destructible && obstacle.destructible === undefined) obstacle.destructible = true;
+    if (!info?.destructible && resetVariant) delete obstacle.destructible;
   }
 
   function deleteSelectedObstacle() {
@@ -1045,6 +1202,7 @@
     if (state.editMode === "road") drawRoadHandles(ctx);
     if (state.editMode === "obstacle") drawObstacleHandles(ctx);
     drawLayoutItems(ctx);
+    drawWorldResizeHandles(ctx);
     drawSelectionBox(ctx);
     ctx.restore();
 
@@ -1127,6 +1285,9 @@
       strokeRoadPath(ctx, road, roadBody, state.roadWidth);
       if (state.editMode === "road" && roadIndex === state.selectedRoad) {
         strokeRoadPath(ctx, road, "rgba(107, 188, 255, 0.28)", state.roadWidth + 14);
+      }
+      if (state.editMode === "road" && state.hoveredRoadSegment?.roadIndex === roadIndex) {
+        strokeRoadPath(ctx, road, "rgba(255, 255, 255, 0.18)", state.roadWidth + 18);
       }
       drawRoadDashes(ctx, road);
     });
@@ -1220,11 +1381,20 @@
       const primarySelected = state.editMode === "obstacle" && index === state.selectedObstacle;
       const hovered = state.editMode === "obstacle" && index === state.hoveredObstacle;
       ctx.save();
-      ctx.fillStyle = danger ? "rgba(255, 109, 102, 0.52)" : obstacleColor(obstacle.kind);
-      ctx.strokeStyle = selected ? "rgba(107, 188, 255, 0.95)" : hovered ? "rgba(238, 243, 236, 0.5)" : danger ? "rgba(255, 210, 175, 0.85)" : "rgba(238, 243, 236, 0.12)";
-      ctx.lineWidth = selected ? 5 / state.camera.zoom : danger ? 3 / state.camera.zoom : hovered ? 3 / state.camera.zoom : 1.5 / state.camera.zoom;
-      ctx.fillRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
-      ctx.strokeRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+      if (obstacle.kind === "base-wall" || obstacle.kind === "concrete") {
+        editorUtils.drawWallObstaclePreview?.(ctx, obstacle, {
+          danger,
+          selected,
+          hovered,
+          zoom: state.camera.zoom
+        });
+      } else {
+        ctx.fillStyle = danger ? "rgba(255, 109, 102, 0.52)" : obstacleColor(obstacle.kind);
+        ctx.strokeStyle = selected ? "rgba(107, 188, 255, 0.95)" : hovered ? "rgba(238, 243, 236, 0.5)" : danger ? "rgba(255, 210, 175, 0.85)" : "rgba(238, 243, 236, 0.12)";
+        ctx.lineWidth = selected ? 5 / state.camera.zoom : danger ? 3 / state.camera.zoom : hovered ? 3 / state.camera.zoom : 1.5 / state.camera.zoom;
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+        ctx.strokeRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+      }
       if (selected) {
         ctx.fillStyle = primarySelected ? "rgba(107, 188, 255, 0.16)" : "rgba(107, 188, 255, 0.09)";
         ctx.fillRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
@@ -1278,6 +1448,12 @@
   function obstacleColor(kind) {
     if (kind === "building") return "rgba(84, 96, 87, 0.9)";
     if (kind === "base-wall") return "rgba(92, 101, 94, 0.95)";
+    if (kind === "sandbag") return "rgba(157, 138, 91, 0.9)";
+    if (kind === "barricade") return "rgba(118, 107, 92, 0.92)";
+    if (kind === "wood-fence") return "rgba(133, 94, 54, 0.9)";
+    if (kind === "tree") return "rgba(56, 105, 61, 0.9)";
+    if (kind === "brush") return "rgba(64, 105, 58, 0.72)";
+    if (kind === "rubble") return "rgba(79, 83, 75, 0.82)";
     return "rgba(103, 113, 104, 0.86)";
   }
 
@@ -1316,7 +1492,8 @@
     ctx.save();
     state.roads.forEach((road, roadIndex) => {
       road.forEach((point, pointIndex) => {
-        const selected = roadIndex === state.selectedRoad && pointIndex === state.selectedPoint;
+        const key = roadPointKey(roadIndex, pointIndex);
+        const selected = state.selectedItems.has(key) || (roadIndex === state.selectedRoad && pointIndex === state.selectedPoint);
         const hovered = state.hoveredPoint?.roadIndex === roadIndex && state.hoveredPoint?.pointIndex === pointIndex;
         const joined = state.joinedPoints.has(`${roadIndex}:${pointIndex}`);
         const radius = selected ? 15 : hovered ? 13 : 10;
@@ -1361,6 +1538,42 @@
       ctx.textBaseline = "middle";
       const text = item.kind === "capture" ? item.label : item.kind === "safe" ? "기지" : item.kind === "exit" ? "출" : "";
       if (text) ctx.fillText(text, item.x, item.y);
+    }
+    ctx.restore();
+  }
+
+  function drawWorldResizeHandles(ctx) {
+    if (state.editMode !== "layout") return;
+    const active = state.hoveredWorldEdge || (state.dragging?.type === "world-resize" ? state.dragging.handle : null);
+    const width = state.world.width;
+    const height = state.world.height;
+    const lineWidth = (active ? 4 : 2) / state.camera.zoom;
+    const handleRadius = (active ? 13 : 10) / state.camera.zoom;
+
+    ctx.save();
+    ctx.strokeStyle = active ? "rgba(159, 211, 255, 0.95)" : "rgba(159, 211, 255, 0.5)";
+    ctx.fillStyle = active ? "rgba(159, 211, 255, 0.95)" : "rgba(159, 211, 255, 0.65)";
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash([28 / state.camera.zoom, 18 / state.camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(width, 0);
+    ctx.lineTo(width, height);
+    ctx.moveTo(0, height);
+    ctx.lineTo(width, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const handles = [
+      { x: width, y: height * 0.5 },
+      { x: width * 0.5, y: height },
+      { x: width, y: height }
+    ];
+    for (const handle of handles) {
+      ctx.beginPath();
+      ctx.arc(handle.x, handle.y, handleRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(7, 11, 9, 0.72)";
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -1472,6 +1685,49 @@
       }
     }
     return best;
+  }
+
+  function findWorldEdgeHandle(x, y) {
+    const threshold = Math.max(22 / state.camera.zoom, 26);
+    const nearRight = Math.abs(x - state.world.width) <= threshold && y >= -threshold && y <= state.world.height + threshold;
+    const nearBottom = Math.abs(y - state.world.height) <= threshold && x >= -threshold && x <= state.world.width + threshold;
+
+    if (nearRight && nearBottom) return "se";
+    if (nearRight) return "e";
+    if (nearBottom) return "s";
+    return null;
+  }
+
+  function updateCanvasCursor() {
+    if (!state.canvas) return;
+    if (state.dragging?.type === "pan") {
+      state.canvas.style.cursor = "grabbing";
+      return;
+    }
+    if (state.dragging?.type === "world-resize") {
+      state.canvas.style.cursor = cursorForWorldEdge(state.dragging.handle);
+      return;
+    }
+    if (state.dragging) {
+      state.canvas.style.cursor = "grabbing";
+      return;
+    }
+    if (state.hoveredWorldEdge) {
+      state.canvas.style.cursor = cursorForWorldEdge(state.hoveredWorldEdge);
+      return;
+    }
+    if (state.hoveredPoint || state.hoveredRoadSegment || state.hoveredLayoutItem || state.hoveredObstacle || state.hoveredHandle) {
+      state.canvas.style.cursor = "grab";
+      return;
+    }
+    state.canvas.style.cursor = "default";
+  }
+
+  function cursorForWorldEdge(edge) {
+    if (edge === "se") return "nwse-resize";
+    if (edge === "e") return "ew-resize";
+    if (edge === "s") return "ns-resize";
+    return "default";
   }
 
   function getLayoutItems() {
@@ -1740,34 +1996,6 @@
     return best;
   }
 
-  function collectRoadJunctions(roads) {
-    const junctions = [];
-    const seen = new Set();
-    const add = (point) => {
-      const key = `${Math.round(point.x / 8) * 8}:${Math.round(point.y / 8) * 8}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      junctions.push({ x: point.x, y: point.y });
-    };
-
-    for (let roadA = 0; roadA < roads.length; roadA += 1) {
-      for (let segmentA = 1; segmentA < roads[roadA].length; segmentA += 1) {
-        const a = roads[roadA][segmentA - 1];
-        const b = roads[roadA][segmentA];
-        for (let roadB = roadA + 1; roadB < roads.length; roadB += 1) {
-          for (let segmentB = 1; segmentB < roads[roadB].length; segmentB += 1) {
-            const c = roads[roadB][segmentB - 1];
-            const d = roads[roadB][segmentB];
-            const point = segmentIntersectionPoint(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y);
-            if (point) add(point);
-          }
-        }
-      }
-    }
-
-    return junctions;
-  }
-
   function isEndpoint(roadIndex, pointIndex) {
     const road = state.roads[roadIndex];
     return pointIndex === 0 || pointIndex === road.length - 1;
@@ -1905,19 +2133,11 @@
   }
 
   function obstacleKindLabel(kind) {
-    if (kind === "building") return "건물";
-    if (kind === "base-wall") return "기지 벽";
-    return "콘크리트";
+    return catalog?.obstacleKindLabel?.(kind) || (kind === "building" ? "건물" : kind === "base-wall" ? "기지 벽" : "콘크리트");
   }
 
   function setStatus(message) {
     if (state.controls.statusText) state.controls.statusText.textContent = message;
-  }
-
-  function cloneRoads(roads) {
-    return roads
-      .map((road) => road.map((point) => ({ x: Math.round(point.x), y: Math.round(point.y) })))
-      .filter((road) => road.length >= 2);
   }
 
   function cloneRects(rects) {
@@ -1926,7 +2146,9 @@
       y: Math.round(rect.y),
       w: Math.round(rect.w),
       h: Math.round(rect.h),
-      kind: rect.kind || "concrete"
+      kind: rect.kind || "concrete",
+      variant: rect.variant,
+      destructible: rect.destructible
     }));
   }
 
@@ -1952,6 +2174,48 @@
       }
     }
     return next;
+  }
+
+  function worldContentMinimum(padding = 120) {
+    let maxX = 0;
+    let maxY = 0;
+
+    const includePoint = (point, radius = 0) => {
+      if (!point || typeof point !== "object") return;
+      if (Number.isFinite(Number(point.x))) maxX = Math.max(maxX, Number(point.x) + radius);
+      if (Number.isFinite(Number(point.y))) maxY = Math.max(maxY, Number(point.y) + radius);
+    };
+    const includeRect = (rect) => {
+      if (!rect || typeof rect !== "object") return;
+      if (Number.isFinite(Number(rect.x)) && Number.isFinite(Number(rect.w))) maxX = Math.max(maxX, Number(rect.x) + Number(rect.w));
+      if (Number.isFinite(Number(rect.y)) && Number.isFinite(Number(rect.h))) maxY = Math.max(maxY, Number(rect.y) + Number(rect.h));
+    };
+    const visit = (value) => {
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      const radius = Math.max(0, Number(value.radius) || Number(value.r) || 0);
+      includePoint(value, radius);
+      includeRect(value);
+      for (const child of Object.values(value)) visit(child);
+    };
+
+    visit(state.roads);
+    visit(state.world.obstacles);
+    visit(state.world.terrainPatches);
+    visit(state.world.capturePoints);
+    visit(state.world.safeZones);
+    visit(state.world.baseExitPoints);
+    visit(state.world.spawns);
+    visit(state.world.reconPoints);
+    visit(state.world.navGraph?.nodes || []);
+
+    return {
+      width: clamp(Math.ceil(maxX + padding), 1200, 9000),
+      height: clamp(Math.ceil(maxY + padding), 1200, 7000)
+    };
   }
 
   function clampAllLayoutToWorld() {
@@ -1992,111 +2256,6 @@
     if (Number.isFinite(Number(point.y))) point.y = clamp(Math.round(point.y), 0, state.world.height);
     if (Number.isFinite(Number(point.radius))) point.radius = Math.max(0, Math.round(point.radius));
     if (Number.isFinite(Number(point.r))) point.r = Math.max(0, Math.round(point.r));
-  }
-
-  function expandRect(rect, amount) {
-    return {
-      x: rect.x - amount,
-      y: rect.y - amount,
-      w: rect.w + amount * 2,
-      h: rect.h + amount * 2
-    };
-  }
-
-  function segmentDistanceToPoint(ax, ay, bx, by, px, py) {
-    return closestPointOnSegment(ax, ay, bx, by, px, py).distance;
-  }
-
-  function closestPointOnSegment(ax, ay, bx, by, px, py) {
-    const abx = bx - ax;
-    const aby = by - ay;
-    const lengthSq = abx * abx + aby * aby;
-    if (lengthSq === 0) {
-      return { x: ax, y: ay, t: 0, distance: distXY(ax, ay, px, py) };
-    }
-    const t = clamp(((px - ax) * abx + (py - ay) * aby) / lengthSq, 0, 1);
-    const x = ax + abx * t;
-    const y = ay + aby * t;
-    return { x, y, t, distance: distXY(x, y, px, py) };
-  }
-
-  function roundedRect(ctx, x, y, width, height, radius) {
-    const r = Math.min(radius, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + width - r, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-    ctx.lineTo(x + width, y + height - r);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-    ctx.lineTo(x + r, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
-
-  function segmentIntersectionPoint(ax, ay, bx, by, cx, cy, dx, dy) {
-    const rx = bx - ax;
-    const ry = by - ay;
-    const sx = dx - cx;
-    const sy = dy - cy;
-    const denominator = rx * sy - ry * sx;
-    if (Math.abs(denominator) < 0.0001) return null;
-    const qpx = cx - ax;
-    const qpy = cy - ay;
-    const t = (qpx * sy - qpy * sx) / denominator;
-    const u = (qpx * ry - qpy * rx) / denominator;
-    if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
-    return {
-      x: ax + rx * clamp(t, 0, 1),
-      y: ay + ry * clamp(t, 0, 1)
-    };
-  }
-
-  function fallbackLineIntersectsRect(x1, y1, x2, y2, rect) {
-    if (pointInRect(x1, y1, rect) || pointInRect(x2, y2, rect)) return true;
-    const left = rect.x;
-    const right = rect.x + rect.w;
-    const top = rect.y;
-    const bottom = rect.y + rect.h;
-    return (
-      segmentIntersection(x1, y1, x2, y2, left, top, right, top) ||
-      segmentIntersection(x1, y1, x2, y2, right, top, right, bottom) ||
-      segmentIntersection(x1, y1, x2, y2, right, bottom, left, bottom) ||
-      segmentIntersection(x1, y1, x2, y2, left, bottom, left, top)
-    );
-  }
-
-  function pointInRect(x, y, rect) {
-    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
-  }
-
-  function rectIntersectsRect(a, b) {
-    return a.x <= b.x + b.w && a.x + a.w >= b.x && a.y <= b.y + b.h && a.y + a.h >= b.y;
-  }
-
-  function hexToRgba(hex, alpha) {
-    const value = String(hex || "").trim().replace("#", "");
-    if (!/^[0-9a-fA-F]{6}$/.test(value)) return `rgba(255, 255, 255, ${alpha})`;
-    const number = Number.parseInt(value, 16);
-    const r = (number >> 16) & 255;
-    const g = (number >> 8) & 255;
-    const b = number & 255;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-
-  function segmentIntersection(ax, ay, bx, by, cx, cy, dx, dy) {
-    const rx = bx - ax;
-    const ry = by - ay;
-    const sx = dx - cx;
-    const sy = dy - cy;
-    const denominator = rx * sy - ry * sx;
-    if (Math.abs(denominator) < 0.0001) return false;
-    const qpx = cx - ax;
-    const qpy = cy - ay;
-    const t = (qpx * sy - qpy * sx) / denominator;
-    const u = (qpx * ry - qpy * rx) / denominator;
-    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
   }
 
   window.addEventListener("load", init);

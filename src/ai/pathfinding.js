@@ -6,7 +6,9 @@
 
   class NavGraph {
     constructor(config, world = null) {
-      this.nodes = (config.nodes || []).map((node) => ({ ...node, authored: true }));
+      this.nodes = (config.nodes || [])
+        .filter((node) => node?.id && Number.isFinite(node.x) && Number.isFinite(node.y))
+        .map((node) => ({ ...node, authored: true }));
       this.edges = [];
       this.objectiveNodes = config.objectiveNodes || {};
       this.world = world;
@@ -24,6 +26,7 @@
     }
 
     nearestNode(x, y, options = {}) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
       let best = null;
       let bestDistance = Infinity;
       let fallback = null;
@@ -60,14 +63,19 @@
       const cameFrom = new Map();
       const gScore = new Map([[startId, 0]]);
       const fScore = new Map([[startId, this.heuristic(startId, goalId)]]);
+      const maxIterations = Math.max(64, this.nodes.length * 4);
+      let iterations = 0;
 
-      while (open.size > 0) {
+      while (open.size > 0 && iterations < maxIterations) {
+        iterations += 1;
         const current = this.lowestScoreNode(open, fScore);
+        if (!current) break;
         if (current === goalId) return this.reconstructPath(cameFrom, current);
 
         open.delete(current);
         for (const neighbor of this.neighbors.get(current) || []) {
           const tentative = (gScore.get(current) ?? Infinity) + neighbor.cost;
+          if (!Number.isFinite(tentative)) continue;
           if (tentative >= (gScore.get(neighbor.id) ?? Infinity)) continue;
 
           cameFrom.set(neighbor.id, current);
@@ -97,6 +105,7 @@
     }
 
     addNode(node) {
+      if (!node?.id || !Number.isFinite(node.x) || !Number.isFinite(node.y)) return null;
       if (this.nodeById.has(node.id)) return this.nodeById.get(node.id);
       this.nodes.push(node);
       this.nodeById.set(node.id, node);
@@ -113,7 +122,8 @@
       if (this.edgeKeys.has(key)) return false;
       if (this.segmentBlocked(from.x, from.y, to.x, to.y, padding)) return false;
 
-      const edgeCost = cost || distXY(from.x, from.y, to.x, to.y);
+      const edgeCost = Number.isFinite(cost) && cost > 0 ? cost : distXY(from.x, from.y, to.x, to.y);
+      if (!Number.isFinite(edgeCost) || edgeCost <= 0) return false;
       this.neighbors.get(fromId).push({ id: toId, cost: edgeCost });
       this.neighbors.get(toId).push({ id: fromId, cost: edgeCost });
       this.openEdges.push([fromId, toId, edgeCost]);
@@ -177,6 +187,7 @@
     heuristic(fromId, toId) {
       const from = this.nodeById.get(fromId);
       const to = this.nodeById.get(toId);
+      if (!from || !to) return Infinity;
       return distXY(from.x, from.y, to.x, to.y);
     }
 
@@ -186,6 +197,7 @@
 
       for (const id of open) {
         const score = fScore.get(id) ?? Infinity;
+        if (!Number.isFinite(score)) continue;
         if (score < bestScore) {
           best = id;
           bestScore = score;
@@ -197,8 +209,11 @@
 
     reconstructPath(cameFrom, current) {
       const path = [this.nodeById.get(current)];
+      const seen = new Set([current]);
       while (cameFrom.has(current)) {
         current = cameFrom.get(current);
+        if (seen.has(current)) break;
+        seen.add(current);
         path.unshift(this.nodeById.get(current));
       }
       return path;

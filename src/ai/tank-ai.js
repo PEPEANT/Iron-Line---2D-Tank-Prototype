@@ -452,6 +452,7 @@
       this.debug.recoveryTimer = navDebug.recoveryTimer;
       this.debug.visible = Boolean(decision.visible);
       this.debug.unsafeLine = Boolean(decision.unsafeLine);
+      this.debug.decision = decision.decision || null;
       this.debug.supportRequest = order?.supportRequestType || "";
       this.debug.supportRequestId = order?.supportRequestId || "";
     }
