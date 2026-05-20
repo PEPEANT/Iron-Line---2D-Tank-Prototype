@@ -112,6 +112,7 @@
         this.adminNotify(result.message || (result.ok ? "백업을 불러왔습니다." : "백업을 불러오지 못했습니다."));
         return Boolean(result.ok);
       }
+      if (action?.startsWith?.("map-")) return this.handleAdminMapAction?.(action) || false;
       if (action?.startsWith?.("room-")) return this.handleAdminRoomAction(action);
       if (action === "refill-player") {
         this.refillTestLabPlayer();

@@ -13,10 +13,26 @@
       this.resize();
     }
 
+    viewportSize() {
+      if (!document.body?.classList.contains("admin-standalone-page") || window.innerWidth <= 760) {
+        return { width: window.innerWidth, height: window.innerHeight };
+      }
+
+      const panel = document.getElementById("adminPanel");
+      const rect = panel?.getBoundingClientRect?.();
+      const panelWidth = rect?.width || Math.min(520, Math.max(420, window.innerWidth * 0.36));
+      const reserved = panelWidth + 28;
+      return {
+        width: Math.max(320, window.innerWidth - reserved),
+        height: window.innerHeight
+      };
+    }
+
     resize() {
       const dpr = window.devicePixelRatio || 1;
-      this.camera.width = window.innerWidth;
-      this.camera.height = window.innerHeight;
+      const viewport = this.viewportSize();
+      this.camera.width = viewport.width;
+      this.camera.height = viewport.height;
       this.camera.zoom = this.camera.zoom || 1;
       this.camera.viewWidth = this.camera.width / this.camera.zoom;
       this.camera.viewHeight = this.camera.height / this.camera.zoom;

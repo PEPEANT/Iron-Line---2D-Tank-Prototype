@@ -2,7 +2,7 @@
 
 (function registerLobbyUI(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM } = IronLine.constants;
+  const { TEAM, MATCH_RULES } = IronLine.constants;
 
   class LobbyUI {
     constructor(hud) {
@@ -140,7 +140,7 @@
       const root = this.nodes.lobbyHeaderMeta;
       if (!root) return;
       const roomId = game.onlineSession?.roomId || "대기";
-      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || 2100) : "제한 없음";
+      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) : "제한 없음";
       const values = [
         { label: "방 코드", value: roomId },
         { label: "슬롯", value: `${options.filled}/${options.total}` },

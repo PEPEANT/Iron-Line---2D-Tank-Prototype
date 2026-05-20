@@ -2,7 +2,7 @@
 
 (function registerGameSessionState(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM } = IronLine.constants;
+  const { TEAM, MATCH_RULES } = IronLine.constants;
 
   class GameSessionState {
     requestedTestLab() {
@@ -276,6 +276,12 @@
             slotId: "blue-infantry",
             roleId: "infantry",
             role: "infantry_leader",
+            classId: "infantry",
+            currentClassId: "infantry",
+            combatRoleId: "infantry",
+            weaponId: "machinegun",
+            weaponInventory: ["machinegun", "pistol", "grenade"],
+            equipmentAmmo: { grenade: 3 },
             participantType: "player",
             ready: false,
             host: true
@@ -285,7 +291,7 @@
     }
 
     defaultConquestState() {
-      const duration = 35 * 60;
+      const duration = MATCH_RULES?.conquestDuration || 20 * 60;
       return {
         duration,
         remaining: duration,

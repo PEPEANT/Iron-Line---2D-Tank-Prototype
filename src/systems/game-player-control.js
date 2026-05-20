@@ -2,7 +2,7 @@
 
 (function registerGamePlayerControl(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { AMMO, INFANTRY_WEAPONS } = IronLine.constants;
+  const { AMMO, INFANTRY_WEAPONS, PLAYER_CLASS_ORDER } = IronLine.constants;
   const {
     clamp,
     distXY,
@@ -559,10 +559,7 @@
 
         if (!this.matchStarted && this.player.inSafeZone) {
           const classId = PLAYER_CLASS_ORDER[i];
-          if (classId && this.player.setClass(classId)) {
-            this.applyPlayerLoadoutOverrides();
-            this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
-          }
+          if (classId) this.applyFullPlayerClassLoadout?.(classId, { resetAmmo: true, clearDrones: true });
           continue;
         }
 

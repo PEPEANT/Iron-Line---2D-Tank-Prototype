@@ -6,83 +6,83 @@
   const obstacleKinds = [
     {
       kind: "building",
-      label: "건물",
-      group: "건물",
+      label: "\uac74\ubb3c",
+      group: "\uac74\ubb3c",
       defaultSize: { w: 240, h: 150 },
       variants: [
-        ["warehouse", "창고"],
-        ["garage", "차고"],
-        ["barracks", "막사"],
-        ["service-block", "정비동"],
-        ["depot", "보급고"],
-        ["bunker", "벙커"],
-        ["checkpoint", "검문소"]
+        ["warehouse", "\ucc3d\uace0"],
+        ["garage", "\ucc28\uace0"],
+        ["barracks", "\ub9c9\uc0ac"],
+        ["service-block", "\uc815\ube44\uc18c"],
+        ["depot", "\ubcf4\uae09\ucc3d"],
+        ["bunker", "\ubc99\ucee4"],
+        ["checkpoint", "\uac80\ubb38\uc18c"]
       ]
     },
     {
       kind: "base-wall",
-      label: "기지 벽",
-      group: "벽",
+      label: "\uae30\uc9c0 \ubcbd",
+      group: "\ubcbd",
       defaultSize: { w: 280, h: 46 },
-      variants: [["fortified-base-wall", "방호벽"]]
+      variants: [["fortified-base-wall", "\ubc29\ud638\ubcbd"]]
     },
     {
       kind: "concrete",
-      label: "콘크리트 벽",
-      group: "벽",
+      label: "\ucf58\ud06c\ub9ac\ud2b8 \ubcbd",
+      group: "\ubcbd",
       defaultSize: { w: 220, h: 42 },
       variants: [
-        ["blast-wall", "방폭벽"],
-        ["checkpoint-wall", "검문 벽"],
-        ["retaining-wall", "옹벽"],
-        ["roadblock-wall", "차단벽"]
+        ["blast-wall", "\ubc29\ud3ed\ubcbd"],
+        ["checkpoint-wall", "\uac80\ubb38 \ubcbd"],
+        ["retaining-wall", "\uc678\uacfd \ubcbd"],
+        ["roadblock-wall", "\ucc28\ub2e8\ubcbd"]
       ]
     },
     {
       kind: "sandbag",
-      label: "모래주머니",
-      group: "바리케이드",
+      label: "\ubaa8\ub798\uc8fc\uba38\ub2c8",
+      group: "\ubc14\ub9ac\ucf00\uc774\ub4dc",
       defaultSize: { w: 180, h: 34 },
       destructible: true,
-      variants: [["sandbag-line", "일자"], ["sandbag-nest", "진지"]]
+      variants: [["sandbag-line", "\uc77c\uc790"], ["sandbag-nest", "\uc9c4\uc9c0"]]
     },
     {
       kind: "barricade",
-      label: "대전차 바리케이드",
-      group: "바리케이드",
+      label: "\ub300\uc804\ucc28 \ubc14\ub9ac\ucf00\uc774\ub4dc",
+      group: "\ubc14\ub9ac\ucf00\uc774\ub4dc",
       defaultSize: { w: 170, h: 34 },
       destructible: true,
-      variants: [["dragon-teeth", "용치"], ["steel-hedgehog", "철제 장애물"]]
+      variants: [["dragon-teeth", "\uc6a9\uce58"], ["steel-hedgehog", "\ucca0\uc81c \ubc29\ud574\ubb3c"]]
     },
     {
       kind: "wood-fence",
-      label: "나무 울타리",
-      group: "바리케이드",
+      label: "\ub098\ubb34 \uc6b8\ud0c0\ub9ac",
+      group: "\ubc14\ub9ac\ucf00\uc774\ub4dc",
       defaultSize: { w: 190, h: 28 },
       destructible: true,
-      variants: [["wood-fence", "기본"], ["broken-fence", "파손됨"]]
+      variants: [["wood-fence", "\uae30\ubcf8"], ["broken-fence", "\ud30c\uc190\ud615"]]
     },
     {
       kind: "tree",
-      label: "나무",
-      group: "자연물",
+      label: "\ub098\ubb34",
+      group: "\uc790\uc5f0\ubb3c",
       defaultSize: { w: 70, h: 70 },
       destructible: true,
-      variants: [["pine", "침엽수"], ["broadleaf", "활엽수"], ["burnt-tree", "그을린 나무"]]
+      variants: [["pine", "\uce68\uc5fd\uc218"], ["broadleaf", "\ud65c\uc5fd\uc218"], ["burnt-tree", "\uadf8\uc744\ub9b0 \ub098\ubb34"]]
     },
     {
       kind: "brush",
-      label: "수풀",
-      group: "자연물",
+      label: "\uc218\ud480",
+      group: "\uc790\uc5f0\ubb3c",
       defaultSize: { w: 120, h: 90 },
-      variants: [["brush", "낮은 수풀"], ["tall-grass", "긴 풀"]]
+      variants: [["brush", "\ub0ae\uc740 \uc218\ud480"], ["tall-grass", "\uae34 \ud480"]]
     },
     {
       kind: "rubble",
-      label: "잔해",
-      group: "폐허",
+      label: "\uc794\ud574",
+      group: "\uc794\ud574",
       defaultSize: { w: 130, h: 90 },
-      variants: [["concrete-rubble", "콘크리트"], ["burnt-rubble", "전소 잔해"]]
+      variants: [["concrete-rubble", "\ucf58\ud06c\ub9ac\ud2b8"], ["burnt-rubble", "\uc804\uc18c \uc794\ud574"]]
     }
   ];
 
@@ -94,11 +94,11 @@
       return byKind.get(kind) || byKind.get("concrete");
     },
     obstacleKindLabel(kind) {
-      return this.getObstacleKind(kind)?.label || kind || "오브젝트";
+      return this.getObstacleKind(kind)?.label || kind || "\uc624\ube0c\uc81d\ud2b8";
     },
     variantLabel(kind, variant) {
       const item = this.getObstacleKind(kind);
-      return item?.variants?.find(([id]) => id === variant)?.[1] || variant || "기본";
+      return item?.variants?.find(([id]) => id === variant)?.[1] || variant || "\uae30\ubcf8";
     },
     defaultVariant(kind) {
       return this.getObstacleKind(kind)?.variants?.[0]?.[0] || "";

@@ -31,8 +31,9 @@
     }
 
     selectedRoom() {
+      const rooms = this.listRooms();
       const id = this.selectedRoomId();
-      return this.listRooms().find((room) => room.id === id) || this.listRooms()[0] || null;
+      return rooms.find((room) => room.id === id) || rooms[0] || null;
     }
 
     selectRoom(id) {
@@ -51,7 +52,7 @@
       const rooms = this.listRooms();
       const room = this.normalizeRoom({
         id: input.id || this.nextRoomId(rooms),
-        name: input.name || "온라인 테스트방",
+        name: input.name || "\uc628\ub77c\uc778 \ud14c\uc2a4\ud2b8\ubc29",
         mode: input.mode || "conquest",
         blueFactionId: input.blueFactionId || "korea",
         redFactionId: input.redFactionId || "russia",
@@ -65,6 +66,7 @@
         spectators: [],
         spectatorCapacity: 24,
         spectatorChatVisibleToPlayers: true,
+        chat: [],
         events: [],
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -72,8 +74,8 @@
       room.events = this.nextEvents(room, {
         type: "room_created",
         severity: "info",
-        title: "방 생성",
-        detail: `${room.name} 방이 생성되었습니다.`
+        title: "\ubc29 \uc0dd\uc131",
+        detail: `${room.name} \ubc29\uc774 \uc0dd\uc131\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
       });
       rooms.push(room);
       this.saveRooms(rooms);
@@ -105,8 +107,8 @@
         events: this.nextEvents(room, {
           type: "room_started",
           severity: "major",
-          title: "방 시작",
-          detail: `${room?.name || id} 방이 관리자에 의해 시작되었습니다.`
+          title: "\ubc29 \uc2dc\uc791",
+          detail: `${room?.name || id} \ubc29\uc774 \uad00\ub9ac\uc790\uc5d0 \uc758\ud574 \uc2dc\uc791\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
         })
       });
     }
@@ -120,8 +122,8 @@
         events: this.nextEvents(room, {
           type: "room_ended",
           severity: "warning",
-          title: "방 종료",
-          detail: `${room?.name || id} 방이 종료되었습니다.`
+          title: "\ubc29 \uc885\ub8cc",
+          detail: `${room?.name || id} \ubc29\uc774 \uc885\ub8cc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
         })
       });
     }
@@ -139,8 +141,8 @@
         events: this.nextEvents(room, {
           type: "room_reset",
           severity: "warning",
-          title: "방 초기화",
-          detail: `${room?.name || id} 방이 초기화되었습니다.`
+          title: "\ubc29 \ucd08\uae30\ud654",
+          detail: `${room?.name || id} \ubc29\uc774 \ucd08\uae30\ud654\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
         })
       });
     }
@@ -173,6 +175,12 @@
         team: player.team || "blue",
         slotId: player.slotId || "",
         roleId: player.roleId || "infantry",
+        classId: player.classId || player.currentClassId || "",
+        currentClassId: player.currentClassId || player.classId || "",
+        combatRoleId: player.combatRoleId || "",
+        weaponId: player.weaponId || "",
+        weaponInventory: Array.isArray(player.weaponInventory) ? player.weaponInventory.slice(0, 4) : [],
+        equipmentAmmo: player.equipmentAmmo ? { ...player.equipmentAmmo } : {},
         participantType,
         factionId: player.factionId || player.skinId || "",
         skinId: player.factionId || player.skinId || "",
@@ -189,39 +197,110 @@
       });
     }
 
+    removeParticipant(roomId, playerId, reason = "leave") {
+      const room = this.getRoom(roomId);
+      if (!room || !playerId) return null;
+      const previous = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === playerId) || null;
+      const players = (room.players || []).filter((item) => item.id !== playerId);
+      const spectators = (room.spectators || []).filter((item) => item.id !== playerId);
+      const event = previous ? {
+        type: "participant_left",
+        severity: "warning",
+        title: "\ucc38\uac00\uc790 \uc774\ud0c8",
+        detail: `${previous.name || "Player"}\uc774 \ubc29\uc5d0\uc11c \ub098\uac14\uc2b5\ub2c8\ub2e4.${reason === "stale" ? " (\uc751\ub2f5 \uc5c6\uc74c)" : ""}`
+      } : null;
+      return this.updateRoom(roomId, {
+        players,
+        spectators,
+        events: event ? this.nextEvents(room, event) : room.events
+      });
+    }
+
+    cleanupStaleParticipants(maxAgeMs = 45000) {
+      const now = Date.now();
+      let changed = false;
+      const rooms = this.listRooms().map((room) => {
+        const players = (room.players || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
+        const spectators = (room.spectators || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
+        if (players.length === (room.players || []).length && spectators.length === (room.spectators || []).length) return room;
+        changed = true;
+        return {
+          ...room,
+          players,
+          spectators,
+          updatedAt: now,
+          events: this.nextEvents(room, {
+            type: "stale_participants_removed",
+            severity: "warning",
+            title: "\uc751\ub2f5 \uc5c6\ub294 \ucc38\uac00\uc790 \uc815\ub9ac",
+            detail: `${room.name || room.id} \ubc29\uc758 \uc751\ub2f5 \uc5c6\ub294 \ucc38\uac00\uc790\ub97c \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.`
+          })
+        };
+      });
+      if (changed) this.saveRooms(rooms);
+      return changed;
+    }
+
+    pushChat(roomId, message = {}) {
+      const room = this.getRoom(roomId);
+      if (!room) return null;
+      const text = String(message.text || "").replace(/\s+/g, " ").trim().slice(0, 120);
+      if (!text) return null;
+      const chat = {
+        id: message.id || `${room.id}:chat:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+        roomId: room.id,
+        createdAt: Date.now(),
+        channel: ["all", "team", "spectator", "caster", "system"].includes(message.channel) ? message.channel : "all",
+        sender: String(message.sender || "Player").slice(0, 24),
+        playerId: String(message.playerId || ""),
+        team: message.team || "",
+        participantType: this.normalizeParticipantType(message.participantType),
+        text
+      };
+      const nextChat = Array.isArray(room.chat) ? room.chat.slice(-119) : [];
+      nextChat.push(chat);
+      this.updateRoom(room.id, { chat: nextChat });
+      return chat;
+    }
+
+    recentChat(roomId, limit = 80) {
+      const room = this.getRoom(roomId);
+      return (room?.chat || []).slice(-limit);
+    }
+
     playerEvent(previous, nextPlayer) {
-      const name = nextPlayer.name || "플레이어";
-      const typeLabel = nextPlayer.participantType === "player" ? "플레이어" : "관전자";
+      const name = nextPlayer.name || "Player";
+      const typeLabel = this.participantTypeLabel(nextPlayer.participantType);
       if (!previous) {
         return {
           type: "participant_joined",
           severity: nextPlayer.participantType === "player" ? "info" : "spectator",
-          title: `${typeLabel} 입장`,
-          detail: `${name}님이 ${typeLabel}로 입장했습니다.`
+          title: `${typeLabel} \uc785\uc7a5`,
+          detail: `${name}\uc774 ${typeLabel}\ub85c \uc785\uc7a5\ud588\uc2b5\ub2c8\ub2e4.`
         };
       }
       if (previous.participantType !== nextPlayer.participantType) {
         return {
           type: "participant_role_changed",
           severity: "info",
-          title: "참가 형태 변경",
-          detail: `${name}님이 ${typeLabel}로 전환되었습니다.`
+          title: "\ucc38\uac00 \ud615\ud0dc \ubcc0\uacbd",
+          detail: `${name}\uc774 ${typeLabel}\ub85c \uc804\ud658\ud588\uc2b5\ub2c8\ub2e4.`
         };
       }
       if (previous.slotId !== nextPlayer.slotId && nextPlayer.slotId) {
         return {
           type: "slot_changed",
           severity: "info",
-          title: "슬롯 변경",
-          detail: `${name}님이 ${this.slotLabel(nextPlayer.slotId)} 슬롯으로 이동했습니다.`
+          title: "\uc2ac\ub86f \ubcc0\uacbd",
+          detail: `${name}\uc774 ${this.slotLabel(nextPlayer.slotId)} \uc2ac\ub86f\uc73c\ub85c \uc774\ub3d9\ud588\uc2b5\ub2c8\ub2e4.`
         };
       }
       if (Boolean(previous.ready) !== Boolean(nextPlayer.ready)) {
         return {
           type: "ready_changed",
           severity: "info",
-          title: "준비 상태",
-          detail: `${name}님이 ${nextPlayer.ready ? "준비 완료" : "준비 해제"} 상태가 되었습니다.`
+          title: "\uc900\ube44 \uc0c1\ud0dc",
+          detail: `${name}\uc774 ${nextPlayer.ready ? "\uc900\ube44 \uc644\ub8cc" : "\uc900\ube44 \ud574\uc81c"} \uc0c1\ud0dc\uac00 \ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
         };
       }
       return null;
@@ -235,7 +314,7 @@
         createdAt: Date.now(),
         type: event.type || "room_event",
         severity: event.severity || "info",
-        title: String(event.title || "방 이벤트").slice(0, 48),
+        title: String(event.title || "\ubc29 \uc774\ubca4\ud2b8").slice(0, 48),
         detail: String(event.detail || "").slice(0, 140)
       };
       const events = Array.isArray(room.events) ? room.events.slice(-79) : [];
@@ -243,12 +322,19 @@
       return events;
     }
 
+    participantTypeLabel(value) {
+      if (value === "caster") return "\ud574\uc124\uc790";
+      if (value === "admin") return "\uad00\ub9ac\uc790";
+      if (value === "spectator") return "\uad00\uc804\uc790";
+      return "\ud50c\ub808\uc774\uc5b4";
+    }
+
     slotLabel(slotId = "") {
-      const side = slotId.startsWith("red") ? "홍팀" : "청팀";
-      if (slotId.includes("engineer")) return `${side} 공병`;
-      if (slotId.includes("recon")) return `${side} 정찰`;
-      if (slotId.includes("armor")) return `${side} 기갑`;
-      return `${side} 보병`;
+      const side = slotId.startsWith("red") ? "\ud64d\ud300" : "\uccad\ud300";
+      if (slotId.includes("engineer")) return `${side} \uacf5\ubcd1`;
+      if (slotId.includes("recon")) return `${side} \uc815\ucc30`;
+      if (slotId.includes("armor")) return `${side} \uae30\uac11`;
+      return `${side} \ubcf4\ubcd1`;
     }
 
     saveRooms(rooms) {
@@ -308,6 +394,7 @@
         spectators,
         spectatorCapacity,
         spectatorChatVisibleToPlayers: room.spectatorChatVisibleToPlayers !== false,
+        chat: Array.isArray(room.chat) ? room.chat.slice(-120) : [],
         events: Array.isArray(room.events) ? room.events.slice(-80) : [],
         createdAt: Number(room.createdAt) || Date.now(),
         updatedAt: Number(room.updatedAt) || Date.now(),

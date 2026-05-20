@@ -3,7 +3,7 @@
 (function registerSuicideDrone(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM } = IronLine.constants;
-  const { clamp, distXY, angleTo, rotateTowards, segmentDistanceToPoint } = IronLine.math;
+  const { clamp, distXY, angleTo, rotateTowards, segmentDistanceToPoint, normalizeAngle } = IronLine.math;
   const { hasLineOfSight } = IronLine.physics;
 
   class SuicideDrone extends IronLine.ReconDrone {
@@ -47,7 +47,13 @@
       this.boostImpactWindow = weapon.boostImpactWindow || 0.36;
       this.boostImpactTimer = 0;
       this.boostDirectImpactPadding = weapon.boostDirectImpactPadding || 10;
-      this.boostDirectTankDamage = weapon.boostDirectTankDamage || 132;
+      this.frontDirectTankDamage = weapon.frontDirectTankDamage || 62;
+      this.sideDirectTankDamage = weapon.sideDirectTankDamage || 74;
+      this.rearDirectTankDamage = weapon.rearDirectTankDamage || 82;
+      this.boostFrontTankDamage = weapon.boostFrontTankDamage || 102;
+      this.boostSideTankDamage = weapon.boostSideTankDamage || 126;
+      this.boostRearTankDamage = weapon.boostRearTankDamage || weapon.boostDirectTankDamage || 146;
+      this.directHumveeDamage = weapon.directHumveeDamage || 92;
       this.lockTarget = null;
       this.lockPoint = null;
       this.lockAttemptType = "";
@@ -315,9 +321,14 @@
       const splash = lockedBlast ? this.lockedSplash : this.splash;
       const boostedDirectHit = Boolean(options.boostedDirectHit);
       const directTarget = options.directTarget || null;
+      const directVehicleTarget = directTarget?.alive &&
+        ([...(game?.tanks || []), ...(game?.humvees || [])].includes(directTarget));
+      const directProfile = directVehicleTarget ? this.directImpactProfile(directTarget, boostedDirectHit) : null;
 
-      if (boostedDirectHit && directTarget?.alive && directTarget.vehicleType !== "humvee") {
-        directTarget.takeDamage?.(game, this.boostDirectTankDamage);
+      if (directProfile) {
+        const directDamage = this.directImpactDamage(directTarget, directProfile);
+        directTarget.takeDamage?.(game, directDamage);
+        this.recordDirectImpact(game, directTarget, directProfile, directDamage);
       }
 
       IronLine.combat.damageRadius(game, this.x, this.y, splash, this.damage, this.team, {
@@ -326,9 +337,83 @@
         lightVehicleDamageScale: this.lightVehicleDamageScale,
         infantryDamageScale: this.infantryDamageScale,
         suppressionBase: this.suppressionBase,
-        suppressionMax: this.suppressionMax
+        suppressionMax: this.suppressionMax,
+        excludeTarget: directProfile ? directTarget : null
       });
-      this.emitDetonationEffect(game, { boostedDirectHit });
+      this.emitDetonationEffect(game, { boostedDirectHit, directProfile });
+    }
+
+    directImpactProfile(target, boostedDirectHit = false) {
+      if (!target) return null;
+      if (target.vehicleType === "humvee") {
+        return {
+          sector: "light",
+          sectorLabel: "경차량",
+          boosted: Boolean(boostedDirectHit),
+          topStrike: false
+        };
+      }
+
+      const hitAngle = Math.atan2(this.y - target.y, this.x - target.x);
+      const aspect = Math.abs(normalizeAngle(hitAngle - (target.angle || 0)));
+      const sector = aspect <= 0.78 ? "front" : aspect >= 2.38 ? "rear" : "side";
+      return {
+        sector,
+        sectorLabel: sector === "front" ? "전면 장갑" : sector === "rear" ? "후면 장갑" : "측면 장갑",
+        boosted: Boolean(boostedDirectHit),
+        topStrike: Boolean(boostedDirectHit && sector !== "front")
+      };
+    }
+
+    directImpactDamage(target, profile) {
+      if (profile.sector === "light") return this.directHumveeDamage;
+      if (profile.boosted) {
+        if (profile.sector === "front") return this.boostFrontTankDamage;
+        if (profile.sector === "rear") return this.boostRearTankDamage;
+        return this.boostSideTankDamage;
+      }
+      if (profile.sector === "front") return this.frontDirectTankDamage;
+      if (profile.sector === "rear") return this.rearDirectTankDamage;
+      return this.sideDirectTankDamage;
+    }
+
+    recordDirectImpact(game, target, profile, damage) {
+      const targetLabel = target.callSign || target.id || target.vehicleType || "vehicle";
+      const hitText = profile.sector === "light"
+        ? "경차량 직격"
+        : `${profile.sectorLabel}${profile.topStrike ? " 상부 급강하" : ""}`;
+      target.lastDroneHit = {
+        sector: profile.sector,
+        boosted: profile.boosted,
+        topStrike: profile.topStrike,
+        damage,
+        time: game?.matchTime || 0
+      };
+
+      game?.aiObservatory?.recordEvent?.({
+        unitId: this.callSign || "FPV",
+        aiType: "drone",
+        team: this.team,
+        targetId: targetLabel,
+        decision: profile.boosted ? "kamikaze_boost_direct_hit" : "kamikaze_direct_hit",
+        reason: profile.topStrike ? `${profile.sector}_top_hit` : `${profile.sector}_hit`,
+        score: damage / Math.max(1, target.maxHp || 110),
+        scores: {
+          damage: Math.round(damage),
+          targetHp: Math.round(target.hp || 0),
+          boosted: profile.boosted ? 1 : 0
+        }
+      });
+
+      game?.battlefieldEvents?.push?.({
+        type: "kamikaze_direct_hit",
+        severity: profile.boosted && profile.sector !== "front" ? "major" : "info",
+        team: this.team,
+        title: "자폭드론 직격",
+        detail: `${this.callSign || "FPV"} ${targetLabel} ${hitText} · ${Math.round(damage)} 피해`,
+        source: "drone",
+        chat: false
+      });
     }
 
     checkImpactDetonation(game, previousX = this.x, previousY = this.y) {
@@ -364,11 +449,10 @@
         const sweptDistance = segmentDistanceToPoint(previousX, previousY, this.x, this.y, target.x, target.y);
         const impactDistance = Math.min(currentDistance, sweptDistance);
         if (impactDistance <= requiredDistance) {
-          const boostedDirectHit = this.boostStrikeReady() &&
-            (game.tanks || []).includes(target) &&
-            impactDistance <= directDistance;
+          const directHit = impactDistance <= directDistance;
+          const boostedDirectHit = directHit && this.boostStrikeReady();
           this.detonate(game, {
-            directTarget: target,
+            directTarget: directHit ? target : null,
             boostedDirectHit
           });
           return;

@@ -173,6 +173,13 @@
     return { zone, multiplier: table[zone] ?? 1 };
   }
 
+  function armorZoneLabel(zone) {
+    if (zone === "front") return "전면";
+    if (zone === "rear") return "후면";
+    if (zone === "side") return "측면";
+    return "경장갑";
+  }
+
   function directArmorSource(shell, tank) {
     let x = shell.previousX ?? shell.x;
     let y = shell.previousY ?? shell.y;
@@ -233,6 +240,14 @@
       time: game?.matchTime || 0
     };
     emitDirectArmorFeedback(game, tank, shell.x, shell.y, profile, shell.ammo);
+    game?.battlefieldEvents?.push?.({
+      type: "armor_direct_hit",
+      severity: profile.zone === "rear" ? "major" : "info",
+      team: tank.team,
+      title: "장갑 직격",
+      detail: `${tank.callSign || "전차"} ${armorZoneLabel(profile.zone)} 피격 · ${Math.round(damage)} 피해`,
+      chat: false
+    });
     return damage;
   }
 
@@ -1022,8 +1037,11 @@
     }
 
     if (ammo.id === "he" || ammo.id === "grenade" || ammo.id === "rpg") {
-      if (ammo.id === "rpg" && hitTank && !friendlyVehicle) {
-        const damage = directTankDamage(game, hitTank, ammo.directDamage || ammo.damage, shell);
+      if ((ammo.id === "rpg" || ammo.id === "he") && hitTank && !friendlyVehicle) {
+        const directBase = ammo.id === "he"
+          ? ammo.directTankDamage || ammo.damage * 0.62
+          : ammo.directDamage || ammo.damage;
+        const damage = directTankDamage(game, hitTank, directBase, shell);
         hitTank.takeDamage(game, damage);
       } else if (hitTank && friendlyVehicle) {
         emitFriendlyArmorBlock(game, hitTank, shell);

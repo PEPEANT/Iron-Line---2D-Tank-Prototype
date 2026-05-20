@@ -11,6 +11,8 @@
       this.open = false;
       this.maxMessages = 36;
       this.visibleMs = 9000;
+      this.seenRoomChat = new Set();
+      this.roomChatPoll = 0;
       this.nodes = {};
       this.ensure();
       window.addEventListener("keydown", (event) => this.onKeyDown(event), true);
@@ -22,7 +24,7 @@
       const root = document.createElement("section");
       root.id = "chatPanel";
       root.className = "chat-panel";
-      root.setAttribute("aria-label", "채팅");
+      root.setAttribute("aria-label", "\ucc44\ud305");
 
       const log = document.createElement("div");
       log.id = "chatLog";
@@ -34,7 +36,7 @@
       const mode = document.createElement("button");
       mode.type = "button";
       mode.className = "chat-mode";
-      mode.textContent = "팀";
+      mode.textContent = this.modeLabel(this.mode);
       mode.addEventListener("click", () => this.toggleMode());
 
       const input = document.createElement("input");
@@ -42,7 +44,7 @@
       input.type = "text";
       input.maxLength = 120;
       input.autocomplete = "off";
-      input.placeholder = "메시지 입력";
+      input.placeholder = "\uba54\uc2dc\uc9c0 \uc785\ub825";
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -53,7 +55,7 @@
       document.body.append(root);
 
       this.nodes = { root, log, form, mode, input };
-      this.addSystemMessage("T 채팅 · Enter 전송 · Tab 전체/팀 전환");
+      this.addSystemMessage("T \ucc44\ud305 \u00b7 Enter \uc804\uc1a1 \u00b7 Tab \uc804\uccb4/\ud300 \uc804\ud658");
     }
 
     onKeyDown(event) {
@@ -121,48 +123,88 @@
     }
 
     modeLabel(mode) {
-      if (mode === "team") return "팀";
-      if (mode === "spectator") return "관전";
-      if (mode === "caster") return "해설";
-      return "전체";
+      if (mode === "team") return "\ud300";
+      if (mode === "spectator") return "\uad00\uc804";
+      if (mode === "caster") return "\ud574\uc124";
+      if (mode === "system") return "\uc54c\ub9bc";
+      return "\uc804\uccb4";
     }
 
     submit() {
       const text = String(this.nodes.input?.value || "").replace(/\s+/g, " ").trim();
       if (text) {
         if (!this.availableModes().includes(this.mode)) this.mode = this.availableModes()[0] || "all";
-        this.addMessage({
+        const payload = {
           channel: this.mode,
           sender: this.game.localProfile?.nickname || "Player",
           text,
           team: this.game.player?.team || IronLine.constants?.TEAM?.BLUE,
-          participantType: this.game.localSessionParticipantType?.() || "player"
-        });
+          participantType: this.game.localSessionParticipantType?.() || "player",
+          playerId: this.game.onlineSession?.playerId || this.game.localProfile?.playerId || ""
+        };
+        const roomId = this.game.sessionMode === "online" ? this.game.onlineSession?.roomId : "";
+        const saved = roomId ? IronLine.roomRegistry?.pushChat?.(roomId, payload) : null;
+        if (saved?.id) {
+          this.seenRoomChat.add(saved.id);
+          this.addMessage(saved);
+        } else {
+          this.addMessage(payload);
+        }
       }
       this.close();
     }
 
     addSystemMessage(text) {
-      this.addMessage({ channel: "system", sender: "시스템", text });
+      this.addMessage({ channel: "system", sender: "\uc2dc\uc2a4\ud15c", text });
     }
 
     addMessage(message) {
       const now = performance.now();
       this.messages.push({
-        id: `${now}:${Math.random().toString(36).slice(2, 7)}`,
+        id: message.id || `${now}:${Math.random().toString(36).slice(2, 7)}`,
         channel: message.channel || "team",
         sender: message.sender || "Player",
         text: String(message.text || "").slice(0, 120),
         team: message.team || "",
         participantType: message.participantType || "player",
-        createdAt: now
+        createdAt: Number(message.createdAt) > 1000000000 ? now : Number(message.createdAt) || now
       });
       if (this.messages.length > this.maxMessages) this.messages.splice(0, this.messages.length - this.maxMessages);
       this.render();
     }
 
-    update() {
+    update(dt = 0) {
+      this.pullRoomChat(dt);
       this.render();
+    }
+
+    pullRoomChat(dt = 0) {
+      if (this.game.sessionMode !== "online" || !this.game.onlineSession?.roomId) return;
+      this.roomChatPoll -= Number(dt) || 0.016;
+      if (this.roomChatPoll > 0) return;
+      this.roomChatPoll = 0.5;
+      const messages = IronLine.roomRegistry?.recentChat?.(this.game.onlineSession.roomId, 40) || [];
+      for (const message of messages) {
+        if (!message?.id || this.seenRoomChat.has(message.id)) continue;
+        if (!this.canSeeRoomChat(message)) continue;
+        this.seenRoomChat.add(message.id);
+        this.addMessage(message);
+      }
+    }
+
+    canSeeRoomChat(message) {
+      const channel = message.channel || "all";
+      if (channel === "system" || channel === "all" || channel === "caster") return true;
+      const participantType = this.game.localSessionParticipantType?.() || "player";
+      if (channel === "team") {
+        return participantType !== "spectator" && message.team === (this.game.player?.team || IronLine.constants?.TEAM?.BLUE);
+      }
+      if (channel === "spectator") {
+        if (["spectator", "caster", "admin"].includes(participantType)) return true;
+        const room = IronLine.roomRegistry?.getRoom?.(this.game.onlineSession?.roomId);
+        return Boolean(room?.spectatorChatVisibleToPlayers);
+      }
+      return true;
     }
 
     render() {

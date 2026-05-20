@@ -2382,8 +2382,10 @@
     }
   }
 
+  IronLine.installPlayerLoadout?.(Game);
   IronLine.installGameSessionState?.(Game);
   IronLine.installGameAdminActions?.(Game);
+  IronLine.installGameAdminMapActions?.(Game);
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
   IronLine.installFogOfWar?.(Game);

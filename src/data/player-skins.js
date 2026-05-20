@@ -30,17 +30,17 @@
       category: "초강대국 정규군",
       concept: "드론 / 화력 / 장갑 전력",
       tagline: "화력으로 전장을 지배한다.",
-      description: "현대식 장비와 전술 장비를 갖춘 정규군 스킨입니다. 헬멧, 방탄복, 전술 장구가 강조됩니다.",
+      description: "사막 작전용 전투복과 현대식 전술 장비를 갖춘 정규군 스킨입니다. 헬멧, 방탄복, 전술 장구가 강조됩니다.",
       rankNote: "세계 군사력 참고 순위: 1위권",
       motto: "멀리서 보고, 먼저 때리고, 끝까지 압박한다.",
       voiceKeywords: ["화력 우세", "드론 정찰", "정밀 타격", "지원 요청", "압박"],
       logo: "assets/factions/usa.png",
-      cloth: "rgba(65, 88, 99, 0.92)",
-      clothDark: "rgba(35, 49, 60, 0.98)",
-      vest: "rgba(48, 63, 73, 0.96)",
-      gear: "rgba(20, 31, 39, 0.92)",
-      helmet: "rgba(57, 75, 85, 0.98)",
-      accent: "rgba(105, 205, 255, 0.78)"
+      cloth: "rgba(151, 127, 82, 0.92)",
+      clothDark: "rgba(82, 69, 47, 0.98)",
+      vest: "rgba(116, 96, 63, 0.96)",
+      gear: "rgba(58, 49, 34, 0.92)",
+      helmet: "rgba(136, 112, 74, 0.98)",
+      accent: "rgba(92, 178, 221, 0.76)"
     },
     {
       id: "russia",
@@ -92,12 +92,12 @@
       motto: "AGI가 온다더니, 우리가 먼저 왔다.",
       voiceKeywords: ["AGI", "자동화", "실험 병기", "드론 링크", "예측 완료"],
       logo: "assets/factions/singularity.png",
-      cloth: "rgba(50, 42, 74, 0.92)",
-      clothDark: "rgba(26, 20, 40, 0.98)",
-      vest: "rgba(42, 35, 62, 0.96)",
-      gear: "rgba(22, 17, 32, 0.94)",
-      helmet: "rgba(58, 45, 84, 0.98)",
-      accent: "rgba(182, 104, 255, 0.84)"
+      cloth: "rgba(65, 88, 99, 0.92)",
+      clothDark: "rgba(35, 49, 60, 0.98)",
+      vest: "rgba(48, 63, 73, 0.96)",
+      gear: "rgba(20, 31, 39, 0.92)",
+      helmet: "rgba(57, 75, 85, 0.98)",
+      accent: "rgba(105, 232, 211, 0.82)"
     },
     {
       id: "military-gallery",

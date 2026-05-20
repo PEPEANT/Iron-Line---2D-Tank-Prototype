@@ -42,7 +42,7 @@
         <div class="segmented" role="group" aria-label="도로 편집 도구">
           <button type="button" class="active" data-tool="move">이동</button>
           <button type="button" data-tool="add">점 추가</button>
-          <button type="button" data-tool="delete">삭제</button>
+          <button type="button" data-tool="delete">점 삭제</button>
         </div>
         <button type="button" id="deletePointButton">선택 점 삭제</button>
       </section>
@@ -70,7 +70,7 @@
         </label>
         <label class="check-row">
           <input id="obstacleDestructibleToggle" type="checkbox">
-          <span>부술 수 있는 오브젝트로 표시</span>
+          <span>파괴 가능한 오브젝트로 표시</span>
         </label>
         <div class="button-row">
           <button type="button" id="newObstacleButton">새 오브젝트</button>
@@ -120,7 +120,7 @@
           <button type="button" id="copyButton">JS 복사</button>
           <button type="button" id="downloadButton">JS 다운로드</button>
         </div>
-        <textarea id="exportOutput" spellcheck="false" aria-label="내보낸 맵 JavaScript"></textarea>
+        <textarea id="exportOutput" spellcheck="false" aria-label="내보낼 맵 JavaScript"></textarea>
       </section>
 
       <footer class="editor-status" id="statusText"></footer>

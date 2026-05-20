@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수복 - 온라인 전술 전차전</title>
+    <meta
+      name="description"
+      content="수복 공식 알파 사이트. 전차, 보병, 거점 점령이 맞물리는 2D 온라인 전술 전차전."
+    >
+    <link rel="stylesheet" href="home.css">
+  </head>
+  <body>
+    <header class="site-header" id="siteHeader">
+      <a class="brand" href="#top" aria-label="수복 홈">
+        <span class="brand-mark">수</span>
+        <span class="brand-text">
+          <strong>수복</strong>
+          <small>Subok Online Alpha</small>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="공식 홈페이지 메뉴">
+        <a href="#gameplay">게임플레이</a>
+        <a href="#factions">세력 스킨</a>
+        <a href="#intel">패치 소식</a>
+        <a href="#join">알파 참여</a>
+      </nav>
+
+      <div class="header-actions">
+        <button type="button" class="text-button" data-auth-open>로그인</button>
+        <a class="solid-button small" href="index.html">게임 시작</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="heroTitle">
+        <img
+          class="hero-media"
+          src="assets/home/subok-gameplay-hero.png"
+          alt="수복 알파 빌드의 전차와 보병이 기지에서 출격을 준비하는 게임 화면"
+          fetchpriority="high"
+        >
+        <div class="hero-shade" aria-hidden="true"></div>
+
+        <div class="hero-content">
+          <p class="eyebrow">Official Alpha Site</p>
+          <h1 id="heroTitle">수복</h1>
+          <p class="hero-lede">
+            전차가 길을 열고, 보병이 거점을 붙잡는 2D 온라인 전술 전차전.
+            지금 빌드는 4v4 알파 플레이와 실전 피드백 수집을 목표로 다듬는 중입니다.
+          </p>
+
+          <div class="hero-actions">
+            <a class="solid-button" href="index.html">무료 알파 플레이</a>
+            <button type="button" class="outline-button" data-auth-open>알파 계정 만들기</button>
+          </div>
+
+          <dl class="hero-stats" aria-label="게임 핵심 정보">
+            <div>
+              <dt>전장</dt>
+              <dd>2D 탑다운</dd>
+            </div>
+            <div>
+              <dt>목표</dt>
+              <dd>거점 점령</dd>
+            </div>
+            <div>
+              <dt>세션</dt>
+              <dd>온라인 알파</dd>
+            </div>
+            <div>
+              <dt>스킨</dt>
+              <dd>성능 차이 없음</dd>
+            </div>
+          </dl>
+        </div>
+
+        <aside class="operation-panel" aria-label="알파 작전 현황">
+          <span>Live Alpha Brief</span>
+          <strong>오늘 목표: 온라인 한 판을 끝까지 검증</strong>
+          <ul>
+            <li>대기방 입장부터 전장 복귀까지 확인</li>
+            <li>관전자/채팅/관리자 노트 설계 대기</li>
+            <li>플레이 중 발견한 문제를 바로 기록</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="mission-strip" aria-label="빠른 이동">
+        <a href="index.html">
+          <span>01</span>
+          <strong>게임 실행</strong>
+          <small>현재 알파 빌드로 바로 진입</small>
+        </a>
+        <a href="#gameplay">
+          <span>02</span>
+          <strong>게임 소개</strong>
+          <small>전차, 보병, 거점 루프 확인</small>
+        </a>
+        <button type="button" data-auth-open>
+          <span>03</span>
+          <strong>알파 로그인</strong>
+          <small id="quickAccountState">플레이 기록을 남길 계정 준비</small>
+        </button>
+      </section>
+
+      <section class="gameplay-section" id="gameplay" aria-labelledby="gameplayTitle">
+        <div class="section-heading">
+          <p>Gameplay</p>
+          <h2 id="gameplayTitle">한 화면에서 전황이 읽히는 전차전</h2>
+          <span>
+            복잡한 설명보다 먼저 보여야 하는 건 “지금 어디가 위험하고, 어디를 밀어야 하는가”입니다.
+            홈페이지도 그 감각을 따라가도록 실제 플레이 화면을 전면에 배치했습니다.
+          </span>
+        </div>
+
+        <div class="play-layout">
+          <figure class="play-shot">
+            <img src="assets/home/subok-gameplay-hero.png" alt="수복 게임플레이 캡처">
+            <figcaption>
+              <strong>Alpha Capture</strong>
+              <span>기지 출격, 전차 편대, 보병 분산, 미니맵 HUD</span>
+            </figcaption>
+          </figure>
+
+          <div class="play-notes" aria-label="게임플레이 특징">
+            <article>
+              <span>Armor</span>
+              <h3>전차가 전선을 연다</h3>
+              <p>방향, 엄폐, 포각을 읽고 아군 보병이 들어갈 길을 만들어야 합니다.</p>
+            </article>
+            <article>
+              <span>Infantry</span>
+              <h3>보병이 거점을 끝낸다</h3>
+              <p>전차만으로 끝나지 않고, 보병 역할 전환과 거점 장악이 승패를 만듭니다.</p>
+            </article>
+            <article>
+              <span>Online</span>
+              <h3>문제는 온라인에서 보인다</h3>
+              <p>방 생성, 입장, 시작, 종료, 복귀까지 이어지는 한 판 루프를 우선 검증합니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="join-band" id="join" aria-labelledby="joinTitle">
+        <div>
+          <p>Alpha Access</p>
+          <h2 id="joinTitle">알파 계정 초안</h2>
+          <span>
+            지금은 로컬 저장 기반의 로그인 초안입니다. 배포 단계에서는 실제 계정, 참가 기록,
+            테스트 노트와 연결할 수 있게 확장하는 자리를 미리 잡아뒀습니다.
+          </span>
+        </div>
+
+        <form class="join-form" id="inlineAuthForm">
+          <label>
+            호출명
+            <input id="inlineNickname" type="text" maxlength="16" autocomplete="nickname" placeholder="Raven">
+          </label>
+          <label>
+            이메일
+            <input id="inlineEmail" type="email" autocomplete="email" placeholder="alpha@example.com">
+          </label>
+          <button type="submit">계정 저장</button>
+        </form>
+      </section>
+
+      <section class="factions-section" id="factions" aria-labelledby="factionsTitle">
+        <div class="section-heading">
+          <p>Faction Skins</p>
+          <h2 id="factionsTitle">성능은 같고, 분위기만 다르게</h2>
+          <span>
+            세력 스킨은 외형, 아이콘, 병사 대사, 설명문만 바꿉니다. 밸런스까지 건드리지 않고
+            플레이어가 고르는 맛부터 살리는 방향입니다.
+          </span>
+        </div>
+
+        <div class="faction-layout">
+          <div class="faction-grid" role="list" aria-label="세력 스킨 목록">
+            <button
+              type="button"
+              class="faction-button active"
+              data-logo="assets/factions/korea.png"
+              data-name="대한민국군"
+              data-type="기본 정규군"
+              data-motto="기본이 가장 오래 버틴다."
+              data-note="현실적인 군복과 장비를 착용한 표준 보병 세력입니다. 수복의 기본값이 되는 정규군 스킨입니다."
+              data-rank="2026.05 기준 설정 표기: 공개 지표 참고, 밸런스 영향 없음"
+            >
+              <img src="assets/factions/korea.png" alt="">
+              <strong>대한민국군</strong>
+              <span>기본 정규군</span>
+            </button>
+
+            <button
+              type="button"
+              class="faction-button"
+              data-logo="assets/factions/usa.png"
+              data-name="미군"
+              data-type="첨단 화력군"
+              data-motto="화력으로 전장을 지배한다."
+              data-note="현대식 장비와 전술 장구가 강조되는 정규군 스킨입니다. 전차와 보병이 함께 밀고 들어가는 이미지에 잘 맞습니다."
+              data-rank="2026.05 기준 설정 표기: 공개 지표 참고, 밸런스 영향 없음"
+            >
+              <img src="assets/factions/usa.png" alt="">
+              <strong>미군</strong>
+              <span>첨단 화력군</span>
+            </button>
+
+            <button
+              type="button"
+              class="faction-button"
+              data-logo="assets/factions/russia.png"
+              data-name="러시아군"
+              data-type="중장갑 보병군"
+              data-motto="버티고, 밀어붙인다."
+              data-note="무거운 장비와 거친 전장 분위기를 가진 스킨입니다. 강한 방어선과 중화력 이미지가 강조됩니다."
+              data-rank="2026.05 기준 설정 표기: 공개 지표 참고, 밸런스 영향 없음"
+            >
+              <img src="assets/factions/russia.png" alt="">
+              <strong>러시아군</strong>
+              <span>중장갑 보병군</span>
+            </button>
+
+            <button
+              type="button"
+              class="faction-button"
+              data-logo="assets/factions/china.png"
+              data-name="중국군"
+              data-type="대규모 통제군"
+              data-motto="수로 압박하고 통제로 장악한다."
+              data-note="통일된 장비와 집단적인 전장 분위기를 가진 스킨입니다. 드론, 감시, 대규모 작전 이미지와 어울립니다."
+              data-rank="2026.05 기준 설정 표기: 공개 지표 참고, 밸런스 영향 없음"
+            >
+              <img src="assets/factions/china.png" alt="">
+              <strong>중국군</strong>
+              <span>대규모 통제군</span>
+            </button>
+
+            <button
+              type="button"
+              class="faction-button"
+              data-logo="assets/factions/singularity.png"
+              data-name="특붕군"
+              data-type="미래기술 민병대"
+              data-motto="AGI가 온다더니, 우리가 먼저 왔다."
+              data-note="특이점 갤러리에서 구상된 미래형 세력 스킨입니다. AI, 드론, 자동화 장비, 실험 병기를 다루는 청년 전투원들로 구성되어 있습니다."
+              data-rank="특이점 갤러리 모티브, 2026.05 기준 흥한갤 32위 설정"
+            >
+              <img src="assets/factions/singularity.png" alt="">
+              <strong>특붕군</strong>
+              <span>미래기술 민병대</span>
+            </button>
+
+            <button
+              type="button"
+              class="faction-button"
+              data-logo="assets/factions/military-gallery.png"
+              data-name="군붕군"
+              data-type="전술분석 민병대"
+              data-motto="전쟁은 제원표에서 시작된다."
+              data-note="군사 갤러리 출신 군붕이들로 구성된 세력 스킨입니다. 실전보다는 군사지식과 장비 분석에 강한 전술덕후 부대입니다."
+              data-rank="군사 갤러리 모티브, 2026.05 기준 흥한갤 84위 설정"
+            >
+              <img src="assets/factions/military-gallery.png" alt="">
+              <strong>군붕군</strong>
+              <span>전술분석 민병대</span>
+            </button>
+          </div>
+
+          <aside class="faction-detail" aria-live="polite">
+            <img id="factionLogo" src="assets/factions/korea.png" alt="">
+            <p id="factionType">기본 정규군</p>
+            <h3 id="factionName">대한민국군</h3>
+            <strong id="factionMotto">기본이 가장 오래 버틴다.</strong>
+            <span id="factionNote">
+              현실적인 군복과 장비를 착용한 표준 보병 세력입니다. 수복의 기본값이 되는 정규군 스킨입니다.
+            </span>
+            <em id="factionRank">2026.05 기준 설정 표기: 공개 지표 참고, 밸런스 영향 없음</em>
+          </aside>
+        </div>
+      </section>
+
+      <section class="intel-section" id="intel" aria-labelledby="intelTitle">
+        <div class="section-heading">
+          <p>Intel Feed</p>
+          <h2 id="intelTitle">다음 패치에서 봐야 할 것</h2>
+        </div>
+
+        <div class="intel-grid">
+          <article>
+            <time datetime="2026-05-21">2026.05.21</time>
+            <h3>유저용 홈페이지 초안</h3>
+            <p>관리자 이동 허브가 아니라, 플레이어가 게임을 보고 바로 실행하는 공식 사이트 흐름으로 분리했습니다.</p>
+          </article>
+          <article>
+            <time datetime="2026-05-21">온라인 목표</time>
+            <h3>한 판 루프 검증</h3>
+            <p>방 생성, 입장, 시작, 역할 변경, 종료, 복귀까지 온라인 플레이에서 실제 문제가 드러나는 구간을 우선 확인합니다.</p>
+          </article>
+          <article>
+            <time datetime="2026-05-21">설계 대기</time>
+            <h3>관전자와 관리자 노트</h3>
+            <p>만석 이후 입장자는 관전자로 보내고, 관리자는 관전 중 바로 문제를 기록하는 구조를 다음 후보로 둘 수 있습니다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="final-cta" aria-labelledby="finalTitle">
+        <p>Ready for Alpha</p>
+        <h2 id="finalTitle">온라인에서 문제를 찾을 시간입니다</h2>
+        <span>홈페이지는 첫 관문이고, 진짜 검증은 한 판을 끝까지 돌리는 데서 시작됩니다.</span>
+        <div>
+          <a class="solid-button" href="index.html">게임 시작</a>
+          <button type="button" class="outline-button" data-auth-open>로그인</button>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="auth-dialog" id="authDialog" aria-labelledby="authTitle">
+      <form method="dialog" class="auth-shell" id="authForm">
+        <button type="button" class="dialog-close" id="authClose" aria-label="닫기">x</button>
+        <p>Alpha Account</p>
+        <h2 id="authTitle">수복 알파 로그인</h2>
+        <span>
+          현재는 공식 사이트 초안을 위한 로컬 로그인입니다. 입력 정보는 이 브라우저에만 저장됩니다.
+        </span>
+
+        <label>
+          호출명
+          <input id="authNickname" type="text" maxlength="16" autocomplete="nickname" required placeholder="Raven">
+        </label>
+        <label>
+          이메일
+          <input id="authEmail" type="email" autocomplete="email" required placeholder="alpha@example.com">
+        </label>
+        <label>
+          알파 코드
+          <input id="authCode" type="text" maxlength="24" autocomplete="off" placeholder="선택 입력">
+        </label>
+
+        <button type="submit">로그인 저장</button>
+        <button type="button" class="logout-button hidden" id="logoutButton">로그아웃</button>
+      </form>
+    </dialog>
+
+    <footer class="site-footer">
+      <strong>수복</strong>
+      <span>온라인 전술 전차전 알파 공식 홈페이지 초안</span>
+      <a href="index.html">게임 시작</a>
+    </footer>
+
+    <script src="home.js"></script>
+  </body>
+</html>

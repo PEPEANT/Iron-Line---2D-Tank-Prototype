@@ -119,6 +119,7 @@
         },
         commands: commandLog,
         events,
+        map: this.mapSnapshot(game),
         backup: this.backupStatus(),
         providers: this.providers.slice()
       };

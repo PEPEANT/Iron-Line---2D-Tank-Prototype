@@ -1066,6 +1066,97 @@
     }
   }
 
+  Object.assign(Hud.prototype, {
+    updateScoreboard: function updateScoreboard(game) {
+      const visible = Boolean(game.input?.keyDown("Tab"));
+      const board = this.nodes.scoreboard;
+      if (!board) return;
+
+      board.classList.toggle("visible", visible);
+
+      const conquest = game.matchConfig?.mode === "conquest";
+      const blue = this.teamStats(game, TEAM.BLUE);
+      const red = this.teamStats(game, TEAM.RED);
+      blue.kills = red.deaths;
+      red.kills = blue.deaths;
+
+      if (this.nodes.scoreboardTitle) {
+        this.nodes.scoreboardTitle.textContent = `${this.modeLabel(game)} 현황`;
+      }
+      if (this.nodes.scoreboardTimer) {
+        const seconds = conquest ? game.conquest?.remaining ?? 0 : game.matchTime || 0;
+        this.nodes.scoreboardTimer.textContent = this.formatTime(seconds);
+      }
+      if (this.nodes.scoreboardGrid) {
+        this.nodes.scoreboardGrid.classList.toggle("conquest", conquest);
+        this.nodes.scoreboardGrid.style.gridTemplateColumns = conquest ? "repeat(7, 1fr)" : "";
+        this.nodes.scoreboardGrid.innerHTML = conquest
+          ? [
+              this.scoreCell("팀", "header"),
+              this.scoreCell("점수", "header"),
+              this.scoreCell("생존", "header"),
+              this.scoreCell("차량", "header"),
+              this.scoreCell("보병", "header"),
+              this.scoreCell("K", "header"),
+              this.scoreCell("D", "header"),
+              ...this.teamRow("청팀", blue, "blue", game.conquest?.score?.[TEAM.BLUE] || 0),
+              ...this.teamRow("홍팀", red, "red", game.conquest?.score?.[TEAM.RED] || 0)
+            ].join("")
+          : [
+              this.scoreCell("팀", "header"),
+              this.scoreCell("생존", "header"),
+              this.scoreCell("차량", "header"),
+              this.scoreCell("보병", "header"),
+              this.scoreCell("K", "header"),
+              this.scoreCell("D", "header"),
+              ...this.teamRow("청팀", blue, "blue"),
+              ...this.teamRow("홍팀", red, "red")
+            ].join("");
+      }
+    },
+
+    modeLabel: function modeLabel(game) {
+      return game.matchConfig?.mode === "conquest" ? "점령전" : "섬멸전";
+    },
+
+    createObjectiveNode: function createObjectiveNode(point) {
+      const root = document.createElement("div");
+      root.className = "objective-node owner-neutral pressure-neutral";
+      root.setAttribute("aria-label", `${point.name} 거점`);
+
+      const fill = document.createElement("span");
+      fill.className = "objective-fill";
+
+      const letter = document.createElement("strong");
+      letter.textContent = point.name;
+
+      root.append(fill, letter);
+      return { root, fill };
+    },
+
+    holdText: function holdText(game) {
+      if (game.matchConfig?.mode === "conquest") {
+        const blue = Math.floor(game.conquest?.score?.[TEAM.BLUE] || 0);
+        const red = Math.floor(game.conquest?.score?.[TEAM.RED] || 0);
+        const remaining = this.formatTime(game.conquest?.remaining ?? game.conquest?.duration ?? 0);
+        return `점령전 ${remaining} · ${blue} : ${red}`;
+      }
+
+      if ((game.objectiveHold?.[TEAM.BLUE] || 0) > 0) {
+        const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.BLUE]));
+        return `청팀 거점 장악 ${remaining}s`;
+      }
+
+      if ((game.objectiveHold?.[TEAM.RED] || 0) > 0) {
+        const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.RED]));
+        return `홍팀 거점 장악 ${remaining}s`;
+      }
+
+      return "";
+    }
+  });
+
+  IronLine.installHudAdminNotes?.(Hud);
   IronLine.installHudAdminUi?.(Hud);
 
   IronLine.Hud = Hud;

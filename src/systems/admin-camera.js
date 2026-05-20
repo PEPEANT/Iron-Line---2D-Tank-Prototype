@@ -48,6 +48,13 @@
     }
 
     availableViewSize() {
+      if (document.body?.classList.contains("admin-standalone-page") && window.innerWidth > 760) {
+        return {
+          width: Math.max(320, this.game.camera.width - 28),
+          height: Math.max(240, this.game.camera.height - 28)
+        };
+      }
+
       const panel = document.getElementById("adminPanel");
       const panelWidth = panel?.getBoundingClientRect?.().width || 0;
       return {
@@ -158,6 +165,24 @@
       document.body.append(help);
     }
   }
+
+  AdminObserverCamera.prototype.ensureHelp = function ensureHelp() {
+    const existing = document.getElementById("adminObserverHelp");
+    const title = this.game.spectatorMode ? "관전자" : "관리자 관전";
+    const html = `<strong>${title}</strong>WASD/방향키 이동 · Shift 빠른 이동 · 휠 줌 · Home 전체 지도 · 목록 클릭 추적`;
+    if (existing) {
+      if (existing.dataset.title === title) return;
+      existing.dataset.title = title;
+      existing.innerHTML = html;
+      return;
+    }
+    const help = document.createElement("div");
+    help.id = "adminObserverHelp";
+    help.className = "admin-observer-help";
+    help.dataset.title = title;
+    help.innerHTML = html;
+    document.body.append(help);
+  };
 
   IronLine.AdminObserverCamera = AdminObserverCamera;
 })(window);

@@ -37,7 +37,8 @@
       loadTime: 2.2,
       speed: 610,
       damage: 48,
-      tankDamageScale: 0.42,
+      directTankDamage: 30,
+      tankDamageScale: 0.52,
       infantryDamageScale: 1.18,
       suppressionBase: 34,
       suppressionMax: 74,
@@ -80,5 +81,9 @@
     }
   };
 
-  IronLine.constants = { TEAM, TEAM_COLORS, AMMO, AI_CONFIG };
+  const MATCH_RULES = {
+    conquestDuration: 20 * 60
+  };
+
+  IronLine.constants = { TEAM, TEAM_COLORS, AMMO, AI_CONFIG, MATCH_RULES };
 })(window);

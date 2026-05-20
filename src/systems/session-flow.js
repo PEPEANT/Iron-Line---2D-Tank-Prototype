@@ -11,6 +11,10 @@
       this.offline = IronLine.OfflineSetup ? new IronLine.OfflineSetup(this) : null;
       this.rooms = IronLine.RoomList ? new IronLine.RoomList(this) : null;
       this.onlineLobby = IronLine.OnlineLobby ? new IronLine.OnlineLobby(this) : null;
+      this.lastPublishAt = 0;
+      this.lastCleanupAt = 0;
+      this.publishIntervalMs = 1000;
+      window.addEventListener("pagehide", () => this.handlePageHide());
     }
 
     game() {
@@ -21,6 +25,10 @@
       if (!game.sessionMode) game.sessionMode = "offline";
       game.roomListOpen = Boolean(game.roomListOpen);
       this.syncCurrentRoom(game);
+      if (game.result === "ended" && game.matchPhase === "ended") {
+        game.resultReason = "\uad00\ub9ac\uc790\uac00 \ubc29\uc744 \uc885\ub8cc\ud588\uc2b5\ub2c8\ub2e4.";
+      }
+      this.cleanupRoomsIfNeeded();
       this.rooms?.update(game);
       this.onlineLobby?.update(game);
       document.body.classList.toggle("session-online", game.sessionMode === "online");
@@ -84,6 +92,7 @@
     backToEntry() {
       const game = this.game();
       if (!game) return false;
+      this.leaveOnlineRoom(game, "entry");
       game.entryOpen = true;
       game.deploymentOpen = false;
       game.lobbyOpen = false;
@@ -99,12 +108,13 @@
 
     backFromLobby(game) {
       if (game.sessionMode !== "online" || game.matchStarted || game.countdownStarted) return false;
+      this.leaveOnlineRoom(game, "rooms");
       game.roomListOpen = true;
       game.lobbyOpen = true;
       game.deploymentOpen = false;
       game.matchPhase = "rooms";
-      game.onlineSession.localReady = false;
-      for (const player of game.onlineSession.players || []) player.ready = false;
+      if (game.onlineSession) game.onlineSession.localReady = false;
+      for (const player of game.onlineSession?.players || []) player.ready = false;
       game.hud?.update?.(game);
       return true;
     }
@@ -145,7 +155,7 @@
           }
         }
       }
-      this.publishLocalPlayer(game);
+      this.publishLocalPlayer(game, { force: true });
     }
 
     resolveParticipantType(room, options = {}) {
@@ -162,11 +172,45 @@
       return Boolean(player?.host || (game?.onlineSession?.hostId && game.onlineSession.hostId === game.onlineSession.playerId));
     }
 
-    publishLocalPlayer(game = this.game()) {
+    publishLocalPlayer(game = this.game(), options = {}) {
       if (!game?.onlineSession?.roomId || !this.registry) return;
+      const now = Date.now();
+      if (!options.force && now - this.lastPublishAt < this.publishIntervalMs) return;
+      this.lastPublishAt = now;
       const player = game.localSessionPlayer?.();
       if (!player) return;
       this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
+    }
+
+    leaveOnlineRoom(game = this.game(), reason = "leave") {
+      if (!game?.onlineSession?.roomId) return false;
+      const roomId = game.onlineSession.roomId;
+      const playerId = game.onlineSession.playerId;
+      if (playerId) this.registry?.removeParticipant?.(roomId, playerId, reason);
+      game.onlineSession.roomId = "";
+      game.onlineSession.localReady = false;
+      game.onlineSession.participantType = "player";
+      game.onlineSession.spectators = [];
+      const player = game.localSessionPlayer?.();
+      if (player) {
+        player.ready = false;
+        player.participantType = "player";
+      }
+      return true;
+    }
+
+    handlePageHide() {
+      const game = this.game();
+      if (game?.sessionMode !== "online") return;
+      if (!game.onlineSession?.roomId || !game.onlineSession?.playerId) return;
+      this.registry?.removeParticipant?.(game.onlineSession.roomId, game.onlineSession.playerId, "pagehide");
+    }
+
+    cleanupRoomsIfNeeded() {
+      const now = Date.now();
+      if (now - this.lastCleanupAt < 10000) return;
+      this.lastCleanupAt = now;
+      this.registry?.cleanupStaleParticipants?.();
     }
 
     syncCurrentRoom(game = this.game()) {
@@ -200,6 +244,9 @@
         game.matchPhase = "ended";
         game.lobbyOpen = true;
         game.result = "ended";
+        game.resultReason = "관리자가 방을 종료했습니다.";
+      }
+      if (game.result === "ended" && game.matchPhase === "ended") {
         game.resultReason = "관리자가 방을 종료했습니다.";
       }
     }
