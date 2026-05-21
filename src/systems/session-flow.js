@@ -228,6 +228,7 @@
       if (room.mode === "conquest" && !game.conquest) game.conquest = game.defaultConquestState?.() || game.conquest;
       game.onlineSession.joinLocked = Boolean(room.locked);
       game.onlineSession.aiFillEmptySlots = room.aiFillEmptySlots !== false;
+      this.syncRoomParticipants(game, room);
       game.onlineSession.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
       game.onlineSession.blueFactionId = room.blueFactionId || "korea";
       game.onlineSession.redFactionId = room.redFactionId || "russia";
@@ -249,6 +250,19 @@
       if (game.result === "ended" && game.matchPhase === "ended") {
         game.resultReason = "관리자가 방을 종료했습니다.";
       }
+    }
+
+    syncRoomParticipants(game, room) {
+      const session = game?.onlineSession;
+      if (!session || !room) return;
+      const previousLocal = game.localSessionPlayer?.();
+      const roomPlayers = Array.isArray(room.players) ? room.players.slice() : [];
+      const localId = session.playerId || previousLocal?.id || "";
+      if (localId && previousLocal && !roomPlayers.some((player) => player.id === localId)) {
+        roomPlayers.push(previousLocal);
+      }
+      if (roomPlayers.length > 0) session.players = roomPlayers;
+      session.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
     }
 
     makeRoomId() {

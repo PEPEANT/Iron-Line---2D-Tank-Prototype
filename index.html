@@ -6,7 +6,9 @@
     <title>Iron Line - 2D Tank Prototype</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="scoreboard.css">
     <link rel="stylesheet" href="session-flow.css">
+    <link rel="stylesheet" href="deployment-mobile.css">
     <link rel="stylesheet" href="chat.css">
     <link rel="stylesheet" href="role-change.css">
     <link rel="stylesheet" href="test-lab.css">
@@ -38,12 +40,13 @@
           <span>모바일 조작 UI</span>
           <small>터치</small>
         </label>
+        <button type="button" class="settings-action" id="settingsMainMenu">메인메뉴로 가기</button>
       </div>
       <div class="control-help">
         <strong>PC 조작</strong>
-        <p>WASD 이동 · E 탑승/하차 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
+        <p>WASD 이동 · F 탑승/하차 · E 역할/드론 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
         <strong>모바일 조작</strong>
-        <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼</p>
+        <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼 · 병과 버튼</p>
       </div>
     </section>
 
@@ -77,6 +80,7 @@
             <option value="rifle">소총</option>
             <option value="sniper">저격총</option>
             <option value="rpg">RPG</option>
+            <option value="grenadeLauncher">유탄발사기</option>
             <option value="grenade">수류탄</option>
             <option value="repairKit">수리킷</option>
             <option value="reconDrone">정찰드론</option>
@@ -160,7 +164,7 @@
         <div class="mobile-action-grid">
           <button type="button" class="mobile-action fire" data-mobile-mouse="0">발사</button>
           <button type="button" class="mobile-action" data-mobile-mouse="2">조준</button>
-          <button type="button" class="mobile-action" data-mobile-key="KeyE">탑승</button>
+          <button type="button" class="mobile-action" data-mobile-key="KeyF">탑승</button>
         </div>
         <div class="mobile-ammo-row">
           <button type="button" data-mobile-key="Digit1">철갑</button>
@@ -174,6 +178,10 @@
     <div class="deployment-screen" id="deploymentScreen">
       <div class="deployment-card">
         <section class="deployment-map-wrap" aria-label="작전 지도">
+          <div class="deployment-map-head">
+            <strong>작전 지도</strong>
+            <button type="button" id="deploymentMapClose" aria-label="작전 지도 닫기">닫기</button>
+          </div>
           <div class="deployment-map" id="deploymentMap"></div>
         </section>
         <section class="deployment-panel">
@@ -181,6 +189,7 @@
             <span class="deployment-kicker">Iron Line</span>
             <h1>전투 준비</h1>
           </div>
+          <button type="button" class="deployment-map-toggle" id="deploymentMapToggle">작전 지도 보기</button>
           <div class="deployment-mode-section">
             <span class="deployment-section-label">모드</span>
             <div class="deployment-mode-row">

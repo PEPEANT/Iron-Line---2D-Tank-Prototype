@@ -343,38 +343,108 @@
   }
 
   function addBattlefieldScenery(world) {
+    const brush = (id, x, y, r, variant = "brush", hp = 34) => ({
+      id,
+      type: "brush",
+      variant,
+      shape: "circle",
+      x,
+      y,
+      r,
+      hp,
+      maxHp: hp,
+      destructible: true,
+      stopsProjectiles: false
+    });
+    const tree = (id, x, y, r, hp = 64, variant = "broadleaf") => ({
+      id,
+      type: "tree",
+      variant,
+      shape: "circle",
+      x,
+      y,
+      r,
+      hp,
+      maxHp: hp,
+      destructible: true,
+      stopsProjectiles: true
+    });
+    const roadProp = (id, type, cx, cy, w, h, angle, hp, variant = "") => ({
+      id,
+      type,
+      variant,
+      shape: "rect",
+      x: Math.round(cx - w * 0.5),
+      y: Math.round(cy - h * 0.5),
+      w,
+      h,
+      hp,
+      maxHp: hp,
+      destructible: true,
+      stopsProjectiles: true,
+      angle
+    });
+
     world.scenery = [
       { id: "blue-gate-sandbags-1", type: "sandbag", shape: "rect", x: 1180, y: 4860, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.18 },
       { id: "blue-gate-sandbags-2", type: "sandbag", shape: "rect", x: 1310, y: 5020, w: 150, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.16 },
       { id: "blue-fence-1", type: "wood-fence", shape: "rect", x: 1560, y: 4580, w: 180, h: 24, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true, angle: 0.45 },
-      { id: "blue-brush-1", type: "brush", shape: "circle", x: 980, y: 4480, r: 82 },
-      { id: "blue-tree-1", type: "tree", shape: "circle", x: 1530, y: 4320, r: 34, hp: 46, maxHp: 46, destructible: true, stopsProjectiles: true },
+      brush("blue-brush-1", 980, 4480, 128, "brush", 38),
+      brush("blue-brush-2", 1230, 4325, 114, "tall-grass", 32),
+      tree("blue-tree-1", 1530, 4320, 54, 74),
+      tree("blue-tree-2", 1740, 4475, 48, 66),
+      roadProp("blue-road-light-1", "streetlight", 1188, 3740, 30, 108, -0.28, 28, "single"),
+      roadProp("blue-road-bench-1", "bench", 1460, 3865, 108, 36, -0.18, 32, "wood"),
+      roadProp("blue-road-billboard-1", "billboard", 1760, 3265, 158, 74, -0.18, 48, "campaign"),
 
-      { id: "a-tree-1", type: "tree", shape: "circle", x: 1030, y: 2060, r: 38, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true },
-      { id: "a-tree-2", type: "tree", shape: "circle", x: 1420, y: 2400, r: 31, hp: 44, maxHp: 44, destructible: true, stopsProjectiles: true },
-      { id: "a-brush-1", type: "brush", shape: "circle", x: 1190, y: 1910, r: 96 },
+      tree("a-tree-1", 1030, 2060, 58, 76),
+      tree("a-tree-2", 1420, 2400, 50, 68),
+      tree("a-tree-3", 1680, 2035, 46, 64),
+      brush("a-brush-1", 1190, 1910, 148, "brush", 42),
+      brush("a-brush-2", 1515, 1770, 122, "tall-grass", 34),
       { id: "a-barricade-1", type: "barricade", shape: "rect", x: 1650, y: 2215, w: 172, h: 30, hp: 70, maxHp: 70, destructible: true, stopsProjectiles: true, angle: -0.35 },
+      roadProp("a-road-light-1", "streetlight", 1980, 2475, 30, 104, 0.08, 28, "single"),
+      roadProp("a-road-bench-1", "bench", 1160, 2305, 108, 36, 0.36, 32, "wood"),
 
       { id: "mid-sandbags-1", type: "sandbag", shape: "rect", x: 2780, y: 2460, w: 160, h: 34, hp: 84, maxHp: 84, destructible: true, stopsProjectiles: true, angle: 0.1 },
       { id: "mid-sandbags-2", type: "sandbag", shape: "rect", x: 3180, y: 2600, w: 190, h: 34, hp: 94, maxHp: 94, destructible: true, stopsProjectiles: true, angle: 0.42 },
       { id: "mid-rubble-1", type: "rubble", shape: "circle", x: 3480, y: 2360, r: 70 },
-      { id: "mid-brush-1", type: "brush", shape: "circle", x: 3000, y: 2880, r: 92 },
+      brush("mid-brush-1", 3000, 2880, 146, "brush", 42),
+      brush("mid-brush-2", 3380, 3040, 118, "tall-grass", 34),
+      roadProp("mid-road-light-1", "streetlight", 2860, 3025, 30, 108, 1.7, 28, "single"),
+      roadProp("mid-road-billboard-1", "billboard", 3935, 2875, 168, 74, 0.18, 50, "supply"),
+      roadProp("mid-road-bench-1", "bench", 4380, 3270, 112, 36, 0.72, 32, "wood"),
 
-      { id: "c-tree-1", type: "tree", shape: "circle", x: 4630, y: 1050, r: 35, hp: 48, maxHp: 48, destructible: true, stopsProjectiles: true },
-      { id: "c-tree-2", type: "tree", shape: "circle", x: 5250, y: 1420, r: 42, hp: 56, maxHp: 56, destructible: true, stopsProjectiles: true },
-      { id: "c-brush-1", type: "brush", shape: "circle", x: 4860, y: 1510, r: 100 },
+      tree("c-tree-1", 4630, 1050, 54, 72),
+      tree("c-tree-2", 5250, 1420, 62, 82),
+      tree("c-tree-3", 5590, 1260, 48, 66),
+      brush("c-brush-1", 4860, 1510, 154, "brush", 44),
+      brush("c-brush-2", 5215, 1715, 126, "tall-grass", 36),
       { id: "c-barricade-1", type: "barricade", shape: "rect", x: 5410, y: 1815, w: 165, h: 30, hp: 68, maxHp: 68, destructible: true, stopsProjectiles: true, angle: 0.25 },
+      roadProp("c-road-light-1", "streetlight", 5335, 2140, 30, 108, 1.64, 28, "single"),
+      roadProp("c-road-billboard-1", "billboard", 5790, 2295, 168, 74, 0.2, 50, "warning"),
+      roadProp("c-road-bench-1", "bench", 4940, 1985, 108, 36, 0.16, 32, "wood"),
 
-      { id: "d-tree-1", type: "tree", shape: "circle", x: 4550, y: 3980, r: 36, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true },
-      { id: "d-tree-2", type: "tree", shape: "circle", x: 5280, y: 4500, r: 33, hp: 45, maxHp: 45, destructible: true, stopsProjectiles: true },
-      { id: "d-brush-1", type: "brush", shape: "circle", x: 4970, y: 4210, r: 105 },
+      tree("d-tree-1", 4550, 3980, 56, 74),
+      tree("d-tree-2", 5280, 4500, 52, 70),
+      tree("d-tree-3", 4715, 4325, 46, 64),
+      brush("d-brush-1", 4970, 4210, 160, "brush", 46),
+      brush("d-brush-2", 5480, 4040, 124, "tall-grass", 36),
       { id: "d-sandbags-1", type: "sandbag", shape: "rect", x: 5050, y: 3910, w: 182, h: 34, hp: 88, maxHp: 88, destructible: true, stopsProjectiles: true, angle: -0.3 },
+      roadProp("d-road-light-1", "streetlight", 5920, 3890, 30, 108, 0.82, 28, "single"),
+      roadProp("d-road-bench-1", "bench", 5270, 3705, 112, 36, 0.46, 32, "wood"),
+      roadProp("d-road-billboard-1", "billboard", 6500, 3195, 168, 74, -0.24, 50, "checkpoint"),
 
       { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 6900, y: 780, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.1 },
       { id: "red-gate-sandbags-2", type: "sandbag", shape: "rect", x: 6600, y: 1100, w: 160, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.35 },
       { id: "red-fence-1", type: "wood-fence", shape: "rect", x: 6270, y: 1450, w: 190, h: 24, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true, angle: -0.42 },
-      { id: "red-brush-1", type: "brush", shape: "circle", x: 6380, y: 1680, r: 96 },
-      { id: "red-tree-1", type: "tree", shape: "circle", x: 7100, y: 1220, r: 36, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true }
+      brush("red-brush-1", 6380, 1680, 148, "brush", 42),
+      brush("red-brush-2", 6735, 1340, 120, "tall-grass", 34),
+      tree("red-tree-1", 7100, 1220, 56, 74),
+      tree("red-tree-2", 6850, 1535, 48, 66),
+      roadProp("red-road-light-1", "streetlight", 6295, 2160, 30, 108, 1.55, 28, "single"),
+      roadProp("red-road-billboard-1", "billboard", 6570, 2475, 168, 74, -0.18, 50, "orders"),
+      roadProp("red-road-bench-1", "bench", 6130, 1805, 112, 36, 0.18, 32, "wood")
     ].map((item) => ({
       ...item,
       baseHp: item.maxHp || item.hp || 1

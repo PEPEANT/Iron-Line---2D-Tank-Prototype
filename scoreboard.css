@@ -1,0 +1,67 @@
+.mobile-action.scoreboard-toggle {
+  position: fixed;
+  right: max(28px, env(safe-area-inset-right));
+  top: max(74px, env(safe-area-inset-top));
+  width: 68px;
+  height: 44px;
+  border-radius: 10px;
+  border-color: rgba(255, 209, 102, 0.42);
+  background: rgba(10, 16, 14, 0.84);
+  color: rgba(255, 232, 168, 0.96);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 209, 102, 0.12);
+}
+
+.mobile-action.scoreboard-toggle.active {
+  background: rgba(255, 209, 102, 0.92);
+  color: #12160f;
+}
+
+.mobile-action.scoreboard-toggle.hidden {
+  display: none;
+}
+
+.scoreboard-grid.roster {
+  grid-template-columns: minmax(138px, 1.45fr) minmax(58px, 0.68fr) minmax(74px, 0.8fr) minmax(42px, 0.42fr) minmax(42px, 0.42fr) minmax(74px, 0.78fr);
+  max-height: min(54vh, 430px);
+  overflow: auto;
+}
+
+.scoreboard-grid.roster .scoreboard-cell:nth-child(6n) {
+  border-right: 0;
+}
+
+.scoreboard-cell.team-neutral {
+  color: var(--muted);
+}
+
+.scoreboard-cell.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard-cell.name.local {
+  color: var(--amber);
+}
+
+.scoreboard-cell.status.alive {
+  color: #8be08f;
+}
+
+.scoreboard-cell.status.dead {
+  color: #ff9288;
+}
+
+.scoreboard-cell.status.spectator {
+  color: #8ed8ff;
+}
+
+@media (max-width: 760px) {
+  .scoreboard-grid.roster {
+    grid-template-columns: minmax(112px, 1.4fr) minmax(44px, 0.58fr) minmax(56px, 0.7fr) minmax(34px, 0.36fr) minmax(34px, 0.36fr) minmax(56px, 0.7fr);
+  }
+}

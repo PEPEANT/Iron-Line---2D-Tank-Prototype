@@ -41,6 +41,13 @@
     grenadeCooldownMax: 13.4,
     grenadeAimMin: 0.42,
     grenadeAimMax: 0.95,
+    droneDeployCooldownMin: 10,
+    droneDeployCooldownMax: 16,
+    reconDroneObserveRange: 980,
+    suicideDronePreferredMin: 260,
+    suicideDronePreferredMax: 1120,
+    suicideDroneStrikeRange: 1280,
+    suicideDroneFriendlySafety: 104,
     repairSearchRange: 760,
     repairUnsafeEnemyRange: 540,
     repairHoldDistance: 58,
@@ -75,6 +82,8 @@
       this.stuckTimer = 0;
       this.fireCooldown = Math.random() * 0.35;
       this.grenadeCooldown = 1.4 + Math.random() * 2.2;
+      this.droneCooldown = 2.5 + Math.random() * 4.5;
+      this.droneCommandTimer = 0;
       this.coverTimer = 0;
       this.coverTarget = null;
       this.reconPostId = "";
@@ -125,6 +134,9 @@
         repairDecision: null,
         tacticalDecision: null,
         grenadeAmmo: this.unit.equipmentAmmo?.grenade || 0,
+        grenadeLauncherAmmo: this.unit.equipmentAmmo?.grenadeLauncher || 0,
+        droneAmmo: (this.unit.equipmentAmmo?.reconDrone || 0) + (this.unit.equipmentAmmo?.kamikazeDrone || 0),
+        droneState: "",
         repairAmmo: this.unit.equipmentAmmo?.repairKit || 0,
         squadId: "",
         squadRole: "",
@@ -218,6 +230,8 @@
       this.repathTimer = Math.max(0, this.repathTimer - dt);
       this.fireCooldown = Math.max(0, this.fireCooldown - dt);
       this.grenadeCooldown = Math.max(0, this.grenadeCooldown - dt);
+      this.droneCooldown = Math.max(0, this.droneCooldown - dt);
+      this.droneCommandTimer = Math.max(0, this.droneCommandTimer - dt);
       this.coverTimer = Math.max(0, this.coverTimer - dt);
       this.reportTimer = Math.max(0, this.reportTimer - dt);
       this.rpgHoldReason = "";
@@ -331,6 +345,8 @@
         this.updateDebug(null);
         return;
       }
+
+      if (this.tryUseAiDrone?.(dt, order, contact, tankThreat || reportedVehicleThreat?.target, beforeX, beforeY)) return;
 
       const grenadeTarget = this.selectGrenadeTarget(contact, tankThreat);
       if (grenadeTarget) {
@@ -1086,6 +1102,7 @@
     updateReconOrder(dt, order, contact, tankThreat, beforeX, beforeY) {
       this.refreshReconPost(order);
       const threat = this.closestReconThreat(contact, tankThreat);
+      if (!threat?.tooClose && this.tryUseAiDrone?.(dt, order, contact, tankThreat, beforeX, beforeY)) return;
       if (threat?.tooClose) {
         const coverTarget = this.resolveCoverTarget(threat.target);
         const evadeTarget = coverTarget || this.reconEvadeTarget(threat.target, order);
@@ -1933,6 +1950,7 @@
       let target = null;
 
       if (formation) {
+        const anchor = this.commandFormationAnchor(order, formation);
         const sideIndex = slot - (count - 1) / 2 + (formation.sideBias || 0) * 0.35;
         const forwardX = Math.cos(formation.angle);
         const forwardY = Math.sin(formation.angle);
@@ -1940,8 +1958,8 @@
         const sideY = Math.sin(formation.angle + Math.PI / 2);
         const sideOffset = sideIndex * (formation.spacing || 36);
         target = {
-          x: order.point.x + forwardX * formation.distance + sideX * sideOffset,
-          y: order.point.y + forwardY * formation.distance + sideY * sideOffset,
+          x: anchor.x + forwardX * formation.distance + sideX * sideOffset,
+          y: anchor.y + forwardY * formation.distance + sideY * sideOffset,
           stopDistance: formation.stopDistance || 24,
           final: true
         };
@@ -1957,10 +1975,54 @@
       }
 
       if (formation?.allowOutside && this.pointPassable(target.x, target.y, this.unit.radius + 3)) {
-        return target;
+        return this.deconflictedFormationTarget(order, target);
       }
 
-      return this.safeFormationTarget(order, target);
+      return this.deconflictedFormationTarget(order, this.safeFormationTarget(order, target));
+    }
+
+    commandFormationAnchor(order, formation) {
+      const point = order.point || { x: this.unit.x, y: this.unit.y };
+      const count = Math.max(1, order.squadSlotCount || order.slotCount || 1);
+      const rawSlot = Number.isFinite(order.squadSlotIndex)
+        ? order.squadSlotIndex
+        : Number.isFinite(order.slotIndex) ? order.slotIndex : 0;
+      const slot = clamp(rawSlot, 0, count - 1);
+      if (!formation || count <= 1) return { x: point.x, y: point.y };
+
+      const mode = order.tacticalMode || "";
+      const commandType = order.commandType || "";
+      const defendLike = order.role === "hold" ||
+        commandType === "defend" ||
+        commandType === "rally" ||
+        mode === "hold" ||
+        mode === "hold-wall";
+      const sideIndex = slot - (count - 1) / 2;
+      const pointRadius = point.radius || 130;
+      const spread = clamp(
+        order.commandSpreadRadius || pointRadius * (defendLike ? 0.46 : 0.38),
+        defendLike ? 74 : 58,
+        defendLike ? 190 : 160
+      );
+      const forwardX = Math.cos(formation.angle);
+      const forwardY = Math.sin(formation.angle);
+      const sideX = Math.cos(formation.angle + Math.PI / 2);
+      const sideY = Math.sin(formation.angle + Math.PI / 2);
+
+      if (defendLike) {
+        const radial = clamp(pointRadius * 0.28, 44, spread);
+        const arc = clamp(0.46 + count * 0.05, 0.5, 0.86);
+        const angle = formation.angle + sideIndex * arc;
+        return {
+          x: point.x + Math.cos(angle) * radial + sideX * sideIndex * spread * 0.34,
+          y: point.y + Math.sin(angle) * radial + sideY * sideIndex * spread * 0.34
+        };
+      }
+
+      return {
+        x: point.x + sideX * sideIndex * spread + forwardX * Math.abs(sideIndex) * 18,
+        y: point.y + sideY * sideIndex * spread + forwardY * Math.abs(sideIndex) * 18
+      };
     }
 
     safeFormationTarget(order, target) {
@@ -1986,6 +2048,63 @@
       return target;
     }
 
+    deconflictedFormationTarget(order, target) {
+      if (!target?.final || !this.game?.infantry?.length) return target;
+
+      const currentScore = this.formationCrowdScore(target.x, target.y);
+      if (currentScore < 0.65) return target;
+
+      const allowOutside = Boolean(order.formation?.allowOutside);
+      const point = order.point || target;
+      const maxRadius = Math.max(48, (point.radius || 130) - 4);
+      const baseAngle = (order.formation?.angle || this.seed * 0.37) +
+        this.seed * 0.23 +
+        (order.roleSlotIndex || 0) * 0.53 +
+        (order.slotIndex || 0) * 0.31;
+      let best = target;
+      let bestScore = currentScore;
+
+      for (const radius of [28, 44, 62, 82]) {
+        for (let step = 0; step < 8; step += 1) {
+          const angle = baseAngle + step * Math.PI * 2 / 8;
+          const candidate = {
+            ...target,
+            x: target.x + Math.cos(angle) * radius,
+            y: target.y + Math.sin(angle) * radius
+          };
+          if (!allowOutside && distXY(candidate.x, candidate.y, point.x, point.y) > maxRadius) continue;
+          if (!this.pointPassable(candidate.x, candidate.y, this.unit.radius + 3)) continue;
+          const score = this.formationCrowdScore(candidate.x, candidate.y) + radius * 0.012;
+          if (score + 0.04 < bestScore) {
+            best = candidate;
+            bestScore = score;
+          }
+        }
+      }
+
+      return best;
+    }
+
+    formationCrowdScore(x, y) {
+      let score = 0;
+      for (const other of this.game.infantry || []) {
+        if (other === this.unit || !other.alive || other.inVehicle || other.team !== this.unit.team) continue;
+        const distance = distXY(x, y, other.x, other.y);
+        if (distance > 58 || distance < 1) continue;
+        const squadFactor = other.squadId === this.unit.squadId ? 1.15 : 0.9;
+        score += ((58 - distance) / 58) * squadFactor;
+      }
+
+      for (const vehicle of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
+        if (!vehicle.alive || vehicle.team !== this.unit.team) continue;
+        const distance = distXY(x, y, vehicle.x, vehicle.y);
+        if (distance > 112 || distance < 1) continue;
+        score += ((112 - distance) / 112) * 1.25;
+      }
+
+      return score;
+    }
+
     rebuildPath(order) {
       if (!this.game.navGraph) return;
       const rawPath = this.game.navGraph.findPathBetween(this.unit, order.point, { padding: 24 });
@@ -2006,7 +2125,7 @@
       }
 
       const desiredAngle = angleTo(this.unit.x, this.unit.y, target.x, target.y);
-      const steer = this.avoidanceVector(Math.cos(desiredAngle), Math.sin(desiredAngle));
+      const steer = this.avoidanceVector(Math.cos(desiredAngle), Math.sin(desiredAngle), target, distance);
       const steerAngle = Math.atan2(steer.y, steer.x);
       this.moveHeading = rotateTowards(this.moveHeading, steerAngle, 5.2 * dt);
       this.unit.angle = this.moveHeading;
@@ -2025,11 +2144,11 @@
       );
     }
 
-    avoidanceVector(vx, vy) {
+    avoidanceVector(vx, vy, target = null, targetDistance = Infinity) {
       let ax = vx;
       let ay = vy;
 
-      for (const obstacle of this.game.world.obstacles) {
+      for (const obstacle of this.game.world.obstacles || []) {
         const expanded = expandedRect(obstacle, 28);
         const lookX = this.unit.x + vx * 52;
         const lookY = this.unit.y + vy * 52;
@@ -2044,20 +2163,29 @@
         ay += (awayY / distance) * 0.75;
       }
 
+      const finalArrival = Boolean(target?.final) && targetDistance < 190;
       for (const other of this.game.infantry || []) {
         if (other === this.unit || !other.alive || other.inVehicle) continue;
         const distance = distXY(this.unit.x, this.unit.y, other.x, other.y);
-        if (distance > 32 || distance < 1) continue;
-        ax += ((this.unit.x - other.x) / distance) * (32 - distance) / 22;
-        ay += ((this.unit.y - other.y) / distance) * (32 - distance) / 22;
+        const friendly = other.team === this.unit.team;
+        const avoidRange = friendly ? (finalArrival ? 56 : 40) : 32;
+        if (distance > avoidRange || distance < 1) continue;
+        const squadBoost = friendly && other.squadId === this.unit.squadId ? 1.18 : 1;
+        const force = ((avoidRange - distance) / Math.max(18, avoidRange * 0.68)) *
+          (friendly ? (finalArrival ? 1.28 : 0.88) : 0.72) *
+          squadBoost;
+        ax += ((this.unit.x - other.x) / distance) * force;
+        ay += ((this.unit.y - other.y) / distance) * force;
       }
 
       for (const tank of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (!tank.alive) continue;
         const distance = distXY(this.unit.x, this.unit.y, tank.x, tank.y);
-        if (distance > 86 || distance < 1) continue;
-        ax += ((this.unit.x - tank.x) / distance) * (86 - distance) / 34;
-        ay += ((this.unit.y - tank.y) / distance) * (86 - distance) / 34;
+        const avoidRange = finalArrival && tank.team === this.unit.team ? 108 : 86;
+        if (distance > avoidRange || distance < 1) continue;
+        const force = (avoidRange - distance) / (finalArrival ? 36 : 34);
+        ax += ((this.unit.x - tank.x) / distance) * force;
+        ay += ((this.unit.y - tank.y) / distance) * force;
       }
 
       const laneAvoidance = this.friendlyTankFireLaneAvoidance();

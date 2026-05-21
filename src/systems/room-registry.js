@@ -181,10 +181,15 @@
         weaponId: player.weaponId || "",
         weaponInventory: Array.isArray(player.weaponInventory) ? player.weaponInventory.slice(0, 4) : [],
         equipmentAmmo: player.equipmentAmmo ? { ...player.equipmentAmmo } : {},
+        stats: {
+          kills: Math.max(0, Math.floor(Number(player.stats?.kills) || 0)),
+          deaths: Math.max(0, Math.floor(Number(player.stats?.deaths) || 0))
+        },
         participantType,
         factionId: player.factionId || player.skinId || "",
         skinId: player.factionId || player.skinId || "",
         ready: Boolean(player.ready),
+        host: Boolean(player.host),
         updatedAt: Date.now()
       };
       if (participantType === "player") players.push(nextPlayer);

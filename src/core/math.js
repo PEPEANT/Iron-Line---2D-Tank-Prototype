@@ -42,10 +42,12 @@
   }
 
   function pointInRect(x, y, rect) {
+    if (rect?.destroyed) return false;
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
   }
 
   function circleRectCollision(x, y, radius, rect) {
+    if (rect?.destroyed) return false;
     const nearestX = clamp(x, rect.x, rect.x + rect.w);
     const nearestY = clamp(y, rect.y, rect.y + rect.h);
     return distXY(x, y, nearestX, nearestY) < radius;
@@ -56,7 +58,8 @@
       x: rect.x - amount,
       y: rect.y - amount,
       w: rect.w + amount * 2,
-      h: rect.h + amount * 2
+      h: rect.h + amount * 2,
+      destroyed: rect.destroyed
     };
   }
 
@@ -75,6 +78,7 @@
   }
 
   function lineIntersectsRect(x1, y1, x2, y2, rect) {
+    if (rect?.destroyed) return false;
     if (pointInRect(x1, y1, rect) || pointInRect(x2, y2, rect)) return true;
     const left = rect.x;
     const right = rect.x + rect.w;

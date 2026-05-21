@@ -109,7 +109,14 @@
         Math.sin(this.angle) * this.speed,
         this.radius,
         dt,
-        { collisionSpeedScale: 0 }
+        {
+          collisionSpeedScale: 0,
+          destroyObstaclesOnImpact: true,
+          impactSpeed: beforeSpeed,
+          impactMass: 0.94,
+          vehicleKind: "humvee",
+          maxImpactSpeed: 230
+        }
       );
       const moved = distXY(beforeX, beforeY, this.x, this.y);
       const expectedMove = Math.abs(beforeSpeed) * dt;

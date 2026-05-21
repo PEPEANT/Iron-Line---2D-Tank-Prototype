@@ -10,7 +10,12 @@
       name: "보병",
       shortName: "보병",
       equipment: ["machinegun", "pistol", "grenade"],
-      defaultAmmo: { grenade: 3 },
+      equipmentChoices: {
+        0: ["machinegun", "rifle", "lmg"],
+        1: ["pistol", "smg"],
+        2: ["grenade", "grenadeLauncher"]
+      },
+      defaultAmmo: { grenade: 3, grenadeLauncher: 3 },
       description: "점령과 제압"
     },
     engineer: {
@@ -19,9 +24,11 @@
       shortName: "공병",
       equipment: ["machinegun", "rpg", "repairKit"],
       equipmentChoices: {
-        2: ["repairKit", "kamikazeDrone"]
+        0: ["machinegun", "rifle", "smg"],
+        1: ["rpg", "grenadeLauncher"],
+        2: ["repairKit", "grenade", "kamikazeDrone"]
       },
-      defaultAmmo: { rpg: 2, repairKit: 2, kamikazeDrone: 1 },
+      defaultAmmo: { rpg: 2, repairKit: 2, grenade: 2, grenadeLauncher: 3, kamikazeDrone: 1 },
       description: "대전차와 수리"
     },
     scout: {
@@ -29,7 +36,12 @@
       name: "정찰",
       shortName: "정찰",
       equipment: ["sniper", "pistol", "reconDrone"],
-      defaultAmmo: { reconDrone: 1 },
+      equipmentChoices: {
+        0: ["sniper", "rifle"],
+        1: ["pistol", "smg"],
+        2: ["reconDrone", "grenade"]
+      },
+      defaultAmmo: { reconDrone: 1, grenade: 2 },
       description: "장거리 사격과 감시"
     }
   };

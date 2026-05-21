@@ -10,7 +10,9 @@
   Object.assign(proto, {
     drawObstacles(game) {
       for (const obstacle of game.world.obstacles) {
-        if (obstacle.kind === "building") this.drawBuildingObstacle(obstacle);
+        if (obstacle.destroyed) {
+          this.drawDestroyedScenery(obstacle);
+        } else if (obstacle.kind === "building") this.drawBuildingObstacle(obstacle);
         else if (["tree", "brush", "rubble", "sandbag", "barricade", "wood-fence"].includes(obstacle.kind)) {
           this.drawObstacleAsScenery(obstacle);
         } else {
@@ -281,6 +283,9 @@
         if (item.type === "tree") this.drawTreeScenery(item);
         else if (item.type === "brush") this.drawBrushScenery(item);
         else if (item.type === "rubble") this.drawRubbleScenery(item);
+        else if (item.type === "streetlight") this.drawStreetlightScenery(item);
+        else if (item.type === "billboard") this.drawBillboardScenery(item);
+        else if (item.type === "bench") this.drawBenchScenery(item);
         else this.drawRectScenery(item);
       }
     },
@@ -326,18 +331,232 @@
 
     drawBrushScenery(item) {
       const ctx = this.ctx;
-      const r = item.r || 70;
+      const r = item.r || 95;
       const seed = this.decorSeed(item);
+      const damage = item.maxHp ? clamp(1 - (item.hp || 0) / item.maxHp, 0, 1) : 0;
+      const isTallGrass = item.variant === "tall-grass";
+      const canopy = damage > 0.58
+        ? ["#59603d", "#4f5638", "#6a6540"]
+        : isTallGrass
+          ? ["#527342", "#3e653e", "#6f8549"]
+          : ["#426c3f", "#315839", "#557744"];
+
       ctx.save();
-      ctx.globalAlpha = 0.54;
-      for (let i = 0; i < 12; i += 1) {
-        const angle = (seed + i * 47) * 0.031;
-        const dist = r * (0.16 + ((seed + i * 13) % 70) / 100);
-        const x = item.x + Math.cos(angle) * dist;
-        const y = item.y + Math.sin(angle) * dist;
-        ctx.fillStyle = i % 3 === 0 ? "#476f42" : i % 3 === 1 ? "#385f3c" : "#5d7742";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+      ctx.beginPath();
+      ctx.ellipse(item.x + 8, item.y + 10, r * 0.92, r * 0.46, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.78 - damage * 0.22;
+      for (let i = 0; i < 9; i += 1) {
+        const angle = (seed + i * 59) * 0.025;
+        const dist = r * (0.08 + ((seed + i * 19) % 42) / 100);
+        const rx = r * (0.32 + (i % 3) * 0.07);
+        const ry = r * (isTallGrass ? 0.22 : 0.26) * (0.82 + (i % 2) * 0.18);
+        ctx.fillStyle = canopy[i % canopy.length];
         ctx.beginPath();
-        ctx.ellipse(x, y, r * 0.16, r * 0.07, angle, 0, Math.PI * 2);
+        ctx.ellipse(
+          item.x + Math.cos(angle) * dist,
+          item.y + Math.sin(angle) * dist * 0.72,
+          rx,
+          ry,
+          angle * 0.38,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+
+      ctx.globalAlpha = 0.48 - damage * 0.12;
+      ctx.strokeStyle = isTallGrass ? "#8aa05a" : "#6f8b55";
+      ctx.lineWidth = Math.max(2, r * 0.018);
+      ctx.lineCap = "round";
+      for (let i = 0; i < 22; i += 1) {
+        const angle = (seed + i * 41) * 0.033;
+        const dist = r * (0.2 + ((seed + i * 31) % 72) / 100);
+        const x = item.x + Math.cos(angle) * dist * 0.72;
+        const y = item.y + Math.sin(angle) * dist * 0.42;
+        const lean = angle + (i % 2 ? -0.62 : 0.62);
+        const length = r * (0.16 + (i % 4) * 0.018);
+        ctx.beginPath();
+        ctx.moveTo(x, y + length * 0.36);
+        ctx.quadraticCurveTo(
+          x + Math.cos(lean) * length * 0.35,
+          y - length * 0.42,
+          x + Math.cos(lean) * length * 0.78,
+          y - length
+        );
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.42 - damage * 0.14;
+      for (let i = 0; i < 14; i += 1) {
+        const angle = (seed + i * 67) * 0.029;
+        const dist = r * (0.48 + ((seed + i * 11) % 35) / 100);
+        ctx.fillStyle = i % 2 ? "#789151" : "#486e3e";
+        ctx.beginPath();
+        ctx.ellipse(
+          item.x + Math.cos(angle) * dist,
+          item.y + Math.sin(angle) * dist * 0.52,
+          r * 0.11,
+          r * 0.045,
+          angle,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+
+      if (item.damageFlash > 0) {
+        ctx.globalAlpha = clamp(item.damageFlash, 0, 0.62);
+        ctx.fillStyle = "#ffd166";
+        ctx.beginPath();
+        ctx.ellipse(item.x, item.y, r * 0.82, r * 0.44, -0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+
+    drawStreetlightScenery(item) {
+      const ctx = this.ctx;
+      const x = item.x;
+      const y = item.y;
+      const w = item.w || 28;
+      const h = item.h || 98;
+      const damage = item.maxHp ? clamp(1 - (item.hp || 0) / item.maxHp, 0, 1) : 0;
+
+      ctx.save();
+      ctx.translate(x + w * 0.5, y + h * 0.5);
+      ctx.rotate(item.angle || 0);
+      ctx.translate(-w * 0.5, -h * 0.5);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+      ctx.beginPath();
+      ctx.ellipse(w * 0.62, h * 0.55, w * 0.95, h * 0.12, 0.18, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = damage > 0.55 ? "#6d706b" : "#9aa29b";
+      ctx.lineWidth = Math.max(3, w * 0.17);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.5, h * 0.9);
+      ctx.lineTo(w * 0.5, h * 0.22);
+      ctx.lineTo(w * 0.76, h * 0.15);
+      ctx.stroke();
+
+      ctx.fillStyle = damage > 0.55 ? "#6f6b54" : "#f1d36f";
+      ctx.strokeStyle = "rgba(30, 35, 32, 0.58)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(w * 0.82, h * 0.14, w * 0.32, h * 0.09, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#6f7771";
+      roundRect(ctx, w * 0.22, h * 0.86, w * 0.58, h * 0.11, 3);
+      ctx.fill();
+
+      if (item.damageFlash > 0) {
+        ctx.globalAlpha = clamp(item.damageFlash, 0, 0.66);
+        ctx.fillStyle = "#ffd166";
+        roundRect(ctx, 0, 0, w, h, 5);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+
+    drawBillboardScenery(item) {
+      const ctx = this.ctx;
+      const x = item.x;
+      const y = item.y;
+      const w = item.w || 150;
+      const h = item.h || 64;
+      const damage = item.maxHp ? clamp(1 - (item.hp || 0) / item.maxHp, 0, 1) : 0;
+
+      ctx.save();
+      ctx.translate(x + w * 0.5, y + h * 0.5);
+      ctx.rotate(item.angle || 0);
+      ctx.translate(-w * 0.5, -h * 0.5);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+      roundRect(ctx, 7, 8, w, h, 5);
+      ctx.fill();
+
+      ctx.fillStyle = damage > 0.55 ? "#5b5d55" : "#243933";
+      ctx.strokeStyle = "rgba(220, 230, 210, 0.28)";
+      ctx.lineWidth = 3;
+      roundRect(ctx, 0, 0, w, h * 0.72, 5);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = damage > 0.55 ? "#9b8d61" : "#d5b24a";
+      roundRect(ctx, w * 0.08, h * 0.16, w * 0.34, h * 0.13, 3);
+      ctx.fill();
+      ctx.fillStyle = damage > 0.55 ? "#7f897a" : "#9fc3a4";
+      roundRect(ctx, w * 0.08, h * 0.38, w * 0.72, h * 0.09, 3);
+      ctx.fill();
+      roundRect(ctx, w * 0.08, h * 0.54, w * 0.5, h * 0.08, 3);
+      ctx.fill();
+
+      ctx.strokeStyle = damage > 0.55 ? "#5f5a45" : "#8e7751";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.25, h * 0.72);
+      ctx.lineTo(w * 0.25, h);
+      ctx.moveTo(w * 0.75, h * 0.72);
+      ctx.lineTo(w * 0.75, h);
+      ctx.stroke();
+
+      if (item.damageFlash > 0) {
+        ctx.globalAlpha = clamp(item.damageFlash, 0, 0.66);
+        ctx.fillStyle = "#ffd166";
+        roundRect(ctx, 0, 0, w, h, 5);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+
+    drawBenchScenery(item) {
+      const ctx = this.ctx;
+      const x = item.x;
+      const y = item.y;
+      const w = item.w || 96;
+      const h = item.h || 34;
+      const damage = item.maxHp ? clamp(1 - (item.hp || 0) / item.maxHp, 0, 1) : 0;
+
+      ctx.save();
+      ctx.translate(x + w * 0.5, y + h * 0.5);
+      ctx.rotate(item.angle || 0);
+      ctx.translate(-w * 0.5, -h * 0.5);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+      roundRect(ctx, 5, 5, w, h, 5);
+      ctx.fill();
+
+      const wood = damage > 0.55 ? "#6d6047" : "#9a7042";
+      const edge = damage > 0.55 ? "#463f34" : "#51351f";
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i += 1) {
+        ctx.fillStyle = i === 1 ? "#b1844e" : wood;
+        roundRect(ctx, 0, 3 + i * (h * 0.24), w, h * 0.16, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = damage > 0.55 ? "#606861" : "#8b928c";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.18, h * 0.74);
+      ctx.lineTo(w * 0.12, h);
+      ctx.moveTo(w * 0.82, h * 0.74);
+      ctx.lineTo(w * 0.88, h);
+      ctx.stroke();
+
+      if (item.damageFlash > 0) {
+        ctx.globalAlpha = clamp(item.damageFlash, 0, 0.66);
+        ctx.fillStyle = "#ffd166";
+        roundRect(ctx, 0, 0, w, h, 5);
         ctx.fill();
       }
       ctx.restore();
@@ -443,27 +662,62 @@
 
     drawDestroyedScenery(item) {
       const ctx = this.ctx;
+      const hasRectSize = Number.isFinite(item.w) || Number.isFinite(item.h);
+      const centerX = hasRectSize ? item.x + (item.w || 0) * 0.5 : item.x;
+      const centerY = hasRectSize ? item.y + (item.h || 0) * 0.5 : item.y;
       const r = item.r || Math.max(item.w || 40, item.h || 24) * 0.45;
+      const duration = item.destroyDuration || 0.58;
+      const progress = item.destroyTimer === undefined ? 1 : clamp(item.destroyTimer / Math.max(duration, 0.001), 0, 1);
+      const ease = 1 - Math.pow(1 - progress, 2);
+      const force = clamp(item.breakForce || 1, 0.75, 2.15);
+      const breakAngle = item.breakAngle ?? item.angle ?? 0;
+      const type = item.type || item.kind;
       const seed = this.decorSeed(item);
       ctx.save();
-      ctx.globalAlpha = 0.42;
+      ctx.globalAlpha = 0.34 + ease * 0.1;
       ctx.fillStyle = "rgba(35, 31, 24, 0.6)";
       ctx.beginPath();
-      ctx.ellipse(item.x + (item.w || 0) * 0.5, item.y + (item.h || 0) * 0.5, r, r * 0.42, item.angle || 0, 0, Math.PI * 2);
+      ctx.ellipse(centerX, centerY, r * (0.78 + ease * 0.22), r * (0.36 + ease * 0.08), item.angle || breakAngle, 0, Math.PI * 2);
       ctx.fill();
-      for (let i = 0; i < 8; i += 1) {
+
+      for (let i = 0; i < 10; i += 1) {
         const angle = (seed + i * 37) * 0.04;
-        const dist = r * 0.7 * (((seed + i * 23) % 100) / 100);
-        ctx.fillStyle = i % 2 ? "#5c513b" : "#3f3a31";
+        const baseDist = r * 0.46 * (((seed + i * 23) % 100) / 100);
+        const burst = r * ease * force * (0.32 + ((seed + i * 17) % 100) / 160);
+        const forwardBias = Math.max(0, Math.cos(angle - breakAngle)) * r * 0.18 * ease * force;
+        const dist = baseDist + burst + forwardBias;
+        ctx.fillStyle = type === "tree" || type === "brush"
+          ? (i % 2 ? "#5d5131" : "#2f3f2c")
+          : ["streetlight", "billboard"].includes(type)
+            ? (i % 2 ? "#777b75" : "#4d5550")
+            : (i % 2 ? "#5c513b" : "#3f3a31");
         ctx.beginPath();
         ctx.arc(
-          item.x + (item.w || 0) * 0.5 + Math.cos(angle) * dist,
-          item.y + (item.h || 0) * 0.5 + Math.sin(angle) * dist,
+          centerX + Math.cos(angle) * dist,
+          centerY + Math.sin(angle) * dist,
           3 + (i % 3) * 2,
           0,
           Math.PI * 2
         );
         ctx.fill();
+      }
+
+      if (progress < 0.9) {
+        const alpha = (1 - progress / 0.9) * 0.52;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = type === "tree" || type === "brush" || type === "wood-fence" || type === "bench"
+          ? "rgba(142, 103, 54, 0.82)"
+          : "rgba(214, 178, 110, 0.72)";
+        for (let i = 0; i < 7; i += 1) {
+          const angle = breakAngle + ((seed + i * 29) % 120 - 60) * 0.018;
+          const start = r * (0.16 + i * 0.015);
+          const end = r * (0.62 + ease * force * (0.42 + i * 0.035));
+          ctx.beginPath();
+          ctx.moveTo(centerX + Math.cos(angle) * start, centerY + Math.sin(angle) * start);
+          ctx.lineTo(centerX + Math.cos(angle) * end, centerY + Math.sin(angle) * end);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }

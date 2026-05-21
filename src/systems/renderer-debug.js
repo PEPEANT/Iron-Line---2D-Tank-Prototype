@@ -98,6 +98,10 @@
         suppressed: "제압",
         "rpg-attack": "RPG",
         "rpg-position": "RPG 위치",
+        "drone-deploy": "드론 전개",
+        "drone-guide": "드론 유도",
+        "drone-strike": "드론 타격",
+        "recon-drone": "정찰드론",
         "report-move": "보고 위치",
         "harass-tank": "차량 견제",
         "evade-tank": "차량 회피",
@@ -151,8 +155,13 @@
       const coverQuality = debug.coverQuality > 0 ? ` Q${Math.round(debug.coverQuality)}` : "";
       const reports = debug.scoutReports > 0 ? ` R${debug.scoutReports}` : "";
       const grenades = debug.grenadeAmmo > 0 ? ` G${debug.grenadeAmmo}` : "";
+      const grenadeLaunchers = debug.grenadeLauncherAmmo > 0 ? ` GL${debug.grenadeLauncherAmmo}` : "";
+      const drones = debug.droneAmmo > 0 ? ` D${debug.droneAmmo}` : "";
       const repairs = debug.repairAmmo > 0 ? ` K${debug.repairAmmo}` : "";
-      const label = `${squad}${unit.callSign} ${weapon.shortName}${role}${tactical}${tacticalTimer}${prone} ${stateLabels[debug.state] || debug.state || unit.ai.state}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${grenades}${repairs}${request}${transport}`;
+      const stateText = debug.grenadeWeaponId === "grenadeLauncher" && (debug.state === "grenade" || debug.state === "grenade-aim")
+        ? (debug.state === "grenade" ? "유탄" : "유탄 조준")
+        : stateLabels[debug.state] || debug.state || unit.ai.state;
+      const label = `${squad}${unit.callSign} ${weapon.shortName}${role}${tactical}${tacticalTimer}${prone} ${stateText}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${grenades}${grenadeLaunchers}${drones}${repairs}${request}${transport}`;
       const labelWidth = Math.max(72, label.length * 7.2);
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(9, 15, 13, 0.78)";

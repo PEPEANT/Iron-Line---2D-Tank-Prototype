@@ -87,6 +87,9 @@
         supportRequest: this.supportRequest,
         transport: this.transportForUnit(unit),
         squadStatus: this.status,
+        squadSlotIndex: this.order.slotIndex || 0,
+        squadSlotCount: Math.max(1, this.order.slotCount || 1),
+        squadUnitCount: active.length,
         roleSlotIndex,
         roleSlotCount,
         formation: this.formationForRole(role, approachAngle, this.tacticalMode),
@@ -209,27 +212,56 @@
         if (role === "support") {
           return {
             angle: approachAngle,
-            distance: 44,
-            spacing: 46,
-            stopDistance: 12,
+            distance: 96,
+            spacing: 68,
+            stopDistance: 24,
             allowOutside: true
           };
         }
         if (role === "security") {
           return {
             angle: approachAngle,
-            distance: 28,
-            spacing: 58,
+            distance: 68,
+            spacing: 76,
             sideBias: 1,
-            stopDistance: 14,
+            stopDistance: 26,
             allowOutside: true
           };
         }
         return {
           angle: approachAngle,
-          distance: 18,
-          spacing: 34,
-          stopDistance: 14,
+          distance: 44,
+          spacing: 52,
+          stopDistance: 26,
+          allowOutside: true
+        };
+      }
+
+      if (mode === "hold") {
+        if (role === "support") {
+          return {
+            angle: approachAngle,
+            distance: 124,
+            spacing: 70,
+            stopDistance: 26,
+            allowOutside: true
+          };
+        }
+        if (role === "security") {
+          return {
+            angle: approachAngle,
+            distance: 86,
+            spacing: 76,
+            sideBias: 1,
+            stopDistance: 28,
+            allowOutside: true
+          };
+        }
+        return {
+          angle: approachAngle,
+          distance: 52,
+          spacing: 56,
+          stopDistance: 28,
           allowOutside: true
         };
       }
@@ -249,8 +281,8 @@
         return {
           angle: approachAngle,
           distance: 168,
-          spacing: 46,
-          stopDistance: 18,
+          spacing: 62,
+          stopDistance: 24,
           allowOutside: true
         };
       }
@@ -259,19 +291,19 @@
         return {
           angle: approachAngle,
           distance: 92,
-          spacing: 58,
+          spacing: 68,
           sideBias: 1,
-          stopDistance: 22,
+          stopDistance: 28,
           allowOutside: true
         };
       }
 
       return {
         angle: approachAngle,
-        distance: 42,
-        spacing: 34,
-        stopDistance: 22,
-        allowOutside: false
+        distance: 58,
+        spacing: 46,
+        stopDistance: 28,
+        allowOutside: true
       };
     }
 

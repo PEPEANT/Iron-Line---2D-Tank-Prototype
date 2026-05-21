@@ -74,12 +74,91 @@
     });
   }
 
+  function vehicleImpactSpeed(entity, options) {
+    return Math.abs(options.impactSpeed ?? entity?.speed ?? 0);
+  }
+
+  function vehicleImpactDamage(entity, target, options) {
+    const speed = vehicleImpactSpeed(entity, options);
+    const minimum = options.impactMinSpeed ?? (options.vehicleKind === "humvee" ? 34 : 24);
+    if (speed < minimum) return 0;
+    const mass = options.impactMass ?? (options.vehicleKind === "humvee" ? 0.94 : 1.34);
+    const hardness = target?.kind === "base-wall" ? 1.05 : target?.kind === "concrete" ? 1 : 0.88;
+    return (20 + speed * 0.86) * mass / hardness;
+  }
+
+  function vehicleBreakOptions(entity, target, options) {
+    const force = clamp(vehicleImpactSpeed(entity, options) / Math.max(options.maxImpactSpeed || 160, 1), 0.8, 1.9);
+    return {
+      angle: entity?.angle ?? 0,
+      force,
+      duration: target?.kind === "base-wall" || target?.kind === "concrete" ? 0.72 : 0.56
+    };
+  }
+
+  function shakeVehicleOnBreak(entity, options) {
+    if (!entity) return;
+    const impulse = clamp(vehicleImpactSpeed(entity, options) / Math.max(options.maxImpactSpeed || 160, 1), 0.16, 0.95);
+    entity.impactShake = Math.max(entity.impactShake || 0, impulse);
+  }
+
+  function circleHitsScenery(x, y, radius, item) {
+    if (!item || item.destroyed) return false;
+    if (item.shape === "rect" || Number.isFinite(item.w) || Number.isFinite(item.h)) {
+      return circleRectCollision(x, y, radius, {
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        w: Number(item.w) || 0,
+        h: Number(item.h) || 0
+      });
+    }
+    const itemRadius = Number(item.r) || Number(item.radius) || 0;
+    return distXY(x, y, Number(item.x) || 0, Number(item.y) || 0) <= radius + itemRadius;
+  }
+
+  function damageTouchedScenery(game, entity, x, y, radius, options, context) {
+    if (!options.destroyObstaclesOnImpact) return;
+    const damage = vehicleImpactDamage(entity, null, options);
+    if (damage <= 0) return;
+    const damaged = context.damagedScenery || (context.damagedScenery = new Set());
+    for (const item of game.world?.scenery || []) {
+      if (!item?.destructible || item.destroyed || damaged.has(item)) continue;
+      if (!circleHitsScenery(x, y, radius, item)) continue;
+      damaged.add(item);
+      const destroyed = IronLine.combat?.damageScenery?.(game, item, damage, vehicleBreakOptions(entity, item, options));
+      if (destroyed) shakeVehicleOnBreak(entity, options);
+    }
+  }
+
+  function tryBreakObstacleOnImpact(game, entity, obstacle, options, context) {
+    if (!options.destroyObstaclesOnImpact || obstacle?.kind === "building" || obstacle?.destroyed) return false;
+    const damaged = context.damagedObstacles || (context.damagedObstacles = new Set());
+    if (damaged.has(obstacle)) return obstacle.destroyed;
+    const damage = vehicleImpactDamage(entity, obstacle, options);
+    if (damage <= 0) return false;
+    damaged.add(obstacle);
+    const destroyed = IronLine.combat?.damageObstacle?.(game, obstacle, damage, vehicleBreakOptions(entity, obstacle, options));
+    if (destroyed) shakeVehicleOnBreak(entity, options);
+    return Boolean(destroyed);
+  }
+
+  function isObstacleBlockingCircle(game, entity, x, y, radius, options, context) {
+    for (const obstacle of game.world?.obstacles || []) {
+      if (obstacle.destroyed || !circleRectCollision(x, y, radius, obstacle)) continue;
+      if (tryBreakObstacleOnImpact(game, entity, obstacle, options, context)) continue;
+      return true;
+    }
+    return false;
+  }
+
   function tryMoveCircle(game, entity, vx, vy, radius, dt, options = {}) {
     const world = game.world;
+    const context = {};
     const collisionSpeedScale = options.collisionSpeedScale ?? -0.18;
     const nextX = clamp(entity.x + vx * dt, radius, world.width - radius);
-    const blockedX = world.obstacles.some((obstacle) => circleRectCollision(nextX, entity.y, radius, obstacle)) ||
-      options.blockTanks && circleIntersectsTank(game, entity, nextX, entity.y, radius, options);
+    damageTouchedScenery(game, entity, nextX, entity.y, radius, options, context);
+    const blockedX = isObstacleBlockingCircle(game, entity, nextX, entity.y, radius, options, context) ||
+      Boolean(options.blockTanks && circleIntersectsTank(game, entity, nextX, entity.y, radius, options));
     if (!blockedX) {
       entity.x = nextX;
     } else if (entity.speed !== undefined) {
@@ -87,8 +166,9 @@
     }
 
     const nextY = clamp(entity.y + vy * dt, radius, world.height - radius);
-    const blockedY = world.obstacles.some((obstacle) => circleRectCollision(entity.x, nextY, radius, obstacle)) ||
-      options.blockTanks && circleIntersectsTank(game, entity, entity.x, nextY, radius, options);
+    damageTouchedScenery(game, entity, entity.x, nextY, radius, options, context);
+    const blockedY = isObstacleBlockingCircle(game, entity, entity.x, nextY, radius, options, context) ||
+      Boolean(options.blockTanks && circleIntersectsTank(game, entity, entity.x, nextY, radius, options));
     if (!blockedY) {
       entity.y = nextY;
     } else if (entity.speed !== undefined) {

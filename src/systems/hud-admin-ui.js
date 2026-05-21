@@ -245,8 +245,13 @@
       },
       setDeploymentLoadoutOpen(open) {
       this.deploymentLoadoutOpen = Boolean(open);
-      this.nodes.deploymentClassList?.classList.toggle("hidden", this.deploymentLoadoutOpen);
+      const keepClassList = this.nodes.deploymentScreen?.classList.contains("mobile-deployment");
+      this.nodes.deploymentClassList?.classList.toggle("hidden", this.deploymentLoadoutOpen && !keepClassList);
       this.nodes.deploymentLoadout?.classList.toggle("hidden", !this.deploymentLoadoutOpen);
+      },
+      setDeploymentMapOpen(open) {
+      this.deploymentMapOpen = Boolean(open);
+      this.nodes.deploymentScreen?.classList.toggle("mobile-map-open", this.deploymentMapOpen);
       },
       toggleSettingsPanel(force = null) {
       const panel = this.nodes.settingsPanel;
@@ -385,11 +390,10 @@
       };
 
       this.nodes.mobileKeyButtons.forEach((button) => {
-        const code = button.dataset.mobileKey;
         bindHold(
           button,
-          () => IronLine.game?.input?.setVirtualKey(code, true),
-          () => IronLine.game?.input?.setVirtualKey(code, false)
+          () => IronLine.game?.input?.setVirtualKey(button.dataset.mobileKey, true),
+          () => IronLine.game?.input?.setVirtualKey(button.dataset.mobileKey, false)
         );
       });
 
@@ -403,6 +407,7 @@
       });
 
       bindTap(this.nodes.mobileWeaponButton, () => IronLine.game?.cycleMobileWeapon?.());
+      bindTap(this.nodes.mobileRoleButton, () => IronLine.game?.roleChange?.openPanel?.());
       bindTap(this.nodes.mobileSpectatorChatButton, () => IronLine.game?.chat?.openInput?.());
       bindTap(this.nodes.mobileSpectatorHomeButton, () => {
         const game = IronLine.game;

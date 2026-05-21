@@ -46,6 +46,45 @@
     return (game.world?.scenery || []).filter((item) => item?.destructible && !item.destroyed);
   }
 
+  const vehicleBreakableObstacleKinds = new Set([
+    "base-wall",
+    "concrete",
+    "sandbag",
+    "barricade",
+    "wood-fence",
+    "tree",
+    "brush",
+    "rubble"
+  ]);
+
+  function isVehicleBreakableObstacle(obstacle) {
+    if (!obstacle || obstacle.destroyed || obstacle.kind === "building") return false;
+    return Boolean(obstacle.destructible || vehicleBreakableObstacleKinds.has(obstacle.kind));
+  }
+
+  function obstacleImpactHp(kind) {
+    switch (kind) {
+      case "base-wall":
+        return 128;
+      case "concrete":
+        return 108;
+      case "barricade":
+        return 72;
+      case "sandbag":
+        return 64;
+      case "rubble":
+        return 56;
+      case "tree":
+        return 50;
+      case "wood-fence":
+        return 38;
+      case "brush":
+        return 28;
+      default:
+        return 72;
+    }
+  }
+
   function projectileHitsScenery(shell, item) {
     if (!shell || !item?.stopsProjectiles || item.destroyed) return false;
     if (item.shape === "rect" || Number.isFinite(item.w) || Number.isFinite(item.h)) {
@@ -81,6 +120,7 @@
   function emitSceneryBreak(game, item) {
     if (!game?.effects || !item) return;
     const center = sceneryCenter(item);
+    const type = item.type || item.kind;
     const dustPuffs = game.effects.dustPuffs || (game.effects.dustPuffs = []);
     const blastSparks = game.effects.blastSparks || (game.effects.blastSparks = []);
     const radius = Math.max(18, center.radius || 24);
@@ -93,10 +133,10 @@
       life: 0.7,
       maxLife: 0.7,
       alpha: 0.24,
-      color: item.type === "tree" ? "#66734b" : "#b1a077"
+      color: type === "tree" ? "#66734b" : "#b1a077"
     });
 
-    const sparkCount = item.type === "tree" ? 7 : 10;
+    const sparkCount = type === "tree" ? 7 : 10;
     for (let i = 0; i < sparkCount; i += 1) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 55 + Math.random() * 120;
@@ -109,25 +149,53 @@
         length: 5 + Math.random() * 9,
         life,
         maxLife: life,
-        color: item.type === "tree" ? "rgba(128, 100, 58, 0.72)" : "rgba(238, 194, 107, 0.7)"
+        color: type === "tree" ? "rgba(128, 100, 58, 0.72)" : "rgba(238, 194, 107, 0.7)"
       });
     }
   }
 
-  function damageScenery(game, item, amount) {
+  function markWorldItemDestroyed(game, item, options = {}) {
+    item.destroyed = true;
+    item.stopsProjectiles = false;
+    item.destroyTimer = 0;
+    item.destroyDuration = options.duration ?? 0.58;
+    item.breakAngle = Number.isFinite(options.angle) ? options.angle : item.angle || 0;
+    item.breakForce = Math.max(0.85, options.force || 1);
+    emitSceneryBreak(game, item);
+  }
+
+  function damageScenery(game, item, amount, options = {}) {
     if (!item?.destructible || item.destroyed) return false;
     item.maxHp = item.maxHp || item.baseHp || item.hp || Math.max(1, amount);
     item.hp = Math.max(0, (item.hp ?? item.maxHp) - amount);
     item.damageFlash = Math.max(item.damageFlash || 0, 0.34);
     if (item.hp > 0) return false;
-    item.destroyed = true;
-    item.stopsProjectiles = false;
-    emitSceneryBreak(game, item);
+    markWorldItemDestroyed(game, item, options);
     game.aiObservatory?.recordEvent?.({
       type: "scenery_destroyed",
       unitId: item.id || item.type,
       aiType: "world",
       reason: item.type || "scenery"
+    });
+    return true;
+  }
+
+  function damageObstacle(game, obstacle, amount, options = {}) {
+    if (!isVehicleBreakableObstacle(obstacle)) return false;
+    obstacle.destructible = true;
+    obstacle.type = obstacle.type || obstacle.kind;
+    obstacle.shape = obstacle.shape || "rect";
+    obstacle.maxHp = obstacle.maxHp || obstacle.baseHp || obstacle.hp || obstacleImpactHp(obstacle.kind);
+    obstacle.baseHp = obstacle.baseHp || obstacle.maxHp;
+    obstacle.hp = Math.max(0, (obstacle.hp ?? obstacle.maxHp) - amount);
+    obstacle.damageFlash = Math.max(obstacle.damageFlash || 0, 0.34);
+    if (obstacle.hp > 0) return false;
+    markWorldItemDestroyed(game, obstacle, options);
+    game.aiObservatory?.recordEvent?.({
+      type: "obstacle_destroyed",
+      unitId: obstacle.id || obstacle.kind,
+      aiType: "world",
+      reason: obstacle.kind || "obstacle"
     });
     return true;
   }
@@ -151,6 +219,15 @@
   function smallArmsRange(weapon, shooter, baseRange = null) {
     const range = baseRange ?? weapon?.range ?? 560;
     return range * smallArmsRangeScale(shooter, weapon);
+  }
+
+  function targetScoreAlive(target) {
+    return Boolean(target && target.alive !== false && (target.hp === undefined || target.hp > 0) && !target.destructionPending);
+  }
+
+  function recordKillIfDestroyed(game, source, target, wasAlive, kind = "kill") {
+    if (!wasAlive || targetScoreAlive(target)) return;
+    game?.recordCombatKill?.(source, target, kind);
   }
 
   function directArmorProfile(tank, sourceX, sourceY, ammoId = "") {
@@ -492,6 +569,7 @@
         hard: Boolean(target.vehicleType),
         tank: Boolean(target.vehicleType)
       });
+      const targetWasAlive = targetScoreAlive(target);
       if (target === game.player && typeof game.applyPlayerDamage === "function") {
         game.applyPlayerDamage(damage, shooter, weapon.id || "rifle", {
           label: weapon.id === "sniper" ? "\uC800\uACA9" : "\uCD1D\uACA9"
@@ -501,6 +579,7 @@
         else target.takeDamage(damage);
       }
       else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
+      recordKillIfDestroyed(game, shooter, target, targetWasAlive, weapon.id || "rifle");
     } else if (Math.random() < (options.impactChance ?? 0.16)) {
       emitSmallArmsImpact(game, finalEndX, finalEndY, impactAngle, weapon);
     }
@@ -696,7 +775,7 @@
       const y = startY + Math.sin(angle) * distance;
       if (x < 0 || y < 0 || x > game.world.width || y > game.world.height) return { x: lastX, y: lastY };
 
-      const blocked = game.world.obstacles.some((obstacle) => (
+      const blocked = game.world.obstacles.some((obstacle) => !obstacle.destroyed && (
         circleRectCollision(x, y, 2, obstacle) ||
         lineIntersectsRect(lastX, lastY, x, y, obstacle)
       ));
@@ -774,6 +853,7 @@
     const chipDamage = friendly
       ? 0
       : options.damage ?? smallArmsTankDamage(weapon);
+    const tankWasAlive = targetScoreAlive(tank);
 
     if (chipDamage > 0) {
       tank.hp = Math.max(0, tank.hp - chipDamage);
@@ -795,6 +875,7 @@
     });
 
     if (!friendly && tank.hp <= 0 && tank.alive) tank.takeDamage(game, 0.01);
+    recordKillIfDestroyed(game, shooter, tank, tankWasAlive, weapon.id || "small-arms");
     return true;
   }
 
@@ -925,6 +1006,7 @@
 
       let hit = null;
       for (const obstacle of game.world.obstacles) {
+        if (obstacle.destroyed) continue;
         const hitObstacle = circleRectCollision(shell.x, shell.y, shell.radius, obstacle) ||
           lineIntersectsRect(shell.previousX, shell.previousY, shell.x, shell.y, obstacle);
         if (hitObstacle) {
@@ -1042,13 +1124,16 @@
           ? ammo.directTankDamage || ammo.damage * 0.62
           : ammo.directDamage || ammo.damage;
         const damage = directTankDamage(game, hitTank, directBase, shell);
+        const tankWasAlive = targetScoreAlive(hitTank);
         hitTank.takeDamage(game, damage);
+        recordKillIfDestroyed(game, shell.owner || shell, hitTank, tankWasAlive, ammo.id);
       } else if (hitTank && friendlyVehicle) {
         emitFriendlyArmorBlock(game, hitTank, shell);
       }
 
       damageRadius(game, x, y, ammo.splash, ammo.damage, shell.team, {
         ...ammo,
+        owner: shell.owner,
         excludeTarget: ammo.id === "rpg" ? hitTank : null,
         tankDamageScale: ammo.id === "rpg" ? 0.38 : ammo.tankDamageScale
       });
@@ -1061,7 +1146,9 @@
       emitFriendlyArmorBlock(game, hitTank, shell);
     } else if (hitTank) {
       const damage = directTankDamage(game, hitTank, ammo.damage, shell);
+      const tankWasAlive = targetScoreAlive(hitTank);
       hitTank.takeDamage(game, damage);
+      recordKillIfDestroyed(game, shell.owner || shell, hitTank, tankWasAlive, ammo.id);
     }
     if (hitInfantry) {
       const hitDamage = ammo.infantryDamage || ammo.damage || 55;
@@ -1072,7 +1159,11 @@
         game.player.hp = Math.max(0, game.player.hp - hitDamage);
       }
     }
-    if (hitInfantryUnit) hitInfantryUnit.takeDamage(ammo.infantryDamage || ammo.damage);
+    if (hitInfantryUnit) {
+      const unitWasAlive = targetScoreAlive(hitInfantryUnit);
+      hitInfantryUnit.takeDamage(ammo.infantryDamage || ammo.damage);
+      recordKillIfDestroyed(game, shell.owner || shell, hitInfantryUnit, unitWasAlive, ammo.id);
+    }
 
     game.effects.explosions.push({
       x,
@@ -1207,6 +1298,7 @@
     let blockedDepth = 0;
 
     for (const obstacle of game.world?.obstacles || []) {
+      if (obstacle.destroyed) continue;
       const depth = segmentRectInteriorLength(x, y, target.x, target.y, expandedRect(obstacle, padding));
       if (depth <= blockLength) continue;
       blockers += 1;
@@ -1268,7 +1360,9 @@
       const vehicleScale = tank.vehicleType === "humvee"
         ? ammo.lightVehicleDamageScale ?? ammo.tankDamageScale ?? 1
         : ammo.tankDamageScale ?? 1;
+      const tankWasAlive = targetScoreAlive(tank);
       tank.takeDamage(game, damage * vehicleScale * falloff * exposure);
+      recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, tank, tankWasAlive, ammo.id || "blast");
     }
 
     for (const unit of game.infantry || []) {
@@ -1287,7 +1381,9 @@
         { x, y, team }
       );
       const proneScale = proneBlastDamageScale(unit, d, radius + unit.radius, ammo);
+      const unitWasAlive = targetScoreAlive(unit);
       unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale);
+      recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, unit, unitWasAlive, ammo.id || "blast");
     }
 
     for (const drone of game.drones || []) {
@@ -1302,7 +1398,9 @@
         nearRadius: 24
       });
       const droneScale = drone.droneRole === "attack" ? 0.46 : 0.5;
+      const droneWasAlive = targetScoreAlive(drone);
       drone.takeDamage(damage * droneScale * falloff * exposure);
+      recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, drone, droneWasAlive, ammo.id || "blast");
     }
 
     for (const item of activeDestructibleScenery(game)) {
@@ -1361,6 +1459,16 @@
 
     for (const item of game.world?.scenery || []) {
       if (item.damageFlash > 0) item.damageFlash = Math.max(0, item.damageFlash - dt * 1.8);
+      if (item.destroyed && item.destroyTimer !== undefined) {
+        item.destroyTimer = Math.min(item.destroyDuration || 0.58, item.destroyTimer + dt);
+      }
+    }
+
+    for (const obstacle of game.world?.obstacles || []) {
+      if (obstacle.damageFlash > 0) obstacle.damageFlash = Math.max(0, obstacle.damageFlash - dt * 1.8);
+      if (obstacle.destroyed && obstacle.destroyTimer !== undefined) {
+        obstacle.destroyTimer = Math.min(obstacle.destroyDuration || 0.58, obstacle.destroyTimer + dt);
+      }
     }
 
     for (let i = tracers.length - 1; i >= 0; i -= 1) {
@@ -1447,6 +1555,10 @@
     updateProjectiles,
     updateEffects,
     resolveImpact,
-    damageRadius
+    damageRadius,
+    damageScenery,
+    damageObstacle,
+    obstacleImpactHp,
+    isVehicleBreakableObstacle
   };
 })(window);

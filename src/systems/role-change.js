@@ -2,7 +2,7 @@
 
 (function registerRoleChange(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM, INFANTRY_CLASSES } = IronLine.constants;
+  const { INFANTRY_CLASSES, INFANTRY_WEAPONS } = IronLine.constants;
 
   class RoleChangeSystem {
     constructor(game) {
@@ -49,7 +49,7 @@
       panel.addEventListener("pointerdown", (event) => event.stopPropagation());
       panel.addEventListener("click", (event) => event.stopPropagation());
       document.body.append(prompt, panel);
-      this.nodes = { prompt, panel, hint, list, close };
+      this.nodes = { root: panel, prompt, panel, hint, list, close };
       this.renderChoices();
     }
 
@@ -135,12 +135,70 @@
       for (const classId of ["infantry", "engineer", "scout"]) {
         const infantryClass = INFANTRY_CLASSES?.[classId];
         if (!infantryClass) continue;
+        const card = document.createElement("article");
+        card.className = "role-change-card";
+        card.dataset.roleClass = classId;
+
         const button = document.createElement("button");
         button.type = "button";
+        button.className = "role-change-select";
         button.dataset.roleClass = classId;
-        button.innerHTML = `<strong>${infantryClass.name || this.classLabel(classId)}</strong><span>${this.roleSummary(classId)}</span>`;
+
+        const title = document.createElement("strong");
+        title.textContent = infantryClass.name || this.classLabel(classId);
+        const summary = document.createElement("span");
+        summary.textContent = this.roleSummary(classId);
+        button.append(title, summary);
         button.addEventListener("click", () => this.selectRole(classId));
-        list.append(button);
+
+        const slots = document.createElement("div");
+        slots.className = "role-change-slots";
+        this.renderSlotChoices(slots, classId);
+
+        card.append(button, slots);
+        list.append(card);
+      }
+    }
+
+    renderSlotChoices(root, classId) {
+      const infantryClass = INFANTRY_CLASSES?.[classId];
+      const equipment = this.game.deploymentEquipmentForClass?.(classId) || infantryClass?.equipment || [];
+      for (let index = 0; index < 3; index += 1) {
+        const row = document.createElement("div");
+        row.className = "role-change-slot";
+
+        const label = document.createElement("span");
+        label.className = "role-change-slot-label";
+        label.textContent = `${index + 1} ${this.slotRole(index, equipment[index])}`;
+
+        const choices = document.createElement("span");
+        choices.className = "role-change-slot-choices";
+        const options = this.game.equipmentChoiceOptions?.(classId, index) ||
+          infantryClass?.equipmentChoices?.[index] ||
+          infantryClass?.equipmentChoices?.[String(index)] ||
+          [];
+
+        for (const weaponId of options) {
+          const weapon = INFANTRY_WEAPONS?.[weaponId];
+          if (!weapon) continue;
+          const choice = document.createElement("button");
+          choice.type = "button";
+          choice.dataset.roleChoiceClass = classId;
+          choice.dataset.roleChoiceSlot = String(index);
+          choice.dataset.roleChoiceWeapon = weaponId;
+          choice.className = "role-change-choice";
+          choice.textContent = weapon.shortName || weapon.name || weaponId;
+          choice.classList.toggle("active", equipment[index] === weaponId);
+          choice.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectChoice(classId, index, weaponId);
+          });
+          choices.append(choice);
+        }
+
+        row.append(label, choices);
+        root.append(row);
       }
     }
 
@@ -149,6 +207,7 @@
       this.open = true;
       this.nodes.panel?.classList.remove("hidden");
       this.nodes.prompt?.classList.add("hidden");
+      this.renderChoices();
       this.refreshActive();
       this.game.input?.clear?.();
       return true;
@@ -171,10 +230,34 @@
       this.close();
     }
 
+    selectChoice(classId, slotIndex, weaponId) {
+      const currentClass = this.game.player?.classId === classId;
+      const changed = this.game.setLoadoutChoiceForClass?.(classId, slotIndex, weaponId, {
+        applyCurrent: currentClass,
+        resetAmmo: currentClass,
+        activeSlot: currentClass ? slotIndex : null
+      });
+      if (!changed) return false;
+      this.renderChoices();
+      this.refreshActive();
+      this.game.hud?.update?.(this.game);
+      return true;
+    }
+
     refreshActive() {
       const current = this.game.player?.classId || "infantry";
-      this.nodes.list?.querySelectorAll("[data-role-class]").forEach((button) => {
+      this.nodes.list?.querySelectorAll(".role-change-card[data-role-class]").forEach((card) => {
+        card.classList.toggle("active", card.dataset.roleClass === current);
+      });
+      this.nodes.list?.querySelectorAll(".role-change-select[data-role-class]").forEach((button) => {
         button.classList.toggle("active", button.dataset.roleClass === current);
+      });
+      this.nodes.list?.querySelectorAll("[data-role-choice-class]").forEach((button) => {
+        const classId = button.dataset.roleChoiceClass;
+        const slotIndex = Number(button.dataset.roleChoiceSlot);
+        const weaponId = button.dataset.roleChoiceWeapon;
+        const equipment = this.game.deploymentEquipmentForClass?.(classId) || INFANTRY_CLASSES?.[classId]?.equipment || [];
+        button.classList.toggle("active", equipment[slotIndex] === weaponId);
       });
     }
 
@@ -185,9 +268,21 @@
     }
 
     roleSummary(classId) {
-      if (classId === "engineer") return "수리, RPG, 공병 장비";
-      if (classId === "scout") return "정찰 드론, 저격, 관측";
-      return "소총, 기관총, 수류탄";
+      if (classId === "engineer") return "RPG, 유탄, 수리/자폭드론";
+      if (classId === "scout") return "저격, 정찰드론, 관측";
+      return "기관총, 소총, 수류탄/유탄";
+    }
+
+    slotRole(index, weaponId = "") {
+      const weapon = INFANTRY_WEAPONS?.[weaponId];
+      if (weapon?.type === "rpg") return "대전차";
+      if (weapon?.id === "grenadeLauncher") return "유탄";
+      if (weapon?.type === "grenade") return "투척";
+      if (weapon?.type === "repair") return "지원";
+      if (weapon?.type === "drone") return weapon.droneRole === "attack" ? "타격" : "정찰";
+      if (index === 0) return "주무기";
+      if (index === 1) return "보조";
+      return "장비";
     }
   }
 

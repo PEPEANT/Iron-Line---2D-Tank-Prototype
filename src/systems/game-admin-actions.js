@@ -36,6 +36,7 @@
         pistol: "권총",
         sniper: "저격총",
         grenade: "수류탄",
+        grenadeLauncher: "유탄발사기",
         rpg: "RPG",
         repairKit: "수리킷",
         reconDrone: "정찰드론",
@@ -89,6 +90,7 @@
         if (item.type === "gun") ammo[item.ammoKey] = Math.max(ammo[item.ammoKey] || 0, item.defaultAmmo ?? 90);
       }
       ammo.grenade = Math.max(ammo.grenade || 0, 6);
+      ammo.grenadeLauncher = Math.max(ammo.grenadeLauncher || 0, 4);
       ammo.rpg = Math.max(ammo.rpg || 0, 6);
       ammo.repairKit = Math.max(ammo.repairKit || 0, 4);
       ammo.reconDrone = Math.max(ammo.reconDrone || 0, 2);

@@ -8,6 +8,7 @@
     const infantryClass = INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry;
     const ammo = {
       grenade: 0,
+      grenadeLauncher: 0,
       rpg: 0,
       repairKit: 0,
       reconDrone: 0,
@@ -64,7 +65,17 @@
           player.activeSlot = 0;
         }
         player.weaponId = player.weaponInventory[player.activeSlot] || player.weaponInventory[0] || "machinegun";
-        if (options.resetAmmo) player.equipmentAmmo = classAmmo(classId, player.weaponInventory);
+        const loadoutAmmo = classAmmo(classId, player.weaponInventory);
+        if (options.resetAmmo) {
+          player.equipmentAmmo = loadoutAmmo;
+        } else {
+          player.equipmentAmmo = player.equipmentAmmo || {};
+          for (const [ammoKey, amount] of Object.entries(loadoutAmmo)) {
+            if (player.equipmentAmmo[ammoKey] === undefined || player.equipmentAmmo[ammoKey] === null) {
+              player.equipmentAmmo[ammoKey] = amount;
+            }
+          }
+        }
         return true;
       },
 
@@ -72,6 +83,7 @@
         if (!player) return;
         player.rifleCooldown = 0;
         player.gunKick = 0;
+        player.fireHoldTimer = 0;
         player.machineGunAim = false;
         player.lastShotCooldownScale = 1;
         player.boosting = false;
@@ -91,6 +103,10 @@
         sessionPlayer.weaponId = player.weaponId || "";
         sessionPlayer.weaponInventory = (player.weaponInventory || []).slice();
         sessionPlayer.equipmentAmmo = { ...(player.equipmentAmmo || {}) };
+        sessionPlayer.stats = {
+          kills: Math.max(0, Math.floor(Number(sessionPlayer.stats?.kills) || 0)),
+          deaths: Math.max(0, Math.floor(Number(sessionPlayer.stats?.deaths) || 0))
+        };
 
         const slot = this.sessionSlotById?.(sessionPlayer.slotId);
         if (slot) {
@@ -102,6 +118,47 @@
           IronLine.roomRegistry?.addOrUpdatePlayer?.(this.onlineSession.roomId, sessionPlayer);
         }
         return true;
+      },
+
+      setLoadoutChoiceForClass(classId, slotIndex, weaponId, options = {}) {
+        const slot = Number(slotIndex);
+        if (!INFANTRY_CLASSES[classId] || !Number.isInteger(slot) || !INFANTRY_WEAPONS[weaponId]) return false;
+        const choices = this.equipmentChoiceOptions?.(classId, slot) || [];
+        if (!choices.includes(weaponId)) return false;
+        const previousWeaponId = this.deploymentEquipmentForClass?.(classId)?.[slot];
+        const changed = previousWeaponId !== weaponId;
+
+        this.playerLoadoutOverrides[classId] = {
+          ...(this.playerLoadoutOverrides[classId] || {}),
+          [slot]: weaponId
+        };
+
+        if (this.player?.classId === classId && options.applyCurrent !== false) {
+          this.applyPlayerLoadoutOverrides(this.player, { resetAmmo: options.resetAmmo === true && changed });
+          if (Number.isInteger(options.activeSlot)) this.player.setEquipmentSlot?.(options.activeSlot);
+          this.player.rifleCooldown = Math.min(this.player.rifleCooldown || 0, 0.12);
+          this.syncLocalCombatRoleState(this.player);
+        }
+
+        if (this.hud) this.hud.deploymentClassesBuilt = false;
+        return true;
+      },
+
+      setDeploymentEquipmentChoice(slotIndex, weaponId) {
+        if (!this.deploymentOpen || this.countdownStarted || this.matchStarted) return false;
+        const classId = this.player?.classId || "infantry";
+        return this.setLoadoutChoiceForClass(classId, slotIndex, weaponId);
+      },
+
+      cycleDeploymentEquipmentChoice(slotIndex) {
+        const classId = this.player?.classId || "infantry";
+        const choices = this.equipmentChoiceOptions?.(classId, slotIndex) || [];
+        if (choices.length < 2) return false;
+
+        const current = this.deploymentEquipmentForClass?.(classId)?.[slotIndex];
+        const currentIndex = Math.max(0, choices.indexOf(current));
+        const next = choices[(currentIndex + 1) % choices.length];
+        return this.setDeploymentEquipmentChoice(slotIndex, next);
       },
 
       applyFullPlayerClassLoadout(classId, options = {}) {

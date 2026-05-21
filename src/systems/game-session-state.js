@@ -283,6 +283,7 @@
             weaponId: "machinegun",
             weaponInventory: ["machinegun", "pistol", "grenade"],
             equipmentAmmo: { grenade: 3 },
+            stats: { kills: 0, deaths: 0 },
             participantType: "player",
             ready: false,
             host: true

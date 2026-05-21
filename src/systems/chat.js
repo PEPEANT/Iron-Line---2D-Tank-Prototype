@@ -11,6 +11,9 @@
       this.open = false;
       this.maxMessages = 36;
       this.visibleMs = 9000;
+      this.worldBubbles = [];
+      this.maxWorldBubbles = 4;
+      this.worldBubbleLife = 4.8;
       this.seenRoomChat = new Set();
       this.roomChatPoll = 0;
       this.nodes = {};
@@ -68,6 +71,10 @@
           event.preventDefault();
           event.stopPropagation();
           this.close();
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation();
+          this.submit();
         } else if (event.key === "Tab") {
           event.preventDefault();
           event.stopPropagation();
@@ -160,22 +167,61 @@
 
     addMessage(message) {
       const now = performance.now();
-      this.messages.push({
+      const entry = {
         id: message.id || `${now}:${Math.random().toString(36).slice(2, 7)}`,
         channel: message.channel || "team",
         sender: message.sender || "Player",
         text: String(message.text || "").slice(0, 120),
         team: message.team || "",
         participantType: message.participantType || "player",
+        playerId: String(message.playerId || ""),
+        epochCreatedAt: Number(message.createdAt) > 1000000000 ? Number(message.createdAt) : 0,
         createdAt: Number(message.createdAt) > 1000000000 ? now : Number(message.createdAt) || now
-      });
+      };
+      this.messages.push(entry);
       if (this.messages.length > this.maxMessages) this.messages.splice(0, this.messages.length - this.maxMessages);
+      this.showWorldBubble(entry);
       this.render();
     }
 
     update(dt = 0) {
       this.pullRoomChat(dt);
+      this.updateWorldBubbles(dt);
       this.render();
+    }
+
+    showWorldBubble(message) {
+      if (!this.shouldShowWorldBubble(message)) return;
+      const bubble = {
+        id: message.id,
+        text: message.text,
+        sender: message.sender,
+        playerId: message.playerId,
+        life: this.worldBubbleLife,
+        maxLife: this.worldBubbleLife,
+        createdAt: performance.now()
+      };
+      this.worldBubbles = this.worldBubbles.filter((item) => item.id !== bubble.id);
+      this.worldBubbles.push(bubble);
+      if (this.worldBubbles.length > this.maxWorldBubbles) {
+        this.worldBubbles.splice(0, this.worldBubbles.length - this.maxWorldBubbles);
+      }
+    }
+
+    shouldShowWorldBubble(message) {
+      if (!message?.text || message.channel === "system") return false;
+      if (message.epochCreatedAt && Date.now() - message.epochCreatedAt > this.worldBubbleLife * 1000) return false;
+      if ((message.participantType || "player") !== "player") return false;
+      if (this.game.spectatorMode || this.game.adminObserverMode) return false;
+      const localId = this.game.onlineSession?.playerId || this.game.localProfile?.playerId || "";
+      if (message.playerId && localId && message.playerId !== localId) return false;
+      return Boolean(this.game.player && (this.game.player.hp > 0 || this.game.playerDowned || this.game.playerDeathActive));
+    }
+
+    updateWorldBubbles(dt = 0) {
+      const step = Math.max(0.016, Math.min(0.2, Number(dt) || 0.016));
+      for (const bubble of this.worldBubbles) bubble.life -= step;
+      this.worldBubbles = this.worldBubbles.filter((bubble) => bubble.life > 0);
     }
 
     pullRoomChat(dt = 0) {

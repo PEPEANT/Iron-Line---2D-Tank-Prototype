@@ -134,7 +134,13 @@
         Math.sin(this.angle) * this.speed,
         this.radius,
         dt,
-        { collisionSpeedScale: 0 }
+        {
+          collisionSpeedScale: 0,
+          destroyObstaclesOnImpact: true,
+          impactSpeed: beforeSpeed,
+          impactMass: 1.34,
+          vehicleKind: "tank"
+        }
       );
       const moved = distXY(beforeX, beforeY, this.x, this.y);
       const expectedMove = Math.abs(beforeSpeed) * dt;

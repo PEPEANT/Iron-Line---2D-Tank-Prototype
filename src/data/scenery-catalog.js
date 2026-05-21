@@ -66,7 +66,7 @@
       kind: "tree",
       label: "\ub098\ubb34",
       group: "\uc790\uc5f0\ubb3c",
-      defaultSize: { w: 70, h: 70 },
+      defaultSize: { w: 110, h: 110 },
       destructible: true,
       variants: [["pine", "\uce68\uc5fd\uc218"], ["broadleaf", "\ud65c\uc5fd\uc218"], ["burnt-tree", "\uadf8\uc744\ub9b0 \ub098\ubb34"]]
     },
@@ -74,8 +74,33 @@
       kind: "brush",
       label: "\uc218\ud480",
       group: "\uc790\uc5f0\ubb3c",
-      defaultSize: { w: 120, h: 90 },
+      defaultSize: { w: 180, h: 130 },
+      destructible: true,
       variants: [["brush", "\ub0ae\uc740 \uc218\ud480"], ["tall-grass", "\uae34 \ud480"]]
+    },
+    {
+      kind: "streetlight",
+      label: "\uac00\ub85c\ub4f1",
+      group: "\ub3c4\ub85c \uc18c\ud488",
+      defaultSize: { w: 30, h: 108 },
+      destructible: true,
+      variants: [["single", "\ub2e8\uc77c\ud615"], ["damaged", "\ub0a1\uc740 \uac00\ub85c\ub4f1"]]
+    },
+    {
+      kind: "billboard",
+      label: "\uad11\uace0\ud310",
+      group: "\ub3c4\ub85c \uc18c\ud488",
+      defaultSize: { w: 168, h: 74 },
+      destructible: true,
+      variants: [["campaign", "\uc120\uc804\ud615"], ["warning", "\uacbd\uace0\ud615"], ["orders", "\uc791\uc804 \uc9c0\uc2dc"]]
+    },
+    {
+      kind: "bench",
+      label: "\ubca4\uce58",
+      group: "\ub3c4\ub85c \uc18c\ud488",
+      defaultSize: { w: 112, h: 36 },
+      destructible: true,
+      variants: [["wood", "\ub098\ubb34 \uc758\uc790"], ["field", "\uc57c\uc804 \uc758\uc790"]]
     },
     {
       kind: "rubble",

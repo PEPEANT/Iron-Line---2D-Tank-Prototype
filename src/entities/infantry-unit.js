@@ -23,6 +23,9 @@
       this.equipmentAmmo = {
         rpg: options.equipmentAmmo?.rpg ?? options.rpgAmmo ?? (this.classId === "engineer" ? 2 : 0),
         grenade: options.equipmentAmmo?.grenade ?? options.grenadeAmmo ?? (this.classId === "infantry" ? 3 : 0),
+        grenadeLauncher: options.equipmentAmmo?.grenadeLauncher ?? options.grenadeLauncherAmmo ?? (options.weaponId === "grenadeLauncher" ? 3 : 0),
+        reconDrone: options.equipmentAmmo?.reconDrone ?? options.reconDroneAmmo ?? (this.classId === "scout" ? 1 : 0),
+        kamikazeDrone: options.equipmentAmmo?.kamikazeDrone ?? options.kamikazeDroneAmmo ?? (this.classId === "engineer" ? 1 : 0),
         repairKit: options.equipmentAmmo?.repairKit ?? options.repairKitAmmo ?? (this.classId === "engineer" ? 2 : 0)
       };
       this.suppression = 0;

@@ -1,0 +1,205 @@
+.deployment-map-head,
+.deployment-map-toggle {
+  display: none;
+}
+
+.deployment-map-toggle {
+  min-height: 42px;
+  border: 1px solid rgba(142, 216, 255, 0.32);
+  border-radius: 7px;
+  background: rgba(142, 216, 255, 0.1);
+  color: #dcefff;
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.loadout-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.loadout-choice.active {
+  border-color: rgba(255, 209, 102, 0.72);
+  background: rgba(255, 209, 102, 0.18);
+  color: #ffe08b;
+}
+
+@media (max-width: 720px) {
+  .deployment-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .deployment-map-wrap {
+    display: none;
+  }
+
+  .deployment-screen.mobile-map-open .deployment-map-wrap {
+    position: fixed;
+    inset:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+    z-index: 2;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid rgba(142, 216, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(5, 10, 9, 0.96);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.56);
+  }
+
+  .deployment-map-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .deployment-map-head strong {
+    color: #edf4ef;
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  .deployment-map-head button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(237, 244, 239, 0.18);
+    border-radius: 6px;
+    background: rgba(237, 244, 239, 0.08);
+    color: #edf4ef;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .deployment-map-toggle {
+    display: grid;
+    place-items: center;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-panel {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-class-list.hidden {
+    display: grid;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-loadout-change {
+    display: none;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-start {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    box-shadow: 0 -12px 22px rgba(5, 10, 9, 0.72);
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .deployment-card {
+    position: relative;
+    grid-template-columns: 1fr;
+    overflow: hidden;
+  }
+
+  .deployment-map-wrap {
+    display: none;
+  }
+
+  .deployment-screen.mobile-map-open .deployment-map-wrap {
+    position: fixed;
+    inset:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    z-index: 2;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 9px;
+    border: 1px solid rgba(142, 216, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(5, 10, 9, 0.96);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.56);
+  }
+
+  .deployment-map-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .deployment-map-head strong {
+    color: #edf4ef;
+    font-size: 13px;
+    font-weight: 950;
+  }
+
+  .deployment-map-head button {
+    min-height: 32px;
+    padding: 0 11px;
+    border: 1px solid rgba(237, 244, 239, 0.18);
+    border-radius: 6px;
+    background: rgba(237, 244, 239, 0.08);
+    color: #edf4ef;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .deployment-map-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 36px;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-panel {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-class-list.hidden {
+    display: grid;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-loadout-change {
+    display: none;
+  }
+
+  .deployment-screen.mobile-deployment .deployment-start {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    box-shadow: 0 -12px 22px rgba(5, 10, 9, 0.72);
+  }
+}
+
+@media (max-height: 480px) and (max-width: 720px) and (orientation: landscape) {
+  .deployment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .deployment-map-wrap {
+    display: none;
+  }
+
+  .deployment-screen.mobile-map-open .deployment-map-wrap {
+    display: grid;
+    padding: 8px;
+  }
+}

@@ -84,6 +84,7 @@
       this.drawBlastRings(game);
       this.drawSmoke(game);
       this.drawDebugOverlay(game);
+      this.drawChatBubbles(game);
 
       ctx.restore();
       this.drawMinimap(game);
@@ -92,7 +93,127 @@
       this.drawTestLabOverlay(game);
       if (!game.adminObserverMode) this.drawAimModeOverlay(game);
       if (!game.adminObserverMode) this.drawScoutAimOverlay(game);
-      if (!game.adminObserverMode) this.drawRpgAimOverlay(game);
+    }
+
+    drawChatBubbles(game) {
+      const bubbles = game.chat?.worldBubbles || [];
+      const target = this.chatBubbleTarget(game);
+      if (!bubbles.length || !target) return;
+
+      const ctx = this.ctx;
+      const visible = bubbles.slice(-3);
+      for (let i = 0; i < visible.length; i += 1) {
+        const bubble = visible[i];
+        const stackOffset = (visible.length - 1 - i) * 44;
+        this.drawChatBubble(game, bubble, target.x, target.y - stackOffset);
+      }
+    }
+
+    chatBubbleTarget(game) {
+      if (game.adminObserverMode || game.spectatorMode || !game.player) return null;
+      const mounted = game.player.inTank;
+      if (mounted?.alive) {
+        return {
+          x: mounted.x,
+          y: mounted.y - (mounted.radius || 34) - 34
+        };
+      }
+      if (game.player.hp <= 0 && !game.playerDowned && !game.playerDeathActive) return null;
+      return {
+        x: game.player.x,
+        y: game.player.y - (game.player.isProne ? 24 : 34)
+      };
+    }
+
+    drawChatBubble(game, bubble, x, y) {
+      const ctx = this.ctx;
+      const maxLife = Math.max(0.001, bubble.maxLife || 1);
+      const age = maxLife - bubble.life;
+      const alpha = clamp(Math.min(age / 0.16, 1, bubble.life / 0.65), 0, 1);
+      if (alpha <= 0) return;
+
+      ctx.save();
+      ctx.translate(x, y - clamp(age * 2.2, 0, 8));
+      ctx.font = "800 12px Inter, sans-serif";
+      const lines = this.wrapChatBubbleText(ctx, bubble.text, 210);
+      const lineHeight = 15;
+      const textWidth = Math.max(30, ...lines.map((line) => ctx.measureText(line).width));
+      const width = clamp(textWidth + 24, 62, 234);
+      const height = lines.length * lineHeight + 18;
+      const top = -height - 9;
+      const bottom = -9;
+      const team = game.player?.team || TEAM.BLUE;
+      const accent = team === TEAM.BLUE ? "rgba(112, 193, 255, 0.78)" : "rgba(255, 130, 120, 0.78)";
+
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = "rgba(0, 0, 0, 0.32)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = "rgba(7, 13, 12, 0.88)";
+      roundRect(ctx, -width / 2, top, width, height, 7);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      ctx.beginPath();
+      ctx.moveTo(-8, bottom - 1);
+      ctx.lineTo(8, bottom - 1);
+      ctx.lineTo(0, 1);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.16)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, -width / 2, top, width, height, 7);
+      ctx.stroke();
+      ctx.fillStyle = accent;
+      roundRect(ctx, -width / 2 + 8, top + 6, width - 16, 2, 1);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.96)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      for (let i = 0; i < lines.length; i += 1) {
+        ctx.fillText(lines[i], -width / 2 + 12, top + 12 + i * lineHeight);
+      }
+      ctx.restore();
+    }
+
+    wrapChatBubbleText(ctx, text, maxWidth) {
+      const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+      const lines = [];
+      let line = "";
+      const pushLine = () => {
+        if (line) lines.push(line);
+        line = "";
+      };
+
+      for (const word of words) {
+        if (ctx.measureText(word).width > maxWidth) {
+          pushLine();
+          for (const char of word) {
+            const next = `${line}${char}`;
+            if (line && ctx.measureText(next).width > maxWidth) pushLine();
+            line += char;
+          }
+          continue;
+        }
+        const next = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(next).width > maxWidth) pushLine();
+        line = line ? `${line} ${word}` : word;
+      }
+      pushLine();
+
+      if (lines.length > 3) {
+        const truncated = lines.slice(0, 3);
+        let last = `${truncated[2]}...`;
+        while (last.length > 3 && ctx.measureText(last).width > maxWidth) {
+          last = `${last.slice(0, -4)}...`;
+        }
+        truncated[2] = last;
+        return truncated;
+      }
+      return lines.length ? lines : [""];
     }
 
     drawTestLabOverlay(game) {
@@ -548,6 +669,11 @@
         return;
       }
 
+      if (game.isPlayerPistolAimMode?.()) {
+        this.drawPlayerInfantryPistolAim(game);
+        return;
+      }
+
       if (!game.isPlayerRpgAimMode?.()) return;
 
       const player = game.player;
@@ -644,6 +770,61 @@
       ctx.restore();
     }
 
+    drawPlayerInfantryPistolAim(game) {
+      const player = game.player;
+      const weapon = player.getWeapon?.() || INFANTRY_WEAPONS.pistol;
+      if (weapon.id !== "pistol") return;
+
+      const ctx = this.ctx;
+      const range = (weapon.range || 250) * 1.12;
+      const aimX = game.input.mouse.worldX;
+      const aimY = game.input.mouse.worldY;
+      const distance = distXY(player.x, player.y, aimX, aimY);
+      const inRange = distance <= range;
+      const ammo = weapon.ammoKey ? player.equipmentAmmo?.[weapon.ammoKey] || 0 : 1;
+      const ready = player.rifleCooldown <= 0 && ammo > 0;
+      const angle = angleTo(player.x, player.y, aimX, aimY);
+      const muzzleDistance = player.radius + 17;
+      const muzzleX = player.x + Math.cos(angle) * muzzleDistance;
+      const muzzleY = player.y + Math.sin(angle) * muzzleDistance;
+      const reticleColor = ready
+        ? inRange ? "rgba(255, 218, 132, 0.82)" : "rgba(255, 218, 132, 0.34)"
+        : "rgba(255, 146, 116, 0.64)";
+      const pulse = 1 + Math.sin(performance.now() * 0.018) * 0.045;
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.strokeStyle = inRange ? "rgba(255, 218, 132, 0.28)" : "rgba(255, 146, 116, 0.18)";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([6, 10]);
+      ctx.beginPath();
+      ctx.moveTo(muzzleX, muzzleY);
+      ctx.lineTo(aimX, aimY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = reticleColor;
+      ctx.lineWidth = ready ? 1.7 : 1.25;
+      ctx.beginPath();
+      ctx.arc(aimX, aimY, (ready ? 8 : 11) * pulse, 0, Math.PI * 2);
+      ctx.moveTo(aimX - 17, aimY);
+      ctx.lineTo(aimX - 8, aimY);
+      ctx.moveTo(aimX + 8, aimY);
+      ctx.lineTo(aimX + 17, aimY);
+      ctx.moveTo(aimX, aimY - 17);
+      ctx.lineTo(aimX, aimY - 8);
+      ctx.moveTo(aimX, aimY + 8);
+      ctx.lineTo(aimX, aimY + 17);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255, 218, 132, 0.16)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, range, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     drawInfantry(game, unit, options = {}) {
       const ctx = this.ctx;
       const teamColor = options.color || "#89d27e";
@@ -653,11 +834,16 @@
       const prone = Boolean(unit.isProne || (unit.proneTransitionTimer || 0) > 0);
       const moving = Math.abs(unit.speed || 0) > (prone ? 5 : 12);
       const firingState = ["fire", "support-fire", "prone-fire", "recon-snipe", "harass-tank", "rpg-attack"].includes(unit.ai?.state || "");
+      const playerHoldingGunFire = unit === game.player &&
+        weapon.type === "gun" &&
+        weapon.id !== "sniper" &&
+        !unit.controlledDrone &&
+        (unit.fireHoldTimer || 0) > 0;
       const playerHoldingPistol = unit === game.player &&
         weapon.id === "pistol" &&
         !unit.controlledDrone &&
-        Boolean(game.input?.mouse?.leftDown || game.input?.keyDown?.("Space"));
-      const firing = scoped || playerHoldingPistol || (unit.gunKick || 0) > 0.02 || firingState;
+        Boolean(game.isPlayerPistolAimMode?.() || game.input?.mouse?.leftDown || game.input?.keyDown?.("Space"));
+      const firing = scoped || playerHoldingGunFire || playerHoldingPistol || (unit.gunKick || 0) > 0.02 || firingState;
       const pose = prone
         ? moving ? "prone-crawl" : "prone-fire"
         : firing ? "stand-fire" : "stand-move";
@@ -1735,7 +1921,7 @@
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
       ctx.font = "800 12px Inter, sans-serif";
-      ctx.fillText("탑승키 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
+      ctx.fillText("F 탑승/하차 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
       ctx.restore();
     }
 
@@ -2015,52 +2201,6 @@
       ctx.restore();
     }
 
-    drawRpgAimOverlay(game) {
-      if (!game.isPlayerRpgAimMode?.()) return;
-
-      const ctx = this.ctx;
-      const camera = this.camera;
-      const zoom = camera.zoom || 1;
-      const sx = (game.input.mouse.worldX - camera.x) * zoom;
-      const sy = (game.input.mouse.worldY - camera.y) * zoom;
-      const ready = (game.player.rpgAimTime || 0) >= 0.34;
-      const radius = Math.min(camera.width, camera.height) * 0.09;
-
-      ctx.save();
-      ctx.fillStyle = "rgba(5, 9, 8, 0.1)";
-      ctx.fillRect(0, 0, camera.width, 32);
-      ctx.fillRect(0, camera.height - 32, camera.width, 32);
-
-      ctx.strokeStyle = ready ? "rgba(255, 209, 102, 0.52)" : "rgba(237, 244, 239, 0.26)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash(ready ? [] : [6, 8]);
-      ctx.beginPath();
-      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-      ctx.moveTo(sx - radius * 1.28, sy);
-      ctx.lineTo(sx - radius * 0.42, sy);
-      ctx.moveTo(sx + radius * 0.42, sy);
-      ctx.lineTo(sx + radius * 1.28, sy);
-      ctx.moveTo(sx, sy - radius * 1.28);
-      ctx.lineTo(sx, sy - radius * 0.42);
-      ctx.moveTo(sx, sy + radius * 0.42);
-      ctx.lineTo(sx, sy + radius * 1.28);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.strokeStyle = ready ? "rgba(255, 180, 92, 0.88)" : "rgba(255, 180, 92, 0.42)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx - 18, sy);
-      ctx.lineTo(sx - 6, sy);
-      ctx.moveTo(sx + 6, sy);
-      ctx.lineTo(sx + 18, sy);
-      ctx.moveTo(sx, sy - 18);
-      ctx.lineTo(sx, sy - 6);
-      ctx.moveTo(sx, sy + 6);
-      ctx.lineTo(sx, sy + 18);
-      ctx.stroke();
-      ctx.restore();
-    }
   }
 
   function collectRoadJunctions(roads) {

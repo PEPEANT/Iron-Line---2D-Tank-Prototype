@@ -150,11 +150,12 @@
 
       const point = this.resolvePoint(packet);
       if (!point) return this.reject(packet, "missing-point");
+      const commandPoint = this.commandPointFor(packet, point, squads, vehicles);
 
-      squads.forEach((squad, index) => this.applySquadOrder(packet, squad, point, index, squads.length));
-      vehicles.forEach((vehicle, index) => this.applyVehicleOrder(packet, vehicle, point, index, vehicles.length));
+      squads.forEach((squad, index) => this.applySquadOrder(packet, squad, commandPoint, index, squads.length));
+      vehicles.forEach((vehicle, index) => this.applyVehicleOrder(packet, vehicle, commandPoint, index, vehicles.length));
       this.setCooldown(packet, slot);
-      this.addRolePing(packet, point, squads.length + vehicles.length);
+      this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
 
       return {
         accepted: true,
@@ -209,6 +210,36 @@
       return null;
     }
 
+    commandPointFor(packet, point, squads, vehicles) {
+      const assetCount = Math.max(1, squads.length + vehicles.length);
+      const infantryCount = squads.reduce((sum, squad) => sum + (squad.activeUnits?.().length || 0), 0);
+      const radius = Math.max(point.radius || 0, this.commandRadius(packet.type, point, assetCount, infantryCount));
+      return {
+        ...point,
+        radius
+      };
+    }
+
+    commandRadius(type, point, assetCount, infantryCount) {
+      const base = point.radius || (type === "defend" || type === "rally" ? 170 : 120);
+      const assetSpread = Math.max(0, assetCount - 1);
+      const infantrySpread = Math.max(0, infantryCount - 4);
+
+      if (type === "defend" || type === "rally") {
+        return Math.min(380, base + assetSpread * 64 + infantrySpread * 8);
+      }
+      if (type === "retreat") {
+        return Math.min(300, base + assetSpread * 48 + infantrySpread * 5);
+      }
+      if (type === "fire_support" || type === "scan") {
+        return Math.min(360, base + assetSpread * 58 + infantrySpread * 6);
+      }
+      if (type === "assault" || type === "attack") {
+        return Math.min(330, base + assetSpread * 54 + infantrySpread * 6);
+      }
+      return Math.min(290, base + assetSpread * 52 + infantrySpread * 5);
+    }
+
     retreatPoint(team) {
       const point = this.game.world.baseExitPoints?.[team] ||
         (team === TEAM.RED ? this.game.world.spawns.red?.[0] : this.game.world.spawns.player) ||
@@ -228,10 +259,12 @@
         point,
         objectiveName: packet.objectiveName || point.name || "",
         role: this.squadOrderRole(packet.type),
+        commandType: packet.type,
         stance: packet.stance,
         priority: packet.priority,
         slotIndex: index,
         slotCount: Math.max(1, count),
+        commandSpreadRadius: this.commandSpreadRadius(packet.type, point, count),
         leashRadius: this.leashRadius(packet.type, point),
         threatRadius: this.threatRadius(packet.type, point),
         forcedTacticalMode: this.forcedTacticalMode(packet.type),
@@ -262,10 +295,12 @@
         point,
         objectiveName: packet.objectiveName || point.name || "",
         role: this.vehicleOrderRole(packet.type),
+        commandType: packet.type,
         stance: packet.stance,
         priority: packet.priority,
         slotIndex: index,
         slotCount: Math.max(1, count),
+        commandSpreadRadius: this.commandSpreadRadius(packet.type, point, count),
         leashRadius: this.leashRadius(packet.type, point) + 140,
         threatRadius: this.threatRadius(packet.type, point) + 120,
         supportPoint: packet.type === "fire_support" ? {
@@ -418,6 +453,16 @@
       if (type === "scan") return base + 560;
       if (type === "fire_support") return base + 620;
       return base + (AI_CONFIG.objectiveThreatExtra || 360);
+    }
+
+    commandSpreadRadius(type, point, count) {
+      const base = point.radius || 130;
+      const multiAssetBonus = Math.max(0, count - 1) * 18;
+      if (type === "defend" || type === "rally") return Math.min(180, Math.max(86, base * 0.46 + multiAssetBonus));
+      if (type === "retreat") return Math.min(132, Math.max(68, base * 0.36 + multiAssetBonus));
+      if (type === "fire_support" || type === "scan") return Math.min(190, Math.max(104, base * 0.5 + multiAssetBonus));
+      if (type === "assault" || type === "attack") return Math.min(154, Math.max(78, base * 0.4 + multiAssetBonus));
+      return Math.min(142, Math.max(70, base * 0.38 + multiAssetBonus));
     }
 
     record(packet, result) {

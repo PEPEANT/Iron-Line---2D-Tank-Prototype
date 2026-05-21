@@ -61,10 +61,15 @@
       const ui = this.nodes;
       if (!ui.deploymentScreen) return;
 
+      const mobileLayout = this.isMobileDeploymentLayout();
       ui.deploymentScreen.classList.toggle("hidden", !game.deploymentOpen);
+      ui.deploymentScreen.classList.toggle("mobile-deployment", Boolean(game.deploymentOpen && mobileLayout));
+      if (!game.deploymentOpen || !mobileLayout) this.hud.deploymentMapOpen = false;
+      this.hud.setDeploymentMapOpen?.(Boolean(game.deploymentOpen && mobileLayout && this.hud.deploymentMapOpen));
 
       if (!this.hud.deploymentClassesBuilt) this.renderClassCards(game);
       if (!game.deploymentOpen) this.hud.deploymentLoadoutOpen = false;
+      if (game.deploymentOpen && mobileLayout) this.hud.deploymentLoadoutOpen = true;
       this.hud.setDeploymentLoadoutOpen(this.hud.deploymentLoadoutOpen && game.deploymentOpen);
 
       if (!this.hud.deploymentMapBuilt) {
@@ -85,12 +90,23 @@
         ui.deploymentStart.textContent = game.sessionMode === "online" ? "로비로 이동" : "전투 시작";
       }
 
+      if (ui.deploymentMapToggle) {
+        ui.deploymentMapToggle.textContent = this.hud.deploymentMapOpen ? "작전 지도 닫기" : "작전 지도 보기";
+        ui.deploymentMapToggle.setAttribute("aria-expanded", this.hud.deploymentMapOpen ? "true" : "false");
+      }
+
       ui.settingControls.forEach((control) => {
         const key = control.dataset.setting;
         if (!key || document.activeElement === control) return;
         const value = game.matchConfig[key];
         if (value !== undefined) control.value = value;
       });
+    }
+
+    isMobileDeploymentLayout() {
+      const narrow = window.matchMedia?.("(max-width: 720px)")?.matches;
+      const shortLandscape = window.matchMedia?.("(max-height: 620px) and (orientation: landscape)")?.matches;
+      return Boolean(narrow || shortLandscape);
     }
 
     classLoadout(classId, game = null) {
@@ -122,6 +138,7 @@
       if (!weapon) return index === 2 ? "장비" : "빈 슬롯";
       if (weapon.type === "rpg") return "대전차";
       if (weapon.type === "repair") return "지원";
+      if (weapon.id === "grenadeLauncher") return "유탄";
       if (weapon.type === "grenade") return "투척";
       if (weapon.type === "drone") return weapon.droneRole === "attack" ? "타격" : "정찰";
       if (index === 0) return "주무기";
@@ -224,15 +241,25 @@
         actions.append(ammo);
 
         if (slot.choices?.length > 1) {
-          const swap = document.createElement("button");
-          swap.type = "button";
-          swap.className = "loadout-swap";
-          swap.textContent = "교체";
-          swap.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (game.cycleDeploymentEquipmentChoice?.(slot.index)) this.updateLoadout(game);
-          });
-          actions.append(swap);
+          const choiceRow = document.createElement("span");
+          choiceRow.className = "loadout-choice-row";
+          for (const choiceId of slot.choices) {
+            const choice = INFANTRY_WEAPONS[choiceId];
+            if (!choice) continue;
+            const choiceButton = document.createElement("button");
+            choiceButton.type = "button";
+            choiceButton.className = "loadout-swap loadout-choice";
+            choiceButton.dataset.loadoutChoiceSlot = String(slot.index);
+            choiceButton.dataset.loadoutChoiceWeapon = choiceId;
+            choiceButton.classList.toggle("active", choiceId === slot.weaponId);
+            choiceButton.textContent = choice.shortName || choice.name || choiceId;
+            choiceButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              if (game.setDeploymentEquipmentChoice?.(slot.index, choiceId)) this.updateLoadout(game);
+            });
+            choiceRow.append(choiceButton);
+          }
+          actions.append(choiceRow);
         }
 
         row.append(key, body, actions);

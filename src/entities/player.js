@@ -12,6 +12,7 @@
     const infantryClass = INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry;
     const ammo = {
       grenade: 0,
+      grenadeLauncher: 0,
       rpg: 0,
       repairKit: 0,
       reconDrone: 0,
@@ -44,6 +45,7 @@
       interactPulse: 0,
       rifleCooldown: 0,
       gunKick: 0,
+      fireHoldTimer: 0,
       machineGunAim: false,
       isProne: false,
       proneTransitionTimer: 0,

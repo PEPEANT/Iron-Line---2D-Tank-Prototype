@@ -10,6 +10,8 @@
       this.deploymentMapBuilt = false;
       this.deploymentClassesBuilt = false;
       this.deploymentLoadoutOpen = false;
+      this.deploymentMapOpen = false;
+      this.scoreboardPinned = false;
       this.adminInspectTarget = { kind: "squad", id: "" };
       this.nodes = this.collectNodes();
       this.setupHudModules();
@@ -23,6 +25,7 @@
         settingsButton: document.getElementById("settingsButton"),
         settingsPanel: document.getElementById("settingsPanel"),
         settingsClose: document.getElementById("settingsClose"),
+        settingsMainMenu: document.getElementById("settingsMainMenu"),
         adminButton: document.getElementById("adminButton"),
         adminPanel: document.getElementById("adminPanel"),
         adminClose: document.getElementById("adminClose"),
@@ -60,13 +63,18 @@
         moveStick: document.getElementById("moveStick"),
         aimStick: document.getElementById("aimStick"),
         mobileWeaponButton: null,
+        mobileRoleButton: null,
+        mobileScoreboardButton: null,
         mobileSpectatorChatButton: null,
         mobileSpectatorHomeButton: null,
-        mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyE']"),
+        mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyF'], [data-mobile-key='KeyE']"),
         mobileKeyButtons: Array.from(document.querySelectorAll("[data-mobile-key]")),
         mobileMouseButtons: Array.from(document.querySelectorAll("[data-mobile-mouse]")),
         deploymentScreen: document.getElementById("deploymentScreen"),
+        deploymentMapWrap: document.querySelector("#deploymentScreen .deployment-map-wrap"),
         deploymentMap: document.getElementById("deploymentMap"),
+        deploymentMapToggle: document.getElementById("deploymentMapToggle"),
+        deploymentMapClose: document.getElementById("deploymentMapClose"),
         deploymentStart: document.getElementById("deploymentStart"),
         deploymentClassList: document.getElementById("deploymentClassList"),
         deploymentLoadout: document.getElementById("deploymentLoadout"),
@@ -151,6 +159,8 @@
       this.ensureAdminAiLabPanel();
       this.ensureProneIndicator();
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
+      this.nodes.mobileRoleButton = this.createMobileRoleButton();
+      this.nodes.mobileScoreboardButton = this.createMobileScoreboardButton();
       this.nodes.mobileSpectatorChatButton = this.createMobileSpectatorButton("chat", "채팅", "관전자 채팅 열기");
       this.nodes.mobileSpectatorHomeButton = this.createMobileSpectatorButton("home", "전체", "전장 전체 보기");
     }
@@ -193,11 +203,23 @@
           if (!this.sessionFlow?.startFromDeployment(game)) game.enterLobby();
         }
       });
+
+      this.nodes.deploymentMapToggle?.addEventListener("click", () => this.setDeploymentMapOpen(true));
+      this.nodes.deploymentMapClose?.addEventListener("click", () => this.setDeploymentMapOpen(false));
+      this.nodes.deploymentMapWrap?.addEventListener("click", (event) => {
+        if (event.target === this.nodes.deploymentMapWrap && this.nodes.deploymentScreen?.classList.contains("mobile-map-open")) {
+          this.setDeploymentMapOpen(false);
+        }
+      });
     }
 
     bindSettingsControls() {
       this.nodes.settingsButton?.addEventListener("click", () => this.toggleSettingsPanel());
       this.nodes.settingsClose?.addEventListener("click", () => this.toggleSettingsPanel(false));
+      this.nodes.settingsMainMenu?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (game) game.returnToMainMenu?.();
+      });
     }
 
     bindAdminControls() {
@@ -261,6 +283,10 @@
       this.bindVirtualStick(this.nodes.moveStick, "move");
       this.bindVirtualStick(this.nodes.aimStick, "aim");
       this.bindVirtualButtons();
+      this.nodes.mobileScoreboardButton?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        this.toggleScoreboardPinned();
+      });
     }
 
     bindLobbyControls() {
@@ -328,6 +354,32 @@
       return button;
     }
 
+    createMobileRoleButton() {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mobile-action role-change hidden";
+      button.textContent = "병과";
+      button.setAttribute("aria-label", "병과 변경");
+      controls.append(button);
+      return button;
+    }
+
+    createMobileScoreboardButton() {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mobile-action scoreboard-toggle hidden";
+      button.textContent = "전황";
+      button.setAttribute("aria-label", "전황판 열기");
+      controls.append(button);
+      return button;
+    }
+
     createMobileSpectatorButton(kind, label, ariaLabel) {
       const controls = this.nodes.mobileControls;
       if (!controls) return null;
@@ -382,6 +434,7 @@
       const canPickupDrone = Boolean(game.nearbyPlayerDroneForPickup?.());
       const canDrone = Boolean(game.activePlayerDrone?.());
       const canInteract = Boolean(canPickupDrone || controlledDrone || canDrone || inTank || game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.());
+      const roleChangeAvailable = Boolean(showPlayerControls && !inTank && !controlledDrone && !game.roleChange?.open && game.roleChange?.canChangeNow?.().available);
 
       this.mobileControlsVisible = showControls;
 
@@ -390,15 +443,21 @@
       this.nodes.mobileControls?.classList.toggle("spectator-controls", showSpectatorControls);
       this.nodes.mobileControls?.classList.toggle("in-tank", inTank);
       this.nodes.mobileControls?.classList.toggle("can-interact", showPlayerControls && canInteract);
+      this.nodes.mobileControls?.classList.toggle("can-role-change", roleChangeAvailable);
       document.body.classList.toggle("mobile-controls-active", showControls);
       document.body.classList.toggle("mobile-spectator-controls-active", showSpectatorControls);
       document.body.classList.toggle("mobile-player-in-tank", showControls && inTank);
       this.nodes.mobileSpectatorChatButton?.classList.toggle("hidden", !showSpectatorControls);
       this.nodes.mobileSpectatorHomeButton?.classList.toggle("hidden", !showSpectatorControls);
+      this.nodes.mobileRoleButton?.classList.toggle("hidden", !roleChangeAvailable);
+      this.nodes.mobileScoreboardButton?.classList.toggle("hidden", !showControls);
+      this.nodes.mobileScoreboardButton?.classList.toggle("active", Boolean(this.scoreboardPinned));
 
       if (this.nodes.mobileInteractButton) {
         const label = canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
+        const mobileKey = canPickupDrone || controlledDrone || canDrone ? "KeyE" : "KeyF";
         this.nodes.mobileInteractButton.textContent = label;
+        this.nodes.mobileInteractButton.dataset.mobileKey = mobileKey;
         this.nodes.mobileInteractButton.setAttribute(
           "aria-label",
           canPickupDrone ? "retrieve drone" : controlledDrone ? "return from drone" : canDrone ? "control drone" : inTank ? "dismount" : "mount"
@@ -435,6 +494,7 @@
         pistol: "PST",
         sniper: "SR",
         grenade: "GR",
+        grenadeLauncher: "GL",
         rpg: "RPG",
         repairKit: "FIX",
         reconDrone: "UAV",
@@ -643,6 +703,9 @@
       } else if (ammo !== null && ammo <= 0) {
         ui.weaponState.textContent = `${weapon.name} 탄약 없음`;
         ui.reloadBar.style.width = "0%";
+      } else if (weapon.id === "pistol" && game?.isPlayerPistolAimMode?.()) {
+        ui.weaponState.textContent = `\uAD8C\uCD1D \uC870\uC900 ${this.weaponAmmoText(player, weapon)}`;
+        ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (observedSniperTarget?.designated) {
         const ttl = Math.max(0, Math.ceil(designatedTarget?.ttl || 0));
         ui.weaponState.textContent = `지정 표적 사격 ${ttl}s`;
@@ -734,7 +797,7 @@
       if (this.nodes.resultKicker) this.nodes.resultKicker.textContent = draw ? "작전 종료" : victory ? "작전 성공" : "작전 실패";
       if (this.nodes.resultTitle) this.nodes.resultTitle.textContent = draw ? "무승부" : victory ? "승리" : "패배";
       if (this.nodes.resultReason) this.nodes.resultReason.textContent = game.resultReason || "전투 종료";
-      if (this.nodes.resultMainButton) this.nodes.resultMainButton.textContent = "로비로 돌아가기";
+      if (this.nodes.resultMainButton) this.nodes.resultMainButton.textContent = "메인메뉴로 가기";
     }
 
     updateLobby(game) {
@@ -956,55 +1019,167 @@
 
     scoreCell(value, extraClass = "") {
       const className = `scoreboard-cell ${extraClass}`.trim();
-      return `<div class="${className}">${value}</div>`;
+      return `<div class="${className}">${this.escapeScoreboardText(value)}</div>`;
+    }
+
+    escapeScoreboardText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    toggleScoreboardPinned(force = null) {
+      this.scoreboardPinned = force === null ? !this.scoreboardPinned : Boolean(force);
+      this.nodes.mobileScoreboardButton?.classList.toggle("active", this.scoreboardPinned);
+      this.nodes.mobileScoreboardButton?.setAttribute("aria-label", this.scoreboardPinned ? "전황판 닫기" : "전황판 열기");
+      return this.scoreboardPinned;
     }
 
     updateScoreboard(game) {
-      const visible = Boolean(game.input?.keyDown("Tab"));
+      return this.renderScoreboard(game);
+    }
+
+    renderScoreboard(game) {
+      const activeScreen = !game.entryOpen && !game.deploymentOpen && !game.roomListOpen;
+      if (!activeScreen) this.scoreboardPinned = false;
+      const visible = Boolean(activeScreen && (game.input?.keyDown("Tab") || this.scoreboardPinned));
       const board = this.nodes.scoreboard;
       if (!board) return;
 
       board.classList.toggle("visible", visible);
+      this.nodes.mobileScoreboardButton?.classList.toggle("active", Boolean(this.scoreboardPinned));
 
       const conquest = game.matchConfig?.mode === "conquest";
+      const seconds = conquest ? game.conquest?.remaining ?? 0 : game.matchTime || 0;
+      if (this.nodes.scoreboardTimer) this.nodes.scoreboardTimer.textContent = this.scoreboardSummary(game, seconds);
+
+      if (game.sessionMode === "online") this.renderOnlineScoreboard(game);
+      else this.renderTeamScoreboard(game, conquest);
+    }
+
+    renderTeamScoreboard(game, conquest) {
       const blue = this.teamStats(game, TEAM.BLUE);
       const red = this.teamStats(game, TEAM.RED);
       blue.kills = red.deaths;
       red.kills = blue.deaths;
 
       if (this.nodes.scoreboardTitle) {
-        this.nodes.scoreboardTitle.textContent = `${this.modeLabel(game)} 현황`;
+        this.nodes.scoreboardTitle.textContent = `${game.matchConfig?.mode === "conquest" ? "점령전" : "섬멸전"} 현황`;
       }
-      if (this.nodes.scoreboardTimer) {
-        const seconds = conquest ? game.conquest?.remaining ?? 0 : game.matchTime || 0;
-        this.nodes.scoreboardTimer.textContent = this.formatTime(seconds);
-      }
-      if (this.nodes.scoreboardGrid) {
-        this.nodes.scoreboardGrid.classList.toggle("conquest", conquest);
-        this.nodes.scoreboardGrid.style.gridTemplateColumns = conquest ? "repeat(7, 1fr)" : "";
-        this.nodes.scoreboardGrid.innerHTML = conquest
-          ? [
-              this.scoreCell("팀", "header"),
-              this.scoreCell("점수", "header"),
-              this.scoreCell("생존", "header"),
-              this.scoreCell("차량", "header"),
-              this.scoreCell("보병", "header"),
-              this.scoreCell("K", "header"),
-              this.scoreCell("D", "header"),
-              ...this.teamRow("청팀", blue, "blue", game.conquest?.score?.[TEAM.BLUE] || 0),
-              ...this.teamRow("홍팀", red, "red", game.conquest?.score?.[TEAM.RED] || 0)
-            ].join("")
-          : [
-              this.scoreCell("팀", "header"),
-              this.scoreCell("생존", "header"),
-              this.scoreCell("차량", "header"),
-              this.scoreCell("보병", "header"),
-              this.scoreCell("K", "header"),
-              this.scoreCell("D", "header"),
-              ...this.teamRow("청팀", blue, "blue"),
-              ...this.teamRow("홍팀", red, "red")
-            ].join("");
-      }
+      if (!this.nodes.scoreboardGrid) return;
+      this.nodes.scoreboardGrid.classList.remove("roster");
+      this.nodes.scoreboardGrid.classList.toggle("conquest", conquest);
+      this.nodes.scoreboardGrid.style.gridTemplateColumns = conquest ? "repeat(7, 1fr)" : "";
+      this.nodes.scoreboardGrid.innerHTML = conquest
+        ? [
+            this.scoreCell("팀", "header"),
+            this.scoreCell("점수", "header"),
+            this.scoreCell("생존", "header"),
+            this.scoreCell("차량", "header"),
+            this.scoreCell("보병", "header"),
+            this.scoreCell("K", "header"),
+            this.scoreCell("D", "header"),
+            ...this.teamRow("청팀", blue, "blue", game.conquest?.score?.[TEAM.BLUE] || 0),
+            ...this.teamRow("홍팀", red, "red", game.conquest?.score?.[TEAM.RED] || 0)
+          ].join("")
+        : [
+            this.scoreCell("팀", "header"),
+            this.scoreCell("생존", "header"),
+            this.scoreCell("차량", "header"),
+            this.scoreCell("보병", "header"),
+            this.scoreCell("K", "header"),
+            this.scoreCell("D", "header"),
+            ...this.teamRow("청팀", blue, "blue"),
+            ...this.teamRow("홍팀", red, "red")
+          ].join("");
+    }
+
+    renderOnlineScoreboard(game) {
+      const rows = this.scoreboardRoster(game);
+      if (this.nodes.scoreboardTitle) this.nodes.scoreboardTitle.textContent = "온라인 전황";
+      if (!this.nodes.scoreboardGrid) return;
+      this.nodes.scoreboardGrid.classList.remove("conquest");
+      this.nodes.scoreboardGrid.classList.add("roster");
+      this.nodes.scoreboardGrid.style.gridTemplateColumns = "";
+      this.nodes.scoreboardGrid.innerHTML = [
+        this.scoreCell("닉네임", "header name"),
+        this.scoreCell("팀", "header"),
+        this.scoreCell("역할", "header"),
+        this.scoreCell("K", "header"),
+        this.scoreCell("D", "header"),
+        this.scoreCell("상태", "header"),
+        ...rows.flatMap((row) => [
+          this.scoreCell(row.name, `name ${row.local ? "local" : ""}`),
+          this.scoreCell(row.team, `team-${row.teamClass}`),
+          this.scoreCell(row.role),
+          this.scoreCell(row.kills),
+          this.scoreCell(row.deaths),
+          this.scoreCell(row.status, `status ${row.statusClass}`)
+        ])
+      ].join("");
+    }
+
+    scoreboardSummary(game, seconds = 0) {
+      if (game.sessionMode !== "online") return this.formatTime(seconds);
+      const players = (game.onlineSession?.players || []).filter((player) => (player.participantType || "player") === "player");
+      const spectators = game.onlineSession?.spectators || [];
+      const aiSlots = (game.onlineSession?.roleSlots || []).filter((slot) => slot.aiControlled !== false && !slot.playerId).length;
+      return `플레이어 ${players.length} · 관전 ${spectators.length} · AI ${aiSlots} · ${this.formatTime(seconds)}`;
+    }
+
+    scoreboardRoster(game) {
+      const session = game.onlineSession || {};
+      const players = (session.players || []).filter((player) => (player.participantType || "player") === "player");
+      const spectators = (session.spectators || []).map((player) => ({ ...player, participantType: player.participantType || "spectator" }));
+      return [...players, ...spectators].map((player) => this.scoreboardRosterRow(game, player));
+    }
+
+    scoreboardRosterRow(game, player) {
+      const stats = player.stats || game.scoreboardStats?.[player.id] || {};
+      const local = player.id && player.id === game.onlineSession?.playerId;
+      const participantType = player.participantType || "player";
+      const alive = local ? !game.playerDeathActive && !game.playerDowned && game.player?.hp > 0 : true;
+      const status = participantType !== "player"
+        ? this.participantLabel(participantType)
+        : alive ? (player.ready ? "준비" : "생존") : "사망";
+      return {
+        name: `${player.name || player.nickname || "Player"}${local ? " (나)" : ""}`,
+        team: participantType === "player" ? this.teamLabel(player.team) : "관전",
+        teamClass: player.team === TEAM.RED ? "red" : player.team === TEAM.BLUE ? "blue" : "neutral",
+        role: participantType === "player" ? this.roleLabel(player.currentClassId || player.classId || player.roleId || player.role) : this.participantLabel(participantType),
+        kills: Math.max(0, Math.floor(Number(stats.kills) || 0)),
+        deaths: Math.max(0, Math.floor(Number(stats.deaths) || 0)),
+        status,
+        statusClass: participantType !== "player" ? "spectator" : alive ? "alive" : "dead",
+        local
+      };
+    }
+
+    teamLabel(team) {
+      if (team === TEAM.RED) return "홍팀";
+      if (team === TEAM.BLUE) return "청팀";
+      return "-";
+    }
+
+    participantLabel(type) {
+      if (type === "caster") return "해설";
+      if (type === "admin") return "관리";
+      return "관전";
+    }
+
+    roleLabel(roleId = "") {
+      const labels = {
+        infantry: "보병",
+        engineer: "공병",
+        scout: "정찰",
+        infantry_leader: "보병",
+        tank_commander: "전차",
+        support: "지원"
+      };
+      return labels[roleId] || roleId || "-";
     }
 
     modeLabel(game) {
@@ -1095,51 +1270,7 @@
 
   Object.assign(Hud.prototype, {
     updateScoreboard: function updateScoreboard(game) {
-      const visible = Boolean(game.input?.keyDown("Tab"));
-      const board = this.nodes.scoreboard;
-      if (!board) return;
-
-      board.classList.toggle("visible", visible);
-
-      const conquest = game.matchConfig?.mode === "conquest";
-      const blue = this.teamStats(game, TEAM.BLUE);
-      const red = this.teamStats(game, TEAM.RED);
-      blue.kills = red.deaths;
-      red.kills = blue.deaths;
-
-      if (this.nodes.scoreboardTitle) {
-        this.nodes.scoreboardTitle.textContent = `${this.modeLabel(game)} 현황`;
-      }
-      if (this.nodes.scoreboardTimer) {
-        const seconds = conquest ? game.conquest?.remaining ?? 0 : game.matchTime || 0;
-        this.nodes.scoreboardTimer.textContent = this.formatTime(seconds);
-      }
-      if (this.nodes.scoreboardGrid) {
-        this.nodes.scoreboardGrid.classList.toggle("conquest", conquest);
-        this.nodes.scoreboardGrid.style.gridTemplateColumns = conquest ? "repeat(7, 1fr)" : "";
-        this.nodes.scoreboardGrid.innerHTML = conquest
-          ? [
-              this.scoreCell("팀", "header"),
-              this.scoreCell("점수", "header"),
-              this.scoreCell("생존", "header"),
-              this.scoreCell("차량", "header"),
-              this.scoreCell("보병", "header"),
-              this.scoreCell("K", "header"),
-              this.scoreCell("D", "header"),
-              ...this.teamRow("청팀", blue, "blue", game.conquest?.score?.[TEAM.BLUE] || 0),
-              ...this.teamRow("홍팀", red, "red", game.conquest?.score?.[TEAM.RED] || 0)
-            ].join("")
-          : [
-              this.scoreCell("팀", "header"),
-              this.scoreCell("생존", "header"),
-              this.scoreCell("차량", "header"),
-              this.scoreCell("보병", "header"),
-              this.scoreCell("K", "header"),
-              this.scoreCell("D", "header"),
-              ...this.teamRow("청팀", blue, "blue"),
-              ...this.teamRow("홍팀", red, "red")
-            ].join("");
-      }
+      return this.renderScoreboard(game);
     },
 
     modeLabel: function modeLabel(game) {

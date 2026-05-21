@@ -2,7 +2,7 @@
 
 (function registerGamePlayerControl(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { AMMO, INFANTRY_WEAPONS, PLAYER_CLASS_ORDER } = IronLine.constants;
+  const { TEAM, AMMO, INFANTRY_WEAPONS, PLAYER_CLASS_ORDER } = IronLine.constants;
   const {
     clamp,
     distXY,
@@ -480,27 +480,35 @@
     updateInfantryPlayer(dt) {
       this.player.rifleCooldown = Math.max(0, this.player.rifleCooldown - dt);
       this.player.gunKick = Math.max(0, (this.player.gunKick || 0) - dt * 11);
+      this.player.fireHoldTimer = Math.max(0, (this.player.fireHoldTimer || 0) - dt);
       this.updateInfantryWeaponInput();
       this.updatePlayerProneTransition(dt);
       if (this.input.consumePress("KeyC")) {
         this.requestPlayerProneToggle();
       }
+      const mouse = this.input.mouse;
+      const weapon = this.player.getWeapon();
+      const primaryPressed = this.input.consumeMousePress(0);
+      const wantsUse = mouse.leftDown || primaryPressed || this.input.keyDown("Space");
+      const fireHoldMode = this.updatePlayerFireHoldIntent(weapon, wantsUse);
       const scoutAimMode = this.isPlayerScoutAimMode();
       const rpgAimMode = this.isPlayerRpgAimMode();
       const machineGunAimMode = this.isPlayerMachineGunAimMode();
+      const pistolAimMode = this.isPlayerPistolAimMode();
       this.player.scoutAim = scoutAimMode;
       this.player.rpgAim = rpgAimMode;
       this.player.machineGunAim = machineGunAimMode;
+      this.player.pistolAim = pistolAimMode;
       this.player.rpgAimTime = rpgAimMode ? Math.min((this.player.rpgAimTime || 0) + dt, 0.7) : 0;
       const moveX = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
       const moveY = this.input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
       const length = Math.hypot(moveX, moveY);
       const prone = this.isPlayerProneLike();
       const baseInfantrySpeed = prone
-        ? scoutAimMode ? 0 : rpgAimMode ? 34 : machineGunAimMode ? 38 : 46
-        : scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 82 : 155;
+        ? scoutAimMode ? 0 : rpgAimMode ? 34 : machineGunAimMode ? 38 : pistolAimMode ? 42 : fireHoldMode ? 44 : 46
+        : scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 82 : pistolAimMode ? 118 : fireHoldMode ? 118 : 155;
       const sprinting = this.updateBoostState(this.player, dt, length > 0.05, {
-        disabled: prone || scoutAimMode || rpgAimMode || machineGunAimMode,
+        disabled: prone || scoutAimMode || rpgAimMode || machineGunAimMode || pistolAimMode || fireHoldMode,
         drainTime: 1.18,
         recoverTime: 2,
         recoverDelay: 0.45
@@ -510,18 +518,14 @@
       const vy = length > 0 ? (moveY / length) * infantrySpeed : 0;
 
       tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, padding: 5 });
-      this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : 650);
+      this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : pistolAimMode ? 560 : fireHoldMode ? 760 : 650);
       if (scoutAimMode) this.applyDroneDesignationAimAssist(dt);
 
-      const mouse = this.input.mouse;
       this.player.angle = angleTo(this.player.x, this.player.y, mouse.worldX, mouse.worldY);
       this.player.interactPulse += dt;
 
-      const weapon = this.player.getWeapon();
-      const primaryPressed = this.input.consumeMousePress(0);
       const markerDesignatePressed = this.input.consumePress("KeyQ") || this.input.consumeMousePress(1);
       if (markerDesignatePressed && this.tryDesignateReconDroneFromMarker()) return;
-      const wantsUse = mouse.leftDown || primaryPressed || this.input.keyDown("Space");
       if (wantsUse && this.player.rifleCooldown <= 0) {
         this.player.lastShotCooldownScale = 1;
         const fired = this.usePlayerEquipment(weapon, mouse.worldX, mouse.worldY);
@@ -531,6 +535,21 @@
           this.player.lastShotCooldownScale = 1;
         }
       }
+    },
+    updatePlayerFireHoldIntent(weapon, wantsUse) {
+      const player = this.player;
+      if (!player || player.inTank || player.controlledDrone || player.hp <= 0) return false;
+      if (!wantsUse || !this.isPlayerFireHoldWeapon(weapon) || !this.hasPlayerWeaponAmmo(weapon)) {
+        return Boolean((player.fireHoldTimer || 0) > 0);
+      }
+
+      const heavy = weapon.id === "machinegun" || weapon.id === "lmg";
+      const holdTime = heavy ? 0.34 : weapon.id === "smg" || weapon.id === "pistol" ? 0.24 : 0.28;
+      player.fireHoldTimer = Math.max(player.fireHoldTimer || 0, holdTime, (weapon.cooldown || 0.2) + 0.08);
+      return true;
+    },
+    isPlayerFireHoldWeapon(weapon) {
+      return Boolean(weapon?.type === "gun" && weapon.id !== "sniper");
     },
     isPlayerScoutAimMode() {
       if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
@@ -546,6 +565,11 @@
       if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
       const weapon = this.player.getWeapon?.();
       return weapon?.id === "machinegun" || weapon?.id === "lmg";
+    },
+    isPlayerPistolAimMode() {
+      if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
+      const weapon = this.player.getWeapon?.();
+      return weapon?.id === "pistol";
     },
     updateInfantryWeaponInput() {
       const keys = [

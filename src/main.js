@@ -58,6 +58,7 @@
       this.localProfile = this.loadLocalProfile();
       this.entryOpen = !this.adminObserverMode && !this.testLab;
       this.onlineSession = this.createLocalSession();
+      this.scoreboardStats = {};
       this.commandBus = new IronLine.CommandBus(this);
       this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
       this.observerBridge = IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
@@ -242,9 +243,12 @@
 
     resetWorldSceneryState() {
       for (const item of this.world?.scenery || []) {
+        if (item.baseStopsProjectiles === undefined) item.baseStopsProjectiles = item.stopsProjectiles !== false;
         if (!item.destructible) {
           item.destroyed = false;
           item.damageFlash = 0;
+          item.destroyTimer = 0;
+          item.stopsProjectiles = item.baseStopsProjectiles;
           continue;
         }
         item.maxHp = item.maxHp || item.baseHp || item.hp || 1;
@@ -252,7 +256,31 @@
         item.hp = item.maxHp;
         item.destroyed = false;
         item.damageFlash = 0;
-        item.stopsProjectiles = item.stopsProjectiles !== false;
+        item.destroyTimer = 0;
+        item.stopsProjectiles = item.baseStopsProjectiles;
+      }
+
+      const vehicleBreakableKinds = ["base-wall", "concrete", "sandbag", "barricade", "wood-fence", "tree", "brush", "rubble"];
+      for (const obstacle of this.world?.obstacles || []) {
+        if (obstacle.baseStopsProjectiles === undefined) obstacle.baseStopsProjectiles = obstacle.stopsProjectiles !== false;
+        const breakableByVehicle = obstacle.kind !== "building" && (obstacle.destructible || vehicleBreakableKinds.includes(obstacle.kind));
+        if (!breakableByVehicle) {
+          obstacle.destroyed = false;
+          obstacle.damageFlash = 0;
+          obstacle.destroyTimer = 0;
+          obstacle.stopsProjectiles = obstacle.baseStopsProjectiles;
+          continue;
+        }
+        obstacle.destructible = true;
+        obstacle.type = obstacle.type || obstacle.kind;
+        obstacle.shape = obstacle.shape || "rect";
+        obstacle.maxHp = obstacle.maxHp || obstacle.baseHp || obstacle.hp || IronLine.combat?.obstacleImpactHp?.(obstacle.kind) || 72;
+        obstacle.baseHp = obstacle.baseHp || obstacle.maxHp;
+        obstacle.hp = obstacle.maxHp;
+        obstacle.destroyed = false;
+        obstacle.damageFlash = 0;
+        obstacle.destroyTimer = 0;
+        obstacle.stopsProjectiles = obstacle.baseStopsProjectiles;
       }
     }
 
@@ -445,6 +473,9 @@
 
     prepareInfantrySpawns(spawns) {
       const prepared = spawns.map((spawn) => ({ ...spawn }));
+      const spawnHash = (spawn) => String(spawn.callSign || `${spawn.x}:${spawn.y}`)
+        .split("")
+        .reduce((sum, char) => sum + char.charCodeAt(0), 0);
       const desiredEngineers = Math.min(
         prepared.length,
         Math.ceil(prepared.length * 0.2)
@@ -461,25 +492,45 @@
 
       for (const spawn of prepared) {
         if (spawn.classId !== "engineer") continue;
+        const variant = spawnHash(spawn);
         const rpgAmmo = Math.max(3, Number(spawn.rpgAmmo ?? spawn.equipmentAmmo?.rpg ?? 0) || 0);
         const repairKitAmmo = Math.max(2, Number(spawn.repairKitAmmo ?? spawn.equipmentAmmo?.repairKit ?? 0) || 0);
+        const grenadeLauncherAmmo = Math.max(variant % 3 === 0 ? 2 : 0, Number(spawn.grenadeLauncherAmmo ?? spawn.equipmentAmmo?.grenadeLauncher ?? 0) || 0);
+        const kamikazeDroneAmmo = Math.max(variant % 2 === 0 ? 1 : 0, Number(spawn.kamikazeDroneAmmo ?? spawn.equipmentAmmo?.kamikazeDrone ?? 0) || 0);
         spawn.rpgAmmo = rpgAmmo;
         spawn.repairKitAmmo = repairKitAmmo;
+        spawn.grenadeLauncherAmmo = grenadeLauncherAmmo;
+        spawn.kamikazeDroneAmmo = kamikazeDroneAmmo;
         spawn.equipmentAmmo = {
           ...(spawn.equipmentAmmo || {}),
           rpg: rpgAmmo,
-          repairKit: repairKitAmmo
+          repairKit: repairKitAmmo,
+          grenadeLauncher: grenadeLauncherAmmo,
+          kamikazeDrone: kamikazeDroneAmmo
         };
       }
 
       for (const spawn of prepared) {
         const classId = spawn.classId || "infantry";
+        if (classId === "scout") {
+          const reconDroneAmmo = Math.max(1, Number(spawn.reconDroneAmmo ?? spawn.equipmentAmmo?.reconDrone ?? 0) || 0);
+          spawn.reconDroneAmmo = reconDroneAmmo;
+          spawn.equipmentAmmo = {
+            ...(spawn.equipmentAmmo || {}),
+            reconDrone: reconDroneAmmo
+          };
+          continue;
+        }
         if (classId !== "infantry") continue;
+        const variant = spawnHash(spawn);
         const grenadeAmmo = Math.max(3, Number(spawn.grenadeAmmo ?? spawn.equipmentAmmo?.grenade ?? 0) || 0);
+        const grenadeLauncherAmmo = Math.max(variant % 5 === 0 ? 2 : 0, Number(spawn.grenadeLauncherAmmo ?? spawn.equipmentAmmo?.grenadeLauncher ?? 0) || 0);
         spawn.grenadeAmmo = grenadeAmmo;
+        spawn.grenadeLauncherAmmo = grenadeLauncherAmmo;
         spawn.equipmentAmmo = {
           ...(spawn.equipmentAmmo || {}),
-          grenade: grenadeAmmo
+          grenade: grenadeAmmo,
+          grenadeLauncher: grenadeLauncherAmmo
         };
       }
 
@@ -1215,6 +1266,61 @@
       return `${label}\uC73C\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4.`;
     }
 
+    scoreboardPlayerIdFor(entity) {
+      if (!entity) return "";
+      if (entity === this.player) return this.onlineSession?.playerId || "local-player";
+      return entity.playerId || entity.ownerPlayerId || "";
+    }
+
+    ensureScoreboardStats(playerId = this.onlineSession?.playerId || "local-player") {
+      if (!playerId) return { kills: 0, deaths: 0 };
+      this.scoreboardStats = this.scoreboardStats || {};
+      const sessionPlayer = this.sessionPlayerById?.(playerId);
+      const existing = this.scoreboardStats[playerId] || sessionPlayer?.stats || {};
+      const stats = {
+        kills: Math.max(0, Math.floor(Number(existing.kills) || 0)),
+        deaths: Math.max(0, Math.floor(Number(existing.deaths) || 0))
+      };
+      this.scoreboardStats[playerId] = stats;
+      if (sessionPlayer) sessionPlayer.stats = { ...stats };
+      return stats;
+    }
+
+    syncScoreboardStatsToSession(playerId = this.onlineSession?.playerId || "local-player", options = {}) {
+      if (!playerId) return;
+      const stats = this.ensureScoreboardStats(playerId);
+      const sessionPlayer = this.sessionPlayerById?.(playerId);
+      if (sessionPlayer) sessionPlayer.stats = { ...stats };
+      if (options.publish !== false && this.sessionMode === "online" && this.onlineSession?.roomId && sessionPlayer) {
+        IronLine.roomRegistry?.addOrUpdatePlayer?.(this.onlineSession.roomId, sessionPlayer);
+      }
+    }
+
+    recordCombatKill(source = null, victim = null, kind = "kill") {
+      const killer = source?.owner || source;
+      const playerId = this.scoreboardPlayerIdFor(killer);
+      if (!playerId || playerId !== (this.onlineSession?.playerId || "local-player")) return false;
+      if (victim === this.player) return false;
+      const stats = this.ensureScoreboardStats(playerId);
+      stats.kills += 1;
+      this.syncScoreboardStatsToSession(playerId, { publish: true });
+      this.battlefieldEvents?.push?.({
+        type: "score_kill",
+        team: this.player?.team || TEAM.BLUE,
+        title: "킬 기록",
+        detail: `${this.localSessionPlayer?.()?.name || "Player"} ${kind}`
+      });
+      return true;
+    }
+
+    recordLocalPlayerDeath(source = null, kind = "death") {
+      const playerId = this.onlineSession?.playerId || "local-player";
+      const stats = this.ensureScoreboardStats(playerId);
+      stats.deaths += 1;
+      this.syncScoreboardStatsToSession(playerId, { publish: true });
+      return true;
+    }
+
     addScreenShake(amount = 1.8, cap = 14) {
       this.screenShake = Math.min(cap, Math.max(this.screenShake || 0, amount));
     }
@@ -1251,6 +1357,7 @@
       this.addScreenShake(clamp(2.8 + damage * 0.16, 3, 12));
 
       if (this.player.hp <= 0) {
+        this.recordLocalPlayerDeath(source, kind);
         this.beginPlayerDowned(options.deathReason || this.playerDeathReasonFor(label));
       }
       return true;
@@ -1395,6 +1502,7 @@
 
       this.resetDroneInteractHold();
       const interactPressed = this.input.consumePress("KeyE");
+      const mountPressed = this.input.consumePress("KeyF");
       if (interactPressed) {
         if (this.roleChange?.handleInteractPressed?.()) {
           this.updatePlayerSafeZone();
@@ -1408,6 +1516,8 @@
           this.updatePlayerSafeZone();
           return;
         }
+      }
+      if (mountPressed) {
         this.toggleTank();
       }
 
@@ -1502,10 +1612,15 @@
       this.input.clear();
       this.testLab = "";
       this.useLiveWorld();
+      this.hud?.sessionFlow?.leaveOnlineRoom?.(this, "main-menu");
       this.resetScenarioForMatch();
+      this.entryOpen = !this.adminObserverMode;
       this.deploymentOpen = false;
-      this.lobbyOpen = true;
-      this.matchPhase = "ended";
+      this.lobbyOpen = false;
+      this.roomListOpen = false;
+      this.spectatorMode = false;
+      this.casterMode = false;
+      this.matchPhase = this.entryOpen ? "entry" : "ended";
       this.countdownStarted = false;
       this.matchStarted = false;
       this.startCountdown = 5;
@@ -1515,6 +1630,7 @@
       this.playerDeathActive = false;
       this.playerDeathReason = "";
       this.onlineSession.localReady = false;
+      this.onlineSession.participantType = "player";
       for (const player of this.onlineSession.players || []) player.ready = false;
       this.resetPlayerFeedbackState();
       this.hud?.toggleSettingsPanel?.(false);
@@ -1951,10 +2067,11 @@
 
       const scoped = this.isPlayerScoutAimMode() && weapon.id === "sniper";
       const machineGunAim = this.isPlayerMachineGunAimMode() && (weapon.id === "machinegun" || weapon.id === "lmg");
+      const pistolAim = this.isPlayerPistolAimMode?.() && weapon.id === "pistol";
       const prone = Boolean(this.player.isProne);
       const proneAccuracyBonus = prone ? 0.06 : 0;
       const proneSpreadScale = prone ? 0.72 : 1;
-      const range = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : weapon.range;
+      const range = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : pistolAim ? weapon.range * 1.12 : weapon.range;
       const directTarget = this.findPlayerRifleTarget();
       const observedTarget = !directTarget && scoped ? this.findObservedSniperTarget() : null;
       const target = directTarget || observedTarget?.target;
@@ -1979,21 +2096,21 @@
           weapon,
           range,
           damage: weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin),
-          accuracyBonus: weapon.accuracyBonus + 0.08 + (scoped ? 0.16 : machineGunAim ? 0.12 : 0) + proneAccuracyBonus,
-          spread: (machineGunAim ? weapon.spread * 0.58 : weapon.spread) * proneSpreadScale,
-          impactChance: machineGunAim ? 0.45 : 0.24
+          accuracyBonus: weapon.accuracyBonus + 0.08 + (scoped ? 0.16 : machineGunAim ? 0.12 : pistolAim ? 0.14 : 0) + proneAccuracyBonus,
+          spread: (machineGunAim ? weapon.spread * 0.58 : pistolAim ? weapon.spread * 0.66 : weapon.spread) * proneSpreadScale,
+          impactChance: machineGunAim ? 0.45 : pistolAim ? 0.34 : 0.24
         })
         : IronLine.combat.fireRifleAtPoint(this, this.player, targetX, targetY, {
           weapon,
           range,
-          spread: (scoped ? weapon.spread * 0.35 : machineGunAim ? weapon.spread * 0.58 : weapon.spread) * proneSpreadScale,
+          spread: (scoped ? weapon.spread * 0.35 : machineGunAim ? weapon.spread * 0.58 : pistolAim ? weapon.spread * 0.66 : weapon.spread) * proneSpreadScale,
           targetTeam: TEAM.RED,
-          impactChance: machineGunAim ? 0.46 : 0.28
+          impactChance: machineGunAim ? 0.46 : pistolAim ? 0.36 : 0.28
         });
       if (fired) {
         if (observedShot) this.player.lastShotCooldownScale = observedTarget.designated ? 1.18 : 1.35;
         this.consumePlayerEquipmentAmmo(weapon);
-        this.emitPlayerGunFeedback(weapon, machineGunAim || observedShot);
+        this.emitPlayerGunFeedback(weapon, machineGunAim || pistolAim || observedShot);
       }
       return fired;
     }
@@ -2097,10 +2214,11 @@
       const weapon = this.player.getWeapon();
       const scoped = this.isPlayerScoutAimMode() && weapon.id === "sniper";
       const machineGunAim = this.isPlayerMachineGunAimMode() && (weapon.id === "machinegun" || weapon.id === "lmg");
-      const baseRange = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : weapon.range;
+      const pistolAim = this.isPlayerPistolAimMode?.() && weapon.id === "pistol";
+      const baseRange = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : pistolAim ? weapon.range * 1.12 : weapon.range;
       const range = this.effectivePlayerGunRange(weapon, baseRange);
-      const aimTolerance = scoped ? 16 + weapon.spread * 16 : machineGunAim ? 22 + weapon.spread * 12 : 30 + weapon.spread * 28;
-      const cursorTolerance = scoped ? 28 + weapon.spread * 10 : machineGunAim ? 34 + weapon.spread * 12 : 46 + weapon.spread * 18;
+      const aimTolerance = scoped ? 16 + weapon.spread * 16 : machineGunAim ? 22 + weapon.spread * 12 : pistolAim ? 20 + weapon.spread * 12 : 30 + weapon.spread * 28;
+      const cursorTolerance = scoped ? 28 + weapon.spread * 10 : machineGunAim ? 34 + weapon.spread * 12 : pistolAim ? 34 + weapon.spread * 12 : 46 + weapon.spread * 18;
       const candidates = [];
 
       for (const unit of this.infantry || []) {
@@ -2301,15 +2419,16 @@
       const scoutAimMode = Boolean(!this.player.inTank && !droneControlMode && this.isPlayerScoutAimMode());
       const rpgAimMode = Boolean(!this.player.inTank && !droneControlMode && this.isPlayerRpgAimMode());
       const machineGunAimMode = Boolean(!this.player.inTank && !droneControlMode && this.isPlayerMachineGunAimMode());
+      const pistolAimMode = Boolean(!this.player.inTank && !droneControlMode && this.isPlayerPistolAimMode?.());
       const scoutObservation = scoutAimMode ? this.scoutObservationCameraTarget() : null;
       const scoutObservationFocus = scoutObservation ? this.scoutObservationCameraFocus(scoutObservation) : null;
       const cameraZoomPreference = this.cameraZoomPreference || 1;
-      const aimingCameraMode = tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode;
+      const aimingCameraMode = tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode || pistolAimMode;
       const tacticalZoomCap = scoutAimMode
         ? 1
         : tankAimMode || rpgAimMode || droneControlMode
           ? 1.05
-          : machineGunAimMode ? 1.08 : 1.45;
+          : machineGunAimMode ? 1.08 : pistolAimMode ? 1.12 : 1.45;
       const effectiveZoomPreference = aimingCameraMode
         ? Math.min(cameraZoomPreference, tacticalZoomCap)
         : cameraZoomPreference;
@@ -2317,7 +2436,7 @@
         ? 0.76
         : scoutAimMode
           ? scoutObservationFocus?.zoom || 0.72
-          : rpgAimMode ? 0.82 : droneControlMode ? 0.82 : machineGunAimMode ? 0.88 : 1;
+          : rpgAimMode ? 0.82 : droneControlMode ? 0.82 : machineGunAimMode ? 0.88 : pistolAimMode ? 0.94 : 1;
       const targetZoom = clamp(baseTargetZoom * effectiveZoomPreference, 0.6, 1.45);
       this.camera.zoom = lerp(this.camera.zoom || 1, targetZoom, 1 - Math.pow(0.0002, dt));
       this.camera.viewWidth = this.camera.width / this.camera.zoom;
@@ -2329,7 +2448,7 @@
         focusX = scoutObservationFocus.x;
         focusY = scoutObservationFocus.y;
       }
-      if (tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode) {
+      if (tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode || pistolAimMode) {
         const mouseDistance = distXY(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
         const lookAhead = (tankAimMode
           ? clamp(mouseDistance * 0.42, 0, 520)
@@ -2339,7 +2458,9 @@
               ? clamp(mouseDistance * 0.38, 0, 440)
               : droneControlMode
                 ? clamp(mouseDistance * 0.34, 0, 360)
-                : clamp(mouseDistance * 0.44, 0, 520)) *
+                : pistolAimMode
+                  ? clamp(mouseDistance * 0.32, 0, 300)
+                  : clamp(mouseDistance * 0.44, 0, 520)) *
           (effectiveZoomPreference > 1 ? clamp(1 - (effectiveZoomPreference - 1) * 0.72, 0.58, 1) : 1);
         const lookAngle = angleTo(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
         focusX += Math.cos(lookAngle) * lookAhead;

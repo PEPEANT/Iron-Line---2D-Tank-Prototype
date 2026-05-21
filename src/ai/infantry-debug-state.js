@@ -21,10 +21,14 @@
       this.debug.grenadeAim = this.grenadeAimTime || 0;
       this.debug.grenadeAimRequired = this.grenadeAimRequired || 0;
       this.debug.grenadePreparing = Boolean(this.grenadePreparing);
+      this.debug.grenadeWeaponId = this.grenadeWeaponId || "";
       this.debug.decision = this.repairDecision || this.tacticalDecision || null;
       this.debug.repairDecision = this.repairDecision || null;
       this.debug.tacticalDecision = this.tacticalDecision || null;
       this.debug.grenadeAmmo = this.unit.equipmentAmmo?.grenade || 0;
+      this.debug.grenadeLauncherAmmo = this.unit.equipmentAmmo?.grenadeLauncher || 0;
+      this.debug.droneAmmo = (this.unit.equipmentAmmo?.reconDrone || 0) + (this.unit.equipmentAmmo?.kamikazeDrone || 0);
+      this.debug.droneState = this.aiDroneState || "";
       this.debug.repairAmmo = this.unit.equipmentAmmo?.repairKit || 0;
       this.debug.squadId = this.order?.squadId || this.unit.squadId || "";
       this.debug.squadRole = this.order?.squadRole || this.unit.squadRole || "";
