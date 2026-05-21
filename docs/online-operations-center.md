@@ -10,7 +10,7 @@ Current state:
 
 - Working live URL: `https://iron-line-2d-tank-prototype.onrender.com/`
 - Related thread/context id from the user: `019e4571-5ad4-7d63-84f0-3949db22da68`
-- Latest GitHub `main` at handoff time: `161a8c5 fix: smooth remote online markers`
+- Latest GitHub `main` should be checked with `git log -1 --oneline` before continuing.
 - Backup branch: `backup/20260521-231336-online-sync-f6e8b4d`
 - Backup tag: `backup-20260521-231336-online-sync-f6e8b4d`
 - Render live `index.html` includes `src/ai/infantry-base-egress.js`, and the file loads with HTTP 200.
@@ -19,13 +19,15 @@ Current state:
   - Scout loadout showed `3 드론 1`.
   - Runtime `player.equipmentAmmo.reconDrone` was observed as `1`.
 - Live console showed no fatal game errors. The only observed warning was browser fullscreen policy blocking a non-user-gesture fullscreen request.
-- GitHub `main` includes online combat sync and remote marker smoothing, but Render live was still serving an older `src/main.js` after push. Treat this as a deployment path/manual deploy issue until proven otherwise.
+- GitHub `main` includes online combat sync, remote marker smoothing, and a build/deploy check path (`/api/build` plus a settings/admin build badge). Render live was still serving an older `src/main.js` after push. Treat this as a deployment path/manual deploy issue until proven otherwise.
 
 Priority order:
 
 1. Reproduce behavior on the Render live URL, not only local `npm start`.
 2. Check browser console errors and page errors.
 3. Compare Render live assets against GitHub `main`, especially `src/main.js`, `src/systems/renderer.js`, and `tools/static-server.cjs`.
+   - First check `https://iron-line-2d-tank-prototype.onrender.com/api/build`.
+   - Then confirm the visible settings/admin build badge and console `[Iron Line build]` output match GitHub `main`.
 4. Confirm infantry base egress works in actual play.
 5. Confirm scout recon drone ammo remains fixed at `1` in UI and runtime state.
 6. If something fails, make the smallest code fix possible.

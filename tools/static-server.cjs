@@ -3,6 +3,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
@@ -15,6 +16,7 @@ const dataDir = process.env.IRONLINE_DATA_DIR
 const roomsStorePath = process.env.IRONLINE_ROOMS_FILE
   ? path.resolve(process.env.IRONLINE_ROOMS_FILE)
   : path.join(dataDir, "online-rooms.json");
+const serverStartedAt = new Date().toISOString();
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -66,6 +68,42 @@ function send(res, status, body, type = "text/plain; charset=utf-8") {
 
 function sendJson(res, status, payload) {
   send(res, status, JSON.stringify(payload), "application/json; charset=utf-8");
+}
+
+function readGit(args = []) {
+  try {
+    return execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 1500
+    }).trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+function buildInfoPayload() {
+  const commitFull = process.env.RENDER_GIT_COMMIT ||
+    process.env.GIT_COMMIT ||
+    process.env.COMMIT_SHA ||
+    readGit(["rev-parse", "HEAD"]);
+  const branch = process.env.RENDER_GIT_BRANCH ||
+    process.env.GIT_BRANCH ||
+    readGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+  return {
+    ok: true,
+    service: "iron-line",
+    source: "api/build",
+    buildId: process.env.RENDER_GIT_COMMIT ? "render" : "local",
+    commit: commitFull ? commitFull.slice(0, 12) : "",
+    commitFull,
+    branch,
+    startedAt: serverStartedAt,
+    nodeVersion: process.version,
+    renderService: process.env.RENDER_SERVICE_NAME || "",
+    renderInstance: process.env.RENDER_INSTANCE_ID || ""
+  };
 }
 
 function readJsonBody(req) {
@@ -549,6 +587,11 @@ const server = http.createServer((req, res) => {
 
   if ((req.url || "/") === "/health") {
     send(res, 200, JSON.stringify({ ok: true, service: "iron-line" }), "application/json; charset=utf-8");
+    return;
+  }
+
+  if ((req.url || "/").startsWith("/api/build")) {
+    sendJson(res, 200, buildInfoPayload());
     return;
   }
 

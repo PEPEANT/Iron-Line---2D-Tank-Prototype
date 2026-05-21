@@ -1,0 +1,23 @@
+.build-info-badge {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 6px 9px;
+  border: 1px solid rgba(132, 180, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(44, 89, 134, 0.16);
+  color: rgba(214, 232, 255, 0.86);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.admin-standalone-page .build-info-badge {
+  display: inline-flex;
+  margin-top: 5px;
+  padding: 4px 7px;
+  border-color: rgba(132, 180, 255, 0.22);
+  background: rgba(44, 89, 134, 0.13);
+  color: rgba(214, 232, 255, 0.78);
+  font-size: 10px;
+}
