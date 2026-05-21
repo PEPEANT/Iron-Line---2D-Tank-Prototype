@@ -432,7 +432,13 @@
           return { x: lastX, y: lastY, blocked: true, rangeClamped: rawDistance > range };
         }
 
-        const blocked = this.world.obstacles.some((obstacle) => lineIntersectsRect(lastX, lastY, x, y, obstacle));
+        const blocked = IronLine.physics?.lineBlockedByWorld
+          ? IronLine.physics.lineBlockedByWorld(this, lastX, lastY, x, y, {
+            padding: ammo.shellRadius || 4,
+            ignore: [tank],
+            ignoreBlockerContainingA: true
+          })
+          : this.world.obstacles.some((obstacle) => lineIntersectsRect(lastX, lastY, x, y, obstacle));
         if (blocked) return { x: lastX, y: lastY, blocked: true, rangeClamped: rawDistance > range };
 
         lastX = x;
@@ -517,7 +523,7 @@
       const vx = length > 0 ? (moveX / length) * infantrySpeed : 0;
       const vy = length > 0 ? (moveY / length) * infantrySpeed : 0;
 
-      tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, padding: 5 });
+      tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, blockWrecks: true, padding: 5 });
       this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : pistolAimMode ? 560 : fireHoldMode ? 760 : 650);
       if (scoutAimMode) this.applyDroneDesignationAimAssist(dt);
 

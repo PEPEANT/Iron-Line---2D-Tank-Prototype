@@ -403,12 +403,16 @@
       }
 
       for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
-        if (other === this.tank || !other.alive) continue;
+        if (other === this.tank) continue;
+        const wreck = IronLine.physics?.isVehicleWreck?.(other) ||
+          Boolean(!other.alive && !other.coverDestroyed && (other.hp <= 0 || other.destructionPending));
+        if (!other.alive && !wreck) continue;
         const distance = distXY(this.tank.x, this.tank.y, other.x, other.y);
-        const avoidRange = (this.tank.radius || 38) + (other.radius || 32) + 22;
+        const avoidRange = (this.tank.radius || 38) + (other.radius || 32) + (wreck ? 44 : 22);
         if (distance > avoidRange || distance < 1) continue;
-        ax += ((this.tank.x - other.x) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.5, 1);
-        ay += ((this.tank.y - other.y) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.5, 1);
+        const force = ((avoidRange - distance) / Math.max(avoidRange * 0.5, 1)) * (wreck ? 1.32 : 1);
+        ax += ((this.tank.x - other.x) / distance) * force;
+        ay += ((this.tank.y - other.y) / distance) * force;
       }
 
       if (this.tank.x < 120) ax += 1.2;
@@ -437,7 +441,12 @@
       const targetSpeed = tank.maxSpeed * throttle;
       tank.speed = approach(tank.speed, targetSpeed, tank.accel * 0.72 * dt);
       tank.speed *= 1 - 0.34 * dt;
-      tryMoveCircle(this.game, tank, Math.cos(tank.angle) * tank.speed, Math.sin(tank.angle) * tank.speed, tank.radius, dt);
+      tryMoveCircle(this.game, tank, Math.cos(tank.angle) * tank.speed, Math.sin(tank.angle) * tank.speed, tank.radius, dt, {
+        blockTanks: true,
+        blockWrecks: true,
+        blockScenery: false,
+        padding: 4
+      });
     }
 
     updateDebugState(order, decision, moveTarget) {

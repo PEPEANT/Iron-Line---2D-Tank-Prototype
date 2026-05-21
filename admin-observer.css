@@ -102,10 +102,15 @@
 }
 
 .admin-standalone-page .admin-page {
+  display: none;
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 12px 14px 18px;
+}
+
+.admin-standalone-page .admin-page.active {
+  display: block;
 }
 
 .admin-standalone-page .admin-observer-block {

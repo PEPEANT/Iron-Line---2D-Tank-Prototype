@@ -39,7 +39,7 @@
           fallback = node;
           fallbackDistance = d;
         }
-        const blocked = d > 90 && this.segmentBlocked(x, y, node.x, node.y, padding);
+        const blocked = d > 90 && this.segmentBlocked(x, y, node.x, node.y, padding, options);
         if (blocked) continue;
         if (d < bestDistance) {
           best = node;
@@ -55,7 +55,7 @@
       return nodeId ? this.nodeById.get(nodeId) : null;
     }
 
-    findPath(startId, goalId) {
+    findPath(startId, goalId, options = {}) {
       if (!this.nodeById.has(startId) || !this.nodeById.has(goalId)) return [];
       if (startId === goalId) return [this.nodeById.get(startId)];
 
@@ -74,6 +74,7 @@
 
         open.delete(current);
         for (const neighbor of this.neighbors.get(current) || []) {
+          if (this.edgeBlockedForOptions(current, neighbor, options)) continue;
           const tentative = (gScore.get(current) ?? Infinity) + neighbor.cost;
           if (!Number.isFinite(tentative)) continue;
           if (tentative >= (gScore.get(neighbor.id) ?? Infinity)) continue;
@@ -88,17 +89,33 @@
       return [];
     }
 
+    edgeBlockedForOptions(fromId, neighbor, options = {}) {
+      if (options.blockScenery === false) return false;
+      const from = this.nodeById.get(fromId);
+      const to = this.nodeById.get(neighbor.id);
+      if (!from || !to) return true;
+      const padding = options.edgePadding ?? neighbor.padding ?? options.padding ?? 34;
+      return this.segmentBlocked(from.x, from.y, to.x, to.y, padding, options);
+    }
+
     findPathBetween(start, goal, options = {}) {
       const startNode = this.nearestNode(start.x, start.y, options);
       const goalNode = goal.name
         ? this.nodeForObjective(goal.name) || this.nearestNode(goal.x, goal.y, options)
         : this.nearestNode(goal.x, goal.y, options);
       if (!startNode || !goalNode) return [];
-      return this.findPath(startNode.id, goalNode.id);
+      return this.findPath(startNode.id, goalNode.id, options);
     }
 
-    segmentBlocked(x1, y1, x2, y2, padding = 56) {
+    segmentBlocked(x1, y1, x2, y2, padding = 56, options = {}) {
       if (!this.world?.obstacles) return false;
+      if (IronLine.physics?.lineBlockedByWorld) {
+        return IronLine.physics.lineBlockedByWorld({ world: this.world, tanks: [], humvees: [] }, x1, y1, x2, y2, {
+          padding,
+          includeScenery: options.blockScenery !== false,
+          includeWrecks: false
+        });
+      }
       return this.world.obstacles.some((obstacle) => (
         lineIntersectsRect(x1, y1, x2, y2, expandedRect(obstacle, padding))
       ));
@@ -120,12 +137,12 @@
 
       const key = fromId < toId ? `${fromId}|${toId}` : `${toId}|${fromId}`;
       if (this.edgeKeys.has(key)) return false;
-      if (this.segmentBlocked(from.x, from.y, to.x, to.y, padding)) return false;
+      if (this.segmentBlocked(from.x, from.y, to.x, to.y, padding, { blockScenery: false })) return false;
 
       const edgeCost = Number.isFinite(cost) && cost > 0 ? cost : distXY(from.x, from.y, to.x, to.y);
       if (!Number.isFinite(edgeCost) || edgeCost <= 0) return false;
-      this.neighbors.get(fromId).push({ id: toId, cost: edgeCost });
-      this.neighbors.get(toId).push({ id: fromId, cost: edgeCost });
+      this.neighbors.get(fromId).push({ id: toId, cost: edgeCost, padding });
+      this.neighbors.get(toId).push({ id: fromId, cost: edgeCost, padding });
       this.openEdges.push([fromId, toId, edgeCost]);
       this.edgeKeys.add(key);
       return true;
@@ -141,7 +158,7 @@
 
       for (let y = margin; y <= this.world.height - margin; y += spacing) {
         for (let x = margin; x <= this.world.width - margin; x += spacing) {
-          if (!this.pointPassable(x, y, 40)) continue;
+          if (!this.pointPassable(x, y, 40, { blockScenery: false })) continue;
           const id = `g_${x}_${y}`;
           const node = this.addNode({ id, x, y, generated: true });
           grid.set(`${x},${y}`, node);
@@ -180,7 +197,14 @@
       }
     }
 
-    pointPassable(x, y, radius) {
+    pointPassable(x, y, radius, options = {}) {
+      if (IronLine.physics?.circleBlockedByWorld) {
+        return !IronLine.physics.circleBlockedByWorld({ world: this.world, tanks: [], humvees: [] }, null, x, y, radius, {
+          blockTanks: false,
+          blockScenery: options.blockScenery !== false,
+          includeWrecks: false
+        });
+      }
       return !this.world.obstacles.some((obstacle) => circleRectCollision(x, y, radius, obstacle));
     }
 

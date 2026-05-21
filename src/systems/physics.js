@@ -12,14 +12,183 @@
     segmentDistanceToPoint
   } = IronLine.math;
   const { AMMO } = IronLine.constants;
+  const sceneryMovementBlockers = new Set([
+    "sandbag",
+    "barricade",
+    "wood-fence",
+    "rubble",
+    "tree",
+    "streetlight",
+    "billboard",
+    "bench"
+  ]);
+  const vehicleCrushThroughTypes = new Set([
+    "sandbag",
+    "barricade",
+    "wood-fence",
+    "brush",
+    "tree",
+    "rubble",
+    "streetlight",
+    "billboard",
+    "bench"
+  ]);
+
+  function worldItemType(item) {
+    return String(item?.type || item?.kind || "");
+  }
+
+  function isDestroyed(item) {
+    return Boolean(item?.destroyed);
+  }
+
+  function isVehicleWreck(vehicle) {
+    return Boolean(vehicle && !vehicle.coverDestroyed && (!vehicle.alive || vehicle.hp <= 0 || vehicle.destructionPending));
+  }
+
+  function isVehicleCrushThrough(item, options = {}) {
+    if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !item?.destructible || item.destroyed) return false;
+    return vehicleCrushThroughTypes.has(worldItemType(item));
+  }
+
+  function rectLike(item) {
+    return Number.isFinite(item?.w) && Number.isFinite(item?.h);
+  }
+
+  function itemRadius(item, movement = false) {
+    const raw = Number(item?.r) || Number(item?.radius) || Math.max(Number(item?.w) || 0, Number(item?.h) || 0) * 0.5;
+    const type = worldItemType(item);
+    if (!movement) return raw;
+    if (type === "tree") return raw * 0.52;
+    if (type === "rubble") return raw * 0.64;
+    return raw;
+  }
+
+  function itemRect(item, padding = 0) {
+    if (rectLike(item)) {
+      return expandedRect({
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        w: Number(item.w) || 0,
+        h: Number(item.h) || 0
+      }, padding);
+    }
+    const r = itemRadius(item) + padding;
+    return {
+      x: (Number(item?.x) || 0) - r,
+      y: (Number(item?.y) || 0) - r,
+      w: r * 2,
+      h: r * 2
+    };
+  }
+
+  function itemBlocksSight(item) {
+    if (!item || isDestroyed(item)) return false;
+    const type = worldItemType(item);
+    if (type === "brush" || item.stopsProjectiles === false) return false;
+    return Boolean(item.stopsProjectiles === true || item.kind || sceneryMovementBlockers.has(type));
+  }
+
+  function itemBlocksMovement(item) {
+    if (!item || isDestroyed(item)) return false;
+    if (item.blocksMovement !== undefined) return item.blocksMovement !== false;
+    const type = worldItemType(item);
+    return Boolean(item.kind || sceneryMovementBlockers.has(type) || item.stopsProjectiles === true);
+  }
+
+  function lineBlockedByItem(x1, y1, x2, y2, item, padding = 0) {
+    if (rectLike(item)) {
+      return lineIntersectsRect(x1, y1, x2, y2, itemRect(item, padding));
+    }
+    const r = itemRadius(item) + padding;
+    return segmentDistanceToPoint(x1, y1, x2, y2, Number(item.x) || 0, Number(item.y) || 0) <= r;
+  }
+
+  function pointInsideItem(x, y, item, padding = 0) {
+    if (rectLike(item)) return pointInRect(x, y, itemRect(item, padding));
+    return distXY(x, y, Number(item?.x) || 0, Number(item?.y) || 0) <= itemRadius(item) + padding;
+  }
+
+  function circleHitsItem(x, y, radius, item) {
+    if (rectLike(item)) return circleRectCollision(x, y, radius, itemRect(item));
+    return distXY(x, y, Number(item?.x) || 0, Number(item?.y) || 0) <= radius + itemRadius(item, true);
+  }
+
+  function coverBlockers(game, options = {}) {
+    const blockers = [];
+    const includeScenery = options.includeScenery !== false;
+    const includeWrecks = options.includeWrecks !== false;
+
+    for (const obstacle of game.world?.obstacles || []) {
+      if (!itemBlocksSight(obstacle)) continue;
+      blockers.push({ ...itemRect(obstacle), source: obstacle, dynamic: false, kind: obstacle.kind || "obstacle" });
+    }
+
+    if (includeScenery) {
+      for (const item of game.world?.scenery || []) {
+        if (!itemBlocksSight(item)) continue;
+        blockers.push({ ...itemRect(item), source: item, dynamic: true, kind: worldItemType(item) || "scenery" });
+      }
+    }
+
+    if (includeWrecks) {
+      for (const wreck of [...(game.tanks || []), ...(game.humvees || [])]) {
+        if (!isVehicleWreck(wreck)) continue;
+        const r = Math.max(22, (wreck.radius || 18) * 1.05);
+        blockers.push({
+          x: wreck.x - r,
+          y: wreck.y - r,
+          w: r * 2,
+          h: r * 2,
+          source: wreck,
+          dynamic: true,
+          kind: "vehicle-wreck"
+        });
+      }
+    }
+
+    return blockers;
+  }
+
+  function lineBlockedByWorld(game, x1, y1, x2, y2, options = {}) {
+    const padding = options.padding || 0;
+    const ignore = new Set(options.ignore || []);
+    const ignoreA = Boolean(options.ignoreObstacleContainingA || options.ignoreBlockerContainingA);
+    const ignoreB = Boolean(options.ignoreObstacleContainingB || options.ignoreBlockerContainingB);
+
+    const blockedBy = (item) => {
+      if (!item || ignore.has(item) || !itemBlocksSight(item)) return false;
+      if (ignoreA && pointInsideItem(x1, y1, item, padding)) return false;
+      if (ignoreB && pointInsideItem(x2, y2, item, padding)) return false;
+      return lineBlockedByItem(x1, y1, x2, y2, item, padding);
+    };
+
+    for (const obstacle of game.world?.obstacles || []) {
+      if (blockedBy(obstacle)) return true;
+    }
+
+    if (options.includeScenery !== false) {
+      for (const item of game.world?.scenery || []) {
+        if (blockedBy(item)) return true;
+      }
+    }
+
+    if (options.includeWrecks !== false) {
+      for (const wreck of [...(game.tanks || []), ...(game.humvees || [])]) {
+        if (!isVehicleWreck(wreck) || ignore.has(wreck)) continue;
+        const blocker = { x: wreck.x, y: wreck.y, r: Math.max(22, (wreck.radius || 18) * 1.05), type: "vehicle-wreck" };
+        if (ignoreA && pointInsideItem(x1, y1, blocker, padding)) continue;
+        if (ignoreB && pointInsideItem(x2, y2, blocker, padding)) continue;
+        if (lineBlockedByItem(x1, y1, x2, y2, blocker, padding)) return true;
+      }
+    }
+
+    return false;
+  }
 
   function hasLineOfSight(game, a, b, options = {}) {
-    for (const obstacle of game.world.obstacles) {
-      if (options.ignoreObstacleContainingA && pointInRect(a.x, a.y, obstacle)) continue;
-      if (options.ignoreObstacleContainingB && pointInRect(b.x, b.y, obstacle)) continue;
-      if (lineIntersectsRect(a.x, a.y, b.x, b.y, expandedRect(obstacle, options.padding || 0))) {
-        return false;
-      }
+    if (lineBlockedByWorld(game, a.x, a.y, b.x, b.y, options)) {
+      return false;
     }
 
     if (!options.ignoreSmoke) {
@@ -44,12 +213,7 @@
     const muzzleX = tank.x + Math.cos(tank.turretAngle) * muzzleDistance;
     const muzzleY = tank.y + Math.sin(tank.turretAngle) * muzzleDistance;
     const padding = options.padding ?? ((ammo.shellRadius || 4) + 3);
-
-    for (const obstacle of game.world.obstacles) {
-      if (lineIntersectsRect(muzzleX, muzzleY, target.x, target.y, expandedRect(obstacle, padding))) {
-        return false;
-      }
-    }
+    if (lineBlockedByWorld(game, muzzleX, muzzleY, target.x, target.y, { ...options, padding })) return false;
 
     if (!options.ignoreSmoke) {
       for (const cloud of game.effects.smokeClouds) {
@@ -69,7 +233,8 @@
 
     return [...(game.tanks || []), ...(game.humvees || [])].some((tank) => {
       if (tank === entity || ignoreTanks.has(tank)) return false;
-      if (!tank.alive && !options.blockWrecks) return false;
+      const wreck = isVehicleWreck(tank);
+      if (!tank.alive && (!options.blockWrecks || !wreck)) return false;
       return distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
     });
   }
@@ -118,12 +283,15 @@
 
   function damageTouchedScenery(game, entity, x, y, radius, options, context) {
     if (!options.destroyObstaclesOnImpact) return;
-    const damage = vehicleImpactDamage(entity, null, options);
-    if (damage <= 0) return;
+    const baseDamage = vehicleImpactDamage(entity, null, options);
     const damaged = context.damagedScenery || (context.damagedScenery = new Set());
     for (const item of game.world?.scenery || []) {
       if (!item?.destructible || item.destroyed || damaged.has(item)) continue;
       if (!circleHitsScenery(x, y, radius, item)) continue;
+      const damage = baseDamage > 0
+        ? baseDamage
+        : isVehicleCrushThrough(item, options) ? (options.vehicleKind === "tank" ? 54 : 36) : 0;
+      if (damage <= 0) continue;
       damaged.add(item);
       const destroyed = IronLine.combat?.damageScenery?.(game, item, damage, vehicleBreakOptions(entity, item, options));
       if (destroyed) shakeVehicleOnBreak(entity, options);
@@ -134,7 +302,10 @@
     if (!options.destroyObstaclesOnImpact || obstacle?.kind === "building" || obstacle?.destroyed) return false;
     const damaged = context.damagedObstacles || (context.damagedObstacles = new Set());
     if (damaged.has(obstacle)) return obstacle.destroyed;
-    const damage = vehicleImpactDamage(entity, obstacle, options);
+    let damage = vehicleImpactDamage(entity, obstacle, options);
+    if (damage <= 0 && isVehicleCrushThrough(obstacle, options)) {
+      damage = options.vehicleKind === "tank" ? 54 : 36;
+    }
     if (damage <= 0) return false;
     damaged.add(obstacle);
     const destroyed = IronLine.combat?.damageObstacle?.(game, obstacle, damage, vehicleBreakOptions(entity, obstacle, options));
@@ -146,9 +317,31 @@
     for (const obstacle of game.world?.obstacles || []) {
       if (obstacle.destroyed || !circleRectCollision(x, y, radius, obstacle)) continue;
       if (tryBreakObstacleOnImpact(game, entity, obstacle, options, context)) continue;
+      if (isVehicleCrushThrough(obstacle, options)) continue;
       return true;
     }
     return false;
+  }
+
+  function isSceneryBlockingCircle(game, x, y, radius, options = {}) {
+    if (options.blockScenery === false) return false;
+    for (const item of game.world?.scenery || []) {
+      if (!itemBlocksMovement(item)) continue;
+      if (!circleHitsItem(x, y, radius, item)) continue;
+      if (isVehicleCrushThrough(item, options)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  function circleBlockedByWorld(game, entity, x, y, radius, options = {}) {
+    const context = {};
+    return isObstacleBlockingCircle(game, entity, x, y, radius, {
+      ...options,
+      destroyObstaclesOnImpact: false
+    }, context) ||
+      isSceneryBlockingCircle(game, x, y, radius, options) ||
+      Boolean(options.blockTanks && circleIntersectsTank(game, entity, x, y, radius, options));
   }
 
   function tryMoveCircle(game, entity, vx, vy, radius, dt, options = {}) {
@@ -158,6 +351,7 @@
     const nextX = clamp(entity.x + vx * dt, radius, world.width - radius);
     damageTouchedScenery(game, entity, nextX, entity.y, radius, options, context);
     const blockedX = isObstacleBlockingCircle(game, entity, nextX, entity.y, radius, options, context) ||
+      isSceneryBlockingCircle(game, nextX, entity.y, radius, options) ||
       Boolean(options.blockTanks && circleIntersectsTank(game, entity, nextX, entity.y, radius, options));
     if (!blockedX) {
       entity.x = nextX;
@@ -168,6 +362,7 @@
     const nextY = clamp(entity.y + vy * dt, radius, world.height - radius);
     damageTouchedScenery(game, entity, entity.x, nextY, radius, options, context);
     const blockedY = isObstacleBlockingCircle(game, entity, entity.x, nextY, radius, options, context) ||
+      isSceneryBlockingCircle(game, entity.x, nextY, radius, options) ||
       Boolean(options.blockTanks && circleIntersectsTank(game, entity, entity.x, nextY, radius, options));
     if (!blockedY) {
       entity.y = nextY;
@@ -251,6 +446,11 @@
   IronLine.physics = {
     hasLineOfSight,
     hasClearShot,
+    lineBlockedByWorld,
+    coverBlockers,
+    itemBlocksMovement,
+    circleBlockedByWorld,
+    isVehicleWreck,
     tryMoveCircle,
     resolveTankSpacing,
     resolveInfantryTankSpacing,

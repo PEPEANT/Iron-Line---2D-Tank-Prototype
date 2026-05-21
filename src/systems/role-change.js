@@ -35,7 +35,11 @@
       const close = document.createElement("button");
       close.type = "button";
       close.textContent = "닫기";
-      close.addEventListener("click", () => this.close());
+      close.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.close();
+      });
       head.append(title, close);
 
       const hint = document.createElement("p");
@@ -46,11 +50,30 @@
       list.className = "role-change-list";
 
       panel.append(head, hint, list);
-      panel.addEventListener("pointerdown", (event) => event.stopPropagation());
-      panel.addEventListener("click", (event) => event.stopPropagation());
+      this.bindInputShield(panel);
       document.body.append(prompt, panel);
       this.nodes = { root: panel, prompt, panel, hint, list, close };
       this.renderChoices();
+    }
+
+    bindInputShield(panel) {
+      const shield = (event) => {
+        event.stopPropagation();
+        if (event.type.startsWith("mouse") || event.type === "contextmenu" || event.type === "dblclick") {
+          event.preventDefault();
+        }
+        this.game.input?.clear?.();
+      };
+      [
+        "pointerdown",
+        "pointerup",
+        "pointercancel",
+        "mousedown",
+        "mouseup",
+        "click",
+        "dblclick",
+        "contextmenu"
+      ].forEach((type) => panel.addEventListener(type, shield));
     }
 
     onKeyDown(event) {
@@ -121,7 +144,12 @@
         button.id = "deathRoleChangeButton";
         button.type = "button";
         button.textContent = "역할 변경";
-        button.addEventListener("click", () => this.openPanel());
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.game.input?.clear?.();
+          this.openPanel();
+        });
         deathScreen.querySelector(".death-card")?.append(button);
       }
       hint.classList.toggle("hidden", !(state.available && state.reason === "death"));
@@ -149,7 +177,11 @@
         const summary = document.createElement("span");
         summary.textContent = this.roleSummary(classId);
         button.append(title, summary);
-        button.addEventListener("click", () => this.selectRole(classId));
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.selectRole(classId);
+        });
 
         const slots = document.createElement("div");
         slots.className = "role-change-slots";
@@ -221,12 +253,14 @@
     close() {
       this.open = false;
       this.nodes.panel?.classList.add("hidden");
+      this.game.input?.clear?.();
       this.game.canvas?.focus?.();
     }
 
     selectRole(classId) {
       if (!this.game.applyConquestRoleChange?.(classId, this.reason)) return;
       this.refreshActive();
+      this.game.input?.clear?.();
       this.close();
     }
 
@@ -241,16 +275,22 @@
       this.renderChoices();
       this.refreshActive();
       this.game.hud?.update?.(this.game);
+      this.game.input?.clear?.();
       return true;
     }
 
     refreshActive() {
       const current = this.game.player?.classId || "infantry";
       this.nodes.list?.querySelectorAll(".role-change-card[data-role-class]").forEach((card) => {
-        card.classList.toggle("active", card.dataset.roleClass === current);
+        const active = card.dataset.roleClass === current;
+        card.classList.toggle("active", active);
+        card.classList.toggle("inactive", !active);
       });
       this.nodes.list?.querySelectorAll(".role-change-select[data-role-class]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.roleClass === current);
+        const active = button.dataset.roleClass === current;
+        button.classList.toggle("active", active);
+        button.classList.toggle("inactive", !active);
+        button.setAttribute("aria-pressed", String(active));
       });
       this.nodes.list?.querySelectorAll("[data-role-choice-class]").forEach((button) => {
         const classId = button.dataset.roleChoiceClass;
@@ -258,6 +298,7 @@
         const weaponId = button.dataset.roleChoiceWeapon;
         const equipment = this.game.deploymentEquipmentForClass?.(classId) || INFANTRY_CLASSES?.[classId]?.equipment || [];
         button.classList.toggle("active", equipment[slotIndex] === weaponId);
+        button.classList.toggle("inactive-role-choice", classId !== current);
       });
     }
 

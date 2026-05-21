@@ -2,7 +2,7 @@
 
 (function registerRendererMinimap(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM_COLORS } = IronLine.constants;
+  const { TEAM, TEAM_COLORS } = IronLine.constants;
   const { distXY, roundRect } = IronLine.math;
   const proto = IronLine.Renderer?.prototype;
   if (!proto) return;
@@ -113,12 +113,8 @@
         ctx.globalAlpha = 1;
       }
 
-      if (player && !player.inTank && player.hp > 0) {
-        ctx.fillStyle = "#89d27e";
-        ctx.beginPath();
-        ctx.arc(x + player.x * sx, y + player.y * sy, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      this.drawHumanMinimapMarkers(game, map, viewerTeam, player);
+      this.drawCommandMinimapOverlays?.(game, map, viewerTeam, false);
 
       ctx.strokeStyle = "rgba(255,255,255,0.42)";
       ctx.lineWidth = 1;
@@ -135,6 +131,123 @@
       if (game.adminObserverMode || !viewerTeam) return true;
       if (!target || target.team === viewerTeam) return true;
       return Boolean(game.isMinimapReportedEnemy?.(viewerTeam, target));
+    },
+
+    drawHumanMinimapMarkers(game, map, viewerTeam, playerEntity) {
+      const ctx = this.ctx;
+      const entries = this.humanMinimapEntries(game, playerEntity);
+      for (const entry of entries) {
+        if (!this.shouldDrawHumanMinimapEntry(game, entry, viewerTeam)) continue;
+        const px = map.x + entry.x * map.sx;
+        const py = map.y + entry.y * map.sy;
+        ctx.save();
+        ctx.globalAlpha = entry.alpha;
+        ctx.fillStyle = entry.local ? "#b6ff82" : "#67f27d";
+        ctx.strokeStyle = entry.local ? "rgba(246, 255, 232, 0.96)" : "rgba(237, 244, 239, 0.86)";
+        ctx.lineWidth = entry.local ? 1.8 : 1.35;
+        ctx.beginPath();
+        ctx.arc(px, py, entry.local ? 4.8 : 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "rgba(8, 18, 11, 0.82)";
+        ctx.beginPath();
+        ctx.arc(px, py, 1.45, 0, Math.PI * 2);
+        ctx.fill();
+        if (entry.inVehicle) {
+          ctx.strokeStyle = "rgba(182, 255, 130, 0.52)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(px, py, 6.6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    },
+
+    shouldDrawHumanMinimapEntry(game, entry, viewerTeam) {
+      if (!entry || entry.alive === false) return false;
+      if (game.adminObserverMode || !viewerTeam || entry.local) return true;
+      if (!entry.team || entry.team === viewerTeam) return true;
+      return Boolean(game.isMinimapReportedEnemy?.(viewerTeam, entry));
+    },
+
+    humanMinimapEntries(game, playerEntity) {
+      const session = game.onlineSession || {};
+      const localId = session.playerId || "";
+      const players = (session.players || []).filter((item) => (item.participantType || "player") === "player");
+      const entries = [];
+      const seen = new Set();
+
+      for (const player of players) {
+        const id = player.id || "";
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        const local = Boolean(id && id === localId);
+        const point = this.humanMinimapPoint(game, player, local ? playerEntity : null);
+        if (!point) continue;
+        entries.push({
+          ...point,
+          id,
+          team: player.team || point.team || TEAM.BLUE,
+          local,
+          name: player.name || player.nickname || "Player"
+        });
+      }
+
+      if (playerEntity && localId && !seen.has(localId)) {
+        const point = this.humanMinimapPoint(game, { id: localId, team: playerEntity.team }, playerEntity);
+        if (point) entries.push({ ...point, id: localId, team: playerEntity.team || TEAM.BLUE, local: true, name: "Player" });
+      }
+
+      return entries;
+    },
+
+    humanMinimapPoint(game, sessionPlayer, localEntity = null) {
+      if (localEntity) {
+        const mounted = localEntity.inTank || localEntity.inVehicle || null;
+        const point = mounted?.alive !== false ? mounted : localEntity;
+        if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+        return {
+          x: point.x,
+          y: point.y,
+          team: localEntity.team || sessionPlayer.team,
+          alive: !game.playerDeathActive && !game.playerDowned && localEntity.hp > 0,
+          inVehicle: Boolean(mounted),
+          alpha: 1
+        };
+      }
+
+      const raw = sessionPlayer.position || sessionPlayer;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        const age = Math.max(0, Date.now() - (Number(raw.updatedAt || sessionPlayer.updatedAt) || Date.now()));
+        return {
+          x,
+          y,
+          team: sessionPlayer.team,
+          alive: raw.alive !== false && sessionPlayer.alive !== false,
+          inVehicle: Boolean(raw.inVehicle || sessionPlayer.inVehicle),
+          alpha: age > 7000 ? 0.54 : age > 3500 ? 0.72 : 1
+        };
+      }
+
+      return this.humanSlotFallbackPoint(game, sessionPlayer);
+    },
+
+    humanSlotFallbackPoint(game, sessionPlayer) {
+      const slot = game.sessionSlotById?.(sessionPlayer.slotId || "");
+      const team = sessionPlayer.team || slot?.team || TEAM.BLUE;
+      const zone = (game.world.safeZones || []).find((item) => item.team === team);
+      if (!zone) return null;
+      return {
+        x: zone.x,
+        y: zone.y,
+        team,
+        alive: sessionPlayer.alive !== false,
+        inVehicle: false,
+        alpha: 0.58
+      };
     },
 
     minimapContactPoint(game, target, viewerTeam) {

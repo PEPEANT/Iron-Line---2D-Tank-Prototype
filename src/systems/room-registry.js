@@ -54,8 +54,8 @@
         id: input.id || this.nextRoomId(rooms),
         name: input.name || "\uc628\ub77c\uc778 \ud14c\uc2a4\ud2b8\ubc29",
         mode: input.mode || "conquest",
-        blueFactionId: input.blueFactionId || "korea",
-        redFactionId: input.redFactionId || "russia",
+        blueFactionId: input.blueFactionId || "singularity",
+        redFactionId: input.redFactionId || "military-gallery",
         phase: "waiting",
         locked: false,
         aiFillEmptySlots: input.aiFillEmptySlots !== false,
@@ -66,6 +66,8 @@
         spectators: [],
         spectatorCapacity: 24,
         spectatorChatVisibleToPlayers: true,
+        commandAuthorities: [],
+        commandAuthorityRequests: [],
         chat: [],
         events: [],
         createdAt: Date.now(),
@@ -162,6 +164,7 @@
       const room = this.getRoom(roomId);
       if (!room || !player.id) return null;
       const participantType = this.normalizeParticipantType(player.participantType);
+      const position = this.normalizePlayerPosition(player);
       const previous = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === player.id) || null;
       const players = Array.isArray(room.players)
         ? room.players.filter((item) => item.id !== player.id).slice()
@@ -185,6 +188,11 @@
           kills: Math.max(0, Math.floor(Number(player.stats?.kills) || 0)),
           deaths: Math.max(0, Math.floor(Number(player.stats?.deaths) || 0))
         },
+        position,
+        x: position?.x ?? null,
+        y: position?.y ?? null,
+        alive: position?.alive ?? player.alive !== false,
+        inVehicle: Boolean(position?.inVehicle || player.inVehicle),
         participantType,
         factionId: player.factionId || player.skinId || "",
         skinId: player.factionId || player.skinId || "",
@@ -200,6 +208,20 @@
         spectators,
         events: event ? this.nextEvents(room, event) : room.events
       });
+    }
+
+    normalizePlayerPosition(player = {}) {
+      const raw = player.position || player;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        alive: raw.alive !== false && player.alive !== false,
+        inVehicle: Boolean(raw.inVehicle || player.inVehicle),
+        updatedAt: Number(raw.updatedAt || player.updatedAt || Date.now()) || Date.now()
+      };
     }
 
     removeParticipant(roomId, playerId, reason = "leave") {
@@ -271,6 +293,97 @@
     recentChat(roomId, limit = 80) {
       const room = this.getRoom(roomId);
       return (room?.chat || []).slice(-limit);
+    }
+
+    updateCommandAuthority(roomId, input = {}) {
+      const room = this.getRoom(roomId);
+      if (!room || !input.slotId) return null;
+      const slotId = String(input.slotId || "");
+      const playerId = String(input.playerId || "");
+      const playerName = String(input.playerName || input.nickname || playerId || "").slice(0, 24);
+      const source = String(input.source || "").slice(0, 24);
+      const commandAuthorities = (room.commandAuthorities || [])
+        .filter((item) => item.slotId !== slotId);
+      if (playerId) {
+        commandAuthorities.push({
+          slotId,
+          playerId,
+          playerName,
+          source,
+          updatedAt: Date.now()
+        });
+      }
+      const commandAuthorityRequests = (room.commandAuthorityRequests || [])
+        .filter((item) => item.slotId !== slotId || item.requesterId !== playerId);
+      const title = input.action === "release" ? "\uc9c0\ud718\uad8c \ud574\uc81c" : "\uc9c0\ud718\uad8c \ubcc0\uacbd";
+      const detail = playerId
+        ? `${this.slotLabel(slotId)} \uc9c0\ud718\uad8c\uc774 ${playerName || playerId}\uc5d0\uac8c \uc9c0\uc815\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`
+        : `${this.slotLabel(slotId)} \uc9c0\ud718\uad8c\uc774 \ud574\uc81c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`;
+      return this.updateRoom(roomId, {
+        commandAuthorities,
+        commandAuthorityRequests,
+        events: this.nextEvents(room, {
+          type: "command_authority_changed",
+          severity: "info",
+          title,
+          detail,
+          actorId: playerId
+        })
+      });
+    }
+
+    requestCommandAuthority(roomId, input = {}) {
+      const room = this.getRoom(roomId);
+      if (!room || !input.slotId || !input.requesterId) return null;
+      const request = {
+        id: input.id || `${input.slotId}:request:${Date.now()}`,
+        slotId: String(input.slotId || ""),
+        requesterId: String(input.requesterId || ""),
+        requesterName: String(input.requesterName || input.requesterId || "Player").slice(0, 24),
+        status: "pending",
+        requestedAt: Number(input.requestedAt) || Date.now()
+      };
+      const commandAuthorityRequests = (room.commandAuthorityRequests || [])
+        .filter((item) => !(item.slotId === request.slotId && item.requesterId === request.requesterId));
+      commandAuthorityRequests.push(request);
+      return this.updateRoom(roomId, {
+        commandAuthorityRequests: commandAuthorityRequests.slice(-16),
+        events: this.nextEvents(room, {
+          type: "command_authority_requested",
+          severity: "info",
+          title: "\uc9c0\ud718\uad8c \uc694\uccad",
+          detail: `${request.requesterName}\uc774 ${this.slotLabel(request.slotId)} \uc9c0\ud718\uad8c\uc744 \uc694\uccad\ud588\uc2b5\ub2c8\ub2e4.`,
+          actorId: request.requesterId
+        })
+      });
+    }
+
+    resolveCommandAuthorityRequest(roomId, requestId, approved = false, resolver = {}) {
+      const room = this.getRoom(roomId);
+      if (!room || !requestId) return null;
+      const request = (room.commandAuthorityRequests || []).find((item) => item.id === requestId);
+      if (!request) return null;
+      const commandAuthorityRequests = (room.commandAuthorityRequests || []).filter((item) => item.id !== requestId);
+      const patch = { commandAuthorityRequests };
+      if (approved) {
+        const commandAuthorities = (room.commandAuthorities || []).filter((item) => item.slotId !== request.slotId);
+        commandAuthorities.push({
+          slotId: request.slotId,
+          playerId: request.requesterId,
+          playerName: request.requesterName,
+          source: "delegated",
+          updatedAt: Date.now()
+        });
+        patch.commandAuthorities = commandAuthorities;
+      }
+      patch.events = this.nextEvents(room, {
+        type: approved ? "command_authority_approved" : "command_authority_denied",
+        severity: approved ? "major" : "warning",
+        title: approved ? "\uc9c0\ud718\uad8c \uc2b9\uc778" : "\uc9c0\ud718\uad8c \uac70\uc808",
+        detail: `${this.slotLabel(request.slotId)} \uc9c0\ud718\uad8c \uc694\uccad\uc774 ${approved ? "\uc2b9\uc778" : "\uac70\uc808"}\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`,
+        actorId: resolver.resolverId || request.requesterId
+      });
+      return this.updateRoom(roomId, patch);
     }
 
     playerEvent(previous, nextPlayer) {
@@ -399,6 +512,8 @@
         spectators,
         spectatorCapacity,
         spectatorChatVisibleToPlayers: room.spectatorChatVisibleToPlayers !== false,
+        commandAuthorities: this.normalizeCommandAuthorities(room.commandAuthorities),
+        commandAuthorityRequests: this.normalizeCommandAuthorityRequests(room.commandAuthorityRequests),
         chat: Array.isArray(room.chat) ? room.chat.slice(-120) : [],
         events: Array.isArray(room.events) ? room.events.slice(-80) : [],
         createdAt: Number(room.createdAt) || Date.now(),
@@ -410,6 +525,35 @@
 
     normalizeParticipantType(value) {
       return ["player", "spectator", "caster", "admin"].includes(value) ? value : "player";
+    }
+
+    normalizeCommandAuthorities(input) {
+      if (!Array.isArray(input)) return [];
+      return input
+        .map((item) => ({
+          slotId: String(item?.slotId || ""),
+          playerId: String(item?.playerId || ""),
+          playerName: String(item?.playerName || item?.nickname || item?.playerId || "").slice(0, 24),
+          source: String(item?.source || "").slice(0, 24),
+          updatedAt: Number(item?.updatedAt) || Date.now()
+        }))
+        .filter((item) => item.slotId && item.playerId)
+        .slice(-16);
+    }
+
+    normalizeCommandAuthorityRequests(input) {
+      if (!Array.isArray(input)) return [];
+      return input
+        .map((item) => ({
+          id: String(item?.id || `${item?.slotId || "slot"}:request:${Date.now()}`),
+          slotId: String(item?.slotId || ""),
+          requesterId: String(item?.requesterId || ""),
+          requesterName: String(item?.requesterName || item?.requesterId || "Player").slice(0, 24),
+          status: item?.status === "denied" ? "denied" : "pending",
+          requestedAt: Number(item?.requestedAt) || Date.now()
+        }))
+        .filter((item) => item.slotId && item.requesterId)
+        .slice(-16);
     }
   }
 

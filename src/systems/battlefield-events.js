@@ -58,7 +58,8 @@
         "match_ended",
         "objective_captured",
         "player_down",
-        "vehicle_destroyed"
+        "vehicle_destroyed",
+        "squad_leader_lost"
       ].includes(event.type);
     }
 

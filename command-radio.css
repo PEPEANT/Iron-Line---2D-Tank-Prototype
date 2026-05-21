@@ -1,0 +1,104 @@
+.command-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.command-channels button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 209, 102, 0.28);
+  border-radius: 999px;
+  background: rgba(237, 244, 239, 0.06);
+  color: rgba(237, 244, 239, 0.82);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.command-channels button.active {
+  border-color: rgba(255, 209, 102, 0.78);
+  background: rgba(255, 209, 102, 0.22);
+  color: #ffe8a8;
+}
+
+.command-channels button:disabled {
+  opacity: 0.36;
+}
+
+.command-authority {
+  display: grid;
+  gap: 5px;
+}
+
+.command-authority-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 6px;
+  border: 1px solid rgba(237, 244, 239, 0.12);
+  border-radius: 8px;
+  background: rgba(237, 244, 239, 0.045);
+}
+
+.command-authority-row.active {
+  border-color: rgba(255, 209, 102, 0.38);
+  background: rgba(255, 209, 102, 0.09);
+}
+
+.command-authority-row span {
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.74);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-authority-row.active span {
+  color: #ffe8a8;
+}
+
+.command-authority-row button {
+  min-width: 46px;
+  min-height: 24px;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 7px;
+  background: rgba(255, 209, 102, 0.16);
+  color: #ffe8a8;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.command-authority-row button:disabled {
+  opacity: 0.45;
+}
+
+.command-memory {
+  display: grid;
+  gap: 5px;
+  min-height: 34px;
+  padding: 8px;
+  border: 1px solid rgba(255, 209, 102, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 209, 102, 0.06);
+}
+
+.command-memory span {
+  color: rgba(237, 244, 239, 0.78);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.command-memory .ordered {
+  color: #ffe8a8;
+}
+
+.command-memory .empty {
+  color: rgba(237, 244, 239, 0.48);
+}
+
+.command-radio-toggle.has-orders::after {
+  background: rgba(255, 209, 102, 0.94);
+  box-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+}

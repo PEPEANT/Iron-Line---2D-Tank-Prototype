@@ -118,6 +118,7 @@
       ui.lobbyScreen.dataset.mode = conquest ? "conquest" : "annihilation";
       if (ui.lobbyModeTitle) ui.lobbyModeTitle.textContent = conquest ? "점령전" : "섬멸전";
       this.updateHeaderMeta(game, { filled, total: roleSlots.length || 8, conquest, room });
+      this.updateModeSummary(game, conquest);
 
       if (ui.lobbyTeamButton) {
         ui.lobbyTeamButton.textContent = localTeam === TEAM.BLUE ? "홍팀으로 이동" : "청팀으로 이동";
@@ -130,17 +131,48 @@
       }
       if (ui.lobbyStartButton) ui.lobbyStartButton.classList.add("hidden");
       if (ui.lobbyBackButton) ui.lobbyBackButton.textContent = game.sessionMode === "online" ? "방 목록으로" : "설정으로 돌아가기";
-      ui.lobbySummary?.classList.add("hidden");
 
       this.updateSlots(game);
       this.hud.buildMapMarkers(game, ui.lobbyMap);
+    }
+
+    updateModeSummary(game, conquest) {
+      const root = this.nodes.lobbySummary;
+      if (!root) return;
+      const state = game.annihilation || game.defaultAnnihilationState?.();
+      const values = conquest ? [
+        { label: "승리 조건", value: "거점 점수 우위" },
+        { label: "경기 시간", value: this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) },
+        { label: "리스폰", value: "가능" },
+        { label: "목표", value: "거점 유지" }
+      ] : [
+        { label: "승리 조건", value: "전 병력 섬멸" },
+        { label: "라운드", value: `${state?.targetScore || 2}선승 / ${state?.maxRounds || 3}판` },
+        { label: "사망 처리", value: "라운드 관전" },
+        { label: "재정비", value: `${Math.round(state?.intermissionDuration || 20)}초` }
+      ];
+      const signature = JSON.stringify(values);
+      root.classList.remove("hidden");
+      if (root.dataset.signature === signature) return;
+      root.dataset.signature = signature;
+      root.textContent = "";
+      for (const item of values) {
+        const tile = document.createElement("div");
+        tile.className = "lobby-summary-tile";
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        const value = document.createElement("strong");
+        value.textContent = item.value;
+        tile.append(label, value);
+        root.append(tile);
+      }
     }
 
     updateHeaderMeta(game, options) {
       const root = this.nodes.lobbyHeaderMeta;
       if (!root) return;
       const roomId = game.onlineSession?.roomId || "대기";
-      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) : "제한 없음";
+      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) : "3판 2선승";
       const values = [
         { label: "방 코드", value: roomId },
         { label: "슬롯", value: `${options.filled}/${options.total}` },

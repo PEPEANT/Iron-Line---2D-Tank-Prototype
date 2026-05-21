@@ -137,6 +137,9 @@
         {
           collisionSpeedScale: 0,
           destroyObstaclesOnImpact: true,
+          blockTanks: true,
+          blockWrecks: true,
+          padding: 4,
           impactSpeed: beforeSpeed,
           impactMass: 1.34,
           vehicleKind: "tank"

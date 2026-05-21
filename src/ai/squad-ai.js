@@ -9,6 +9,7 @@
       this.game = game;
       this.team = options.team;
       this.callSign = options.callSign;
+      this.squadType = options.squadType || "infantry";
       this.units = [];
       this.order = null;
       this.roleMap = new Map();
@@ -22,9 +23,14 @@
       this.preAssaultCompletedFor = "";
       this.rallyWithTankCooldown = 0;
       this.status = this.emptyStatus();
+      this.commandSlotOverrideId = options.commandSlotOverrideId || "";
+      this.commandTransferReason = "";
+      this.currentLeaderCallSign = "";
+      this.reportedLeaderLosses = new Set();
 
       for (const unit of options.units || []) this.addUnit(unit);
       this.rebuildRoles();
+      this.currentLeaderCallSign = this.leaderUnit()?.callSign || "";
     }
 
     addUnit(unit) {
@@ -37,16 +43,35 @@
 
     activeUnits() {
       return this.units
-        .filter((unit) => unit.alive && unit.ai && unit.classId !== "scout")
+        .filter((unit) => unit.alive && unit.ai && (this.squadType === "recon" || unit.classId !== "scout"))
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
     }
 
     update(dt = 0.45) {
+      const previousLeader = this.currentLeaderCallSign;
       this.rebuildRoles();
+      this.trackLeaderLoss(previousLeader);
       this.updateTactics(false, dt);
       const alive = this.activeUnits().length;
       const request = this.supportRequest ? ` ${this.supportRequest.type}` : "";
       this.summary = `${this.callSign}:${this.order?.objectiveName || "-"} ${this.tacticalMode} ${alive}/${this.units.length}${request}`;
+    }
+
+    trackLeaderLoss(previousLeader) {
+      const leader = this.leaderUnit();
+      const currentLeader = leader?.callSign || "";
+      if (!previousLeader) {
+        this.currentLeaderCallSign = currentLeader;
+        return;
+      }
+      const lost = this.units.find((unit) => unit.callSign === previousLeader);
+      const leaderChanged = currentLeader && currentLeader !== previousLeader;
+      const leaderDead = lost && lost.alive === false;
+      if (leaderChanged && leaderDead && !this.reportedLeaderLosses.has(previousLeader)) {
+        this.reportedLeaderLosses.add(previousLeader);
+        this.game?.handleSquadLeaderLoss?.(this, lost, leader);
+      }
+      this.currentLeaderCallSign = currentLeader;
     }
 
     assignOrder(order) {
@@ -99,7 +124,7 @@
 
     rebuildRoles() {
       const units = this.activeUnits();
-      const lmg = units.find((unit) => unit.weaponId === "lmg");
+      const lmg = units.find((unit) => unit.weaponId === "lmg" || unit.weaponId === "machinegun");
       this.roleMap.clear();
       for (const unit of this.units) unit.isSquadLeader = false;
 
@@ -107,7 +132,11 @@
 
       const remaining = units.filter((unit) => unit !== lmg);
       remaining.forEach((unit, index) => {
-        const role = unit.weaponId === "smg" || index === 0 ? "assault" : "security";
+        const role = unit.classId === "scout"
+          ? "scout"
+          : unit.classId === "engineer" && this.squadType === "engineer"
+            ? "support"
+            : unit.weaponId === "smg" || index === 0 ? "assault" : "security";
         this.roleMap.set(unit, role);
       });
 
@@ -300,9 +329,9 @@
 
       return {
         angle: approachAngle,
-        distance: 58,
-        spacing: 46,
-        stopDistance: 28,
+        distance: 64,
+        spacing: 56,
+        stopDistance: 30,
         allowOutside: true
       };
     }
@@ -450,8 +479,8 @@
       if (status.avgSuppression > 46 && status.friendlyTank?.distance > 520) {
         return { type: "need-fire-support", target: status.lastThreat || this.order.point, urgency: clamp(status.avgSuppression / 100, 0.35, 1) };
       }
-      if (status.cohesion > 230) {
-        return { type: "need-regroup", target: status.center, urgency: clamp(status.cohesion / 420, 0.25, 1) };
+      if (status.cohesion > 280) {
+        return { type: "need-regroup", target: status.center, urgency: clamp(status.cohesion / 480, 0.25, 1) };
       }
       return null;
     }
@@ -512,7 +541,7 @@
         return defensivePressure ? "hold-wall" : "hold";
       }
       if (status.casualtyRatio >= 0.48 || status.avgSuppression >= 68 || status.maxSuppression >= 92) return "fallback";
-      if (status.cohesion > 245 && status.alive > 1) return "regroup";
+      if (status.cohesion > 305 && status.alive > 1) return "regroup";
       if (
         this.order.forcedTacticalMode &&
         (!this.order.forcedTacticalUntil || performance.now() < this.order.forcedTacticalUntil)
@@ -592,7 +621,7 @@
       let best = null;
       let bestScore = Infinity;
 
-      for (const obstacle of this.game.world.obstacles || []) {
+      for (const obstacle of this.coverBlockers()) {
         const center = {
           x: obstacle.x + obstacle.w / 2,
           y: obstacle.y + obstacle.h / 2
@@ -696,7 +725,7 @@
       let best = null;
       let bestScore = Infinity;
 
-      for (const obstacle of this.game.world.obstacles || []) {
+      for (const obstacle of this.coverBlockers()) {
         const center = {
           x: obstacle.x + obstacle.w / 2,
           y: obstacle.y + obstacle.h / 2
@@ -753,6 +782,14 @@
       });
     }
 
+    coverBlockers(options = {}) {
+      return IronLine.physics?.coverBlockers?.(this.game, {
+        includeScenery: true,
+        includeWrecks: true,
+        ...options
+      }) || this.game.world.obstacles || [];
+    }
+
     safeTacticalPoint(x, y, name, radius, margin = 42) {
       const point = {
         name,
@@ -767,6 +804,13 @@
     pointPassable(x, y, radius) {
       const margin = radius + 2;
       if (x < margin || y < margin || x > this.game.world.width - margin || y > this.game.world.height - margin) return false;
+      if (IronLine.physics?.circleBlockedByWorld) {
+        return !IronLine.physics.circleBlockedByWorld(this.game, null, x, y, radius, {
+          blockTanks: true,
+          blockWrecks: true,
+          padding: 5
+        });
+      }
       return !(this.game.world.obstacles || []).some((obstacle) => circleRectCollision(x, y, radius, obstacle));
     }
 

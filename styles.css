@@ -2494,6 +2494,16 @@ body {
   width: min(92vw, 440px);
 }
 
+.hud-bottom.infantry-simple-weapons .weapon-panel {
+  width: auto;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.hud-bottom.infantry-simple-weapons .reload-readout {
+  display: none;
+}
+
 .reload-readout {
   min-width: 150px;
 }

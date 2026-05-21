@@ -308,7 +308,10 @@
     },
     isAiDroneStrikeSafe(target, weapon = INFANTRY_WEAPONS.kamikazeDrone) {
       if (!target) return false;
-      const safety = Math.max(INFANTRY_CONFIG.suicideDroneFriendlySafety, (weapon?.splash || 132) * 0.64);
+      const vehicleTarget = Boolean(target.vehicleType || target.ammo);
+      const safety = vehicleTarget
+        ? Math.max(68, (weapon?.splash || 132) * 0.42)
+        : Math.max(INFANTRY_CONFIG.suicideDroneFriendlySafety, (weapon?.splash || 132) * 0.64);
       for (const unit of this.game.infantry || []) {
         if (!unit.alive || unit.inVehicle || unit.team !== this.unit.team || unit === this.unit) continue;
         if (distXY(target.x, target.y, unit.x, unit.y) <= safety) return false;
@@ -322,17 +325,40 @@
       }
       return true;
     },
+    aiReconWaypoint(target, order = null) {
+      const anchor = target || order?.point;
+      if (!anchor) return null;
+      const targetIsEnemy = target && target.team && target.team !== this.unit.team;
+      if (!targetIsEnemy) {
+        return {
+          x: clamp(anchor.x, 20, this.game.world.width - 20),
+          y: clamp(anchor.y, 20, this.game.world.height - 20)
+        };
+      }
+
+      const weapon = INFANTRY_WEAPONS.reconDrone || {};
+      const standoff = clamp((weapon.scanRange || 620) * 0.52, 260, 420);
+      const fromTargetAngle = angleTo(target.x, target.y, this.unit.x, this.unit.y);
+      const side = (this.seed % 2 === 0 ? 1 : -1) * 0.42;
+      const angle = fromTargetAngle + side;
+      return {
+        x: clamp(target.x + Math.cos(angle) * standoff, 20, this.game.world.width - 20),
+        y: clamp(target.y + Math.sin(angle) * standoff, 20, this.game.world.height - 20)
+      };
+    },
     launchAiReconDrone(target, order = null) {
       const weapon = INFANTRY_WEAPONS.reconDrone;
       if (!weapon || this.unit.classId !== "scout") return false;
       const existing = this.ownedAiDrone("recon");
-      const waypoint = target || order?.point;
+      const waypoint = this.aiReconWaypoint(target, order);
       if (!waypoint) return false;
 
       if (existing) {
         if (this.droneCommandTimer <= 0) {
           this.game.setReconDroneWaypoint?.(existing, waypoint.x, waypoint.y) || existing.setWaypoint?.(waypoint.x, waypoint.y);
           this.droneCommandTimer = 1.1 + Math.random() * 0.45;
+          this.aiDroneState = "recon-guide";
+          return true;
         }
         return false;
       }
@@ -366,6 +392,7 @@
       const existing = this.ownedAiDrone("attack");
 
       if (existing) {
+        existing.setAiTarget?.(target);
         if (existing.diveActive) {
           existing.boosting = true;
           this.aiDroneState = "strike";
@@ -401,11 +428,15 @@
         team: this.unit.team,
         owner: this.unit,
         weapon,
+        aiControlled: true,
+        aiTarget: target,
         targetX: target.x,
         targetY: target.y,
         callSign: `${this.unit.callSign || "AI"}-FPV`
       });
+      drone.setAiTarget?.(target);
       drone.setWaypoint?.(target.x, target.y);
+      drone.boosting = distance > 420;
       (this.game.drones || (this.game.drones = [])).push(drone);
       this.unit.equipmentAmmo.kamikazeDrone = Math.max(0, (this.unit.equipmentAmmo.kamikazeDrone || 0) - 1);
       this.droneCooldown = INFANTRY_CONFIG.droneDeployCooldownMin +

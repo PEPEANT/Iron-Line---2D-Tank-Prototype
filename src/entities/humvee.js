@@ -112,6 +112,9 @@
         {
           collisionSpeedScale: 0,
           destroyObstaclesOnImpact: true,
+          blockTanks: true,
+          blockWrecks: true,
+          padding: 4,
           impactSpeed: beforeSpeed,
           impactMass: 0.94,
           vehicleKind: "humvee",

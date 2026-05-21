@@ -166,7 +166,8 @@
 
       const goal = order.supportPoint || order.point;
       const rawPath = this.game.navGraph.findPathBetween(this.tank, goal, {
-        padding: 64
+        padding: 64,
+        blockScenery: false
       });
       this.path = rawPath.filter((node) => distXY(this.tank.x, this.tank.y, node.x, node.y) > 95);
       this.pathIndex = 0;
@@ -193,12 +194,29 @@
     }
 
     canDriveDirect(x, y, padding = 58) {
+      if (IronLine.physics?.lineBlockedByWorld) {
+        return !IronLine.physics.lineBlockedByWorld(this.game, this.tank.x, this.tank.y, x, y, {
+          padding,
+          includeScenery: false,
+          includeWrecks: true,
+          ignore: [this.tank],
+          ignoreBlockerContainingA: true
+        });
+      }
       return !this.game.world.obstacles.some((obstacle) => (
         lineIntersectsRect(this.tank.x, this.tank.y, x, y, expandedRect(obstacle, padding))
       ));
     }
 
     pointPassable(x, y, radius) {
+      if (IronLine.physics?.circleBlockedByWorld) {
+        return !IronLine.physics.circleBlockedByWorld(this.game, this.tank, x, y, radius, {
+          blockScenery: false,
+          blockTanks: true,
+          blockWrecks: true,
+          padding: 5
+        });
+      }
       return !this.game.world.obstacles.some((obstacle) => circleRectCollision(x, y, radius, obstacle));
     }
 

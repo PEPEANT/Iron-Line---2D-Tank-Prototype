@@ -88,8 +88,10 @@
 
       ctx.restore();
       this.drawMinimap(game);
+      this.drawTacticalMapOverlay?.(game);
       if (!game.adminObserverMode) this.drawScreenVignette(game);
       this.drawStartCountdown(game);
+      this.drawAnnihilationRoundOverlay(game);
       this.drawTestLabOverlay(game);
       if (!game.adminObserverMode) this.drawAimModeOverlay(game);
       if (!game.adminObserverMode) this.drawScoutAimOverlay(game);
@@ -652,7 +654,12 @@
         const y = startY + Math.sin(angle) * distance;
         if (x < 0 || y < 0 || x > game.world.width || y > game.world.height) return { x: lastX, y: lastY, blocked: true };
 
-        const blocked = game.world.obstacles.some((obstacle) => lineIntersectsRect(lastX, lastY, x, y, obstacle));
+        const blocked = IronLine.physics?.lineBlockedByWorld
+          ? IronLine.physics.lineBlockedByWorld(game, lastX, lastY, x, y, {
+            padding: 4,
+            ignoreBlockerContainingA: true
+          })
+          : game.world.obstacles.some((obstacle) => lineIntersectsRect(lastX, lastY, x, y, obstacle));
         if (blocked) return { x: lastX, y: lastY, blocked: true };
 
         lastX = x;
@@ -817,11 +824,6 @@
       ctx.lineTo(aimX, aimY + 17);
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(255, 218, 132, 0.16)";
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, range, 0, Math.PI * 2);
-      ctx.stroke();
       ctx.restore();
     }
 
@@ -1407,21 +1409,67 @@
 
     drawGrenadeProjectile(shell) {
       const ctx = this.ctx;
+      const launcher = shell.ammo.sourceWeaponId === "grenadeLauncher";
       const warning = shell.life < 0.72;
-      const pulse = warning ? 1 + Math.sin(shell.life * 30) * 0.22 : 1;
+      const pulse = warning ? 1 + Math.sin(shell.life * 30) * 0.16 : 1;
+      const angle = Math.atan2(shell.vy, shell.vx);
 
       ctx.save();
-      ctx.fillStyle = warning ? "#ffdf78" : shell.ammo.color;
-      ctx.strokeStyle = warning ? "rgba(255, 95, 74, 0.7)" : "rgba(44, 30, 12, 0.55)";
-      ctx.lineWidth = 1.5;
+      if (launcher) {
+        if (!shell.landed) {
+          ctx.strokeStyle = "rgba(205, 211, 188, 0.28)";
+          ctx.lineWidth = 1.35;
+          ctx.beginPath();
+          ctx.moveTo(shell.previousX, shell.previousY);
+          ctx.lineTo(shell.x, shell.y);
+          ctx.stroke();
+        }
+
+        ctx.translate(shell.x, shell.y);
+        ctx.rotate(angle);
+        ctx.fillStyle = "#47513f";
+        roundRect(ctx, -7, -3, 13, 6, 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(230, 226, 190, 0.55)";
+        ctx.lineWidth = 1;
+        roundRect(ctx, -7, -3, 13, 6, 2);
+        ctx.stroke();
+        ctx.fillStyle = "#2e332b";
+        roundRect(ctx, -9, -2, 3.5, 4, 1);
+        ctx.fill();
+        ctx.fillStyle = "rgba(244, 201, 105, 0.78)";
+        ctx.beginPath();
+        ctx.arc(5.7, 0, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+
+      ctx.fillStyle = shell.ammo.color || "#59654d";
+      ctx.strokeStyle = warning ? "rgba(244, 108, 86, 0.66)" : "rgba(28, 34, 25, 0.74)";
+      ctx.lineWidth = warning ? 1.8 : 1.35;
       ctx.beginPath();
-      ctx.arc(shell.x, shell.y, Math.max(3.8, shell.radius * pulse), 0, Math.PI * 2);
+      ctx.ellipse(shell.x, shell.y, Math.max(3.9, shell.radius * pulse), Math.max(3.2, shell.radius * 0.78), angle * 0.35, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
+      ctx.strokeStyle = "rgba(216, 221, 194, 0.62)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.arc(shell.x + Math.cos(angle + 1.15) * 3.4, shell.y + Math.sin(angle + 1.15) * 2.8, 2.2, 0.15, Math.PI * 1.35);
+      ctx.stroke();
+
+      if (warning) {
+        ctx.strokeStyle = "rgba(244, 108, 86, 0.34)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(shell.x, shell.y, 8.5 + Math.sin(shell.life * 24) * 1.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       if (!shell.landed) {
-        ctx.strokeStyle = "rgba(255, 209, 102, 0.32)";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(182, 188, 154, 0.22)";
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.moveTo(shell.previousX, shell.previousY);
         ctx.lineTo(shell.x, shell.y);
@@ -1922,6 +1970,77 @@
       ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
       ctx.font = "800 12px Inter, sans-serif";
       ctx.fillText("F 탑승/하차 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
+      ctx.restore();
+    }
+
+    drawAnnihilationRoundOverlay(game) {
+      const state = game.annihilation;
+      if (!state || game.matchConfig?.mode !== "annihilation" || game.result) return;
+      if (!game.matchStarted && state.state !== "intermission") return;
+
+      const ctx = this.ctx;
+      const camera = this.camera;
+      const blueName = game.annihilationTeamName?.(TEAM.BLUE) || "청팀";
+      const redName = game.annihilationTeamName?.(TEAM.RED) || "홍팀";
+      const score = game.annihilationScoreText?.() || `${state.score?.[TEAM.BLUE] || 0} : ${state.score?.[TEAM.RED] || 0}`;
+      const roundText = `R${state.round || 1}/${state.maxRounds || 3}`;
+      const topText = `${blueName} ${score} ${redName} · ${roundText}`;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "900 13px Inter, sans-serif";
+      const topWidth = Math.min(camera.width - 28, Math.max(260, ctx.measureText(topText).width + 44));
+      const topX = camera.width / 2 - topWidth / 2;
+      const topY = 18;
+      roundRect(ctx, topX, topY, topWidth, 34, 8);
+      ctx.fillStyle = "rgba(7, 13, 12, 0.78)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.22)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#edf4ef";
+      ctx.fillText(topText, camera.width / 2, topY + 17);
+
+      if (game.isRoundSpectatorMode?.()) {
+        const specText = "라운드 관전 중";
+        ctx.font = "900 12px Inter, sans-serif";
+        const specWidth = Math.min(camera.width - 28, Math.max(160, ctx.measureText(specText).width + 34));
+        const specX = camera.width / 2 - specWidth / 2;
+        const specY = topY + 42;
+        roundRect(ctx, specX, specY, specWidth, 28, 8);
+        ctx.fillStyle = "rgba(255, 209, 102, 0.15)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 209, 102, 0.36)";
+        ctx.stroke();
+        ctx.fillStyle = "#ffe2a3";
+        ctx.fillText(specText, camera.width / 2, specY + 14);
+      }
+
+      if (state.state === "intermission") {
+        const w = Math.min(560, camera.width * 0.86);
+        const h = 162;
+        const x = camera.width / 2 - w / 2;
+        const y = camera.height * 0.34;
+        const remaining = Math.max(1, Math.ceil(state.intermissionRemaining || 0));
+        ctx.fillStyle = "rgba(5, 9, 8, 0.34)";
+        ctx.fillRect(0, 0, camera.width, camera.height);
+        roundRect(ctx, x, y, w, h, 8);
+        ctx.fillStyle = "rgba(8, 14, 12, 0.9)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(237, 244, 239, 0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = "#ffd166";
+        ctx.font = "900 30px Inter, sans-serif";
+        ctx.fillText(state.banner || "라운드 종료", camera.width / 2, y + 42);
+        ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
+        ctx.font = "900 17px Inter, sans-serif";
+        ctx.fillText(state.detail || `현재 점수 ${score}`, camera.width / 2, y + 80);
+        ctx.fillStyle = "rgba(237, 244, 239, 0.74)";
+        ctx.font = "800 14px Inter, sans-serif";
+        ctx.fillText(`재정비 중... ${remaining}초 후 다음 라운드 시작`, camera.width / 2, y + 118);
+      }
       ctx.restore();
     }
 

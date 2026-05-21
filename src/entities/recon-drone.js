@@ -173,11 +173,19 @@
       }
 
       const sightOptions = game.droneSightOptions?.(this, { padding: 1 }) || { padding: 1 };
+      let reported = 0;
       for (const target of targets) {
         if (distXY(this.x, this.y, target.x, target.y) > this.scanRange + (target.radius || 0)) continue;
         if (!hasLineOfSight(game, this, target, sightOptions)) continue;
-        game.reportContact?.(this.team, target, this, this.reportTtl);
+        const vehicle = Boolean(target.vehicleType || target.ammo);
+        game.reportContact?.(this.team, target, this, this.reportTtl * (vehicle ? 1.45 : 1), {
+          confidence: vehicle ? 1 : 0.95,
+          minimapVisible: true,
+          certainty: "confirmed"
+        });
+        reported += 1;
       }
+      this.lastReportCount = reported;
     }
 
     takeDamage(amount) {

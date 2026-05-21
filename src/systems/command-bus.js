@@ -110,6 +110,10 @@
     }
 
     commandPermission(packet, slot) {
+      const authority = this.game.commandAuthorityForSlot?.(slot, packet.issuerPlayerId);
+      if (authority && !authority.allowed) {
+        return { allowed: false, reason: authority.reason || "command-authority-required" };
+      }
       if (!this.isTypeAllowedForSlot(slot, packet.type)) {
         return { allowed: false, reason: "role-command-restricted" };
       }
@@ -170,7 +174,10 @@
     }
 
     resolveSquads(packet, slot) {
-      const ids = packet.targetSquadIds.length ? packet.targetSquadIds : slot?.squadIds || [];
+      const allowedIds = new Set(slot?.squadIds || []);
+      const ids = packet.targetSquadIds.length
+        ? packet.targetSquadIds.filter((id) => allowedIds.has(id))
+        : slot?.squadIds || [];
       return ids
         .map((id) => this.game.squadById?.(id))
         .filter((squad) => squad && squad.team === packet.team && squad.activeUnits().length > 0);
@@ -178,7 +185,10 @@
 
     resolveVehicles(packet, slot) {
       if (!this.canCommandVehicles(slot)) return [];
-      const ids = packet.targetVehicleIds.length ? packet.targetVehicleIds : slot?.vehicleIds || [];
+      const allowedIds = new Set(slot?.vehicleIds || []);
+      const ids = packet.targetVehicleIds.length
+        ? packet.targetVehicleIds.filter((id) => allowedIds.has(id))
+        : slot?.vehicleIds || [];
       return ids
         .map((id) => this.game.vehicleById?.(id))
         .filter((vehicle) => vehicle && vehicle.alive && vehicle.team === packet.team);
@@ -458,11 +468,12 @@
     commandSpreadRadius(type, point, count) {
       const base = point.radius || 130;
       const multiAssetBonus = Math.max(0, count - 1) * 18;
-      if (type === "defend" || type === "rally") return Math.min(180, Math.max(86, base * 0.46 + multiAssetBonus));
-      if (type === "retreat") return Math.min(132, Math.max(68, base * 0.36 + multiAssetBonus));
-      if (type === "fire_support" || type === "scan") return Math.min(190, Math.max(104, base * 0.5 + multiAssetBonus));
-      if (type === "assault" || type === "attack") return Math.min(154, Math.max(78, base * 0.4 + multiAssetBonus));
-      return Math.min(142, Math.max(70, base * 0.38 + multiAssetBonus));
+      const crowdBonus = Math.max(0, count - 3) * 10;
+      if (type === "defend" || type === "rally") return Math.min(240, Math.max(96, base * 0.52 + multiAssetBonus + crowdBonus));
+      if (type === "retreat") return Math.min(166, Math.max(78, base * 0.4 + multiAssetBonus));
+      if (type === "fire_support" || type === "scan") return Math.min(260, Math.max(118, base * 0.58 + multiAssetBonus + crowdBonus));
+      if (type === "assault" || type === "attack") return Math.min(220, Math.max(92, base * 0.48 + multiAssetBonus + crowdBonus));
+      return Math.min(210, Math.max(82, base * 0.44 + multiAssetBonus + crowdBonus));
     }
 
     record(packet, result) {

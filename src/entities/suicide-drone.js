@@ -68,6 +68,9 @@
       this.detectedTimer = 0;
       this.detectedBy = null;
       this.detectedWarningCooldown = 0;
+      this.aiControlled = Boolean(options.aiControlled);
+      this.aiTarget = options.aiTarget || null;
+      this.aiRetargetTimer = 0;
     }
 
     update(game, dt) {
@@ -78,6 +81,7 @@
       this.age += dt;
       this.updateFeedbackTimers(dt);
       this.updateLockState();
+      this.updateAiAutopilot(game, dt);
       if (this.diveActive && this.boosting) {
         this.boostImpactTimer = this.boostImpactWindow;
       } else {
@@ -99,6 +103,82 @@
 
       this.flightDistance += distXY(beforeX, beforeY, this.x, this.y);
       this.checkImpactDetonation(game, beforeX, beforeY);
+    }
+
+    setAiTarget(target) {
+      if (!target) return false;
+      const alive = target.alive !== undefined ? target.alive : target.hp > 0;
+      if (!alive || target.team === this.team) return false;
+      this.aiControlled = true;
+      this.aiTarget = target;
+      if (!this.diveActive) this.setWaypoint(target.x, target.y);
+      return true;
+    }
+
+    updateAiAutopilot(game, dt) {
+      if (!this.aiControlled || this.controlled || !game) return;
+
+      let target = this.validAiTarget(this.aiTarget) ? this.aiTarget : null;
+      this.aiRetargetTimer = Math.max(0, (this.aiRetargetTimer || 0) - dt);
+      if (!target && this.aiRetargetTimer <= 0) {
+        target = this.findAiStrikeTarget(game);
+        this.aiTarget = target;
+        this.aiRetargetTimer = 0.35;
+      }
+      if (!target) {
+        this.boosting = false;
+        return;
+      }
+
+      if (this.diveActive) {
+        this.boosting = true;
+        return;
+      }
+
+      const distance = distXY(this.x, this.y, target.x, target.y);
+      const sightOptions = game.droneSightOptions?.(this, { padding: 1 }) || { padding: 1 };
+      const hasSight = hasLineOfSight(game, this, target, sightOptions);
+      this.setWaypoint(target.x, target.y);
+      this.boosting = distance > 260 || hasSight;
+
+      const lockRange = (this.lockAcquireRange || 720) + (target.radius || 0);
+      if (!hasSight || distance > lockRange || !this.canDetonate()) return;
+
+      if (!this.lockTarget || this.lockTarget !== target) this.lockOn(target);
+      this.startAttackDive(game);
+    }
+
+    validAiTarget(target) {
+      if (!target || target.team === this.team) return false;
+      return target.alive !== undefined ? target.alive : target.hp > 0;
+    }
+
+    findAiStrikeTarget(game) {
+      const candidates = [];
+      const add = (target, baseScore) => {
+        if (!this.validAiTarget(target)) return;
+        const distance = distXY(this.x, this.y, target.x, target.y);
+        const score = baseScore - distance * 0.16 + ((target.hp || 0) / Math.max(1, target.maxHp || 1)) * 28;
+        candidates.push({ target, score });
+      };
+
+      for (const vehicle of [...(game.tanks || []), ...(game.humvees || [])]) {
+        if (!vehicle.alive || vehicle.team === this.team) continue;
+        add(vehicle, vehicle.vehicleType === "humvee" ? 230 : 320);
+      }
+      for (const unit of game.infantry || []) {
+        if (!unit.alive || unit.inVehicle || unit.team === this.team) continue;
+        add(unit, 72);
+      }
+      for (const crew of game.crews || []) {
+        if (!crew.alive || crew.inTank || crew.team === this.team) continue;
+        add(crew, 64);
+      }
+      if (!game.player?.inTank && game.player?.hp > 0 && game.player.team !== this.team && !game.isPlayerInSafeZone?.()) {
+        add(game.player, 86);
+      }
+
+      return candidates.sort((a, b) => b.score - a.score)[0]?.target || null;
     }
 
     moveToward(x, y, dt) {

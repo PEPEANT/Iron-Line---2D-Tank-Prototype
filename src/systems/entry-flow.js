@@ -9,6 +9,7 @@
       this.selectedMode = "offline";
       this.selectedFactionId = "";
       this.factionSignature = "";
+      this.roomSignature = "";
       this.bound = false;
     }
 
@@ -54,7 +55,22 @@
       skinDetail.id = "entrySkinDetail";
       skinDetail.className = "entry-skin-detail";
       skinWrap.append(skinLabel, skinList, skinDetail);
-      factionPane.append(head, skinWrap);
+
+      const onlineRooms = document.createElement("section");
+      onlineRooms.id = "entryOnlineRooms";
+      onlineRooms.className = "entry-online-rooms hidden";
+      onlineRooms.innerHTML = `
+        <div class="entry-online-head">
+          <span>ONLINE ROOMS</span>
+          <strong>참가 가능한 방</strong>
+          <p>방 카드를 누르면 바로 대기방으로 입장합니다. 진행 중이거나 정원이 찬 방은 관전자로 들어갑니다.</p>
+        </div>
+        <div class="entry-online-toolbar">
+          <button type="button" id="entryRoomRefreshButton">새로고침</button>
+        </div>
+        <div class="entry-online-list" id="entryOnlineRoomList"></div>
+      `;
+      factionPane.append(head, skinWrap, onlineRooms);
 
       const panel = document.createElement("section");
       panel.className = "entry-panel entry-session-pane";
@@ -102,8 +118,12 @@
       ui.entryScreen = screen;
       ui.entryIntro = head.querySelector("#entryIntro");
       ui.entryNickname = nickname;
+      ui.entrySkinWrap = skinWrap;
       ui.entrySkinList = skinList;
       ui.entrySkinDetail = skinDetail;
+      ui.entryOnlineRooms = onlineRooms;
+      ui.entryOnlineRoomList = onlineRooms.querySelector("#entryOnlineRoomList");
+      ui.entryRoomRefreshButton = onlineRooms.querySelector("#entryRoomRefreshButton");
       ui.entryModeList = modeList;
       ui.entryRoomStatus = roomStatus;
       ui.entryEnterButton = enter;
@@ -116,23 +136,45 @@
       if (this.bound || !ui?.entryEnterButton || !ui.entryNickname) return;
       this.bound = true;
       ui.entryEnterButton.addEventListener("click", () => this.submit());
+      ui.entryRoomRefreshButton?.addEventListener("click", () => {
+        this.roomSignature = "";
+        this.renderEntryRooms(IronLine.game);
+      });
       ui.entryNickname.addEventListener("keydown", (event) => {
         if (event.key === "Enter") this.submit();
       });
     }
 
-    submit() {
-      const game = IronLine.game;
-      if (!game) return;
+    entryProfile(game) {
       const fallbackFaction = IronLine.playerFactions?.[0]?.id || IronLine.playerSkins?.[0]?.id || "korea";
       const factionId = this.selectedFactionId || game.localProfile?.factionId || game.localProfile?.skinId || fallbackFaction;
-      const profile = {
+      return {
         nickname: this.nodes.entryNickname?.value || game.localProfile?.nickname || "",
         factionId,
         skinId: factionId
       };
+    }
+
+    submit() {
+      const game = IronLine.game;
+      if (!game) return;
+      const profile = this.entryProfile(game);
+      if (this.selectedMode === "online") {
+        this.roomSignature = "";
+        this.renderEntryRooms(game);
+        if (this.nodes.entryStatus) this.nodes.entryStatus.textContent = "방 카드를 선택하면 바로 대기방으로 입장합니다.";
+        game.setLocalProfile?.(profile);
+        return;
+      }
       if (this.hud.sessionFlow?.submitEntry?.(this.selectedMode, profile)) return;
       game.completeEntryProfile(profile);
+    }
+
+    joinRoom(room) {
+      const game = IronLine.game;
+      if (!game || !room) return false;
+      game.setLocalProfile?.(this.entryProfile(game));
+      return Boolean(this.hud.sessionFlow?.joinOnlineRoom?.(room));
     }
 
     update(game) {
@@ -144,6 +186,10 @@
       ui.entryScreen.classList.toggle("hidden", !visible);
       document.body.classList.toggle("entry-open", visible);
       if (!visible) return;
+      const onlineMode = this.selectedMode === "online";
+      ui.entryScreen.classList.toggle("entry-online-mode", onlineMode);
+      ui.entrySkinWrap?.classList.toggle("hidden", onlineMode);
+      ui.entryOnlineRooms?.classList.toggle("hidden", !onlineMode);
 
       const profile = game.localProfile || {};
       const fallbackFaction = IronLine.playerFactions?.[0]?.id || IronLine.playerSkins?.[0]?.id || "korea";
@@ -153,21 +199,25 @@
         ui.entryNickname.dataset.entrySeeded = "1";
       }
       if (ui.entryIntro) {
-        ui.entryIntro.textContent = this.selectedMode === "online"
-          ? "세력을 고르고 온라인 방 목록으로 이동합니다."
+        ui.entryIntro.textContent = onlineMode
+          ? "닉네임만 정하고 바로 방 목록에서 대기방으로 입장합니다."
           : "세력과 닉네임을 정하고 오프라인 전투 설정으로 이동합니다.";
       }
       if (ui.entryStatus) {
-        ui.entryStatus.textContent = this.selectedMode === "online"
-          ? "방 참가 뒤에는 로비에서 준비 상태와 시작 조건을 확인합니다."
+        ui.entryStatus.textContent = onlineMode
+          ? "온라인 세력은 방의 청팀/홍팀 설정을 따릅니다."
           : "선택한 세력은 외형, 전장 대사, 아이콘에만 반영됩니다. 전투 성능에는 영향을 주지 않습니다.";
       }
       if (ui.entryEnterButton) {
-        ui.entryEnterButton.textContent = this.selectedMode === "online" ? "온라인으로 이동" : "오프라인 전투";
+        ui.entryEnterButton.textContent = onlineMode ? "방 목록 새로고침" : "오프라인 전투";
       }
       this.renderModeCards();
-      this.renderSkinCards(game);
-      this.renderSkinDetail(game);
+      if (onlineMode) {
+        this.renderEntryRooms(game);
+      } else {
+        this.renderSkinCards(game);
+        this.renderSkinDetail(game);
+      }
       this.renderRoomStatus(game);
     }
 
@@ -188,6 +238,7 @@
           button.addEventListener("click", () => {
             this.selectedMode = mode.id;
             this.factionSignature = "";
+            this.roomSignature = "";
             this.update(IronLine.game);
           });
           list.append(button);
@@ -197,6 +248,89 @@
       list.querySelectorAll("[data-entry-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.entryMode === this.selectedMode);
       });
+    }
+
+    renderEntryRooms(game) {
+      const list = this.nodes.entryOnlineRoomList;
+      if (!list) return;
+      const rooms = IronLine.roomRegistry?.listRooms?.() || [];
+      const signature = JSON.stringify(rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        mode: room.mode,
+        phase: room.phase,
+        locked: room.locked,
+        blueFactionId: room.blueFactionId,
+        redFactionId: room.redFactionId,
+        players: (room.players || []).length,
+        spectators: (room.spectators || []).length,
+        capacity: room.capacity
+      })));
+      if (this.roomSignature === signature) return;
+      this.roomSignature = signature;
+      list.textContent = "";
+
+      if (rooms.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "entry-online-empty";
+        empty.innerHTML = `
+          <strong>참가 가능한 방 없음</strong>
+          <span>관리자 운영센터에서 방을 만들면 이곳에 바로 표시됩니다.</span>
+        `;
+        list.append(empty);
+        return;
+      }
+
+      for (const room of rooms) {
+        const players = (room.players || []).filter((player) => (player.participantType || "player") === "player");
+        const spectators = room.spectators || [];
+        const capacity = room.capacity || 8;
+        const spectatorJoin = room.phase === "playing" || room.locked || players.length >= capacity;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "entry-online-room";
+        button.dataset.phase = room.phase || "waiting";
+        button.classList.toggle("is-spectator-join", spectatorJoin);
+        button.disabled = room.phase === "ended";
+        button.innerHTML = `
+          <span class="entry-online-room-main">
+            <strong>${this.escape(room.name || room.id)}</strong>
+            <small>${this.modeLabel(room.mode)} · ${this.phaseLabel(room.phase)}</small>
+          </span>
+          <span class="entry-online-room-meta">
+            <em>${this.factionLabel(room.blueFactionId)} vs ${this.factionLabel(room.redFactionId)}</em>
+            <em>슬롯 ${players.length}/${capacity} · 관전 ${spectators.length}</em>
+          </span>
+          <b>${spectatorJoin ? "관전 입장" : "대기방 입장"}</b>
+        `;
+        button.addEventListener("click", () => this.joinRoom(room));
+        list.append(button);
+      }
+    }
+
+    modeLabel(mode) {
+      return mode === "conquest" ? "점령전" : "섬멸전";
+    }
+
+    phaseLabel(phase) {
+      if (phase === "playing") return "진행 중";
+      if (phase === "loading") return "로딩";
+      if (phase === "ended") return "종료";
+      return "대기";
+    }
+
+    factionLabel(id) {
+      return IronLine.playerFactionById?.(id)?.name || IronLine.playerSkinById?.(id)?.name || "세력 미정";
+    }
+
+    escape(value) {
+      return String(value || "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      })[char]);
     }
 
     renderSkinCards(game) {
@@ -279,16 +413,13 @@
       const skin = IronLine.playerFactionById?.(selectedId) || IronLine.playerSkinById?.(selectedId) || null;
       const nickname = String(this.nodes.entryNickname?.value || game.localProfile?.nickname || "Player").trim() || "Player";
       const modeOnline = this.selectedMode === "online";
-      const room = modeOnline && game.onlineSession?.roomId
-        ? IronLine.roomRegistry?.getRoom?.(game.onlineSession.roomId)
-        : null;
-      const playerCount = room ? (room.players || []).length : 0;
-      const spectatorCount = room ? (room.spectators || []).length : 0;
+      const rooms = modeOnline ? IronLine.roomRegistry?.listRooms?.() || [] : [];
+      const openRooms = rooms.filter((room) => room.phase !== "ended");
       const roomLabel = modeOnline
-        ? room?.name || room?.id || "방 목록"
+        ? "방 목록"
         : "로컬 전투";
       const stateLabel = modeOnline
-        ? room ? `${playerCount}명 참가 · 관전자 ${spectatorCount}` : "참가 가능한 방 확인"
+        ? openRooms.length > 0 ? `${openRooms.length}개 방 참가 가능` : "대기 중인 방 없음"
         : "설정 화면에서 전투 조건 선택";
 
       root.textContent = "";
@@ -303,12 +434,19 @@
 
       const grid = document.createElement("div");
       grid.className = "entry-room-grid";
-      const facts = [
-        ["플레이어", nickname],
-        ["세력", skin?.name || "선택 대기"],
-        ["모드", modeOnline ? "온라인" : "오프라인"],
-        ["상태", stateLabel]
-      ];
+      const facts = modeOnline
+        ? [
+            ["플레이어", nickname],
+            ["입장 방식", "방 카드 선택"],
+            ["모드", "온라인"],
+            ["상태", stateLabel]
+          ]
+        : [
+            ["플레이어", nickname],
+            ["세력", skin?.name || "선택 대기"],
+            ["모드", "오프라인"],
+            ["상태", stateLabel]
+          ];
       for (const [label, value] of facts) {
         const item = document.createElement("div");
         item.className = "entry-room-fact";

@@ -49,8 +49,8 @@
       game.lobbyOpen = true;
       game.roomListOpen = true;
       game.matchPhase = "rooms";
-      game.matchConfig.mode = "conquest";
-      game.conquest = game.defaultConquestState?.() || game.conquest;
+      game.matchConfig.mode = "annihilation";
+      game.resetAnnihilationState?.();
       if (game.onlineSession) game.onlineSession.roomId = "";
       this.prepareOnlineSession(game, { host: false });
       game.hud?.update?.(game);
@@ -75,8 +75,9 @@
       game.deploymentOpen = false;
       game.lobbyOpen = true;
       game.matchPhase = "lobby";
-      game.matchConfig.mode = options.room?.mode || "conquest";
-      game.conquest = game.defaultConquestState?.() || game.conquest;
+      game.matchConfig.mode = options.room?.mode || "annihilation";
+      if (game.matchConfig.mode === "conquest") game.conquest = game.defaultConquestState?.() || game.conquest;
+      else game.resetAnnihilationState?.();
       this.prepareOnlineSession(game, options);
       game.resetScenarioForMatch?.();
       game.syncOnlineSlotAssets?.();
@@ -179,7 +180,30 @@
       this.lastPublishAt = now;
       const player = game.localSessionPlayer?.();
       if (!player) return;
+      this.syncLocalPlayerPresence(game, player, now);
       this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
+    }
+
+    syncLocalPlayerPresence(game, sessionPlayer, now = Date.now()) {
+      const entity = game?.player;
+      if (!entity || !sessionPlayer) return null;
+      const mounted = entity.inTank || entity.inVehicle || null;
+      const point = mounted?.alive !== false ? mounted : entity;
+      if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+      const alive = Boolean(!game.playerDeathActive && !game.playerDowned && entity.hp > 0);
+      const position = {
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+        alive,
+        inVehicle: Boolean(mounted),
+        updatedAt: now
+      };
+      sessionPlayer.position = position;
+      sessionPlayer.x = position.x;
+      sessionPlayer.y = position.y;
+      sessionPlayer.alive = alive;
+      sessionPlayer.inVehicle = position.inVehicle;
+      return position;
     }
 
     leaveOnlineRoom(game = this.game(), reason = "leave") {
@@ -224,14 +248,16 @@
         return;
       }
 
-      game.matchConfig.mode = room.mode || game.matchConfig.mode;
-      if (room.mode === "conquest" && !game.conquest) game.conquest = game.defaultConquestState?.() || game.conquest;
+      game.matchConfig.mode = room.mode || game.matchConfig.mode || "annihilation";
+      if (game.matchConfig.mode === "conquest" && !game.conquest) game.conquest = game.defaultConquestState?.() || game.conquest;
+      if (game.matchConfig.mode === "annihilation" && !game.annihilation) game.resetAnnihilationState?.();
       game.onlineSession.joinLocked = Boolean(room.locked);
       game.onlineSession.aiFillEmptySlots = room.aiFillEmptySlots !== false;
       this.syncRoomParticipants(game, room);
       game.onlineSession.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
       game.onlineSession.blueFactionId = room.blueFactionId || "korea";
       game.onlineSession.redFactionId = room.redFactionId || "russia";
+      game.applyRoomCommandAuthority?.(room.commandAuthorities || [], room.commandAuthorityRequests || []);
       this.applyRoomFactionToLocalPlayer(game);
       IronLine.factionVisuals?.syncGame?.(game);
       this.publishLocalPlayer(game);
@@ -263,6 +289,21 @@
       }
       if (roomPlayers.length > 0) session.players = roomPlayers;
       session.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
+      const playerBySlot = new Map(
+        roomPlayers
+          .filter((player) => (player.participantType || "player") === "player" && player.slotId)
+          .map((player) => [player.slotId, player])
+      );
+      for (const slot of session.roleSlots || []) {
+        const player = playerBySlot.get(slot.id) || null;
+        slot.playerId = player?.id || null;
+        slot.nickname = player?.name || player?.nickname || "";
+        slot.ready = Boolean(player?.ready);
+        slot.aiControlled = !player;
+        if (player && !slot.commandAuthorityPlayerId) {
+          game.setSlotCommandAuthority?.(slot, player.id, player.name || player.nickname || player.id, "owner");
+        }
+      }
     }
 
     makeRoomId() {

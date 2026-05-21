@@ -45,7 +45,7 @@
           <label>
             <span>모드</span>
             <select id="adminRoomMode">
-              <option value="conquest">점령전</option>
+              <option value="conquest" selected>점령전</option>
               <option value="annihilation">섬멸전</option>
             </select>
           </label>
@@ -487,7 +487,7 @@
       );
       if (game.adminObserverMode && ui.adminPanel?.classList.contains("hidden")) {
         ui.adminPanel.classList.remove("hidden");
-        this.selectAdminTab("observer");
+        this.selectAdminTab(game.isAdminStandalonePage?.() ? "ops" : "observer");
       }
 
       if (ui.adminStatus) {
@@ -566,8 +566,8 @@
       const selectedRoom = rooms.find((room) => room.id === selectedId) || rooms[0] || null;
       const roomKey = selectedRoom?.id || "";
       const roomChanged = this.nodes.adminRoomControls?.dataset.selectedRoomKey !== roomKey;
-      this.updateAdminFactionSelect(this.nodes.adminBlueFaction, selectedRoom?.blueFactionId || "korea", roomChanged);
-      this.updateAdminFactionSelect(this.nodes.adminRedFaction, selectedRoom?.redFactionId || "russia", roomChanged);
+      this.updateAdminFactionSelect(this.nodes.adminBlueFaction, selectedRoom?.blueFactionId || "singularity", roomChanged);
+      this.updateAdminFactionSelect(this.nodes.adminRedFaction, selectedRoom?.redFactionId || "military-gallery", roomChanged);
       if (selectedRoom) {
         if (this.nodes.adminRoomName && (roomChanged || !this.nodes.adminRoomName.value)) this.nodes.adminRoomName.value = selectedRoom.name || "";
         if (this.nodes.adminRoomMode && (roomChanged || !this.nodes.adminRoomMode.value)) this.nodes.adminRoomMode.value = selectedRoom.mode || "conquest";
@@ -852,13 +852,17 @@
         ? (snapshot.commands || []).filter((entry) => entry.accepted).length
         : (game.commandBus?.log || []).filter((entry) => entry.accepted).length;
       const match = snapshot?.match || {};
+      const localScore = game.matchConfig?.mode === "conquest" ? game.conquest?.score : game.annihilation?.score;
+      const localTime = game.matchConfig?.mode === "conquest"
+        ? game.conquest?.remaining ?? 0
+        : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0;
       const values = [
         { label: "연결", value: snapshot ? "플레이어 화면" : "로컬 관전" },
         { label: "상태", value: snapshot ? match.started ? "전투 중" : match.lobbyOpen ? "로비" : "배치" : game.matchStarted ? "전투 중" : game.lobbyOpen ? "로비" : "배치" },
-        { label: "시간", value: this.formatTime(snapshot ? match.remaining ?? 0 : game.matchConfig?.mode === "conquest" ? game.conquest?.remaining ?? 0 : game.matchTime || 0) },
+        { label: "시간", value: this.formatTime(snapshot ? match.remaining ?? 0 : localTime) },
         { label: "청팀", value: `${blue.alive}/${blue.total}` },
         { label: "홍팀", value: `${red.alive}/${red.total}` },
-        { label: "점수", value: snapshot ? `${Math.floor(match.score?.[TEAM.BLUE] || 0)} : ${Math.floor(match.score?.[TEAM.RED] || 0)}` : `${Math.floor(game.conquest?.score?.[TEAM.BLUE] || 0)} : ${Math.floor(game.conquest?.score?.[TEAM.RED] || 0)}` },
+        { label: "점수", value: snapshot ? `${Math.floor(match.score?.[TEAM.BLUE] || 0)} : ${Math.floor(match.score?.[TEAM.RED] || 0)}` : `${Math.floor(localScore?.[TEAM.BLUE] || 0)} : ${Math.floor(localScore?.[TEAM.RED] || 0)}` },
         { label: "명령", value: String(activeCommands) }
       ];
       const signature = JSON.stringify(values);

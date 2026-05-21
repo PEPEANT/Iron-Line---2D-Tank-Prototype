@@ -25,7 +25,13 @@
       return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
     }
 
+    isAdminStandalonePage() {
+      return /admin\.html$/i.test(window.location.pathname || "") ||
+        Boolean(document.body?.classList?.contains("admin-standalone-page"));
+    }
+
     enterAdminObserverMode() {
+      if (this.isAdminStandalonePage()) return this.enterAdminOpsMode();
       this.setMatchMode?.("conquest");
       this.deploymentOpen = false;
       this.lobbyOpen = false;
@@ -38,6 +44,45 @@
       if (this.playerTank) this.playerTank.playerControlled = false;
       this.adminCamera?.activate?.();
       this.hud?.openAdminObserver?.();
+    }
+
+    enterAdminOpsMode() {
+      const room = this.ensureAdminControlRoom();
+      this.matchConfig.mode = "conquest";
+      this.deploymentOpen = false;
+      this.lobbyOpen = false;
+      this.roomListOpen = false;
+      this.entryOpen = false;
+      this.matchStarted = false;
+      this.countdownStarted = false;
+      this.startCountdown = 0;
+      this.matchPhase = "waiting";
+      this.debug.ai = true;
+      if (this.player) Object.assign(this.player, { alive: false, hp: 0, inTank: null });
+      if (this.playerTank) this.playerTank.playerControlled = false;
+      if (room) this.adminApplyRoom?.(room, { live: false });
+      this.adminCamera?.activate?.();
+      this.adminCamera?.fitWorld?.();
+      this.hud?.toggleAdminPanel?.(true);
+      this.hud?.selectAdminTab?.("ops");
+      this.hud?.update?.(this);
+      return true;
+    }
+
+    ensureAdminControlRoom() {
+      const registry = IronLine.roomRegistry;
+      if (!registry) return null;
+      const selectedRoom = registry.selectedRoom?.();
+      if (selectedRoom) {
+        registry.selectRoom?.(selectedRoom.id);
+        return selectedRoom;
+      }
+      return registry.createRoom?.({
+        name: "온라인 테스트방",
+        mode: "conquest",
+        blueFactionId: "singularity",
+        redFactionId: "military-gallery"
+      }) || null;
     }
 
     enterSpectatorMode(options = {}) {
@@ -65,14 +110,74 @@
 
     defaultMatchConfig() {
       const spawns = this.world.spawns;
+      const density = this.aiDensityProfile("large");
+      const blueInfantryBase = spawns.infantryBlue?.length || 0;
+      const redInfantryBase = spawns.infantryRed?.length || 0;
+      const blueTankBase = spawns.blue?.length || 0;
+      const redTankBase = spawns.red?.length || 0;
       return {
         mode: "annihilation",
         difficulty: "normal",
-        blueAiTanks: spawns.blue.length,
-        blueInfantry: spawns.infantryBlue.length,
-        redTanks: spawns.red.length,
-        redInfantry: spawns.infantryRed.length
+        aiDensityPreset: density.id,
+        blueAiTanks: this.defaultAiTankCount(blueTankBase, density.blueTankBonus),
+        blueInfantry: this.defaultAiInfantryCount(blueInfantryBase, density.blueInfantryScale),
+        redTanks: this.defaultAiTankCount(redTankBase, density.redTankBonus),
+        redInfantry: this.defaultAiInfantryCount(redInfantryBase, density.redInfantryScale)
       };
+    }
+
+    aiDensityProfile(id = "large") {
+      const profiles = {
+        performance: {
+          id: "performance",
+          blueInfantryScale: 1.15,
+          redInfantryScale: 1.25,
+          blueTankBonus: 0,
+          redTankBonus: 0
+        },
+        standard: {
+          id: "standard",
+          blueInfantryScale: 1.32,
+          redInfantryScale: 1.45,
+          blueTankBonus: 0,
+          redTankBonus: 0
+        },
+        large: {
+          id: "large",
+          blueInfantryScale: 1.5,
+          redInfantryScale: 1.7,
+          blueTankBonus: 0,
+          redTankBonus: 1
+        }
+      };
+      return profiles[id] || profiles.large;
+    }
+
+    applyAiDensityPreset(id = "large") {
+      if (this.matchStarted || this.countdownStarted) return false;
+      const density = this.aiDensityProfile(id);
+      const spawns = this.world.spawns;
+      this.matchConfig.aiDensityPreset = density.id;
+      this.matchConfig.blueAiTanks = this.defaultAiTankCount(spawns.blue?.length || 0, density.blueTankBonus);
+      this.matchConfig.blueInfantry = this.defaultAiInfantryCount(spawns.infantryBlue?.length || 0, density.blueInfantryScale);
+      this.matchConfig.redTanks = this.defaultAiTankCount(spawns.red?.length || 0, density.redTankBonus);
+      this.matchConfig.redInfantry = this.defaultAiInfantryCount(spawns.infantryRed?.length || 0, density.redInfantryScale);
+      this.scenarioDirty = true;
+      this.resetScenarioForMatch?.();
+      this.hud?.update?.(this);
+      return true;
+    }
+
+    defaultAiInfantryCount(baseCount, scale = 1.5) {
+      const base = Math.max(0, Math.floor(Number(baseCount) || 0));
+      if (base <= 0) return 0;
+      return Math.max(base, Math.round(base * scale));
+    }
+
+    defaultAiTankCount(baseCount, bonus = 0) {
+      const base = Math.max(0, Math.floor(Number(baseCount) || 0));
+      if (base <= 0) return 0;
+      return Math.max(base, base + Math.max(0, Math.floor(Number(bonus) || 0)));
     }
 
     profileStorageKey() {
@@ -224,7 +329,12 @@
             squadIds: [],
             vehicleIds: [],
             unitIds: [],
-            droneIds: []
+            droneIds: [],
+            commandAuthorityPlayerId: "",
+            commandAuthorityName: "",
+            commandAuthoritySource: "",
+            commandAuthorityUpdatedAt: 0,
+            commandRequest: null
           });
         }
       }
@@ -240,8 +350,8 @@
           roomId: `관전-${suffix}`,
           playerId: "",
           hostId: "",
-          blueFactionId: "korea",
-          redFactionId: "russia",
+          blueFactionId: "singularity",
+          redFactionId: "military-gallery",
           localReady: true,
           joinLocked: true,
           allowMidMatchJoin: false,
@@ -254,6 +364,7 @@
       if (localSlot) {
         localSlot.playerId = profile.playerId;
         localSlot.aiControlled = false;
+        this.setSlotCommandAuthority(localSlot, profile.playerId, profile.nickname, "owner");
       }
       return {
         roomId: `로컬-${suffix}`,
@@ -362,6 +473,7 @@
         if (slot.playerId === playerId) {
           slot.playerId = null;
           slot.aiControlled = true;
+          this.clearSlotCommandAuthority(slot, playerId);
         }
       }
 
@@ -381,6 +493,7 @@
         this.player.skinId = factionId;
       }
       player.ready = false;
+      this.setSlotCommandAuthority(nextSlot, playerId, player.name || player.nickname || playerId, "owner");
       if (playerId === this.onlineSession.playerId) this.onlineSession.localReady = false;
       IronLine.factionVisuals?.syncGame?.(this);
       this.syncOnlineSlotAssets();
@@ -396,6 +509,88 @@
       return [...(this.tanks || []), ...(this.humvees || [])].find((vehicle) => vehicle.callSign === id) || null;
     }
 
+    handleSquadLeaderLoss(squad, lostLeader) {
+      if (!squad || !lostLeader || squad.commandSlotOverrideId) return false;
+      const player = this.localSessionPlayer?.();
+      if (!player || (player.participantType || "player") !== "player" || player.team !== squad.team) return false;
+      if (!this.localPlayerAlive()) return false;
+      const ownerSlot = this.sessionSlotById?.(squad.ownerSlotId || "");
+      if (ownerSlot?.playerId && ownerSlot.playerId !== player.id) return false;
+      const successor = this.squadSuccessionCandidate(squad, ownerSlot);
+      if (!successor || successor.player.id !== player.id) return false;
+      const localSlot = successor.slot;
+      if (!localSlot || squad.ownerSlotId === localSlot.id) return false;
+
+      squad.commandSlotOverrideId = localSlot.id;
+      squad.commandTransferReason = "leader_loss";
+      this.syncOnlineSlotAssets?.();
+
+      const transferCount = squad.activeUnits?.().length || 0;
+      if (transferCount <= 0) return false;
+      const teamLabel = squad.team === TEAM.RED ? "홍팀" : "청팀";
+      const roleLabel = this.commandRoleLabel(ownerSlot?.roleId || squad.squadType || localSlot.roleId);
+      const squadNo = this.squadSerialLabel(squad);
+      const detail = `${teamLabel} ${roleLabel} ${squadNo}분대 분대장이 사망했습니다. 보병 ${transferCount}명이 내 분대로 편입됩니다.`;
+      this.battlefieldEvents?.push?.({
+        type: "squad_leader_lost",
+        severity: "warning",
+        team: squad.team,
+        title: "분대장 사망",
+        detail
+      });
+      this.hud?.update?.(this);
+      return true;
+    }
+
+    squadSuccessionCandidate(squad, ownerSlot = null) {
+      const center = squad.status?.center || squad.leaderUnit?.() || squad.order?.point;
+      if (!center) return null;
+      const candidates = [];
+      for (const player of this.onlineSession?.players || []) {
+        if (!player || (player.participantType || "player") !== "player") continue;
+        if (player.team !== squad.team || player.alive === false) continue;
+        const slot = this.sessionSlotById?.(player.slotId);
+        if (!slot || slot.team !== squad.team || slot.id === ownerSlot?.id) continue;
+        const distance = this.distanceFromSquadToSlotCommand(center, player, slot);
+        if (!Number.isFinite(distance) || distance > 900) continue;
+        candidates.push({ player, slot, distance });
+      }
+      candidates.sort((a, b) => a.distance - b.distance || String(a.player.id).localeCompare(String(b.player.id)));
+      return candidates[0] || null;
+    }
+
+    distanceFromSquadToSlotCommand(center, player, slot) {
+      const anchors = [];
+      if (player.id === this.onlineSession?.playerId && this.player?.alive !== false) {
+        anchors.push(this.player);
+      }
+      const position = player.position || player;
+      if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) anchors.push(position);
+      for (const vehicleId of slot?.vehicleIds || []) {
+        const vehicle = this.vehicleById?.(vehicleId);
+        if (vehicle?.alive) anchors.push(vehicle);
+      }
+      for (const squadId of slot?.squadIds || []) {
+        const owned = this.squadById?.(squadId);
+        const ownedCenter = owned?.status?.center || owned?.leaderUnit?.();
+        if (ownedCenter) anchors.push(ownedCenter);
+      }
+      if (!anchors.length) return Infinity;
+      return anchors.reduce((best, anchor) => Math.min(best, Math.hypot(center.x - anchor.x, center.y - anchor.y)), Infinity);
+    }
+
+    commandRoleLabel(roleId = "") {
+      if (roleId === "armor") return "기갑";
+      if (roleId === "engineer") return "공병";
+      if (roleId === "recon") return "정찰";
+      return "보병";
+    }
+
+    squadSerialLabel(squad) {
+      const match = /-(\d+)$/.exec(squad?.callSign || "");
+      return match ? match[1] : (squad?.callSign || "");
+    }
+
     syncOnlineSlotAssets() {
       const slots = this.onlineSession?.roleSlots || [];
       for (const slot of slots) {
@@ -408,12 +603,20 @@
       for (const squad of this.squads || []) {
         squad.ownerSlotId = "";
       }
+      for (const vehicle of [...(this.tanks || []), ...(this.humvees || [])]) {
+        vehicle.ownerSlotId = "";
+      }
 
-      const assignTeam = (team, sideId) => {
+      const assignTeam = (team) => {
         const teamSlots = new Map(
           slots
             .filter((slot) => slot.team === team)
             .map((slot) => [slot.roleId, slot])
+        );
+        const teamSlotsById = new Map(
+          slots
+            .filter((slot) => slot.team === team)
+            .map((slot) => [slot.id, slot])
         );
         const squads = (this.squads || [])
           .filter((squad) => squad.team === team)
@@ -423,33 +626,218 @@
           .map((unit) => unit.callSign);
         const vehicles = [...(this.tanks || []), ...(this.humvees || [])]
           .filter((vehicle) => vehicle.team === team && !vehicle.isPlayerTank)
-          .sort((a, b) => a.callSign.localeCompare(b.callSign))
-          .map((vehicle) => vehicle.callSign);
+          .sort((a, b) => a.callSign.localeCompare(b.callSign));
+        const transferredSquads = squads.filter((squad) => (
+          squad.commandSlotOverrideId && teamSlotsById.has(squad.commandSlotOverrideId)
+        ));
+        const transferSet = new Set(transferredSquads);
+        const commandableSquads = squads.filter((squad) => !transferSet.has(squad));
 
         const squadBuckets = {
-          infantry: squads.slice(0, 1),
-          engineer: squads.slice(1, 2),
-          recon: squads.slice(2, 3),
-          armor: squads.slice(3)
+          infantry: commandableSquads.filter((squad) => (squad.squadType || "infantry") === "infantry"),
+          engineer: commandableSquads.filter((squad) => squad.squadType === "engineer"),
+          recon: commandableSquads.filter((squad) => squad.squadType === "recon"),
+          armor: commandableSquads.filter((squad) => squad.squadType === "armor")
         };
-        if (squads.length > 0 && squadBuckets.armor.length === 0) squadBuckets.armor = squads.slice(-1);
 
-        for (const [roleId, bucket] of Object.entries(squadBuckets)) {
+        const assignPrimarySquad = (roleId, bucket) => {
           const slot = teamSlots.get(roleId);
-          if (!slot) continue;
-          slot.squadIds = bucket.map((squad) => squad.callSign);
-          for (const squad of bucket) squad.ownerSlotId = slot.id;
+          const squad = bucket.shift();
+          if (!slot || !squad) return;
+          slot.squadIds.push(squad.callSign);
+          squad.ownerSlotId = slot.id;
+        };
+
+        assignPrimarySquad("infantry", squadBuckets.infantry);
+        assignPrimarySquad("engineer", squadBuckets.engineer);
+        assignPrimarySquad("recon", squadBuckets.recon);
+        assignPrimarySquad("armor", squadBuckets.armor);
+
+        for (const squad of transferredSquads) {
+          const slot = teamSlotsById.get(squad.commandSlotOverrideId);
+          if (!slot || slot.squadIds.includes(squad.callSign)) continue;
+          slot.squadIds.push(squad.callSign);
+          squad.ownerSlotId = slot.id;
         }
 
         const reconSlot = teamSlots.get("recon");
         if (reconSlot) reconSlot.unitIds = scouts;
         const armorSlot = teamSlots.get("armor");
-        if (armorSlot) armorSlot.vehicleIds = vehicles;
+        if (armorSlot) {
+          const primaryVehicle = vehicles[0] || null;
+          armorSlot.vehicleIds = primaryVehicle ? [primaryVehicle.callSign] : [];
+          if (primaryVehicle) primaryVehicle.ownerSlotId = armorSlot.id;
+        }
       };
 
-      assignTeam(TEAM.BLUE, "blue");
-      assignTeam(TEAM.RED, "red");
+      assignTeam(TEAM.BLUE);
+      assignTeam(TEAM.RED);
       for (const slot of slots) slot.aiControlled = !slot.playerId;
+      this.syncCommandAuthorityState();
+    }
+
+    playerDisplayName(playerId = "") {
+      const player = this.sessionPlayerById(playerId);
+      return player?.name || player?.nickname || playerId || "";
+    }
+
+    localPlayerAlive() {
+      if (this.playerDeathActive || this.playerDowned) return false;
+      return !this.player || this.player.hp > 0;
+    }
+
+    sessionPlayerActive(playerId = "") {
+      if (!playerId) return false;
+      const player = this.sessionPlayerById(playerId);
+      if (!player || (player.participantType || "player") !== "player") return false;
+      return player.alive !== false;
+    }
+
+    setSlotCommandAuthority(slot, playerId = "", playerName = "", source = "delegated") {
+      if (!slot) return null;
+      slot.commandAuthorityPlayerId = playerId || "";
+      slot.commandAuthorityName = playerId ? (playerName || this.playerDisplayName(playerId) || playerId) : "";
+      slot.commandAuthoritySource = playerId ? source : "";
+      slot.commandAuthorityUpdatedAt = Date.now();
+      if (playerId) slot.commandRequest = null;
+      return slot;
+    }
+
+    clearSlotCommandAuthority(slot, playerId = "") {
+      if (!slot) return null;
+      if (playerId && slot.commandAuthorityPlayerId && slot.commandAuthorityPlayerId !== playerId) return slot;
+      slot.commandAuthorityPlayerId = "";
+      slot.commandAuthorityName = "";
+      slot.commandAuthoritySource = "";
+      slot.commandAuthorityUpdatedAt = Date.now();
+      if (slot.commandRequest?.requesterId === playerId) slot.commandRequest = null;
+      return slot;
+    }
+
+    slotHasAssets(slot) {
+      return Boolean((slot?.squadIds?.length || 0) + (slot?.vehicleIds?.length || 0) + (slot?.unitIds?.length || 0));
+    }
+
+    canCommandSlot(slot, playerId = this.onlineSession?.playerId || "") {
+      if (!slot || !playerId) return false;
+      if (slot.playerId === playerId) return true;
+      return Boolean(slot.playerId && slot.commandAuthorityPlayerId === playerId);
+    }
+
+    commandSlotsForPlayer(playerId = this.onlineSession?.playerId || "") {
+      const player = this.sessionPlayerById(playerId);
+      const team = player?.team || this.player?.team || TEAM.BLUE;
+      return (this.onlineSession?.roleSlots || [])
+        .filter((slot) => slot.team === team && this.slotHasAssets(slot) && this.canCommandSlot(slot, playerId));
+    }
+
+    commandAuthorityForSlot(slot, playerId = this.onlineSession?.playerId || "") {
+      if (!slot) return { allowed: false, reason: "missing-slot" };
+      if (this.canCommandSlot(slot, playerId)) return { allowed: true, reason: "" };
+      return { allowed: false, reason: "command-authority-required" };
+    }
+
+    commandRequestForLocal(slot) {
+      const localId = this.onlineSession?.playerId || "";
+      if (!slot?.commandRequest || !localId) return null;
+      return slot.commandRequest.requesterId === localId ? slot.commandRequest : null;
+    }
+
+    requestCommandAuthority(slotId) {
+      const slot = this.sessionSlotById(slotId);
+      const player = this.localSessionPlayer?.();
+      if (!slot || !player || player.participantType !== "player") return { ok: false, reason: "missing-slot" };
+      if (slot.team !== player.team) return { ok: false, reason: "team-mismatch" };
+      if (this.canCommandSlot(slot, player.id)) return { ok: true, status: "already-owned", slot };
+      return { ok: false, reason: slot.playerId ? "manual-delegation-disabled" : "ai-slot-not-claimable" };
+    }
+
+    approveCommandAuthority(slotId) {
+      const slot = this.sessionSlotById(slotId);
+      const player = this.localSessionPlayer?.();
+      const request = slot?.commandRequest;
+      if (!slot || !player || !request) return { ok: false, reason: "missing-request" };
+      if (slot.playerId !== player.id && this.onlineSession?.hostId !== player.id) return { ok: false, reason: "not-owner" };
+      this.setSlotCommandAuthority(slot, request.requesterId, request.requesterName, "delegated");
+      this.publishCommandAuthorityChange(slot, "approve");
+      this.hud?.update?.(this);
+      return { ok: true, status: "approved", slot };
+    }
+
+    denyCommandAuthority(slotId) {
+      const slot = this.sessionSlotById(slotId);
+      const player = this.localSessionPlayer?.();
+      if (!slot || !player || !slot.commandRequest) return { ok: false, reason: "missing-request" };
+      if (slot.playerId !== player.id && this.onlineSession?.hostId !== player.id) return { ok: false, reason: "not-owner" };
+      const request = slot.commandRequest;
+      slot.commandRequest = null;
+      IronLine.roomRegistry?.resolveCommandAuthorityRequest?.(this.onlineSession?.roomId || "", request.id, false, {
+        resolverId: player.id,
+        resolverName: player.name || player.nickname || player.id
+      });
+      this.hud?.update?.(this);
+      return { ok: true, status: "denied", slot };
+    }
+
+    releaseCommandAuthority(slotId) {
+      const slot = this.sessionSlotById(slotId);
+      const player = this.localSessionPlayer?.();
+      if (!slot || !player || !this.canCommandSlot(slot, player.id)) return { ok: false, reason: "not-owner" };
+      if (slot.playerId === player.id) {
+        this.setSlotCommandAuthority(slot, player.id, player.name || player.nickname, "owner");
+      } else {
+        this.clearSlotCommandAuthority(slot, player.id);
+      }
+      this.publishCommandAuthorityChange(slot, "release");
+      this.hud?.update?.(this);
+      return { ok: true, status: "released", slot };
+    }
+
+    publishCommandAuthorityChange(slot, action = "update") {
+      if (!this.onlineSession?.roomId || !slot) return;
+      IronLine.roomRegistry?.updateCommandAuthority?.(this.onlineSession.roomId, {
+        slotId: slot.id,
+        playerId: slot.commandAuthorityPlayerId || "",
+        playerName: slot.commandAuthorityName || "",
+        source: slot.commandAuthoritySource || "",
+        action
+      });
+    }
+
+    publishCommandAuthorityRequest(slot) {
+      if (!this.onlineSession?.roomId || !slot?.commandRequest) return;
+      IronLine.roomRegistry?.requestCommandAuthority?.(this.onlineSession.roomId, slot.commandRequest);
+    }
+
+    applyRoomCommandAuthority(authorities = [], requests = []) {
+      const bySlot = new Map((authorities || []).map((item) => [item.slotId, item]));
+      for (const slot of this.onlineSession?.roleSlots || []) {
+        const authority = bySlot.get(slot.id);
+        if (authority && slot.playerId && authority.playerId === slot.playerId) {
+          this.setSlotCommandAuthority(slot, authority.playerId, authority.playerName, "owner");
+          slot.commandAuthorityUpdatedAt = authority.updatedAt || slot.commandAuthorityUpdatedAt || Date.now();
+        } else if (slot.playerId) {
+          this.setSlotCommandAuthority(slot, slot.playerId, this.playerDisplayName(slot.playerId), "owner");
+        } else {
+          this.clearSlotCommandAuthority(slot);
+        }
+        slot.commandRequest = null;
+      }
+      this.syncCommandAuthorityState();
+    }
+
+    syncCommandAuthorityState() {
+      for (const slot of this.onlineSession?.roleSlots || []) {
+        if (slot.playerId) {
+          if (slot.commandAuthorityPlayerId !== slot.playerId || slot.commandAuthoritySource !== "owner") {
+            this.setSlotCommandAuthority(slot, slot.playerId, this.playerDisplayName(slot.playerId), "owner");
+          }
+        } else if (slot.commandAuthorityPlayerId) {
+          this.clearSlotCommandAuthority(slot);
+        }
+
+        slot.commandRequest = null;
+      }
     }
   }
 

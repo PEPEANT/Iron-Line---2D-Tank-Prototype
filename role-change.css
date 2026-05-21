@@ -89,6 +89,17 @@
   background: rgba(107, 188, 255, 0.08);
 }
 
+.role-change-card.inactive {
+  opacity: 0.5;
+  filter: saturate(0.62);
+}
+
+.role-change-card.inactive:hover,
+.role-change-card.inactive:focus-within {
+  opacity: 0.74;
+  filter: saturate(0.82);
+}
+
 .role-change-select {
   width: 100%;
   display: grid;
@@ -97,10 +108,25 @@
   text-align: left;
 }
 
+.role-change-select.inactive {
+  background: rgba(238, 243, 236, 0.045);
+}
+
 .role-change-select.active,
 .role-change-choice.active {
   border-color: rgba(107, 188, 255, 0.75);
   background: rgba(107, 188, 255, 0.16);
+}
+
+.role-change-choice.inactive-role-choice {
+  border-color: rgba(238, 243, 236, 0.12);
+  background: rgba(238, 243, 236, 0.045);
+  color: rgba(238, 243, 236, 0.72);
+}
+
+.role-change-choice.inactive-role-choice.active {
+  border-color: rgba(107, 188, 255, 0.32);
+  background: rgba(107, 188, 255, 0.06);
 }
 
 .role-change-list span {

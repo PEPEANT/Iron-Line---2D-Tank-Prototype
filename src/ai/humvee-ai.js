@@ -493,12 +493,16 @@
       }
 
       for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
-        if (other === this.vehicle || !other.alive) continue;
+        if (other === this.vehicle) continue;
+        const wreck = IronLine.physics?.isVehicleWreck?.(other) ||
+          Boolean(!other.alive && !other.coverDestroyed && (other.hp <= 0 || other.destructionPending));
+        if (!other.alive && !wreck) continue;
         const distance = distXY(this.vehicle.x, this.vehicle.y, other.x, other.y);
-        const avoidRange = (this.vehicle.radius || 30) + (other.radius || 32) + 26;
+        const avoidRange = (this.vehicle.radius || 30) + (other.radius || 32) + (wreck ? 46 : 26);
         if (distance > avoidRange || distance < 1) continue;
-        ax += ((this.vehicle.x - other.x) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.54, 1);
-        ay += ((this.vehicle.y - other.y) / distance) * (avoidRange - distance) / Math.max(avoidRange * 0.54, 1);
+        const force = ((avoidRange - distance) / Math.max(avoidRange * 0.54, 1)) * (wreck ? 1.25 : 1);
+        ax += ((this.vehicle.x - other.x) / distance) * force;
+        ay += ((this.vehicle.y - other.y) / distance) * force;
       }
 
       const length = Math.max(0.001, Math.hypot(ax, ay));

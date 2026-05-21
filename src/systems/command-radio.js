@@ -10,6 +10,7 @@
       this.selectedType = "move";
       this.selectedSquads = new Set();
       this.selectedVehicles = new Set();
+      this.channel = "infantry";
       this.statusMessage = "";
       this.statusUntil = 0;
       this.open = false;
@@ -52,7 +53,7 @@
       const brandName = document.createElement("span");
       brandName.textContent = "야전 무전기";
       const channel = document.createElement("b");
-      channel.textContent = "작전 채널";
+      channel.textContent = "보병 채널";
       brand.append(brandName, channel);
 
       const head = document.createElement("div");
@@ -78,6 +79,28 @@
       assets.className = "command-assets";
       assets.hidden = true;
       assets.setAttribute("aria-hidden", "true");
+
+      const channels = document.createElement("div");
+      channels.className = "command-channels";
+      for (const [id, label] of [["infantry", "보병"], ["armor", "기갑"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.commandChannel = id;
+        button.textContent = label;
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.setChannel(id);
+        });
+        channels.append(button);
+      }
+
+      const memory = document.createElement("div");
+      memory.id = "commandMemory";
+      memory.className = "command-memory";
+
+      const authority = document.createElement("div");
+      authority.id = "commandAuthority";
+      authority.className = "command-authority";
 
       const buttons = document.createElement("div");
       buttons.className = "command-buttons";
@@ -123,7 +146,7 @@
 
       const controlDeck = document.createElement("div");
       controlDeck.className = "command-control-deck";
-      controlDeck.append(assets, buttons, log);
+      controlDeck.append(channels, assets, memory, buttons, log);
 
       shell.append(brand, head, speaker, controlDeck);
       panel.append(antenna, shell);
@@ -138,7 +161,10 @@
       ui.commandStatus = status;
       ui.commandAssets = assets;
       ui.commandButtons = Array.from(buttons.querySelectorAll("[data-command-type]"));
+      ui.commandChannelButtons = Array.from(channels.querySelectorAll("[data-command-channel]"));
+      ui.commandAuthority = authority;
       ui.commandSpecials = specials;
+      ui.commandMemory = memory;
       ui.commandMap = map;
       ui.commandLog = log;
     }
@@ -178,6 +204,7 @@
 
       const player = game.localSessionPlayer?.();
       const slot = player ? game.sessionSlotById?.(player.slotId) : null;
+      this.updateChannels(game, slot);
       this.syncSelection(slot);
       if (slot && !(game.commandBus?.isTypeAllowedForSlot?.(slot, this.selectedType) ?? true)) {
         const fallback = ui.commandButtons?.find((button) => (
@@ -213,6 +240,7 @@
       });
 
       this.updateAssets(game, slot);
+      this.updateMemory(game, slot);
       const showMap = this.open && (this.selectedType === "attack" || this.selectedType === "defend");
       ui.commandMap?.classList.toggle("hidden", !showMap);
       if (ui.commandMap) {
@@ -226,9 +254,37 @@
       this.updateLog(game);
     }
 
+    setChannel(channel) {
+      if (!["infantry", "armor"].includes(channel)) return;
+      if (this.channel === channel) return;
+      this.channel = channel;
+      this.selectedSquads.clear();
+      this.selectedVehicles.clear();
+      if (this.nodes.commandAssets) this.nodes.commandAssets.dataset.signature = "";
+      if (this.nodes.commandMemory) this.nodes.commandMemory.dataset.signature = "";
+      const game = IronLine.game;
+      if (game) this.update(game);
+    }
+
+    updateChannels(game, slot) {
+      const canArmor = Boolean((slot?.vehicleIds || []).length);
+      if (this.channel === "armor" && !canArmor) this.channel = "infantry";
+      this.nodes.commandChannelButtons?.forEach((button) => {
+        const channel = button.dataset.commandChannel;
+        const disabled = channel === "armor" && !canArmor;
+        button.disabled = disabled;
+        button.classList.toggle("active", channel === this.channel);
+        button.title = disabled ? "이 슬롯에는 기갑 자산이 없습니다." : "";
+      });
+      if (this.nodes.commandPanel) this.nodes.commandPanel.dataset.channel = this.channel;
+      const label = this.nodes.commandPanel?.querySelector?.(".command-radio-brand b");
+      if (label) label.textContent = `${this.channel === "armor" ? "기갑" : "보병"} 채널`;
+    }
+
     syncSelection(slot) {
-      const squadIds = new Set(slot?.squadIds || []);
-      const vehicleIds = new Set(slot?.vehicleIds || []);
+      const allowed = this.channelAssets(slot);
+      const squadIds = new Set(allowed.squads);
+      const vehicleIds = new Set(allowed.vehicles);
       for (const id of Array.from(this.selectedSquads)) {
         if (!squadIds.has(id)) this.selectedSquads.delete(id);
       }
@@ -238,6 +294,24 @@
       if (this.selectedSquads.size > 0 || this.selectedVehicles.size > 0) return;
       for (const id of squadIds) this.selectedSquads.add(id);
       for (const id of vehicleIds) this.selectedVehicles.add(id);
+    }
+
+    channelAssets(slot) {
+      const slots = this.commandSlots(slot);
+      const squads = [];
+      const vehicles = [];
+      for (const candidate of slots) {
+        if (this.channel !== "armor") squads.push(...(candidate.squadIds || []));
+        if (this.channel !== "infantry") vehicles.push(...(candidate.vehicleIds || []));
+      }
+      return {
+        squads: Array.from(new Set(squads)),
+        vehicles: Array.from(new Set(vehicles))
+      };
+    }
+
+    commandSlots(slot) {
+      return slot ? [slot] : [];
     }
 
     updateAssets(game, slot) {
@@ -342,17 +416,58 @@
 
     submitCurrentCommand(game, point, objectiveName = "", extra = {}) {
       const slot = game.sessionSlotById?.(game.localSessionPlayer?.()?.slotId);
-      const allSquads = new Set(slot?.squadIds || []);
-      const allVehicles = new Set(slot?.vehicleIds || []);
-      const targetSquadIds = Array.from(this.selectedSquads).filter((id) => allSquads.has(id));
-      const targetVehicleIds = Array.from(this.selectedVehicles).filter((id) => allVehicles.has(id));
-      return game.submitLocalCommand?.(this.selectedType, {
-        ...extra,
-        objectiveName,
-        targetPoint: point,
-        targetSquadIds,
-        targetVehicleIds
-      });
+      const squadSlotById = new Map();
+      const vehicleSlotById = new Map();
+      for (const candidate of this.commandSlots(slot)) {
+        for (const id of candidate.squadIds || []) squadSlotById.set(id, candidate);
+        for (const id of candidate.vehicleIds || []) vehicleSlotById.set(id, candidate);
+      }
+
+      const grouped = new Map();
+      const groupFor = (candidate) => {
+        if (!candidate) return null;
+        if (!grouped.has(candidate.id)) grouped.set(candidate.id, { slot: candidate, targetSquadIds: [], targetVehicleIds: [] });
+        return grouped.get(candidate.id);
+      };
+      for (const id of this.selectedSquads) {
+        const group = groupFor(squadSlotById.get(id));
+        if (group) group.targetSquadIds.push(id);
+      }
+      for (const id of this.selectedVehicles) {
+        const group = groupFor(vehicleSlotById.get(id));
+        if (group) group.targetVehicleIds.push(id);
+      }
+      if (!grouped.size) {
+        return { accepted: false, reason: "no-assets", squadIds: [], vehicleIds: [] };
+      }
+
+      const results = [];
+      for (const group of grouped.values()) {
+        results.push(game.submitLocalCommand?.(this.selectedType, {
+          ...extra,
+          slotId: group.slot.id,
+          objectiveName,
+          targetPoint: point,
+          targetSquadIds: group.targetSquadIds,
+          targetVehicleIds: group.targetVehicleIds
+        }));
+      }
+      return this.mergeCommandResults(results);
+    }
+
+    mergeCommandResults(results = []) {
+      const accepted = results.filter((result) => result?.accepted);
+      const rejected = results.filter((result) => result && !result.accepted);
+      if (results.length === 1) return results[0];
+      if (!accepted.length) return rejected[0] || { accepted: false, reason: "no-assets" };
+      return {
+        accepted: true,
+        partial: rejected.length > 0,
+        packet: accepted[0].packet,
+        squadIds: accepted.flatMap((result) => result.squadIds || []),
+        vehicleIds: accepted.flatMap((result) => result.vehicleIds || []),
+        results
+      };
     }
 
     showCommandResult(result) {

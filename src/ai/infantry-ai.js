@@ -43,7 +43,7 @@
     grenadeAimMax: 0.95,
     droneDeployCooldownMin: 10,
     droneDeployCooldownMax: 16,
-    reconDroneObserveRange: 980,
+    reconDroneObserveRange: 1220,
     suicideDronePreferredMin: 260,
     suicideDronePreferredMax: 1120,
     suicideDroneStrikeRange: 1280,
@@ -1726,7 +1726,7 @@
       let best = null;
       let bestQuality = -Infinity;
 
-      for (const obstacle of this.game.world.obstacles) {
+      for (const obstacle of this.coverBlockers()) {
         const samples = this.coverSamplesForObstacle(obstacle, threat);
         for (const point of samples) {
           if (!this.pointPassable(point.x, point.y, this.unit.radius + 3)) continue;
@@ -1755,6 +1755,14 @@
       return best && this.game.coverSlots
         ? this.game.coverSlots.reserve(this.unit, best, 1.4) || best
         : best;
+    }
+
+    coverBlockers(options = {}) {
+      return IronLine.physics?.coverBlockers?.(this.game, {
+        includeScenery: true,
+        includeWrecks: true,
+        ...options
+      }) || this.game.world.obstacles || [];
     }
 
     coverSearchRadius() {
@@ -1880,6 +1888,7 @@
       const commander = this.game.commanders?.[this.unit.team];
       const ordered = commander?.getInfantryOrderFor(this.unit);
       if (ordered?.role === "repair") return ordered;
+      if (this.unit.classId === "scout" && ordered && !this.unit.squad?.manualOrder) return ordered;
 
       const squadOrder = this.unit.squad?.getOrderFor?.(this.unit);
       if (squadOrder) return squadOrder;
@@ -1929,7 +1938,7 @@
         return finalTarget;
       }
 
-      if (this.path.length === 0 || this.repathTimer <= 0) this.rebuildPath(order);
+      if (this.path.length === 0 || this.repathTimer <= 0) this.rebuildPath(order, finalTarget);
 
       while (
         this.pathIndex < this.path.length &&
@@ -1940,7 +1949,16 @@
 
       if (this.pathIndex >= this.path.length) return finalTarget;
       const node = this.path[this.pathIndex];
-      return { x: node.x, y: node.y, stopDistance: 42, final: false };
+      return this.pathNodeTarget(order, node);
+    }
+
+    clampMoveTarget(target, margin = this.unit.radius + 8) {
+      if (!target) return target;
+      return {
+        ...target,
+        x: clamp(target.x, margin, this.game.world.width - margin),
+        y: clamp(target.y, margin, this.game.world.height - margin)
+      };
     }
 
     formationTarget(order) {
@@ -1974,6 +1992,7 @@
         };
       }
 
+      target = this.clampMoveTarget(target);
       if (formation?.allowOutside && this.pointPassable(target.x, target.y, this.unit.radius + 3)) {
         return this.deconflictedFormationTarget(order, target);
       }
@@ -2001,8 +2020,8 @@
       const pointRadius = point.radius || 130;
       const spread = clamp(
         order.commandSpreadRadius || pointRadius * (defendLike ? 0.46 : 0.38),
-        defendLike ? 74 : 58,
-        defendLike ? 190 : 160
+        defendLike ? 92 : 76,
+        defendLike ? 280 : 235
       );
       const forwardX = Math.cos(formation.angle);
       const forwardY = Math.sin(formation.angle);
@@ -2026,6 +2045,7 @@
     }
 
     safeFormationTarget(order, target) {
+      target = this.clampMoveTarget(target);
       const allowOutside = Boolean(order.formation?.allowOutside);
       if (this.pointPassable(target.x, target.y, this.unit.radius + 3)) return target;
 
@@ -2034,12 +2054,12 @@
       for (const radius of radii) {
         for (let step = 0; step < 14; step += 1) {
           const angle = baseAngle + step * Math.PI * 2 / 14;
-          const candidate = {
+          const candidate = this.clampMoveTarget({
             x: order.point.x + Math.cos(angle) * radius,
             y: order.point.y + Math.sin(angle) * radius,
             stopDistance: target.stopDistance || 24,
             final: true
-          };
+          });
           if (!allowOutside && distXY(candidate.x, candidate.y, order.point.x, order.point.y) > order.point.radius - 4) continue;
           if (this.pointPassable(candidate.x, candidate.y, this.unit.radius + 3)) return candidate;
         }
@@ -2052,7 +2072,7 @@
       if (!target?.final || !this.game?.infantry?.length) return target;
 
       const currentScore = this.formationCrowdScore(target.x, target.y);
-      if (currentScore < 0.65) return target;
+      if (currentScore < 0.48) return target;
 
       const allowOutside = Boolean(order.formation?.allowOutside);
       const point = order.point || target;
@@ -2064,17 +2084,17 @@
       let best = target;
       let bestScore = currentScore;
 
-      for (const radius of [28, 44, 62, 82]) {
-        for (let step = 0; step < 8; step += 1) {
-          const angle = baseAngle + step * Math.PI * 2 / 8;
-          const candidate = {
+      for (const radius of [34, 56, 82, 112, 146]) {
+        for (let step = 0; step < 10; step += 1) {
+          const angle = baseAngle + step * Math.PI * 2 / 10;
+          const candidate = this.clampMoveTarget({
             ...target,
             x: target.x + Math.cos(angle) * radius,
             y: target.y + Math.sin(angle) * radius
-          };
+          });
           if (!allowOutside && distXY(candidate.x, candidate.y, point.x, point.y) > maxRadius) continue;
           if (!this.pointPassable(candidate.x, candidate.y, this.unit.radius + 3)) continue;
-          const score = this.formationCrowdScore(candidate.x, candidate.y) + radius * 0.012;
+          const score = this.formationCrowdScore(candidate.x, candidate.y) + radius * 0.008;
           if (score + 0.04 < bestScore) {
             best = candidate;
             bestScore = score;
@@ -2090,9 +2110,9 @@
       for (const other of this.game.infantry || []) {
         if (other === this.unit || !other.alive || other.inVehicle || other.team !== this.unit.team) continue;
         const distance = distXY(x, y, other.x, other.y);
-        if (distance > 58 || distance < 1) continue;
+        if (distance > 74 || distance < 1) continue;
         const squadFactor = other.squadId === this.unit.squadId ? 1.15 : 0.9;
-        score += ((58 - distance) / 58) * squadFactor;
+        score += ((74 - distance) / 74) * squadFactor;
       }
 
       for (const vehicle of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
@@ -2105,12 +2125,43 @@
       return score;
     }
 
-    rebuildPath(order) {
+    rebuildPath(order, finalTarget = null) {
       if (!this.game.navGraph) return;
-      const rawPath = this.game.navGraph.findPathBetween(this.unit, order.point, { padding: 24 });
+      const destination = finalTarget || order.point;
+      const rawPath = this.game.navGraph.findPathBetween(this.unit, destination, { padding: 24 });
       this.path = rawPath.filter((node) => distXY(this.unit.x, this.unit.y, node.x, node.y) > 52);
       this.pathIndex = 0;
       this.repathTimer = 2.8 + Math.random() * 0.9;
+    }
+
+    pathNodeTarget(order, node) {
+      if (!node) return { x: order.point.x, y: order.point.y, stopDistance: 42, final: false };
+      const formation = order.formation || {};
+      const angle = Number.isFinite(formation.angle)
+        ? formation.angle
+        : angleTo(this.unit.x, this.unit.y, order.point?.x ?? node.x, order.point?.y ?? node.y);
+      const sideX = Math.cos(angle + Math.PI / 2);
+      const sideY = Math.sin(angle + Math.PI / 2);
+      const squadCount = Math.max(1, order.squadSlotCount || order.slotCount || 1);
+      const squadSlot = clamp(
+        Number.isFinite(order.squadSlotIndex) ? order.squadSlotIndex : order.slotIndex || 0,
+        0,
+        squadCount - 1
+      );
+      const roleCount = Math.max(1, order.roleSlotCount || 1);
+      const roleSlot = clamp(order.roleSlotIndex || 0, 0, roleCount - 1);
+      const squadSide = squadSlot - (squadCount - 1) / 2;
+      const roleSide = roleSlot - (roleCount - 1) / 2;
+      const jitter = ((this.seed % 7) - 3) * 4;
+      const offset = clamp(squadSide * 30 + roleSide * 18 + jitter, -104, 104);
+      const candidate = this.clampMoveTarget({
+        x: node.x + sideX * offset,
+        y: node.y + sideY * offset,
+        stopDistance: 46,
+        final: false
+      });
+      if (this.pointPassable(candidate.x, candidate.y, this.unit.radius + 5)) return candidate;
+      return this.clampMoveTarget({ x: node.x, y: node.y, stopDistance: 50, final: false });
     }
 
     moveTo(dt, target) {
@@ -2140,7 +2191,7 @@
         Math.sin(this.unit.angle) * this.unit.speed,
         this.unit.radius,
         dt,
-        { blockTanks: true, padding: 5 }
+        { blockTanks: true, blockWrecks: true, padding: 5 }
       );
     }
 
@@ -2148,7 +2199,7 @@
       let ax = vx;
       let ay = vy;
 
-      for (const obstacle of this.game.world.obstacles || []) {
+      for (const obstacle of this.coverBlockers()) {
         const expanded = expandedRect(obstacle, 28);
         const lookX = this.unit.x + vx * 52;
         const lookY = this.unit.y + vy * 52;
@@ -2168,11 +2219,11 @@
         if (other === this.unit || !other.alive || other.inVehicle) continue;
         const distance = distXY(this.unit.x, this.unit.y, other.x, other.y);
         const friendly = other.team === this.unit.team;
-        const avoidRange = friendly ? (finalArrival ? 56 : 40) : 32;
+        const avoidRange = friendly ? (finalArrival ? 66 : 48) : 34;
         if (distance > avoidRange || distance < 1) continue;
-        const squadBoost = friendly && other.squadId === this.unit.squadId ? 1.18 : 1;
+        const squadBoost = friendly && other.squadId === this.unit.squadId ? 1.28 : 1.08;
         const force = ((avoidRange - distance) / Math.max(18, avoidRange * 0.68)) *
-          (friendly ? (finalArrival ? 1.28 : 0.88) : 0.72) *
+          (friendly ? (finalArrival ? 1.42 : 1.02) : 0.76) *
           squadBoost;
         ax += ((this.unit.x - other.x) / distance) * force;
         ay += ((this.unit.y - other.y) / distance) * force;
@@ -2309,6 +2360,15 @@
     }
 
     canMoveDirect(x, y, padding = 24) {
+      if (!this.pointPassable(x, y, this.unit.radius + 3)) return false;
+      if (IronLine.physics?.lineBlockedByWorld) {
+        return !IronLine.physics.lineBlockedByWorld(this.game, this.unit.x, this.unit.y, x, y, {
+          padding,
+          ignore: [this.unit],
+          ignoreBlockerContainingA: true,
+          ignoreBlockerContainingB: true
+        });
+      }
       return !this.game.world.obstacles.some((obstacle) => (
         lineIntersectsRect(this.unit.x, this.unit.y, x, y, expandedRect(obstacle, padding))
       ));
@@ -2318,8 +2378,15 @@
       if (x < radius || y < radius || x > this.game.world.width - radius || y > this.game.world.height - radius) {
         return false;
       }
+      if (IronLine.physics?.circleBlockedByWorld) {
+        return !IronLine.physics.circleBlockedByWorld(this.game, this.unit, x, y, radius, {
+          blockTanks: true,
+          blockWrecks: true,
+          padding: 5
+        });
+      }
       return !this.game.world.obstacles.some((obstacle) => circleRectCollision(x, y, radius, obstacle)) &&
-        !circleIntersectsTank(this.game, this.unit, x, y, radius, { padding: 5 });
+        !circleIntersectsTank(this.game, this.unit, x, y, radius, { padding: 5, blockWrecks: true });
     }
 
     recordMovement(dt, beforeX, beforeY, target) {

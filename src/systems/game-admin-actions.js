@@ -165,8 +165,8 @@
       const selectedId = document.getElementById("adminRoomSelect")?.value || registry.selectedRoomId();
       const name = document.getElementById("adminRoomName")?.value || "온라인 테스트방";
       const mode = document.getElementById("adminRoomMode")?.value || "conquest";
-      const blueFactionId = document.getElementById("adminBlueFaction")?.value || "korea";
-      const redFactionId = document.getElementById("adminRedFaction")?.value || "russia";
+      const blueFactionId = document.getElementById("adminBlueFaction")?.value || "singularity";
+      const redFactionId = document.getElementById("adminRedFaction")?.value || "military-gallery";
       let room = null;
 
       if (action === "room-create") {
@@ -183,7 +183,7 @@
           this.adminNotify("선택할 방이 없습니다.");
           return false;
         }
-        this.adminApplyRoom(room, { live: room.phase === "playing" });
+        this.adminApplyRoom(room, { live: false });
         this.adminNotify(`관전 방 선택: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -197,7 +197,7 @@
       if (action === "room-save") {
         room = registry.updateRoom(selectedId, { name, mode, blueFactionId, redFactionId });
         if (!room) return false;
-        this.adminApplyRoom(room, { live: room.phase === "playing" });
+        this.adminApplyRoom(room, { live: false });
         this.adminNotify(`방 설정 저장: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -259,6 +259,7 @@
       this.onlineSession.redFactionId = room.redFactionId || "russia";
       this.matchConfig.mode = room.mode || "conquest";
       if (this.matchConfig.mode === "conquest") this.conquest = this.defaultConquestState?.() || this.conquest;
+      else this.resetAnnihilationState?.();
       this.entryOpen = false;
       this.roomListOpen = false;
       this.deploymentOpen = false;

@@ -65,6 +65,7 @@
         mobileWeaponButton: null,
         mobileRoleButton: null,
         mobileScoreboardButton: null,
+        mobileTacticalMapButton: null,
         mobileSpectatorChatButton: null,
         mobileSpectatorHomeButton: null,
         mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyF'], [data-mobile-key='KeyE']"),
@@ -100,7 +101,10 @@
         commandStatus: document.getElementById("commandStatus"),
         commandAssets: document.getElementById("commandAssets"),
         commandButtons: [],
+        commandChannelButtons: [],
+        commandAuthority: document.getElementById("commandAuthority"),
         commandSpecials: document.getElementById("commandSpecials"),
+        commandMemory: document.getElementById("commandMemory"),
         commandMap: document.getElementById("commandMap"),
         commandLog: document.getElementById("commandLog"),
         deathScreen: document.getElementById("deathScreen"),
@@ -161,6 +165,7 @@
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
       this.nodes.mobileRoleButton = this.createMobileRoleButton();
       this.nodes.mobileScoreboardButton = this.createMobileScoreboardButton();
+      this.nodes.mobileTacticalMapButton = this.createMobileTacticalMapButton();
       this.nodes.mobileSpectatorChatButton = this.createMobileSpectatorButton("chat", "채팅", "관전자 채팅 열기");
       this.nodes.mobileSpectatorHomeButton = this.createMobileSpectatorButton("home", "전체", "전장 전체 보기");
     }
@@ -287,6 +292,10 @@
         event.preventDefault();
         this.toggleScoreboardPinned();
       });
+      this.nodes.mobileTacticalMapButton?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        IronLine.game?.toggleTacticalMap?.();
+      });
     }
 
     bindLobbyControls() {
@@ -380,6 +389,19 @@
       return button;
     }
 
+    createMobileTacticalMapButton() {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mobile-action tactical-map-toggle hidden";
+      button.textContent = "지도";
+      button.setAttribute("aria-label", "전술지도 열기");
+      controls.append(button);
+      return button;
+    }
+
     createMobileSpectatorButton(kind, label, ariaLabel) {
       const controls = this.nodes.mobileControls;
       if (!controls) return null;
@@ -452,6 +474,9 @@
       this.nodes.mobileRoleButton?.classList.toggle("hidden", !roleChangeAvailable);
       this.nodes.mobileScoreboardButton?.classList.toggle("hidden", !showControls);
       this.nodes.mobileScoreboardButton?.classList.toggle("active", Boolean(this.scoreboardPinned));
+      this.nodes.mobileTacticalMapButton?.classList.toggle("hidden", !showControls);
+      this.nodes.mobileTacticalMapButton?.classList.toggle("active", Boolean(game.tacticalMapOpen));
+      this.nodes.mobileTacticalMapButton?.setAttribute("aria-label", game.tacticalMapOpen ? "전술지도 닫기" : "전술지도 열기");
 
       if (this.nodes.mobileInteractButton) {
         const label = canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
@@ -511,6 +536,7 @@
       }
 
       const ui = this.nodes;
+      this.setInfantryWeaponReadoutCompact(false);
 
       for (const id of ["ap", "he"]) {
         if (!ui.slots[id]) continue;
@@ -567,6 +593,7 @@
 
     updateHumveeWeapons(humvee) {
       const ui = this.nodes;
+      this.setInfantryWeaponReadoutCompact(false);
 
       for (const id of ["ap", "he", "smoke"]) {
         ui.slots[id]?.classList.add("hidden");
@@ -591,9 +618,14 @@
       }
     }
 
+    setInfantryWeaponReadoutCompact(compact) {
+      this.nodes.bottomHud?.classList.toggle("infantry-simple-weapons", Boolean(compact));
+    }
+
     updateInfantryWeapons(player, game = null) {
       const ui = this.nodes;
       if (!ui.weaponState || !ui.reloadBar) return;
+      this.setInfantryWeaponReadoutCompact(true);
       const slotIds = ["ap", "he", "mg"];
       const inventory = player.weaponInventory || [];
 
@@ -620,6 +652,7 @@
       const ammo = this.weaponAmmoCount(player, weapon);
       const drone = game?.player?.controlledDrone;
       if (drone?.alive) {
+        this.setInfantryWeaponReadoutCompact(false);
         const attackDrone = drone.droneRole === "attack";
         const signalStrength = drone.signalStrength?.() ?? 1;
         const weakSignal = Boolean(drone.isSignalWeak?.());
@@ -656,6 +689,7 @@
       }
       const returningDrone = game?.activePlayerDrone?.();
       if (returningDrone?.autoReturn) {
+        this.setInfantryWeaponReadoutCompact(false);
         const distance = IronLine.math.distXY(player.x, player.y, returningDrone.x, returningDrone.y);
         const pct = 1 - IronLine.math.clamp(distance / Math.max(120, returningDrone.maxControlRange || 1200), 0, 1);
         ui.weaponState.textContent = returningDrone.droneRole === "attack" ? "FPV auto returning" : "Recon drone auto returning";
@@ -664,12 +698,14 @@
       }
       const pickupDrone = game?.nearbyPlayerDroneForPickup?.();
       if (pickupDrone) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = pickupDrone.droneRole === "attack" ? "FPV retrieve ready" : "Recon drone retrieve ready";
         ui.reloadBar.style.width = "100%";
         return;
       }
       const activeDrone = game?.activePlayerDrone?.();
       if (activeDrone?.alive && !activeDrone.autoReturn) {
+        this.setInfantryWeaponReadoutCompact(false);
         const attackDrone = activeDrone.droneRole === "attack";
         const signalStrength = activeDrone.signalStrength?.() ?? 1;
         const weakSignal = Boolean(activeDrone.isSignalWeak?.());
@@ -707,25 +743,32 @@
         ui.weaponState.textContent = `\uAD8C\uCD1D \uC870\uC900 ${this.weaponAmmoText(player, weapon)}`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (observedSniperTarget?.designated) {
+        this.setInfantryWeaponReadoutCompact(false);
         const ttl = Math.max(0, Math.ceil(designatedTarget?.ttl || 0));
         ui.weaponState.textContent = `지정 표적 사격 ${ttl}s`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (observedSniperTarget?.target) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `드론 관측 사격 ${this.weaponAmmoText(player, weapon)}`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (designatedTarget?.target && weapon?.id === "sniper") {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `지정 표적 ${Math.max(0, Math.ceil(designatedTarget.ttl || 0))}s`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconDesignationOptions.length > 0) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `정찰드론 표적 ${reconDesignationOptions.length} · 마커 클릭`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0 && game?.isPlayerScoutAimMode?.()) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `Recon observed ${reconObservedContacts.length} · align aim`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `드론 관측 ${reconObservedContacts.length}`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconDroneReady) {
+        this.setInfantryWeaponReadoutCompact(false);
         ui.weaponState.textContent = `정찰드론 관측 대기 ${this.weaponAmmoText(player, weapon)}`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else {
@@ -774,7 +817,7 @@
     }
 
     updateDeathScreen(game) {
-      const visible = Boolean(game.playerDeathActive && !game.result);
+      const visible = Boolean(game.playerDeathActive && !game.result && !game.isRoundSpectatorMode?.());
       this.nodes.deathScreen?.classList.toggle("hidden", !visible);
       if (this.nodes.deathReason) {
         const respawn = game.matchConfig?.mode === "conquest" && Number.isFinite(game.playerRespawnTimer)
@@ -991,7 +1034,75 @@
           if (!humvee.alive) continue;
           addMarker(`unit-${humvee.team === TEAM.BLUE ? "blue" : "red"}`, "", humvee.x, humvee.y, "vehicle", humvee.callSign);
         }
+
+        if (game.sessionMode === "online") {
+          for (const human of this.humanMapMarkers(game)) {
+            const marker = addMarker(`player-human ${human.local ? "local" : ""}`, human.label, human.x, human.y);
+            marker.title = `${human.name} · 실제 플레이어`;
+          }
+        }
       }
+    }
+
+    humanMapMarkers(game) {
+      const session = game.onlineSession || {};
+      const localId = session.playerId || "";
+      const players = (session.players || []).filter((player) => (player.participantType || "player") === "player");
+      const seen = new Set();
+      const markers = [];
+
+      for (const player of players) {
+        const id = player.id || "";
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        const local = Boolean(id && id === localId);
+        const point = this.humanMapPoint(game, player, local ? game.player : null);
+        if (!point || point.alive === false) continue;
+        const name = player.name || player.nickname || "Player";
+        markers.push({
+          ...point,
+          id,
+          local,
+          name,
+          label: local ? "나" : this.playerInitial(name)
+        });
+      }
+
+      if (game.player && localId && !seen.has(localId)) {
+        const point = this.humanMapPoint(game, { id: localId, team: game.player.team }, game.player);
+        if (point) markers.push({ ...point, id: localId, local: true, name: "Player", label: "나" });
+      }
+
+      return markers;
+    }
+
+    humanMapPoint(game, sessionPlayer, localEntity = null) {
+      if (localEntity) {
+        const mounted = localEntity.inTank || localEntity.inVehicle || null;
+        const point = mounted?.alive !== false ? mounted : localEntity;
+        if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+        return {
+          x: point.x,
+          y: point.y,
+          alive: !game.playerDeathActive && !game.playerDowned && localEntity.hp > 0
+        };
+      }
+
+      const raw = sessionPlayer.position || sessionPlayer;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        return { x, y, alive: raw.alive !== false && sessionPlayer.alive !== false };
+      }
+
+      const slot = game.sessionSlotById?.(sessionPlayer.slotId || "");
+      const team = sessionPlayer.team || slot?.team || TEAM.BLUE;
+      const zone = (game.world.safeZones || []).find((item) => item.team === team);
+      return zone ? { x: zone.x, y: zone.y, alive: sessionPlayer.alive !== false } : null;
+    }
+
+    playerInitial(name = "") {
+      return String(name || "P").trim().slice(0, 1).toUpperCase() || "P";
     }
 
     teamStats(game, team) {
@@ -1127,7 +1238,10 @@
       const players = (game.onlineSession?.players || []).filter((player) => (player.participantType || "player") === "player");
       const spectators = game.onlineSession?.spectators || [];
       const aiSlots = (game.onlineSession?.roleSlots || []).filter((slot) => slot.aiControlled !== false && !slot.playerId).length;
-      return `플레이어 ${players.length} · 관전 ${spectators.length} · AI ${aiSlots} · ${this.formatTime(seconds)}`;
+      const round = game.matchConfig?.mode === "annihilation" && game.annihilation
+        ? `R${game.annihilation.round || 1}/${game.annihilation.maxRounds || 3} · ${game.annihilationScoreText?.() || "0 : 0"}`
+        : this.formatTime(seconds);
+      return `플레이어 ${players.length} · 관전 ${spectators.length} · AI ${aiSlots} · ${round}`;
     }
 
     scoreboardRoster(game) {

@@ -4,13 +4,12 @@
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, INFANTRY_WEAPONS } = IronLine.constants;
   const { clamp, distXY, normalizeAngle, circleRectCollision, expandedRect, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
+  const wreckCover = IronLine.wreckCover || {};
+  const isVehicleWreck = wreckCover.isVehicleWreck || ((vehicle) => Boolean(vehicle && !vehicle.coverDestroyed && (!vehicle.alive || vehicle.hp <= 0)));
+  const damageVehicleWreck = wreckCover.damageVehicleWreck || (() => false), shellWreckDamage = wreckCover.shellWreckDamage || (() => 0);
 
   function vehicleTargets(game) {
     return [...(game.tanks || []), ...(game.humvees || [])];
-  }
-
-  function isVehicleWreck(vehicle) {
-    return Boolean(vehicle && (!vehicle.alive || vehicle.hp <= 0));
   }
 
   function pushLimited(list, item, max = 180) {
@@ -690,7 +689,8 @@
     return launchInfantryProjectile(game, shooter, aimX, aimY, {
       ...weapon,
       id: "grenade",
-      color: "#ffd166",
+      sourceWeaponId: weapon.id || "grenade",
+      color: weapon.id === "grenadeLauncher" ? "#b9c0a4" : "#59654d",
       maxDistance: weapon.range,
       fuseExtra: 0,
       fuseTime: weapon.fuseTime || 2.15,
@@ -775,10 +775,17 @@
       const y = startY + Math.sin(angle) * distance;
       if (x < 0 || y < 0 || x > game.world.width || y > game.world.height) return { x: lastX, y: lastY };
 
-      const blocked = game.world.obstacles.some((obstacle) => !obstacle.destroyed && (
-        circleRectCollision(x, y, 2, obstacle) ||
-        lineIntersectsRect(lastX, lastY, x, y, obstacle)
-      ));
+      const blocked = IronLine.physics?.lineBlockedByWorld
+        ? IronLine.physics.lineBlockedByWorld(game, lastX, lastY, x, y, {
+          padding: 2,
+          includeWrecks: false,
+          ignore: [shooter],
+          ignoreBlockerContainingA: true
+        })
+        : game.world.obstacles.some((obstacle) => !obstacle.destroyed && (
+          circleRectCollision(x, y, 2, obstacle) ||
+          lineIntersectsRect(lastX, lastY, x, y, obstacle)
+        ));
       if (blocked) return { x, y, blocked: true };
 
       const hitTank = findSmallArmsTankHit(game, shooter, lastX, lastY, x, y, options);
@@ -1083,6 +1090,10 @@
         if (hit.scenery && shell.ammo.id !== "smoke") {
           damageScenery(game, hit.scenery, (shell.ammo.directDamage || shell.ammo.damage || 36) * 0.9);
         }
+        if (hit.obstacle && shell.ammo.id !== "smoke") {
+          damageObstacle(game, hit.obstacle, (shell.ammo.directDamage || shell.ammo.damage || 46) * 0.84);
+        }
+        if (hit.wreck && shell.ammo.id !== "smoke") damageVehicleWreck(game, hit.wreck, shellWreckDamage(shell, hit.wreck), { ammoId: shell.ammo.id });
         resolveImpact(game, shell, hit.tank || hit.friendlyTank || null, hit.infantry || false, hit.infantryUnit || null, {
           friendlyVehicle: Boolean(hit.friendlyTank)
         });
@@ -1197,29 +1208,30 @@
     const splash = ammo.splash || ammo.directExplosionRadius || 80;
     const isRpg = ammo.id === "rpg";
     const isGrenade = ammo.id === "grenade";
-    const scale = isRpg ? 0.9 : isGrenade ? 0.72 : 1;
-    const fireLife = ammo.explosionLife || (isGrenade ? 0.36 : 0.48);
-    const smokeLife = isGrenade ? 0.72 : 0.92;
+    const isLauncherGrenade = ammo.sourceWeaponId === "grenadeLauncher";
+    const scale = isRpg ? 0.9 : isLauncherGrenade ? 0.7 : isGrenade ? 0.58 : 1;
+    const fireLife = ammo.explosionLife || (isGrenade ? 0.16 : 0.48);
+    const smokeLife = isGrenade ? (isLauncherGrenade ? 0.68 : 0.86) : 0.92;
 
     blastRings.push({
       x,
       y,
       radius: 8,
-      maxRadius: splash * (isRpg ? 0.62 : 0.72),
-      life: 0.18,
-      maxLife: 0.18,
-      color: "rgba(255, 238, 178, 0.72)",
-      width: isGrenade ? 4 : 6
+      maxRadius: splash * (isRpg ? 0.62 : isGrenade ? 0.64 : 0.72),
+      life: isGrenade ? 0.14 : 0.18,
+      maxLife: isGrenade ? 0.14 : 0.18,
+      color: isGrenade ? "rgba(224, 220, 190, 0.62)" : "rgba(255, 238, 178, 0.72)",
+      width: isLauncherGrenade ? 3.2 : isGrenade ? 2.6 : 6
     });
 
     game.effects.explosions.push({
       x,
       y,
-      radius: ammo.explosionStart || (isRpg ? 20 : isGrenade ? 15 : 24),
-      maxRadius: splash * (isGrenade ? 0.45 : 0.58),
+      radius: ammo.explosionStart || (isRpg ? 20 : isGrenade ? 7 : 24),
+      maxRadius: isGrenade ? (isLauncherGrenade ? 24 : 18) : splash * 0.58,
       life: fireLife,
       maxLife: fireLife,
-      color: isRpg ? "rgba(255, 112, 52, 0.95)" : "rgba(255, 145, 58, 0.92)",
+      color: isRpg ? "rgba(255, 112, 52, 0.95)" : isGrenade ? "rgba(255, 231, 171, 0.42)" : "rgba(255, 145, 58, 0.92)",
       core: true,
       smoke: false
     });
@@ -1227,29 +1239,33 @@
     game.effects.explosions.push({
       x: x + (Math.random() - 0.5) * 10,
       y: y + (Math.random() - 0.5) * 10,
-      radius: 18,
-      maxRadius: splash * (isGrenade ? 0.7 : 0.88),
+      radius: isGrenade ? 14 : 18,
+      maxRadius: splash * (isLauncherGrenade ? 0.62 : isGrenade ? 0.76 : 0.88),
       life: smokeLife,
       maxLife: smokeLife,
-      color: "rgba(70, 63, 50, 0.58)",
+      color: isGrenade ? "rgba(86, 82, 69, 0.55)" : "rgba(70, 63, 50, 0.58)",
       core: false,
       smoke: true
     });
 
-    const sparkCount = Math.round((isGrenade ? 9 : isRpg ? 13 : 16) * scale);
+    const sparkCount = Math.round((isGrenade ? (isLauncherGrenade ? 12 : 10) : isRpg ? 13 : 16) * scale);
     for (let i = 0; i < sparkCount; i += 1) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (isGrenade ? 90 : 125) + Math.random() * (isRpg ? 170 : 210);
-      const life = 0.22 + Math.random() * 0.28;
+      const speed = (isGrenade ? 78 : 125) + Math.random() * (isLauncherGrenade ? 132 : isRpg ? 170 : 210);
+      const life = (isGrenade ? 0.16 : 0.22) + Math.random() * (isGrenade ? 0.2 : 0.28);
       blastSparks.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        length: 8 + Math.random() * 18,
+        length: (isGrenade ? 5 : 8) + Math.random() * (isGrenade ? 11 : 18),
         life,
         maxLife: life,
-        color: i % 3 === 0 ? "rgba(255, 228, 148, 0.92)" : "rgba(255, 127, 67, 0.82)"
+        color: isGrenade
+          ? (i % 4 === 0 ? "rgba(236, 224, 176, 0.78)" : "rgba(146, 137, 105, 0.66)")
+          : i % 3 === 0 ? "rgba(255, 228, 148, 0.92)" : "rgba(255, 127, 67, 0.82)",
+        width: isGrenade ? 1.15 : 2.2,
+        alpha: isGrenade ? 0.74 : 1
       });
     }
   }
@@ -1365,6 +1381,14 @@
       recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, tank, tankWasAlive, ammo.id || "blast");
     }
 
+    for (const wreck of vehicleTargets(game)) {
+      if (!isVehicleWreck(wreck) || wreck === ammo.excludeTarget) continue;
+      const d = distXY(x, y, wreck.x, wreck.y);
+      if (d > radius + wreck.radius) continue;
+      const falloff = clamp(1 - d / Math.max(1, radius + wreck.radius), 0.18, 1);
+      damageVehicleWreck(game, wreck, damage * (ammo.wreckDamageScale ?? 0.34) * falloff, { ammoId: ammo.id || "blast" });
+    }
+
     for (const unit of game.infantry || []) {
       if (!unit.alive || unit.inVehicle || unit.team === team) continue;
       const d = distXY(x, y, unit.x, unit.y);
@@ -1410,6 +1434,15 @@
       const falloff = clamp(1 - d / Math.max(1, radius + center.radius), 0.18, 1);
       const sceneryScale = item.type === "tree" ? 0.48 : item.type === "wood-fence" ? 0.72 : 0.58;
       damageScenery(game, item, damage * (ammo.sceneryDamageScale ?? sceneryScale) * falloff);
+    }
+
+    for (const obstacle of game.world?.obstacles || []) {
+      if (!isVehicleBreakableObstacle(obstacle)) continue;
+      const center = sceneryCenter(obstacle);
+      const d = distXY(x, y, center.x, center.y);
+      if (d > radius + center.radius) continue;
+      const falloff = clamp(1 - d / Math.max(1, radius + center.radius), 0.18, 1);
+      damageObstacle(game, obstacle, damage * (ammo.obstacleDamageScale ?? 0.42) * falloff);
     }
 
     if (!game.player.inTank && game.player.hp > 0 && team === TEAM.RED && !game.isPlayerInSafeZone?.()) {

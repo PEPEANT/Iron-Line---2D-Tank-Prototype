@@ -59,6 +59,7 @@
       this.entryOpen = !this.adminObserverMode && !this.testLab;
       this.onlineSession = this.createLocalSession();
       this.scoreboardStats = {};
+      this.tacticalMapOpen = false;
       this.commandBus = new IronLine.CommandBus(this);
       this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
       this.observerBridge = IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
@@ -68,6 +69,8 @@
       this.roleChange = !this.adminObserverMode && IronLine.RoleChangeSystem ? new IronLine.RoleChangeSystem(this) : null;
       this.observerSnapshot = null;
       this.conquest = this.defaultConquestState();
+      this.annihilation = this.defaultAnnihilationState?.() || null;
+      this.playerRoundSpectator = false;
       this.respawnTimers = new WeakMap();
       this.playerRespawnTimer = 0;
       this.testLabAiPaused = false;
@@ -490,6 +493,21 @@
         engineerCount += 1;
       }
 
+      const desiredSupport = Math.min(
+        prepared.length,
+        Math.ceil(prepared.length * 0.18)
+      );
+      let supportCount = prepared.filter((spawn) => (
+        spawn.weaponId === "machinegun" || spawn.weaponId === "lmg"
+      )).length;
+      for (const spawn of prepared) {
+        if (supportCount >= desiredSupport) break;
+        if ((spawn.classId || "infantry") !== "infantry") continue;
+        if (spawn.weaponId && spawn.weaponId !== "rifle" && spawn.weaponId !== "smg") continue;
+        spawn.weaponId = spawnHash(spawn) % 3 === 0 ? "lmg" : "machinegun";
+        supportCount += 1;
+      }
+
       for (const spawn of prepared) {
         if (spawn.classId !== "engineer") continue;
         const variant = spawnHash(spawn);
@@ -620,16 +638,69 @@
     createSquads(team, units, prefix) {
       const size = 5;
       const created = [];
-      for (let i = 0; i < units.length; i += size) {
-        const squadUnits = units.slice(i, i + size);
-        if (squadUnits.length === 0) continue;
+      const sorted = (units || [])
+        .filter((unit) => unit?.alive !== false)
+        .sort((a, b) => a.callSign.localeCompare(b.callSign));
+      const scouts = sorted.filter((unit) => unit.classId === "scout");
+      const engineers = sorted.filter((unit) => unit.classId === "engineer");
+      const support = sorted.filter((unit) => (
+        unit.classId !== "scout" &&
+        unit.classId !== "engineer" &&
+        (unit.weaponId === "machinegun" || unit.weaponId === "lmg")
+      ));
+      const line = sorted.filter((unit) => (
+        unit.classId !== "scout" &&
+        unit.classId !== "engineer" &&
+        unit.weaponId !== "machinegun" &&
+        unit.weaponId !== "lmg"
+      ));
+
+      const buckets = [];
+      const addBucket = (squadType) => {
+        const bucket = { squadType, units: [] };
+        buckets.push(bucket);
+        return bucket;
+      };
+      const putInBucket = (bucket, unit) => {
+        if (!bucket || !unit || bucket.units.length >= size) return false;
+        bucket.units.push(unit);
+        return true;
+      };
+      const leastFilled = (type) => buckets
+        .filter((bucket) => bucket.squadType === type && bucket.units.length < size)
+        .sort((a, b) => a.units.length - b.units.length)[0] || addBucket(type);
+
+      const engineerSquadCount = engineers.length ? Math.max(1, Math.ceil(engineers.length / 3)) : 0;
+      for (let index = 0; index < engineerSquadCount; index += 1) addBucket("engineer");
+      engineers.forEach((unit, index) => putInBucket(buckets[index % Math.max(1, engineerSquadCount)], unit));
+
+      const combatCount = support.length + line.length;
+      const infantrySquadCount = Math.max(0, Math.ceil(combatCount / size));
+      for (let index = 0; index < infantrySquadCount; index += 1) addBucket("infantry");
+      for (const unit of support) putInBucket(leastFilled("infantry"), unit);
+      for (const unit of line) {
+        const target = buckets
+          .filter((bucket) => bucket.units.length < size)
+          .sort((a, b) => a.units.length - b.units.length)[0] || addBucket("infantry");
+        putInBucket(target, unit);
+      }
+
+      for (let i = 0; i < scouts.length; i += 3) {
+        const bucket = addBucket("recon");
+        bucket.units.push(...scouts.slice(i, i + 3));
+      }
+
+      let serial = 1;
+      for (const bucket of buckets.filter((item) => item.units.length > 0)) {
         const squad = new IronLine.SquadAI(this, {
           team,
-          callSign: `${prefix}-${Math.floor(i / size) + 1}`,
-          units: squadUnits
+          callSign: `${prefix}-${serial}`,
+          squadType: bucket.squadType,
+          units: bucket.units
         });
         this.squads.push(squad);
         created.push(squad);
+        serial += 1;
       }
       return created;
     }
@@ -707,6 +778,7 @@
       this.updateTestLabHotkeys();
       this.testLabUI?.update?.(this, dt);
       this.updateCommandRadioHotkey();
+      this.updateTacticalMapHotkey();
       this.updateAdminMessage(dt);
       this.updateCombatFeedback(dt);
       this.observerBridge?.update(dt);
@@ -736,7 +808,7 @@
       }
 
       if (this.playerDowned && !this.playerDeathActive) {
-        const battleContinues = this.isConquestMode() && this.matchStarted;
+        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -745,8 +817,8 @@
       }
 
       if (this.playerDeathActive) {
-        this.updateDeathRestartInput();
-        const battleContinues = this.isConquestMode() && this.matchStarted;
+        if (!this.isRoundSpectatorMode?.()) this.updateDeathRestartInput();
+        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -757,7 +829,7 @@
       this.updatePlayer(dt);
       this.updatePlayerDeathState();
       if (this.playerDowned && !this.playerDeathActive) {
-        const battleContinues = this.isConquestMode() && this.matchStarted;
+        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -765,7 +837,7 @@
         return;
       }
       if (this.playerDeathActive) {
-        const battleContinues = this.isConquestMode() && this.matchStarted;
+        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -802,6 +874,11 @@
 
     updateBattlefield(dt) {
       if (!this.matchStarted || this.result) return;
+      if (this.updateAnnihilationIntermission?.(dt)) {
+        IronLine.combat.updateEffects(this, dt);
+        this.aiObservatory?.update?.(dt);
+        return;
+      }
 
       this.matchTime += dt;
       this.updateDroneDesignation(dt);
@@ -1110,6 +1187,7 @@
       if (!["annihilation", "conquest"].includes(mode)) return false;
       this.matchConfig.mode = mode;
       this.conquest = this.defaultConquestState();
+      if (mode === "annihilation") this.resetAnnihilationState?.();
       this.hud?.invalidateDeploymentMap?.();
       return true;
     }
@@ -1134,10 +1212,10 @@
 
     matchSettingBounds() {
       return {
-        blueAiTanks: { min: 0, max: 6 },
-        blueInfantry: { min: 4, max: 30 },
-        redTanks: { min: 1, max: 8 },
-        redInfantry: { min: 4, max: 34 }
+        blueAiTanks: { min: 0, max: 8 },
+        blueInfantry: { min: 4, max: 56 },
+        redTanks: { min: 1, max: 10 },
+        redInfantry: { min: 4, max: 64 }
       };
     }
 
@@ -1194,16 +1272,16 @@
     submitLocalCommand(type, options = {}) {
       const player = this.localSessionPlayer();
       if (!player) return { accepted: false, reason: "missing-player" };
-      const slot = this.sessionSlotById(player.slotId);
+      const slot = this.sessionSlotById(options.slotId || player.slotId);
       if (!slot) return { accepted: false, reason: "missing-slot" };
       return this.commandBus.submit({
         ...options,
         type,
         issuerPlayerId: player.id,
-        team: player.team,
+        team: slot.team || player.team,
         slotId: slot.id,
         slotRole: slot.role,
-        authority: "owned_squad"
+        authority: slot.playerId === player.id ? "owned_squad" : "delegated_squad"
       });
     }
 
@@ -1427,7 +1505,8 @@
       }
     }
 
-    resetScenarioForMatch() {
+    resetScenarioForMatch(options = {}) {
+      const preservedAnnihilation = options.preserveAnnihilation || null;
       const selectedClass = this.player?.classId || "infantry";
       this.projectiles = [];
       this.effects = {
@@ -1468,6 +1547,8 @@
       this.matchTime = 0;
       this.startLoading = this.defaultStartLoadingState();
       this.conquest = this.defaultConquestState();
+      this.annihilation = preservedAnnihilation || this.defaultAnnihilationState?.() || this.annihilation;
+      this.playerRoundSpectator = false;
       this.respawnTimers = new WeakMap();
       this.playerRespawnTimer = 0;
       this.droneDesignation = null;
@@ -1582,6 +1663,9 @@
       this.playerDeathReason = reason;
       if (this.isConquestMode() && this.matchStarted) {
         this.playerRespawnTimer = this.conquest.respawnDelay.player;
+      } else if (this.isRoundSpectatorMode?.()) {
+        this.playerRoundSpectator = true;
+        this.chat?.addSystemMessage?.("라운드가 끝날 때까지 관전합니다.");
       }
       this.input.clear();
       this.hud?.toggleSettingsPanel?.(false);
@@ -1595,6 +1679,7 @@
 
     restartMatchAfterDeath() {
       if (!this.playerDeathActive) return false;
+      if (this.isRoundSpectatorMode?.()) return false;
       if (this.isConquestMode() && this.matchStarted) {
         return this.respawnPlayerForConquest(true);
       }
@@ -1885,6 +1970,31 @@
         !this.adminObserverMode;
       if (!canUseRadio) return;
       this.hud?.toggleCommandRadio?.();
+    }
+
+    updateTacticalMapHotkey() {
+      const active = this.matchStarted &&
+        !this.entryOpen &&
+        !this.deploymentOpen &&
+        !this.lobbyOpen &&
+        !this.roomListOpen &&
+        !this.result;
+      if (!active) {
+        this.tacticalMapOpen = false;
+        return;
+      }
+      if (this.input.consumePress("KeyM")) this.toggleTacticalMap();
+    }
+
+    toggleTacticalMap(force = null) {
+      const active = this.matchStarted &&
+        !this.entryOpen &&
+        !this.deploymentOpen &&
+        !this.lobbyOpen &&
+        !this.roomListOpen &&
+        !this.result;
+      this.tacticalMapOpen = active && (force === null ? !this.tacticalMapOpen : Boolean(force));
+      return this.tacticalMapOpen;
     }
 
     updatePlayerSafeZone() {
@@ -2412,6 +2522,20 @@
 
     updateCamera(dt) {
       if (this.adminCamera?.update(dt)) return;
+      if (this.isRoundSpectatorMode?.()) {
+        const fitZoom = Math.min(
+          this.camera.width / Math.max(1, this.world.width),
+          this.camera.height / Math.max(1, this.world.height)
+        ) * 0.9;
+        const targetZoom = clamp(fitZoom, 0.16, 1);
+        this.camera.zoom = lerp(this.camera.zoom || 1, targetZoom, 1 - Math.pow(0.0002, dt));
+        this.camera.viewWidth = this.camera.width / this.camera.zoom;
+        this.camera.viewHeight = this.camera.height / this.camera.zoom;
+        this.camera.x = clamp(this.world.width / 2 - this.camera.viewWidth / 2, 0, Math.max(0, this.world.width - this.camera.viewWidth));
+        this.camera.y = clamp(this.world.height / 2 - this.camera.viewHeight / 2, 0, Math.max(0, this.world.height - this.camera.viewHeight));
+        this.input.updateWorld(this.camera);
+        return;
+      }
       const controlledDrone = this.player.controlledDrone?.alive ? this.player.controlledDrone : null;
       const focus = this.player.inTank || controlledDrone || this.player;
       const tankAimMode = Boolean(this.player.inTank && this.input.mouse.rightDown);
@@ -2477,7 +2601,7 @@
 
     updateResult(dt) {
       if (this.result) return;
-      if (this.playerDeathActive && this.matchConfig.mode !== "conquest") return;
+      if (this.playerDeathActive && this.matchConfig.mode !== "conquest" && !this.isRoundSpectatorMode?.()) return;
       if (this.matchConfig.mode === "conquest") {
         this.updateConquestResult();
         return;
@@ -2555,6 +2679,7 @@
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
   IronLine.installFogOfWar?.(Game);
+  IronLine.installAnnihilationRounds?.(Game);
   IronLine.Game = Game;
   IronLine.game = new Game();
 })(window);
