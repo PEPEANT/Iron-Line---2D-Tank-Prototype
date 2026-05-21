@@ -431,6 +431,10 @@
       }
       if (roomPlayers.length > 0) session.players = roomPlayers;
       session.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
+      const localPlayer = localId ? roomPlayers.find((player) => player.id === localId) : null;
+      if (localPlayer && (localPlayer.participantType || "player") === "player") {
+        session.localReady = Boolean(localPlayer.ready);
+      }
       const playerBySlot = new Map(
         roomPlayers
           .filter((player) => (player.participantType || "player") === "player" && player.slotId)

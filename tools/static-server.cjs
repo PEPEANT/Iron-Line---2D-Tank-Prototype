@@ -260,6 +260,14 @@ function importParticipants(room, participants = [], fallbackType = "player", op
   for (const participant of source) {
     const normalized = normalizeParticipant(participant, fallbackType);
     if (!normalized) continue;
+    const previous = room.players?.get?.(normalized.playerId) ||
+      room.spectators?.get?.(normalized.playerId) ||
+      room.admins?.get?.(normalized.playerId) ||
+      room.participants?.get?.(normalized.playerId) ||
+      null;
+    if (previous && toClientTimestamp(previous.updatedAt || previous.lastSeenAt || 0) > toClientTimestamp(normalized.updatedAt || normalized.lastSeenAt || 0)) {
+      continue;
+    }
     if (fallbackType === "player") room.spectators.delete(normalized.playerId);
     if (fallbackType === "spectator") room.players.delete(normalized.playerId);
     targetMap.set(normalized.playerId, normalized);
@@ -286,6 +294,26 @@ function removeParticipantFromRoom(room, playerId = "") {
   return changed;
 }
 
+function cleanupStaleServerParticipants(maxAgeMs = 45000) {
+  if (!onlineRegistry) return false;
+  const now = Date.now();
+  let changed = false;
+  for (const room of onlineRegistry.rooms?.values?.() || []) {
+    const ids = [
+      ...Array.from(room.players?.values?.() || []),
+      ...Array.from(room.spectators?.values?.() || []),
+      ...Array.from(room.admins?.values?.() || [])
+    ]
+      .filter((participant) => now - toClientTimestamp(participant.updatedAt || participant.lastSeenAt || 0) > maxAgeMs)
+      .map((participant) => participant.playerId || participant.id)
+      .filter(Boolean);
+    for (const id of ids) {
+      if (removeParticipantFromRoom(room, id)) changed = true;
+    }
+  }
+  return changed;
+}
+
 function roomRecordTime(record = {}) {
   const numeric = Number(record.createdAt || record.updatedAt || 0);
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
@@ -306,6 +334,22 @@ function mergeRoomRecords(existing = [], incoming = [], limit = 120) {
   return Array.from(records.values())
     .sort((a, b) => roomRecordTime(a) - roomRecordTime(b))
     .slice(-limit);
+}
+
+function hasRoomEvent(body = {}, type = "") {
+  return Array.isArray(body.events) && body.events.some((event) => event?.type === type);
+}
+
+function resolveRoomPhase(currentPhase = "lobby", body = {}) {
+  const nextPhase = clientPhaseToServer(body.phase);
+  const resetRequested = hasRoomEvent(body, "room_reset");
+  const endRequested = nextPhase === "ended" || hasRoomEvent(body, "room_ended") || Boolean(body.endedAt);
+  const startRequested = nextPhase === "playing" || hasRoomEvent(body, "room_started") || Boolean(body.startedAt);
+  if (resetRequested) return "lobby";
+  if (endRequested) return "ended";
+  if (currentPhase === "ended") return "ended";
+  if (currentPhase === "playing") return "playing";
+  return startRequested ? "playing" : "lobby";
 }
 
 function applyClientRoomToServer(body = {}) {
@@ -344,13 +388,25 @@ function applyClientRoomToServer(body = {}) {
   room.config.redInfantry = clampInt(body.redInfantry, 4, 64, room.config.redInfantry ?? 24);
   room.config.aiFillEmptySlots = body.aiFillEmptySlots !== false;
   room.config.spectatorChatVisibleToPlayers = body.spectatorChatVisibleToPlayers !== false;
-  room.config.joinLocked = Boolean(body.locked);
+  const resetRequested = hasRoomEvent(body, "room_reset");
+  const resolvedPhase = resolveRoomPhase(room.phase, body);
+  room.config.joinLocked = Boolean(body.locked || resolvedPhase === "playing" || resolvedPhase === "ended");
   room.config.createdBy = body.createdBy || room.config.createdBy || "admin";
   room.config.startedBy = body.startedBy || room.config.startedBy || "";
   room.config.startedAt = body.startedAt || room.config.startedAt || 0;
-  room.config.endedAt = body.endedAt || room.config.endedAt || 0;
-  room.phase = clientPhaseToServer(body.phase);
+  room.config.endedAt = resolvedPhase === "ended" ? (body.endedAt || room.config.endedAt || Date.now()) : 0;
+  if (resolvedPhase === "lobby") {
+    room.config.startedBy = "";
+    room.config.startedAt = 0;
+  }
+  room.phase = resolvedPhase;
 
+  if (resetRequested) {
+    room.players.clear();
+    room.spectators.clear();
+    room.admins.clear();
+    room.participants.clear();
+  }
   importParticipants(room, Array.isArray(body.players) ? body.players : [], "player");
   importParticipants(room, Array.isArray(body.spectators) ? body.spectators : [], "spectator");
   importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
@@ -417,6 +473,7 @@ async function handleRoomsApi(req, res) {
   const participantId = pathParts[3] === "participants" ? decodeURIComponent(pathParts[4] || "") : "";
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
+    if (cleanupStaleServerParticipants()) persistRooms();
     sendJson(res, 200, {
       ok: true,
       rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room))

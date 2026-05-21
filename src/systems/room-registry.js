@@ -135,7 +135,7 @@
           room.blueInfantry,
           room.redTanks,
           room.redInfantry,
-          room.players?.length || 0,
+          (room.players || []).map((player) => `${player.id}/${player.slotId}/${player.ready ? 1 : 0}/${player.updatedAt || 0}`).join(","),
           room.spectators?.length || 0,
           room.admins?.length || 0,
           room.chat?.length || 0,
@@ -157,16 +157,23 @@
           ? payload.rooms.map((room) => this.normalizeRoom(room)).filter(Boolean)
           : [];
         const serverIds = new Set(serverRooms.map((room) => room.id));
+        const localRooms = this.readLocalRooms();
+        const localById = new Map(localRooms.map((room) => [room.id, room]));
         for (const id of Array.from(this.deletedRemoteRoomIds)) {
           if (!serverIds.has(id)) this.deletedRemoteRoomIds.delete(id);
         }
         const roomsById = new Map();
         for (const room of serverRooms) {
-          if (!this.deletedRemoteRoomIds.has(room.id)) roomsById.set(room.id, room);
+          if (this.deletedRemoteRoomIds.has(room.id)) continue;
+          const localRoom = localById.get(room.id);
+          const pendingNewer = this.pendingRemoteRoomIds.has(room.id) &&
+            this.roomUpdatedAt(localRoom) > this.roomUpdatedAt(room);
+          roomsById.set(room.id, pendingNewer ? localRoom : room);
         }
-        for (const localRoom of this.readLocalRooms()) {
+        for (const localRoom of localRooms) {
           if (!this.pendingRemoteRoomIds.has(localRoom.id) || this.deletedRemoteRoomIds.has(localRoom.id)) continue;
-          if (!roomsById.has(localRoom.id)) roomsById.set(localRoom.id, localRoom);
+          const previous = roomsById.get(localRoom.id);
+          if (!previous || this.roomUpdatedAt(localRoom) > this.roomUpdatedAt(previous)) roomsById.set(localRoom.id, localRoom);
         }
         const rooms = Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
         const signature = this.remoteRoomSignature(rooms);
@@ -206,7 +213,10 @@
             if (optimisticRoom) this.pendingRemoteRoomIds.delete(optimisticRoom.id);
             return null;
           }
-          this.pendingRemoteRoomIds.delete(remoteRoom.id);
+          const localRoom = this.readLocalRooms().find((item) => item.id === remoteRoom.id);
+          if (!localRoom || this.roomUpdatedAt(remoteRoom) >= this.roomUpdatedAt(localRoom)) {
+            this.pendingRemoteRoomIds.delete(remoteRoom.id);
+          }
           this.upsertRemoteRoom(remoteRoom);
           this.remoteOnline = true;
           this.emit();
@@ -221,11 +231,21 @@
 
     upsertRemoteRoom(room) {
       if (!room?.id) return;
+      const roomTime = this.roomUpdatedAt(room);
+      const current = this.remoteRooms?.find?.((item) => item.id === room.id) || this.readLocalRooms().find((item) => item.id === room.id);
+      if (current && this.roomUpdatedAt(current) > roomTime) return;
       const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== room.id);
       nextRooms.push(room);
       this.remoteRooms = nextRooms.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
       this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
       this.writeLocalRooms(this.remoteRooms);
+    }
+
+    roomUpdatedAt(room = null) {
+      const numeric = Number(room?.updatedAt || 0);
+      if (Number.isFinite(numeric) && numeric > 0) return numeric;
+      const parsed = Date.parse(room?.updatedAt || "");
+      return Number.isFinite(parsed) ? parsed : 0;
     }
 
     deleteRemoteRoom(id) {
