@@ -121,6 +121,7 @@
         this.remoteRooms = rooms;
         this.remoteSignature = signature;
         this.remoteOnline = true;
+        this.publishLocalRoomsMissingFromRemote(rooms);
         if (changed) this.emit();
       } catch (_error) {
         const changed = this.remoteOnline;
@@ -152,6 +153,16 @@
         .catch(() => {
           this.remoteOnline = false;
         });
+    }
+
+    publishLocalRoomsMissingFromRemote(remoteRooms = []) {
+      const remoteById = new Map((remoteRooms || []).map((room) => [room.id, room]));
+      for (const localRoom of this.readLocalRooms()) {
+        if (!localRoom?.id) continue;
+        const remoteRoom = remoteById.get(localRoom.id);
+        if (remoteRoom && Number(remoteRoom.updatedAt) >= Number(localRoom.updatedAt)) continue;
+        this.publishRoom(localRoom);
+      }
     }
 
     deleteRemoteRoom(id) {

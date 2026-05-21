@@ -135,6 +135,7 @@
       ui.entryEnterButton.addEventListener("click", () => this.submit());
       ui.entryRoomRefreshButton?.addEventListener("click", () => {
         this.roomSignature = "";
+        IronLine.roomRegistry?.refreshRemoteRooms?.();
         this.renderEntryRooms(IronLine.game);
       });
       ui.entryNickname.addEventListener("keydown", (event) => {

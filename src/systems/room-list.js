@@ -45,6 +45,7 @@
       };
       this.nodes.refresh.addEventListener("click", () => {
         this.lastSignature = "";
+        IronLine.roomRegistry?.refreshRemoteRooms?.();
         this.renderRooms();
       });
       this.nodes.back.addEventListener("click", () => this.flow.backToEntry());
