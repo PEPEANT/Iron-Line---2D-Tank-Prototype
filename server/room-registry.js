@@ -29,6 +29,8 @@ class RoomRegistry {
       commands: [],
       chat: [],
       events: [],
+      combatEvents: [],
+      worldState: null,
       createdAt: config.createdAt,
       updatedAt: this.now()
     };
@@ -286,7 +288,9 @@ class RoomRegistry {
       slots: room.slots,
       commands: room.commands.slice(-24),
       chat: room.chat.slice(-40),
-      events: room.events.slice(-80)
+      events: room.events.slice(-80),
+      combatEvents: (room.combatEvents || []).slice(-80),
+      worldState: room.worldState || null
     });
   }
 
@@ -303,6 +307,8 @@ class RoomRegistry {
       aiSlots: room.slots.filter((slot) => !slot.playerId).length,
       locked: room.config.joinLocked,
       events: room.events.slice(-12),
+      combatEvents: (room.combatEvents || []).slice(-12),
+      worldState: room.worldState || null,
       updatedAt: room.updatedAt
     };
   }

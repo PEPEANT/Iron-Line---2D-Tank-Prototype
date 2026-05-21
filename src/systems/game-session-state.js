@@ -499,6 +499,7 @@
       player.factionId = factionId;
       player.skinId = factionId;
       if (playerId === this.onlineSession.playerId && this.player) {
+        this.player.team = nextSlot.team;
         this.player.factionId = factionId;
         this.player.skinId = factionId;
       }

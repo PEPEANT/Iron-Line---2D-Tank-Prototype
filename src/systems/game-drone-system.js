@@ -453,6 +453,7 @@
       this.droneInteractReleaseRequired = true;
       this.resetDroneInteractHold();
       this.input.clearVirtual?.();
+      this.canvas?.focus?.();
       return true;
     },
     exitPlayerDroneControl() {
@@ -464,6 +465,7 @@
       }
       if (this.player) this.player.controlledDrone = null;
       this.droneInteractReleaseRequired = false;
+      this.canvas?.focus?.();
     },
     resetDroneInteractHold() {
       this.droneInteractHoldTime = 0;

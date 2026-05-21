@@ -162,6 +162,18 @@
           ctx.arc(px, py, 6.6, 0, Math.PI * 2);
           ctx.stroke();
         }
+        if (Number.isFinite(entry.droneX) && Number.isFinite(entry.droneY)) {
+          const dx = map.x + entry.droneX * map.sx;
+          const dy = map.y + entry.droneY * map.sy;
+          ctx.strokeStyle = "rgba(142, 216, 255, 0.48)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(dx, dy);
+          ctx.stroke();
+          ctx.fillStyle = "rgba(142, 216, 255, 0.9)";
+          ctx.fillRect(dx - 2.2, dy - 2.2, 4.4, 4.4);
+        }
         ctx.restore();
         if (game.adminObserverMode || entries.length <= 6) this.drawHumanMinimapLabel(ctx, entry, px, py, index);
       }
@@ -241,7 +253,10 @@
       const raw = sessionPlayer.position || sessionPlayer;
       const x = Number(raw.x);
       const y = Number(raw.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
+      const droneX = Number(raw.droneX ?? sessionPlayer.droneX);
+      const droneY = Number(raw.droneY ?? sessionPlayer.droneY);
+      const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
+      if (Number.isFinite(x) && Number.isFinite(y) && !nearOrigin) {
         const age = Math.max(0, Date.now() - (Number(raw.updatedAt || sessionPlayer.updatedAt) || Date.now()));
         return {
           x,
@@ -249,6 +264,8 @@
           team: sessionPlayer.team,
           alive: raw.alive !== false && sessionPlayer.alive !== false,
           inVehicle: Boolean(raw.inVehicle || sessionPlayer.inVehicle),
+          droneX: Number.isFinite(droneX) ? droneX : null,
+          droneY: Number.isFinite(droneY) ? droneY : null,
           alpha: age > 7000 ? 0.54 : age > 3500 ? 0.72 : 1
         };
       }

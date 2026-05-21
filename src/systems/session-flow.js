@@ -13,7 +13,7 @@
       this.onlineLobby = IronLine.OnlineLobby ? new IronLine.OnlineLobby(this) : null;
       this.lastPublishAt = 0;
       this.lastCleanupAt = 0;
-      this.publishIntervalMs = 1000;
+      this.publishIntervalMs = 500;
       window.addEventListener("pagehide", () => this.handlePageHide());
     }
 
@@ -296,15 +296,41 @@
     syncLocalPlayerPresence(game, sessionPlayer, now = Date.now()) {
       const entity = game?.player;
       if (!entity || !sessionPlayer) return null;
+      this.syncLocalPlayerEntityFromSession(game, sessionPlayer);
       const mounted = entity.inTank || entity.inVehicle || null;
-      const point = mounted?.alive !== false ? mounted : entity;
+      let point = mounted?.alive !== false ? mounted : entity;
+      if (!this.isUsablePresencePoint(game, point)) {
+        point = this.fallbackPresencePoint(game, sessionPlayer);
+      }
       if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
       const alive = Boolean(!game.playerDeathActive && !game.playerDowned && entity.hp > 0);
+      const pointAngle = Number.isFinite(point.angle) ? point.angle : entity.angle || 0;
+      const mouse = game?.input?.mouse || {};
+      const aimX = Number.isFinite(Number(mouse.worldX)) ? Number(mouse.worldX) : point.x + Math.cos(pointAngle) * 180;
+      const aimY = Number.isFinite(Number(mouse.worldY)) ? Number(mouse.worldY) : point.y + Math.sin(pointAngle) * 180;
+      const controlledDrone = entity.controlledDrone?.alive ? entity.controlledDrone : null;
+      const activeDrone = controlledDrone || game.activePlayerDrone?.() || null;
+      const hasDrone = Boolean(activeDrone?.alive !== false && Number.isFinite(activeDrone?.x) && Number.isFinite(activeDrone?.y));
       const position = {
         x: Math.round(point.x),
         y: Math.round(point.y),
         alive,
         inVehicle: Boolean(mounted),
+        vehicleId: mounted?.callSign || mounted?.id || "",
+        vehicleType: mounted?.vehicleType || "",
+        vehicleHp: mounted ? Math.round(Number(mounted.hp) || 0) : 0,
+        vehicleMaxHp: mounted ? Math.round(Number(mounted.maxHp) || 0) : 0,
+        angle: pointAngle,
+        turretAngle: Number.isFinite(mounted?.turretAngle) ? mounted.turretAngle : 0,
+        machineGunAngle: Number.isFinite(mounted?.machineGunAngle) ? mounted.machineGunAngle : 0,
+        aimX: Math.round(aimX),
+        aimY: Math.round(aimY),
+        droneId: hasDrone ? activeDrone.callSign || activeDrone.id || "" : "",
+        droneType: hasDrone ? activeDrone.droneRole || activeDrone.weaponId || "drone" : "",
+        droneX: hasDrone ? Math.round(activeDrone.x) : null,
+        droneY: hasDrone ? Math.round(activeDrone.y) : null,
+        droneAngle: hasDrone && Number.isFinite(activeDrone.angle) ? activeDrone.angle : 0,
+        droneControlled: Boolean(controlledDrone && activeDrone === controlledDrone),
         updatedAt: now
       };
       sessionPlayer.position = position;
@@ -312,7 +338,41 @@
       sessionPlayer.y = position.y;
       sessionPlayer.alive = alive;
       sessionPlayer.inVehicle = position.inVehicle;
+      sessionPlayer.vehicleId = position.vehicleId;
+      sessionPlayer.vehicleType = position.vehicleType;
+      sessionPlayer.aimX = position.aimX;
+      sessionPlayer.aimY = position.aimY;
+      sessionPlayer.droneId = position.droneId;
+      sessionPlayer.droneType = position.droneType;
+      sessionPlayer.droneControlled = position.droneControlled;
       return position;
+    }
+
+    syncLocalPlayerEntityFromSession(game, sessionPlayer) {
+      if (!game?.player || !sessionPlayer) return;
+      if (sessionPlayer.team) game.player.team = sessionPlayer.team;
+      const factionId = sessionPlayer.team === TEAM.RED
+        ? (game.onlineSession?.redFactionId || sessionPlayer.factionId || sessionPlayer.skinId || "russia")
+        : (game.onlineSession?.blueFactionId || sessionPlayer.factionId || sessionPlayer.skinId || "korea");
+      game.player.factionId = factionId;
+      game.player.skinId = factionId;
+    }
+
+    isUsablePresencePoint(game, point) {
+      if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return false;
+      const nearOrigin = Math.abs(point.x) < 4 && Math.abs(point.y) < 4;
+      const originOutsidePlay = !game?.world?.safeZones?.some?.((zone) => Math.hypot((zone.x || 0) - point.x, (zone.y || 0) - point.y) < (zone.radius || 0));
+      return !(nearOrigin && originOutsidePlay);
+    }
+
+    fallbackPresencePoint(game, sessionPlayer) {
+      const team = sessionPlayer?.team || game?.player?.team || TEAM.BLUE;
+      const spawn = game?.respawnPointForTeam?.(team) ||
+        (team === TEAM.RED ? game?.world?.spawns?.red?.[0] : game?.world?.spawns?.player) ||
+        game?.world?.spawns?.player;
+      if (spawn && Number.isFinite(spawn.x) && Number.isFinite(spawn.y)) return spawn;
+      const zone = (game?.world?.safeZones || []).find((item) => item.team === team) || game?.world?.safeZones?.[0];
+      return zone && Number.isFinite(zone.x) && Number.isFinite(zone.y) ? zone : null;
     }
 
     leaveOnlineRoom(game = this.game(), reason = "leave") {
@@ -494,6 +554,7 @@
       player.factionId = factionId;
       player.skinId = factionId;
       if (game.player && player.id === session.playerId) {
+        game.player.team = player.team || game.player.team;
         game.player.factionId = factionId;
         game.player.skinId = factionId;
         IronLine.factionVisuals?.syncEntity?.(game, game.player);

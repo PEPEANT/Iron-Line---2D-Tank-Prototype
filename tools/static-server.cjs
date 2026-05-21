@@ -192,6 +192,13 @@ function exportParticipant(input = {}, fallbackType = "player") {
     y: Number.isFinite(participant.y) ? participant.y : null,
     alive: participant.alive !== false,
     inVehicle: Boolean(participant.inVehicle),
+    vehicleId: String(participant.vehicleId || participant.position?.vehicleId || "").slice(0, 36),
+    vehicleType: String(participant.vehicleType || participant.position?.vehicleType || "").slice(0, 18),
+    aimX: Number.isFinite(participant.aimX) ? participant.aimX : participant.position?.aimX ?? null,
+    aimY: Number.isFinite(participant.aimY) ? participant.aimY : participant.position?.aimY ?? null,
+    droneId: String(participant.droneId || participant.position?.droneId || "").slice(0, 36),
+    droneType: String(participant.droneType || participant.position?.droneType || "").slice(0, 18),
+    droneControlled: Boolean(participant.droneControlled || participant.position?.droneControlled),
     participantType: participant.participantType,
     factionId: participant.factionId || participant.skinId || "",
     skinId: participant.skinId || participant.factionId || "",
@@ -240,6 +247,8 @@ function exportClientRoom(room) {
     commandAuthorityRequests: Array.isArray(room?.commandAuthorityRequests) ? room.commandAuthorityRequests.slice(-16) : [],
     chat: Array.isArray(room?.chat) ? room.chat.slice(-120) : [],
     events: Array.isArray(room?.events) ? room.events.slice(-80) : [],
+    combatEvents: Array.isArray(room?.combatEvents) ? room.combatEvents.slice(-140) : [],
+    worldState: room?.worldState || null,
     createdAt: toClientTimestamp(config.createdAt),
     updatedAt: toClientTimestamp(room?.updatedAt),
     startedAt: toClientTimestamp(config.startedAt || 0) || 0,
@@ -422,6 +431,14 @@ function applyClientRoomToServer(body = {}) {
 
   room.chat = Array.isArray(body.chat) ? mergeRoomRecords(room.chat, body.chat, 120) : room.chat;
   room.events = Array.isArray(body.events) ? mergeRoomRecords(room.events, body.events, 80) : room.events;
+  room.combatEvents = Array.isArray(body.combatEvents) ? mergeRoomRecords(room.combatEvents, body.combatEvents, 140) : (room.combatEvents || []);
+  if (body.worldState && typeof body.worldState === "object") {
+    const incomingTime = roomRecordTime(body.worldState);
+    const currentTime = roomRecordTime(room.worldState || {});
+    if (!room.worldState || incomingTime >= currentTime) room.worldState = body.worldState;
+  } else {
+    room.worldState = room.worldState || null;
+  }
   room.moderation = Array.isArray(body.moderation) ? body.moderation.slice(-80) : [];
   room.commandAuthorities = Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : [];
   room.commandAuthorityRequests = Array.isArray(body.commandAuthorityRequests) ? body.commandAuthorityRequests.slice(-16) : [];

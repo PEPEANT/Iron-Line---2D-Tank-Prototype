@@ -1144,7 +1144,8 @@
       const raw = sessionPlayer.position || sessionPlayer;
       const x = Number(raw.x);
       const y = Number(raw.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
+      const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
+      if (Number.isFinite(x) && Number.isFinite(y) && !nearOrigin) {
         return { x, y, alive: raw.alive !== false && sessionPlayer.alive !== false };
       }
 

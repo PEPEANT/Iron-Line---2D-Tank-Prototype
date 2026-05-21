@@ -73,6 +73,7 @@
       for (const crew of game.crews || []) this.drawCrewMember(game, crew);
       if (!game.adminObserverMode && !game.player.inTank && game.player.hp > 0) this.drawInfantry(game, game.player, { color: "#b6dcff" });
       else if (!game.adminObserverMode && !game.player.inTank && (game.playerDowned || game.playerDeathActive)) this.drawInfantryCorpse(game.player);
+      this.drawRemoteHumanPlayers(game);
       if (!game.adminObserverMode) this.drawPlayerInfantryAim(game);
       for (const drone of game.drones || []) this.drawReconDrone(game, drone);
       this.drawCommandHighlights(game);
@@ -131,6 +132,202 @@
         x: game.player.x,
         y: game.player.y - (game.player.isProne ? 24 : 34)
       };
+    }
+
+    drawRemoteHumanPlayers(game) {
+      const players = this.remoteHumanPlayers(game);
+      if (!players.length) return;
+      const ctx = this.ctx;
+      for (const entry of players) {
+        const alpha = entry.alpha ?? 0.9;
+        this.drawRemoteAimCue(entry, alpha);
+        this.drawRemoteDroneCue(entry, alpha);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (entry.inVehicle) this.drawRemoteVehicleOccupant(entry, alpha);
+        else this.drawInfantry(game, entry.unit, { color: "#67f27d", showPrompt: false });
+        ctx.restore();
+        this.drawRemoteHumanLabel(entry, alpha);
+      }
+    }
+
+    remoteHumanPlayers(game) {
+      if (game.sessionMode !== "online" && !game.adminObserverMode && !game.spectatorMode) return [];
+      const session = game.onlineSession || {};
+      const localId = session.playerId || "";
+      const now = Date.now();
+      const players = (session.players || []).filter((player) => (player.participantType || "player") === "player");
+      const entries = [];
+      const seen = new Set();
+      for (const player of players) {
+        const id = String(player.id || "");
+        if (!id || seen.has(id) || (localId && id === localId)) continue;
+        seen.add(id);
+        const point = this.remoteHumanPoint(game, player, now);
+        if (!point || point.alive === false) continue;
+        const unit = {
+          x: point.x,
+          y: point.y,
+          angle: point.angle,
+          team: player.team || point.team || TEAM.BLUE,
+          radius: 11,
+          hp: 100,
+          maxHp: 100,
+          weaponId: player.weaponId || "rifle",
+          classId: player.currentClassId || player.classId || player.roleId || "infantry",
+          factionId: player.factionId || player.skinId || "",
+          skinId: player.skinId || player.factionId || "",
+          speed: 0,
+          gunKick: 0,
+          interactPulse: 0,
+          isRemoteHuman: true
+        };
+        entries.push({
+          id,
+          name: player.name || player.nickname || "Player",
+          unit,
+          inVehicle: point.inVehicle,
+          vehicleId: point.vehicleId,
+          vehicleType: point.vehicleType,
+          aim: point.aim,
+          drone: point.drone,
+          alpha: point.alpha
+        });
+      }
+      return entries;
+    }
+
+    remoteHumanPoint(game, player, now = Date.now()) {
+      const raw = player.position || player;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || nearOrigin) return null;
+      const age = Math.max(0, now - (Number(raw.updatedAt || player.updatedAt) || now));
+      if (age > 18000) return null;
+      const aimX = Number(raw.aimX ?? player.aimX);
+      const aimY = Number(raw.aimY ?? player.aimY);
+      const droneX = Number(raw.droneX ?? player.droneX);
+      const droneY = Number(raw.droneY ?? player.droneY);
+      return {
+        x,
+        y,
+        angle: Number.isFinite(Number(raw.angle)) ? Number(raw.angle) : 0,
+        team: player.team,
+        alive: raw.alive !== false && player.alive !== false,
+        inVehicle: Boolean(raw.inVehicle || player.inVehicle),
+        vehicleId: String(raw.vehicleId || player.vehicleId || ""),
+        vehicleType: String(raw.vehicleType || player.vehicleType || ""),
+        aim: Number.isFinite(aimX) && Number.isFinite(aimY) ? { x: aimX, y: aimY } : null,
+        drone: Number.isFinite(droneX) && Number.isFinite(droneY) ? {
+          id: String(raw.droneId || player.droneId || ""),
+          type: String(raw.droneType || player.droneType || "drone"),
+          x: droneX,
+          y: droneY,
+          angle: Number.isFinite(Number(raw.droneAngle ?? player.droneAngle)) ? Number(raw.droneAngle ?? player.droneAngle) : 0,
+          controlled: Boolean(raw.droneControlled || player.droneControlled)
+        } : null,
+        alpha: age > 8000 ? 0.42 : age > 3500 ? 0.62 : 0.88
+      };
+    }
+
+    drawRemoteAimCue(entry, alpha = 1) {
+      const ctx = this.ctx;
+      const unit = entry?.unit;
+      const aim = entry?.aim;
+      if (!unit || !Number.isFinite(aim?.x) || !Number.isFinite(aim?.y)) return;
+      const distance = distXY(unit.x, unit.y, aim.x, aim.y);
+      if (distance < 12) return;
+      const maxLength = 260;
+      const scale = Math.min(1, maxLength / distance);
+      const x2 = unit.x + (aim.x - unit.x) * scale;
+      const y2 = unit.y + (aim.y - unit.y) * scale;
+      ctx.save();
+      ctx.globalAlpha = Math.min(alpha, 0.62);
+      ctx.strokeStyle = "rgba(103, 242, 125, 0.72)";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([9, 8]);
+      ctx.beginPath();
+      ctx.moveTo(unit.x, unit.y);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(x2, y2, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    drawRemoteDroneCue(entry, alpha = 1) {
+      const ctx = this.ctx;
+      const unit = entry?.unit;
+      const drone = entry?.drone;
+      if (!unit || !Number.isFinite(drone?.x) || !Number.isFinite(drone?.y)) return;
+      ctx.save();
+      ctx.globalAlpha = Math.min(alpha, drone.controlled ? 0.82 : 0.56);
+      ctx.strokeStyle = drone.controlled ? "rgba(142, 216, 255, 0.85)" : "rgba(103, 242, 125, 0.45)";
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 7]);
+      ctx.beginPath();
+      ctx.moveTo(unit.x, unit.y);
+      ctx.lineTo(drone.x, drone.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.translate(drone.x, drone.y);
+      ctx.rotate(drone.angle || 0);
+      ctx.fillStyle = drone.controlled ? "rgba(142, 216, 255, 0.88)" : "rgba(103, 242, 125, 0.74)";
+      ctx.beginPath();
+      ctx.moveTo(9, 0);
+      ctx.lineTo(-5, 6);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-5, -6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    drawRemoteVehicleOccupant(entry, alpha = 1) {
+      const ctx = this.ctx;
+      const unit = entry?.unit;
+      if (!unit) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(unit.x, unit.y);
+      ctx.rotate(unit.angle || 0);
+      ctx.strokeStyle = "rgba(103, 242, 125, 0.86)";
+      ctx.fillStyle = "rgba(11, 45, 20, 0.34)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 21, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#67f27d";
+      ctx.fillRect(13, -3, 14, 6);
+      ctx.restore();
+    }
+
+    drawRemoteHumanLabel(entry, alpha = 1) {
+      const ctx = this.ctx;
+      const unit = entry.unit;
+      const name = String(entry.name || "Player").slice(0, 12);
+      if (!unit || !name) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = "800 10px Inter, system-ui, sans-serif";
+      const width = Math.ceil(ctx.measureText(name).width) + 12;
+      const x = unit.x;
+      const y = unit.y - 31;
+      ctx.fillStyle = "rgba(5, 16, 8, 0.82)";
+      roundRect(ctx, x - width / 2, y - 8, width, 16, 5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(103, 242, 125, 0.72)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#baffc5";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(name, x, y);
+      ctx.restore();
     }
 
     drawChatBubble(game, bubble, x, y) {

@@ -733,8 +733,7 @@
       ? travelDistance / Math.max(0.2, ammo.throwTime)
       : ammo.speed || 420;
     const life = ammo.fuseTime || Math.max(0.12, travelDistance / (ammo.speed || 420) + (ammo.fuseExtra || 0));
-
-    game.projectiles.push({
+    const projectile = {
       x: startX,
       y: startY,
       previousX: startX,
@@ -749,7 +748,8 @@
       travelTime: ammo.throwTime || 0,
       landed: false,
       radius: ammo.shellRadius || 5
-    });
+    }; game.publishOnlineProjectileLaunch?.(projectile, { shooter, weaponId: ammo.sourceWeaponId || ammo.id, aimX, aimY });
+    game.projectiles.push(projectile);
 
     if (ammo.id === "rpg") {
       game.effects.explosions.push({
@@ -1108,6 +1108,7 @@
     const x = shell.x;
     const y = shell.y;
     const friendlyVehicle = Boolean(options.friendlyVehicle);
+    game.publishOnlineProjectileImpact?.(shell, { hitTank, hitInfantry, hitInfantryUnit, friendlyVehicle });
 
     if (ammo.id === "smoke") {
       game.effects.smokeClouds.push({

@@ -57,7 +57,7 @@
   function isVehicleCrushThrough(item, options = {}) {
     if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !item || item.destroyed) return false;
     const type = worldItemType(item);
-    return vehicleCrushThroughTypes.has(type) && (item.destructible || vehicleVegetationTypes.has(type));
+    return vehicleCrushThroughTypes.has(type);
   }
 
   function vehicleCrushThroughDamage(item, options = {}) {
@@ -111,6 +111,7 @@
     if (!item || isDestroyed(item)) return false;
     if (item.blocksMovement !== undefined) return item.blocksMovement !== false;
     const type = worldItemType(item);
+    if (type === "brush") return false;
     return Boolean(item.kind || sceneryMovementBlockers.has(type) || item.stopsProjectiles === true);
   }
 

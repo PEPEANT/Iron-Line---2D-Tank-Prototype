@@ -261,7 +261,16 @@
     fireTankMachineGun(tank, targetX, targetY) {
       if (!tank?.canFireMachineGun?.()) return false;
       const target = this.findTankMachineGunTarget(tank, targetX, targetY);
-      return tank.fireMachineGun(this, targetX, targetY, { target });
+      const fired = tank.fireMachineGun(this, targetX, targetY, { target });
+      if (fired && tank === this.player?.inTank) {
+        const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
+        this.publishOnlineGunShot?.(weapon, targetX, targetY, {
+          aimed: true,
+          range: weapon.range,
+          extraHitRadius: 8
+        });
+      }
+      return fired;
     },
     updatePlayerTankMachineGunner(tank, dt) {
       if (!tank?.hasMachineGunner?.() || (tank.ammo?.mg || 0) <= 0) return false;

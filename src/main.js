@@ -63,6 +63,9 @@
       this.entryOpen = !this.adminObserverMode && !this.testLab;
       this.onlineSession = this.createLocalSession();
       this.scoreboardStats = {};
+      this.onlineCombatSeenIds = new Set();
+      this.onlineWorldSyncTimer = 0;
+      this.onlineWorldAppliedAt = 0;
       this.tacticalMapOpen = false;
       this.commandBus = new IronLine.CommandBus(this);
       this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
@@ -205,7 +208,6 @@
       for (const type of ["pointerdown", "touchstart", "mousedown", "keydown"]) {
         window.addEventListener(type, trigger, { capture: true, once: true, passive: true });
       }
-      setTimeout(() => this.requestAppFullscreen(), 120);
     }
 
     installFullscreenPreferenceListener() {
@@ -249,6 +251,7 @@
       if (this.settings?.fullscreenDisabled && !options.userInitiated) return false;
       if (options.userInitiated) this.setFullscreenDisabled(false);
       if (this.isFullscreenActive() || this.fullscreenRequestPending) return false;
+      if (!options.userInitiated && navigator.userActivation && !navigator.userActivation.isActive) return false;
 
       const target = document.documentElement;
       const requestFullscreen = target.requestFullscreen || target.webkitRequestFullscreen;
@@ -327,11 +330,16 @@
     }
 
     resetWorldSceneryState() {
+      const vehicleBreakableScenery = new Set(["brush", "tree", "rubble", "sandbag", "barricade", "wood-fence", "streetlight", "billboard", "bench"]);
       for (const item of this.world?.scenery || []) {
         if (item.baseStopsProjectiles === undefined) item.baseStopsProjectiles = item.stopsProjectiles !== false;
         if (item.type === "brush" || item.type === "tree") {
           item.destructible = true;
           item.maxHp = item.maxHp || item.baseHp || item.hp || (item.type === "tree" ? 64 : 34);
+          item.hp = item.maxHp;
+        } else if (vehicleBreakableScenery.has(item.type || item.kind)) {
+          item.destructible = true;
+          item.maxHp = item.maxHp || item.baseHp || item.hp || IronLine.combat?.obstacleImpactHp?.(item.type || item.kind) || 42;
           item.hp = item.maxHp;
         }
         if (!item.destructible) {
@@ -881,6 +889,8 @@
       this.chat?.update?.(dt);
       this.roleChange?.update?.(dt);
       this.battlefieldEvents?.update?.(dt);
+      this.updateOnlineCombatEvents(dt);
+      this.updateOnlineWorldSync(dt);
 
       if (this.adminObserverMode) {
         this.updateBattlefield(dt);
@@ -1526,6 +1536,609 @@
       }
     }
 
+    onlineCombatRoom() {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId) return null;
+      return IronLine.roomRegistry?.getRoom?.(this.onlineSession.roomId) || null;
+    }
+
+    onlineCombatActiveForLocalPlayer() {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId || !this.matchStarted) return false;
+      if (this.isLocalSpectator?.()) return false;
+      if (!this.player || this.playerDeathActive || this.playerDowned || this.player.hp <= 0) return false;
+      return !this.lobbyOpen && !this.deploymentOpen;
+    }
+
+    updateOnlineCombatEvents(_dt) {
+      const room = this.onlineCombatRoom();
+      if (!room) return;
+      const events = IronLine.roomRegistry?.recentCombatEvents?.(room.id, 90) || room.combatEvents || [];
+      const localId = this.onlineSession?.playerId || "";
+      const now = Date.now();
+      this.onlineCombatSeenIds = this.onlineCombatSeenIds || new Set();
+
+      for (const event of events) {
+        if (!event?.id || this.onlineCombatSeenIds.has(event.id)) continue;
+        this.onlineCombatSeenIds.add(event.id);
+        const createdAt = this.onlineCombatEventTime(event);
+        if (createdAt && now - createdAt > 6500) continue;
+        if (event.shooterId === localId) continue;
+        this.applyOnlineCombatEvent(event);
+      }
+
+      if (this.onlineCombatSeenIds.size > 420) {
+        const staleCount = this.onlineCombatSeenIds.size - 320;
+        let index = 0;
+        for (const id of this.onlineCombatSeenIds) {
+          this.onlineCombatSeenIds.delete(id);
+          index += 1;
+          if (index >= staleCount) break;
+        }
+      }
+    }
+
+    onlineCombatEventTime(event = {}) {
+      const numeric = Number(event.createdAt);
+      if (Number.isFinite(numeric) && numeric > 0) return numeric;
+      const parsed = Date.parse(event.createdAt || "");
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    applyOnlineCombatEvent(event = {}) {
+      if (event.type === "projectile_launch") {
+        this.emitOnlineProjectileLaunch(event);
+        return true;
+      }
+      if (event.type === "projectile_impact") {
+        this.emitOnlineProjectileImpact(event);
+        return this.applyOnlineProjectileImpactDamage(event);
+      }
+
+      this.emitOnlineCombatTracer(event);
+      const localId = this.onlineSession?.playerId || "";
+      if (!this.onlineCombatActiveForLocalPlayer()) return false;
+      if (!event.hit || event.targetPlayerId !== localId) return false;
+      if (this.isPlayerInSafeZone?.()) return false;
+
+      const source = {
+        x: Number(event.x1) || Number(event.hitX) || this.player.x,
+        y: Number(event.y1) || Number(event.hitY) || this.player.y,
+        team: event.shooterTeam === TEAM.RED ? TEAM.RED : TEAM.BLUE,
+        ownerPlayerId: event.shooterId || ""
+      };
+      return this.applyPlayerDamage(event.damage, source, event.weaponId || "rifle", {
+        label: "\uc628\ub77c\uc778 \ud53c\uaca9",
+        deathReason: `${event.shooterName || "Player"}\uc758 \uacf5\uaca9\uc73c\ub85c \uc804\ud22c \ubd88\ub2a5 \uc0c1\ud0dc\uac00 \ub418\uc5c8\uc2b5\ub2c8\ub2e4.`,
+        x: source.x,
+        y: source.y
+      });
+    }
+
+    emitOnlineCombatTracer(event = {}) {
+      const x1 = Number(event.x1);
+      const y1 = Number(event.y1);
+      const x2 = Number(event.x2 ?? event.hitX);
+      const y2 = Number(event.y2 ?? event.hitY);
+      if (![x1, y1, x2, y2].every(Number.isFinite)) return false;
+      const tracers = this.effects.tracers || (this.effects.tracers = []);
+      if (tracers.length > 180) tracers.shift();
+      const blue = event.shooterTeam !== TEAM.RED;
+      tracers.push({
+        x1,
+        y1,
+        x2,
+        y2,
+        life: Number(event.ttl) || 0.12,
+        maxLife: Number(event.ttl) || 0.12,
+        color: blue ? "rgba(129, 230, 161, 0.9)" : "rgba(255, 150, 133, 0.9)",
+        width: event.weaponId === "sniper" ? 3.4 : 2.6,
+        length: event.weaponId === "sniper" ? 26 : 18
+      });
+      return true;
+    }
+
+    publishOnlineGunShot(weapon, targetX, targetY, options = {}) {
+      if (!this.onlineCombatActiveForLocalPlayer()) return null;
+      const roomId = this.onlineSession?.roomId || "";
+      const localPlayer = this.localSessionPlayer?.();
+      if (!roomId || !localPlayer) return null;
+
+      const line = this.onlineGunShotLine(weapon, targetX, targetY, options);
+      if (!line) return null;
+      const hitTarget = this.findOnlineGunHitTarget(weapon, line, options);
+      const hitChance = hitTarget ? this.onlineGunHitChance(weapon, hitTarget.distance, line.range, options) : 0;
+      const hit = Boolean(hitTarget && Math.random() < hitChance);
+      const damage = hit ? this.onlineGunDamage(weapon, hitTarget.distance, line.range) : 0;
+      const endX = hit ? hitTarget.point.x : line.x2;
+      const endY = hit ? hitTarget.point.y : line.y2;
+
+      const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        type: "small_arms",
+        shooterId: this.onlineSession.playerId,
+        shooterName: localPlayer.name || localPlayer.nickname || "Player",
+        shooterTeam: localPlayer.team || this.player.team || TEAM.BLUE,
+        targetPlayerId: hit ? hitTarget.player.id : "",
+        weaponId: weapon?.id || "rifle",
+        damage,
+        hit,
+        x1: line.x1,
+        y1: line.y1,
+        x2: endX,
+        y2: endY,
+        hitX: endX,
+        hitY: endY,
+        angle: line.angle,
+        ttl: weapon?.tracerLife || 0.1
+      });
+      if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      return event;
+    }
+
+    isOnlineLocalShooter(shooter = null) {
+      if (!this.onlineCombatActiveForLocalPlayer()) return false;
+      if (shooter === this.player) return true;
+      const mounted = this.player?.inTank || null;
+      return Boolean(mounted && shooter === mounted && mounted.playerControlled);
+    }
+
+    onlineShooterInfo(shooter = null) {
+      const localPlayer = this.localSessionPlayer?.() || {};
+      const mounted = this.player?.inTank || null;
+      const vehicle = shooter?.vehicleType ? shooter : mounted;
+      return {
+        id: this.onlineSession?.playerId || "",
+        name: localPlayer.name || localPlayer.nickname || "Player",
+        team: localPlayer.team || shooter?.team || this.player?.team || TEAM.BLUE,
+        vehicleId: vehicle?.callSign || vehicle?.id || "",
+        vehicleType: vehicle?.vehicleType || ""
+      };
+    }
+
+    publishOnlineProjectileLaunch(projectile = null, options = {}) {
+      const shooter = options.shooter || projectile?.owner || null;
+      if (!projectile || !this.isOnlineLocalShooter(shooter)) return null;
+      const roomId = this.onlineSession?.roomId || "";
+      if (!roomId) return null;
+      const ammo = projectile.ammo || {};
+      const shooterInfo = this.onlineShooterInfo(shooter);
+      const projectileId = `${roomId}:proj:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+      projectile.onlineCombatId = projectileId;
+      projectile.onlineShooterId = shooterInfo.id;
+      const speed = Math.hypot(projectile.vx || 0, projectile.vy || 0);
+      const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        id: `${projectileId}:launch`,
+        type: "projectile_launch",
+        projectileId,
+        shooterId: shooterInfo.id,
+        shooterName: shooterInfo.name,
+        shooterTeam: shooterInfo.team,
+        targetVehicleId: shooterInfo.vehicleId,
+        weaponId: options.weaponId || ammo.sourceWeaponId || ammo.id || "projectile",
+        damage: ammo.directDamage || ammo.damage || 0,
+        radius: ammo.splash || ammo.directExplosionRadius || 0,
+        x1: projectile.x,
+        y1: projectile.y,
+        x2: Number.isFinite(options.aimX) ? options.aimX : projectile.x + Math.cos(Math.atan2(projectile.vy || 0, projectile.vx || 1)) * Math.min(speed * Math.max(projectile.life || 0.35, 0.25), ammo.range || 1200),
+        y2: Number.isFinite(options.aimY) ? options.aimY : projectile.y + Math.sin(Math.atan2(projectile.vy || 0, projectile.vx || 1)) * Math.min(speed * Math.max(projectile.life || 0.35, 0.25), ammo.range || 1200),
+        vx: projectile.vx || 0,
+        vy: projectile.vy || 0,
+        speed,
+        angle: Math.atan2(projectile.vy || 0, projectile.vx || 1),
+        ttl: ammo.id === "rpg" ? 0.16 : 0.12,
+        smoke: ammo.id === "smoke"
+      });
+      if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      return event;
+    }
+
+    publishOnlineProjectileImpact(shell = null, options = {}) {
+      if (!shell?.onlineCombatId || shell.onlineShooterId !== this.onlineSession?.playerId) return null;
+      const roomId = this.onlineSession?.roomId || "";
+      if (!roomId) return null;
+      const ammo = shell.ammo || {};
+      const shooterInfo = this.onlineShooterInfo(shell.owner || null);
+      const hitTank = options.hitTank || null;
+      const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        id: `${shell.onlineCombatId}:impact`,
+        type: "projectile_impact",
+        projectileId: shell.onlineCombatId,
+        shooterId: shooterInfo.id,
+        shooterName: shooterInfo.name,
+        shooterTeam: shooterInfo.team || shell.team,
+        targetVehicleId: hitTank?.callSign || hitTank?.id || "",
+        weaponId: ammo.sourceWeaponId || ammo.id || "projectile",
+        damage: ammo.directDamage || ammo.damage || 0,
+        radius: ammo.splash || ammo.directExplosionRadius || (ammo.id === "ap" ? 52 : 0),
+        splash: ammo.splash || 0,
+        x1: shell.previousX ?? shell.x,
+        y1: shell.previousY ?? shell.y,
+        x2: shell.x,
+        y2: shell.y,
+        hitX: shell.x,
+        hitY: shell.y,
+        vx: shell.vx || 0,
+        vy: shell.vy || 0,
+        angle: Math.atan2(shell.vy || 0, shell.vx || 1),
+        smoke: ammo.id === "smoke"
+      });
+      if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      return event;
+    }
+
+    emitOnlineProjectileLaunch(event = {}) {
+      const x1 = Number(event.x1);
+      const y1 = Number(event.y1);
+      const vx = Number(event.vx);
+      const vy = Number(event.vy);
+      if (![x1, y1, vx, vy].every(Number.isFinite)) return false;
+      const speed = Math.max(1, Math.hypot(vx, vy));
+      const duration = event.weaponId === "rpg" ? 0.22 : 0.14;
+      const x2 = x1 + vx / speed * Math.min(speed * duration, event.weaponId === "rpg" ? 260 : 360);
+      const y2 = y1 + vy / speed * Math.min(speed * duration, event.weaponId === "rpg" ? 260 : 360);
+      const tracers = this.effects.tracers || (this.effects.tracers = []);
+      if (tracers.length > 180) tracers.shift();
+      tracers.push({
+        x1,
+        y1,
+        x2,
+        y2,
+        life: event.weaponId === "rpg" ? 0.18 : 0.12,
+        maxLife: event.weaponId === "rpg" ? 0.18 : 0.12,
+        color: event.weaponId === "rpg" ? "rgba(255, 199, 120, 0.78)" : "rgba(255, 236, 172, 0.82)",
+        width: event.weaponId === "rpg" ? 3.2 : 3.8,
+        length: event.weaponId === "rpg" ? 26 : 34
+      });
+      return true;
+    }
+
+    emitOnlineProjectileImpact(event = {}) {
+      const x = Number(event.hitX ?? event.x2);
+      const y = Number(event.hitY ?? event.y2);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      if (event.smoke) {
+        this.effects.smokeClouds.push({
+          x,
+          y,
+          radius: 42,
+          maxRadius: 142,
+          life: 8.5,
+          maxLife: 8.5
+        });
+      }
+      const radius = Math.max(28, Number(event.radius || event.splash || 72));
+      const blastRings = this.effects.blastRings || (this.effects.blastRings = []);
+      blastRings.push({
+        x,
+        y,
+        radius: 8,
+        maxRadius: Math.min(radius * 0.72, 180),
+        life: 0.18,
+        maxLife: 0.18,
+        color: event.smoke ? "rgba(220, 226, 230, 0.62)" : "rgba(255, 238, 178, 0.72)",
+        width: event.weaponId === "grenade" || event.weaponId === "grenadeLauncher" ? 2.8 : 5
+      });
+      this.effects.explosions.push({
+        x,
+        y,
+        radius: event.weaponId === "grenade" ? 7 : 18,
+        maxRadius: event.smoke ? 70 : Math.min(radius * 0.58, 150),
+        life: event.smoke ? 0.58 : 0.42,
+        maxLife: event.smoke ? 0.58 : 0.42,
+        color: event.smoke ? "rgba(220, 226, 230, 0.7)" : "rgba(255, 145, 58, 0.86)",
+        core: true,
+        smoke: false
+      });
+      this.effects.scorchMarks.push({
+        x,
+        y,
+        radius: Math.min(radius * 0.36, 58),
+        alpha: event.smoke ? 0.06 : 0.2
+      });
+      return true;
+    }
+
+    applyOnlineProjectileImpactDamage(event = {}) {
+      if (!this.onlineCombatActiveForLocalPlayer()) return false;
+      if (event.smoke) return false;
+      const localTeam = this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
+      if ((event.shooterTeam || TEAM.BLUE) === localTeam) return false;
+      const x = Number(event.hitX ?? event.x2);
+      const y = Number(event.hitY ?? event.y2);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      if (this.isPlayerInSafeZone?.()) return false;
+
+      const mounted = this.player?.inTank || null;
+      const target = mounted?.alive ? mounted : this.player;
+      if (!target || target.hp <= 0) return false;
+      const radius = Math.max(1, Number(event.radius || event.splash || 1));
+      const d = distXY(x, y, target.x, target.y);
+      if (d > radius + (target.radius || this.player.radius || 10)) return false;
+      const falloff = clamp(1 - d / Math.max(1, radius + (target.radius || 0)), 0.18, 1);
+      const baseDamage = Number(event.damage) || (event.weaponId === "rpg" ? 52 : event.weaponId === "he" ? 60 : 38);
+      const source = {
+        x,
+        y,
+        team: event.shooterTeam === TEAM.RED ? TEAM.RED : TEAM.BLUE,
+        ownerPlayerId: event.shooterId || ""
+      };
+
+      if (mounted?.alive) {
+        const vehicleScale = mounted.vehicleType === "humvee" ? 0.72 : 0.42;
+        mounted.takeDamage?.(this, baseDamage * falloff * vehicleScale);
+        if (!mounted.alive) {
+          this.applyPlayerDamage(28, source, event.weaponId || "explosion", {
+            label: "\uc628\ub77c\uc778 \ucc28\ub7c9 \ud53c\uaca9",
+            x,
+            y
+          });
+        }
+        return true;
+      }
+
+      return this.applyPlayerDamage(baseDamage * falloff, source, event.weaponId || "explosion", {
+        label: event.weaponId === "rpg" ? "RPG \ud3ed\ubc1c" : "\uc628\ub77c\uc778 \ud3ed\ubc1c",
+        x,
+        y
+      });
+    }
+
+    onlineGunShotLine(weapon, targetX, targetY, options = {}) {
+      if (!this.player || !weapon) return null;
+      const scoped = this.isPlayerScoutAimMode?.() && weapon.id === "sniper";
+      const machineGunAim = this.isPlayerMachineGunAimMode?.() && (weapon.id === "machinegun" || weapon.id === "lmg");
+      const pistolAim = this.isPlayerPistolAimMode?.() && weapon.id === "pistol";
+      const baseRange = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : pistolAim ? weapon.range * 1.12 : weapon.range;
+      const range = this.effectivePlayerGunRange(weapon, options.range || baseRange || 560);
+      const angle = angleTo(this.player.x, this.player.y, targetX, targetY);
+      const spread = (weapon.spread || 0.22) * (options.aimed ? 0.035 : 0.08);
+      const shotAngle = angle + (Math.random() - 0.5) * spread;
+      const muzzleDistance = this.player.radius + (weapon.visualLength || 16) + 5;
+      const x1 = this.player.x + Math.cos(shotAngle) * muzzleDistance;
+      const y1 = this.player.y + Math.sin(shotAngle) * muzzleDistance;
+      const aimDistance = Math.max(1, distXY(this.player.x, this.player.y, targetX, targetY));
+      const distance = Math.min(range, aimDistance);
+      return {
+        x1,
+        y1,
+        x2: x1 + Math.cos(shotAngle) * distance,
+        y2: y1 + Math.sin(shotAngle) * distance,
+        angle: shotAngle,
+        range
+      };
+    }
+
+    findOnlineGunHitTarget(weapon, line, options = {}) {
+      const localId = this.onlineSession?.playerId || "";
+      const localTeam = this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
+      const now = Date.now();
+      const baseRadius = weapon?.id === "sniper" ? 13 : weapon?.id === "pistol" ? 15 : 18;
+      const candidates = [];
+      for (const player of this.onlineSession?.players || []) {
+        if (!player || player.id === localId || (player.participantType || "player") !== "player") continue;
+        if (player.alive === false || player.team === localTeam) continue;
+        const point = this.onlineCombatPlayerPoint(player);
+        if (!point || point.inVehicle) continue;
+        if (now - point.updatedAt > 7500) continue;
+        const distance = distXY(line.x1, line.y1, point.x, point.y);
+        if (distance > line.range + baseRadius) continue;
+        const laneDistance = segmentDistanceToPoint(line.x1, line.y1, line.x2, line.y2, point.x, point.y);
+        if (laneDistance > baseRadius + (options.extraHitRadius || 0)) continue;
+        if (!hasLineOfSight(this, { x: line.x1, y: line.y1 }, point, { padding: 3 })) continue;
+        candidates.push({ player, point, distance, laneDistance });
+      }
+      candidates.sort((a, b) => (
+        a.laneDistance + a.distance * 0.012 -
+        (b.laneDistance + b.distance * 0.012)
+      ));
+      return candidates[0] || null;
+    }
+
+    onlineCombatPlayerPoint(player = {}) {
+      const raw = player.position || player;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
+      if (nearOrigin) return null;
+      return {
+        x,
+        y,
+        inVehicle: Boolean(raw.inVehicle || player.inVehicle),
+        updatedAt: Number(raw.updatedAt || player.updatedAt || 0) || Date.now()
+      };
+    }
+
+    onlineGunHitChance(weapon, distance, range, options = {}) {
+      const ratio = range > 0 ? clamp(distance / range, 0, 1) : 0;
+      const aimed = options.aimed ? 0.08 : 0;
+      const base = weapon?.id === "sniper"
+        ? 0.86
+        : (weapon?.id === "machinegun" || weapon?.id === "lmg") ? 0.68
+          : weapon?.id === "pistol" ? 0.7 : 0.76;
+      return clamp(base - ratio * 0.34 + (weapon?.accuracyBonus || 0) + aimed, 0.18, 0.9);
+    }
+
+    onlineGunDamage(weapon, distance, range) {
+      const min = Number(weapon?.damageMin) || 5;
+      const max = Number(weapon?.damageMax) || min + 2;
+      const ratio = range > 0 ? clamp(distance / range, 0, 1) : 0;
+      const falloff = weapon?.id === "sniper" ? 0.92 : 0.78 - ratio * 0.18;
+      return Math.max(1, Math.round((min + Math.random() * (max - min)) * falloff * 10) / 10);
+    }
+
+    updateOnlineWorldSync(dt) {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId || !this.matchStarted || this.result) return;
+      const room = this.onlineCombatRoom();
+      if (!room) return;
+      if (this.isOnlineWorldHost(room)) {
+        this.onlineWorldSyncTimer = Math.max(0, (this.onlineWorldSyncTimer || 0) - dt);
+        if (this.onlineWorldSyncTimer <= 0) {
+          this.onlineWorldSyncTimer = 1.8;
+          IronLine.roomRegistry?.updateWorldState?.(room.id, this.captureOnlineWorldState(room));
+        }
+        return;
+      }
+      this.applyOnlineWorldState(room.worldState);
+    }
+
+    onlineWorldHostPlayerId(room = this.onlineCombatRoom()) {
+      const players = (room?.players || [])
+        .filter((player) => player && (player.participantType || "player") === "player" && player.alive !== false);
+      if (!players.length) return "";
+      const explicit = players.find((player) => player.host);
+      if (explicit?.id) return explicit.id;
+      const slots = this.onlineSession?.roleSlots || [];
+      const slotOrder = new Map(slots.map((slot, index) => [slot.id, index]));
+      players.sort((a, b) => (
+        (slotOrder.get(a.slotId) ?? 999) - (slotOrder.get(b.slotId) ?? 999) ||
+        String(a.id || "").localeCompare(String(b.id || ""))
+      ));
+      return players[0]?.id || "";
+    }
+
+    isOnlineWorldHost(room = this.onlineCombatRoom()) {
+      const localId = this.onlineSession?.playerId || "";
+      if (!localId || this.isLocalSpectator?.()) return false;
+      return this.onlineWorldHostPlayerId(room) === localId;
+    }
+
+    onlineVehicleControllerId(vehicle = null) {
+      const id = vehicle?.callSign || vehicle?.id || "";
+      if (!id || this.sessionMode !== "online") return "";
+      for (const player of this.onlineSession?.players || []) {
+        const position = player?.position || player;
+        if (position?.inVehicle && (position.vehicleId || player.vehicleId) === id) return player.id || "";
+      }
+      return "";
+    }
+
+    captureOnlineWorldState(room = this.onlineCombatRoom()) {
+      const localId = this.onlineSession?.playerId || "";
+      const vehiclePresence = new Map();
+      for (const player of room?.players || []) {
+        const position = player?.position || player;
+        const vehicleId = String(position?.vehicleId || player?.vehicleId || "");
+        if (!vehicleId || !position?.inVehicle) continue;
+        vehiclePresence.set(vehicleId, { player, position });
+      }
+      const vehicles = [...(this.tanks || []), ...(this.humvees || [])]
+        .map((vehicle) => {
+          const id = vehicle.callSign || vehicle.id || "";
+          const presence = vehiclePresence.get(id);
+          const position = presence?.position || null;
+          const controllerId = presence?.player?.id || (vehicle.playerControlled ? localId : "");
+          return {
+            id,
+            type: vehicle.vehicleType || position?.vehicleType || "tank",
+            team: vehicle.team,
+            x: Number.isFinite(Number(position?.x)) ? Number(position.x) : vehicle.x,
+            y: Number.isFinite(Number(position?.y)) ? Number(position.y) : vehicle.y,
+            angle: Number.isFinite(Number(position?.angle)) ? Number(position.angle) : vehicle.angle,
+            turretAngle: Number.isFinite(Number(position?.turretAngle)) ? Number(position.turretAngle) : (vehicle.turretAngle ?? vehicle.angle),
+            machineGunAngle: Number.isFinite(Number(position?.machineGunAngle)) ? Number(position.machineGunAngle) : (vehicle.machineGunAngle ?? vehicle.angle),
+            hp: Number(position?.vehicleHp) || vehicle.hp,
+            maxHp: Number(position?.vehicleMaxHp) || vehicle.maxHp,
+            alive: (position?.alive ?? vehicle.alive) !== false && (Number(position?.vehicleHp) || vehicle.hp) > 0,
+            controllerId
+          };
+        })
+        .filter((item) => item.id);
+      const units = [...(this.infantry || []), ...(this.crews || [])]
+        .map((unit) => ({
+          id: unit.callSign || unit.id || "",
+          team: unit.team,
+          x: unit.x,
+          y: unit.y,
+          angle: unit.angle,
+          hp: unit.hp,
+          maxHp: unit.maxHp,
+          alive: unit.alive !== false && unit.hp > 0,
+          inVehicle: Boolean(unit.inVehicle || unit.inTank)
+        }))
+        .filter((item) => item.id)
+        .slice(0, 96);
+      const capturePoints = (this.capturePoints || []).map((point) => ({
+        id: point.name,
+        owner: point.owner,
+        progress: point.progress,
+        contested: point.contested
+      }));
+      return {
+        roomId: room?.id || this.onlineSession?.roomId || "",
+        hostId: localId,
+        tick: Math.floor((this.matchTime || 0) * 10),
+        vehicles,
+        units,
+        capturePoints
+      };
+    }
+
+    applyOnlineWorldState(state = null) {
+      if (!state || state.hostId === this.onlineSession?.playerId) return false;
+      const updatedAt = Number(state.updatedAt) || 0;
+      if (!updatedAt || updatedAt <= (this.onlineWorldAppliedAt || 0)) return false;
+      if (Date.now() - updatedAt > 7000) return false;
+      this.onlineWorldAppliedAt = updatedAt;
+
+      const vehicleById = new Map(
+        [...(this.tanks || []), ...(this.humvees || [])]
+          .map((vehicle) => [vehicle.callSign || vehicle.id || "", vehicle])
+          .filter(([id]) => id)
+      );
+      for (const snap of state.vehicles || []) {
+        const vehicle = vehicleById.get(snap.id);
+        if (!vehicle || vehicle === this.player?.inTank) continue;
+        const alive = snap.alive !== false && Number(snap.hp) > 0;
+        if (!alive) {
+          vehicle.hp = 0;
+          vehicle.alive = false;
+          vehicle.playerControlled = false;
+          vehicle.wreckTimer = vehicle.wreckTimer || 0;
+          continue;
+        }
+        vehicle.alive = true;
+        vehicle.destructionPending = false;
+        vehicle.hp = Math.max(1, Math.min(vehicle.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
+        vehicle.x = lerp(vehicle.x, Number(snap.x) || vehicle.x, 0.72);
+        vehicle.y = lerp(vehicle.y, Number(snap.y) || vehicle.y, 0.72);
+        vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, 0.62));
+        if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(lerp(vehicle.turretAngle, Number(snap.turretAngle) || vehicle.turretAngle, 0.68));
+        if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(lerp(vehicle.machineGunAngle, Number(snap.machineGunAngle) || vehicle.machineGunAngle, 0.68));
+        vehicle.playerControlled = Boolean(snap.controllerId);
+      }
+
+      const unitById = new Map(
+        [...(this.infantry || []), ...(this.crews || [])]
+          .map((unit) => [unit.callSign || unit.id || "", unit])
+          .filter(([id]) => id)
+      );
+      for (const snap of state.units || []) {
+        const unit = unitById.get(snap.id);
+        if (!unit) continue;
+        const alive = snap.alive !== false && Number(snap.hp) > 0;
+        if (!alive) {
+          unit.hp = 0;
+          unit.alive = false;
+          continue;
+        }
+        if (unit.inTank || unit.inVehicle) continue;
+        unit.alive = true;
+        unit.hp = Math.max(1, Math.min(unit.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
+        unit.x = lerp(unit.x, Number(snap.x) || unit.x, 0.7);
+        unit.y = lerp(unit.y, Number(snap.y) || unit.y, 0.7);
+        unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, 0.55));
+      }
+
+      const pointById = new Map((this.capturePoints || []).map((point) => [point.name, point]));
+      for (const snap of state.capturePoints || []) {
+        const point = pointById.get(snap.id);
+        if (!point) continue;
+        point.owner = snap.owner || TEAM.NEUTRAL;
+        point.progress = clamp(Number(snap.progress) || 0, -1, 1);
+        point.contested = Boolean(snap.contested);
+      }
+      return true;
+    }
+
     recordCombatKill(source = null, victim = null, kind = "kill") {
       const killer = source?.owner || source;
       const playerId = this.scoreboardPlayerIdFor(killer);
@@ -1686,7 +2299,12 @@
         [TEAM.RED]: new Map()
       };
       this.capturePoints = [];
-      this.player = IronLine.createPlayer(this.world.spawns.player);
+      const localSessionPlayer = this.localSessionPlayer?.();
+      const localTeam = localSessionPlayer?.team || TEAM.BLUE;
+      const playerSpawn = this.respawnPointForTeam?.(localTeam) || this.world.spawns.player;
+      this.player = IronLine.createPlayer(playerSpawn);
+      this.player.team = localTeam;
+      if (Number.isFinite(playerSpawn?.angle)) this.player.angle = playerSpawn.angle;
       this.applyLocalProfile();
       this.player.setClass(selectedClass);
       this.applyPlayerLoadoutOverrides();
@@ -2370,6 +2988,10 @@
           impactChance: machineGunAim ? 0.46 : pistolAim ? 0.36 : 0.28
         });
       if (fired) {
+        this.publishOnlineGunShot(weapon, targetX, targetY, {
+          aimed: scoped || machineGunAim || pistolAim || observedShot,
+          range
+        });
         if (observedShot) this.player.lastShotCooldownScale = observedTarget.designated ? 1.18 : 1.35;
         this.consumePlayerEquipmentAmmo(weapon);
         this.emitPlayerGunFeedback(weapon, machineGunAim || pistolAim || observedShot);
@@ -2627,10 +3249,12 @@
     findMountablePlayerVehicle(maxDistance = 104) {
       if (this.player.inTank) return this.player.inTank;
       const vehicles = [...(this.tanks || []), ...(this.humvees || [])];
+      const playerTeam = this.localSessionPlayer?.()?.team || this.player.team || TEAM.BLUE;
       return vehicles
         .filter((vehicle) => (
           vehicle.alive &&
-          vehicle.team === TEAM.BLUE &&
+          vehicle.team === playerTeam &&
+          (!this.onlineVehicleControllerId?.(vehicle) || this.onlineVehicleControllerId?.(vehicle) === this.onlineSession?.playerId) &&
           distXY(this.player.x, this.player.y, vehicle.x, vehicle.y) < maxDistance + Math.max(0, (vehicle.radius || 0) - 30)
         ))
         .sort((a, b) => distXY(this.player.x, this.player.y, a.x, a.y) - distXY(this.player.x, this.player.y, b.x, b.y))[0] || null;

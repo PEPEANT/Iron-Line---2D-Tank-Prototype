@@ -28,10 +28,8 @@
         pressed: new Set()
       };
 
-      window.addEventListener("keydown", (event) => this.onKeyDown(event));
-      window.addEventListener("keyup", (event) => this.onKeyUp(event));
-      document.addEventListener("keydown", (event) => this.onKeyDown(event));
-      document.addEventListener("keyup", (event) => this.onKeyUp(event));
+      window.addEventListener("keydown", (event) => this.onKeyDown(event), true);
+      window.addEventListener("keyup", (event) => this.onKeyUp(event), true);
       window.addEventListener("mousemove", (event) => {
         this.mouse.x = event.clientX;
         this.mouse.y = event.clientY;
@@ -124,7 +122,6 @@
     }
 
     onKeyUp(event) {
-      if (this.isEditableTarget(event.target)) return;
       this.keys.delete(event.code);
       if (event.key === " ") this.keys.delete("Space");
     }

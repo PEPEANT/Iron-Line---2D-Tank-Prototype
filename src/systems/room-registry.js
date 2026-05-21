@@ -9,6 +9,9 @@
   const PRODUCTION_ROOMS_API_BASE = "https://iron-line-2d-tank-prototype.onrender.com";
   const DEFAULT_SPECTATOR_CAPACITY = 12;
   const MAX_SPECTATOR_CAPACITY = 12;
+  const REMOTE_REFRESH_INTERVAL_MS = 1200;
+  const MAX_COMBAT_EVENTS = 140;
+  const MAX_WORLD_UNITS = 96;
   const ROOM_SETTING_LIMITS = Object.freeze({
     capacity: { min: 1, max: 8, fallback: 8 },
     blueAiTanks: { min: 0, max: 8, fallback: 3 },
@@ -27,6 +30,21 @@
     "red-armor"
   ]);
 
+  function finiteNumber(value, fallback = 0) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  }
+
+  function clampNumber(value, min = 0, max = 1, fallback = min) {
+    const numeric = finiteNumber(value, fallback);
+    return Math.max(min, Math.min(max, numeric));
+  }
+
+  function roundCoord(value) {
+    const numeric = finiteNumber(value, 0);
+    return Math.round(numeric);
+  }
+
   class RoomRegistry {
     constructor() {
       this.storageKey = STORAGE_KEY;
@@ -37,6 +55,8 @@
       this.remoteOnline = false;
       this.remoteRefreshInFlight = false;
       this.pendingRemoteRoomIds = new Set();
+      this.pendingPublishRooms = new Map();
+      this.pendingPublishTimers = new Map();
       this.deletedRemoteRoomIds = new Set();
       this.apiBase = this.resolveRoomsApiBase();
       window.addEventListener("storage", (event) => {
@@ -44,7 +64,7 @@
       });
       if (this.canUseRemoteApi()) {
         window.setTimeout(() => this.refreshRemoteRooms(), 200);
-        window.setInterval(() => this.refreshRemoteRooms(), 2500);
+        window.setInterval(() => this.refreshRemoteRooms(), REMOTE_REFRESH_INTERVAL_MS);
       }
     }
 
@@ -141,7 +161,11 @@
           room.chat?.length || 0,
           room.chat?.[room.chat.length - 1]?.id || "",
           room.events?.length || 0,
-          room.events?.[room.events.length - 1]?.id || ""
+          room.events?.[room.events.length - 1]?.id || "",
+          room.combatEvents?.length || 0,
+          room.combatEvents?.[room.combatEvents.length - 1]?.id || "",
+          room.worldState?.updatedAt || 0,
+          room.worldState?.hostId || ""
         ].join(":"))
         .join("|");
     }
@@ -229,6 +253,25 @@
         });
     }
 
+    schedulePublishRoom(room, delayMs = 160) {
+      if (!this.canUseRemoteApi() || !room?.id) return;
+      const normalized = this.normalizeRoom(room);
+      if (!normalized) return;
+      this.pendingRemoteRoomIds.add(normalized.id);
+      this.deletedRemoteRoomIds.delete(normalized.id);
+      this.pendingPublishRooms.set(normalized.id, normalized);
+      this.upsertRemoteRoom(normalized);
+      if (this.pendingPublishTimers.has(normalized.id)) return;
+      const delay = Math.max(40, Math.min(500, Math.round(Number(delayMs) || 160)));
+      const timer = window.setTimeout(() => {
+        this.pendingPublishTimers.delete(normalized.id);
+        const latest = this.pendingPublishRooms.get(normalized.id) || this.getRoom(normalized.id);
+        this.pendingPublishRooms.delete(normalized.id);
+        if (latest) this.publishRoom(latest);
+      }, delay);
+      this.pendingPublishTimers.set(normalized.id, timer);
+    }
+
     upsertRemoteRoom(room) {
       if (!room?.id) return;
       const roomTime = this.roomUpdatedAt(room);
@@ -307,6 +350,8 @@
         commandAuthorityRequests: [],
         chat: [],
         events: [],
+        combatEvents: [],
+        worldState: null,
         createdAt: Date.now(),
         updatedAt: Date.now()
       });
@@ -438,6 +483,13 @@
         y: position?.y ?? null,
         alive: position?.alive ?? player.alive !== false,
         inVehicle: Boolean(position?.inVehicle || player.inVehicle),
+        vehicleId: String(position?.vehicleId || player.vehicleId || "").slice(0, 36),
+        vehicleType: String(position?.vehicleType || player.vehicleType || "").slice(0, 18),
+        aimX: position?.aimX ?? null,
+        aimY: position?.aimY ?? null,
+        droneId: String(position?.droneId || player.droneId || "").slice(0, 36),
+        droneType: String(position?.droneType || player.droneType || "").slice(0, 18),
+        droneControlled: Boolean(position?.droneControlled || player.droneControlled),
         participantType,
         factionId: player.factionId || player.skinId || "",
         skinId: player.factionId || player.skinId || "",
@@ -517,6 +569,21 @@
         y: Math.round(y),
         alive: raw.alive !== false && player.alive !== false,
         inVehicle: Boolean(raw.inVehicle || player.inVehicle),
+        vehicleId: String(raw.vehicleId || player.vehicleId || "").slice(0, 36),
+        vehicleType: String(raw.vehicleType || player.vehicleType || "").slice(0, 18),
+        vehicleHp: clampNumber(raw.vehicleHp ?? player.vehicleHp, 0, 999, 0),
+        vehicleMaxHp: clampNumber(raw.vehicleMaxHp ?? player.vehicleMaxHp, 0, 999, 0),
+        turretAngle: finiteNumber(raw.turretAngle ?? player.turretAngle, 0),
+        machineGunAngle: finiteNumber(raw.machineGunAngle ?? player.machineGunAngle, 0),
+        aimX: Number.isFinite(Number(raw.aimX ?? player.aimX)) ? roundCoord(raw.aimX ?? player.aimX) : null,
+        aimY: Number.isFinite(Number(raw.aimY ?? player.aimY)) ? roundCoord(raw.aimY ?? player.aimY) : null,
+        droneId: String(raw.droneId || player.droneId || "").slice(0, 36),
+        droneType: String(raw.droneType || player.droneType || "").slice(0, 18),
+        droneX: Number.isFinite(Number(raw.droneX ?? player.droneX)) ? roundCoord(raw.droneX ?? player.droneX) : null,
+        droneY: Number.isFinite(Number(raw.droneY ?? player.droneY)) ? roundCoord(raw.droneY ?? player.droneY) : null,
+        droneAngle: finiteNumber(raw.droneAngle ?? player.droneAngle, 0),
+        droneControlled: Boolean(raw.droneControlled || player.droneControlled),
+        angle: Number.isFinite(Number(raw.angle)) ? Number(raw.angle) : 0,
         updatedAt: Number(raw.updatedAt || player.updatedAt || Date.now()) || Date.now()
       };
     }
@@ -670,6 +737,117 @@
     recentChat(roomId, limit = 80) {
       const room = this.getRoom(roomId);
       return (room?.chat || []).slice(-limit);
+    }
+
+    pushCombatEvent(roomId, event = {}) {
+      const room = this.getRoom(roomId);
+      if (!room) return null;
+      const createdAt = Number(event.createdAt) || Date.now();
+      const combatEvent = {
+        id: String(event.id || `${room.id}:combat:${createdAt}:${Math.random().toString(36).slice(2, 7)}`),
+        roomId: room.id,
+        createdAt,
+        type: String(event.type || "small_arms").slice(0, 32),
+        shooterId: String(event.shooterId || event.playerId || "").slice(0, 48),
+        shooterName: String(event.shooterName || event.sender || "Player").slice(0, 24),
+        shooterTeam: event.shooterTeam === "red" ? "red" : "blue",
+        targetPlayerId: String(event.targetPlayerId || "").slice(0, 48),
+        weaponId: String(event.weaponId || "rifle").slice(0, 32),
+        damage: clampNumber(event.damage, 0, 120),
+        hit: Boolean(event.hit && event.targetPlayerId),
+        x1: roundCoord(event.x1),
+        y1: roundCoord(event.y1),
+        x2: roundCoord(event.x2),
+        y2: roundCoord(event.y2),
+        hitX: roundCoord(event.hitX ?? event.x2),
+        hitY: roundCoord(event.hitY ?? event.y2),
+        angle: finiteNumber(event.angle, 0),
+        ttl: clampNumber(event.ttl, 0.04, 0.35, 0.12)
+      };
+      combatEvent.projectileId = String(event.projectileId || "").slice(0, 48);
+      combatEvent.targetVehicleId = String(event.targetVehicleId || "").slice(0, 36);
+      combatEvent.radius = clampNumber(event.radius, 0, 2200, 0);
+      combatEvent.splash = clampNumber(event.splash, 0, 2200, 0);
+      combatEvent.speed = clampNumber(event.speed, 0, 3000, 0);
+      combatEvent.vx = finiteNumber(event.vx, 0);
+      combatEvent.vy = finiteNumber(event.vy, 0);
+      combatEvent.smoke = Boolean(event.smoke);
+      const rooms = this.readLocalRooms();
+      const index = rooms.findIndex((item) => item.id === room.id);
+      const base = index >= 0 ? rooms[index] : room;
+      const nextEvents = Array.isArray(base.combatEvents) ? base.combatEvents.slice(-(MAX_COMBAT_EVENTS - 1)) : [];
+      if (!nextEvents.some((item) => item?.id === combatEvent.id)) nextEvents.push(combatEvent);
+      const next = this.normalizeRoom({
+        ...base,
+        combatEvents: nextEvents,
+        updatedAt: Date.now()
+      });
+      if (!next) return null;
+      if (index >= 0) rooms[index] = next;
+      else rooms.push(next);
+      this.saveRooms(rooms);
+      this.schedulePublishRoom(next, combatEvent.type === "small_arms" ? 180 : 90);
+      return combatEvent;
+    }
+
+    recentCombatEvents(roomId, limit = 80) {
+      const room = this.getRoom(roomId);
+      return (room?.combatEvents || []).slice(-limit);
+    }
+
+    updateWorldState(roomId, state = {}) {
+      const room = this.getRoom(roomId);
+      if (!room) return null;
+      const worldState = this.normalizeWorldState({
+        ...state,
+        roomId: room.id,
+        updatedAt: Date.now()
+      });
+      return this.updateRoom(room.id, { worldState });
+    }
+
+    normalizeWorldState(state = {}) {
+      if (!state || typeof state !== "object") return null;
+      const vehicleSnapshot = (item) => ({
+        id: String(item?.id || item?.callSign || "").slice(0, 36),
+        type: String(item?.type || item?.vehicleType || "tank").slice(0, 18),
+        team: item?.team === "red" ? "red" : "blue",
+        x: roundCoord(item?.x),
+        y: roundCoord(item?.y),
+        angle: finiteNumber(item?.angle, 0),
+        turretAngle: finiteNumber(item?.turretAngle, 0),
+        machineGunAngle: finiteNumber(item?.machineGunAngle, 0),
+        hp: clampNumber(item?.hp, 0, 999, 0),
+        maxHp: clampNumber(item?.maxHp, 0, 999, 1),
+        alive: item?.alive !== false,
+        controllerId: String(item?.controllerId || "").slice(0, 48)
+      });
+      const unitSnapshot = (item) => ({
+        id: String(item?.id || item?.callSign || "").slice(0, 42),
+        team: item?.team === "red" ? "red" : "blue",
+        x: roundCoord(item?.x),
+        y: roundCoord(item?.y),
+        angle: finiteNumber(item?.angle, 0),
+        hp: clampNumber(item?.hp, 0, 999, 0),
+        maxHp: clampNumber(item?.maxHp, 0, 999, 1),
+        alive: item?.alive !== false,
+        inVehicle: Boolean(item?.inVehicle)
+      });
+      const captureSnapshot = (item) => ({
+        id: String(item?.id || item?.name || "").slice(0, 16),
+        owner: item?.owner === "red" ? "red" : item?.owner === "blue" ? "blue" : "",
+        progress: clampNumber(item?.progress, -1, 1, 0),
+        contested: Boolean(item?.contested)
+      });
+      return {
+        roomId: String(state.roomId || "").slice(0, 48),
+        hostId: String(state.hostId || "").slice(0, 48),
+        tick: Math.max(0, Math.floor(Number(state.tick) || 0)),
+        updatedAt: Number(state.updatedAt) || Date.now(),
+        vehicles: Array.isArray(state.vehicles) ? state.vehicles.map(vehicleSnapshot).filter((item) => item.id).slice(0, 64) : [],
+        units: Array.isArray(state.units) ? state.units.map(unitSnapshot).filter((item) => item.id).slice(0, MAX_WORLD_UNITS) : [],
+        capturePoints: Array.isArray(state.capturePoints) ? state.capturePoints.map(captureSnapshot).filter((item) => item.id).slice(0, 12) : []
+      };
     }
 
     updateCommandAuthority(roomId, input = {}) {
@@ -934,6 +1112,8 @@
         commandAuthorityRequests: this.normalizeCommandAuthorityRequests(room.commandAuthorityRequests),
         chat: Array.isArray(room.chat) ? room.chat.slice(-120) : [],
         events: Array.isArray(room.events) ? room.events.slice(-80) : [],
+        combatEvents: Array.isArray(room.combatEvents) ? room.combatEvents.slice(-MAX_COMBAT_EVENTS) : [],
+        worldState: this.normalizeWorldState(room.worldState),
         createdAt: Number(room.createdAt) || Date.now(),
         updatedAt: Number(room.updatedAt) || Date.now(),
         startedAt: Number(room.startedAt) || 0,

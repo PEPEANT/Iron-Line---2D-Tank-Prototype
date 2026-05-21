@@ -616,7 +616,7 @@
         ? clamp(fuseDistance / ammo.speed, 0.12, ammo.life || 3)
         : ammo.life || 3;
 
-      game.projectiles.push({
+      const projectile = {
         x: muzzleX,
         y: muzzleY,
         previousX: muzzleX,
@@ -628,7 +628,15 @@
         ammo,
         life: shellLife,
         radius: ammo.shellRadius
+      };
+      game.publishOnlineProjectileLaunch?.(projectile, {
+        shooter: this,
+        weaponId: ammo.id,
+        aimX: options.target?.x,
+        aimY: options.target?.y,
+        fuseDistance
       });
+      game.projectiles.push(projectile);
 
       game.effects.explosions.push({
         x: muzzleX,

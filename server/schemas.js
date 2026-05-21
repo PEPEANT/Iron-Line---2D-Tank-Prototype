@@ -94,6 +94,22 @@ function createParticipant(input = {}) {
     participantType,
     team: input.team === TEAMS.RED ? TEAMS.RED : input.team === TEAMS.BLUE ? TEAMS.BLUE : "",
     slotId: input.slotId || "",
+    roleId: input.roleId || "",
+    classId: input.classId || "",
+    currentClassId: input.currentClassId || input.classId || "",
+    weaponId: input.weaponId || "",
+    position: input.position && typeof input.position === "object" ? input.position : null,
+    x: Number.isFinite(input.x) ? input.x : null,
+    y: Number.isFinite(input.y) ? input.y : null,
+    alive: input.alive !== false,
+    inVehicle: Boolean(input.inVehicle || input.position?.inVehicle),
+    vehicleId: String(input.vehicleId || input.position?.vehicleId || "").slice(0, 36),
+    vehicleType: String(input.vehicleType || input.position?.vehicleType || "").slice(0, 18),
+    aimX: Number.isFinite(input.aimX) ? input.aimX : input.position?.aimX ?? null,
+    aimY: Number.isFinite(input.aimY) ? input.aimY : input.position?.aimY ?? null,
+    droneId: String(input.droneId || input.position?.droneId || "").slice(0, 36),
+    droneType: String(input.droneType || input.position?.droneType || "").slice(0, 18),
+    droneControlled: Boolean(input.droneControlled || input.position?.droneControlled),
     connected: input.connected !== false,
     joinedAt: input.joinedAt || new Date().toISOString(),
     lastSeenAt: input.lastSeenAt || new Date().toISOString()
@@ -159,6 +175,8 @@ function createObserverSnapshot(input = {}) {
     commands: Array.isArray(input.commands) ? input.commands : [],
     chat: Array.isArray(input.chat) ? input.chat : [],
     events: Array.isArray(input.events) ? input.events : [],
+    combatEvents: Array.isArray(input.combatEvents) ? input.combatEvents : [],
+    worldState: input.worldState && typeof input.worldState === "object" ? input.worldState : null,
     aiSummary: input.aiSummary || {}
   };
 }
