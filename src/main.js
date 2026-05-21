@@ -23,8 +23,8 @@
       this.canvas = document.getElementById("game");
       this.canvas.addEventListener("pointerdown", () => {
         this.canvas.focus();
-        this.requestAppFullscreen();
       });
+      this.setupMobileCameraGestures?.();
       this.canvas.addEventListener("wheel", (event) => this.onPlayerCameraWheel(event), { passive: false });
       this.canvas.focus();
       this.liveWorld = IronLine.map01;
@@ -43,7 +43,7 @@
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
       this.fullscreenRequestPending = false;
-      this.installAutoFullscreen();
+      this.installInitialFullscreen();
       this.cameraZoomPreference = 1;
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
@@ -189,15 +189,17 @@
       };
     }
 
-    installAutoFullscreen() {
-      const trigger = () => this.requestAppFullscreen();
+    installInitialFullscreen() {
+      let inputAttempted = false;
+      const trigger = () => {
+        if (inputAttempted) return;
+        inputAttempted = true;
+        this.requestAppFullscreen();
+      };
       for (const type of ["pointerdown", "touchstart", "mousedown", "keydown"]) {
-        window.addEventListener(type, trigger, { capture: true, passive: true });
+        window.addEventListener(type, trigger, { capture: true, once: true, passive: true });
       }
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") this.requestAppFullscreen();
-      });
-      setTimeout(trigger, 120);
+      setTimeout(() => this.requestAppFullscreen(), 120);
     }
 
     requestMobileFullscreen() {
@@ -268,6 +270,11 @@
     resetWorldSceneryState() {
       for (const item of this.world?.scenery || []) {
         if (item.baseStopsProjectiles === undefined) item.baseStopsProjectiles = item.stopsProjectiles !== false;
+        if (item.type === "brush" || item.type === "tree") {
+          item.destructible = true;
+          item.maxHp = item.maxHp || item.baseHp || item.hp || (item.type === "tree" ? 64 : 34);
+          item.hp = item.maxHp;
+        }
         if (!item.destructible) {
           item.destroyed = false;
           item.damageFlash = 0;
@@ -1376,7 +1383,6 @@
       if (this.matchStarted) return false;
       if (this.deploymentOpen) return this.enterLobby();
       if (!this.lobbyOpen) return false;
-      this.requestMobileFullscreen();
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
       this.lobbyOpen = false;
@@ -2767,6 +2773,7 @@
   IronLine.installGamePlayerControl?.(Game);
   IronLine.installFogOfWar?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
+  IronLine.installMobileCameraGestures?.(Game);
   IronLine.Game = Game;
   IronLine.game = new Game();
 })(window);

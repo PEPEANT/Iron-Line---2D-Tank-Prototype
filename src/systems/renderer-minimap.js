@@ -12,6 +12,7 @@
       const ctx = this.ctx;
       const camera = this.camera;
       const mobileLayout = Boolean(game.settings?.mobileControls && camera.width > camera.height && !game.deploymentOpen);
+      if (mobileLayout && game.hud?.commandRadio?.open) return;
       const mapW = mobileLayout ? 150 : 178;
       const mapH = mobileLayout ? 94 : 120;
       const x = mobileLayout ? 14 : camera.width - mapW - 16;

@@ -488,6 +488,7 @@
 
       bindTap(this.nodes.mobileWeaponButton, () => IronLine.game?.cycleMobileWeapon?.());
       bindTap(this.nodes.mobileRoleButton, () => IronLine.game?.roleChange?.openPanel?.());
+      bindTap(this.nodes.mobileChatButton, () => IronLine.game?.chat?.openInput?.());
       bindTap(this.nodes.mobileSpectatorChatButton, () => IronLine.game?.chat?.openInput?.());
       bindTap(this.nodes.mobileSpectatorHomeButton, () => {
         const game = IronLine.game;

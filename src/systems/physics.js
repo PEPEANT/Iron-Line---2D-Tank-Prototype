@@ -34,6 +34,7 @@
     "billboard",
     "bench"
   ]);
+  const vehicleVegetationTypes = new Set(["brush", "tree"]);
 
   function worldItemType(item) {
     return String(item?.type || item?.kind || "");
@@ -54,8 +55,18 @@
   }
 
   function isVehicleCrushThrough(item, options = {}) {
-    if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !item?.destructible || item.destroyed) return false;
-    return vehicleCrushThroughTypes.has(worldItemType(item));
+    if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !item || item.destroyed) return false;
+    const type = worldItemType(item);
+    return vehicleCrushThroughTypes.has(type) && (item.destructible || vehicleVegetationTypes.has(type));
+  }
+
+  function vehicleCrushThroughDamage(item, options = {}) {
+    if (!isVehicleCrushThrough(item, options)) return 0;
+    const type = worldItemType(item);
+    if (vehicleVegetationTypes.has(type)) {
+      return Math.max(Number(item.hp) || 0, Number(item.maxHp) || 0, Number(item.baseHp) || 0, type === "tree" ? 70 : 42) + 12;
+    }
+    return options.vehicleKind === "tank" ? 54 : 36;
   }
 
   function rectLike(item) {
@@ -334,11 +345,12 @@
     const baseDamage = vehicleImpactDamage(entity, null, options);
     const damaged = context.damagedScenery || (context.damagedScenery = new Set());
     for (const item of game.world?.scenery || []) {
-      if (!item?.destructible || item.destroyed || damaged.has(item)) continue;
+      if (!item || item.destroyed || damaged.has(item)) continue;
+      const crushDamage = vehicleCrushThroughDamage(item, options);
+      if (!item.destructible && crushDamage <= 0) continue;
       if (!circleHitsScenery(x, y, radius, item)) continue;
-      const damage = baseDamage > 0
-        ? baseDamage
-        : isVehicleCrushThrough(item, options) ? (options.vehicleKind === "tank" ? 54 : 36) : 0;
+      if (crushDamage > 0) item.destructible = true;
+      const damage = Math.max(baseDamage, crushDamage);
       if (damage <= 0) continue;
       damaged.add(item);
       const destroyed = IronLine.combat?.damageScenery?.(game, item, damage, vehicleBreakOptions(entity, item, options));
@@ -351,9 +363,7 @@
     const damaged = context.damagedObstacles || (context.damagedObstacles = new Set());
     if (damaged.has(obstacle)) return obstacle.destroyed;
     let damage = vehicleImpactDamage(entity, obstacle, options);
-    if (damage <= 0 && isVehicleCrushThrough(obstacle, options)) {
-      damage = options.vehicleKind === "tank" ? 54 : 36;
-    }
+    damage = Math.max(damage, vehicleCrushThroughDamage(obstacle, options));
     if (damage <= 0) damage = heavyObstacleGrindDamage(game, obstacle, options);
     if (damage <= 0) return false;
     damaged.add(obstacle);

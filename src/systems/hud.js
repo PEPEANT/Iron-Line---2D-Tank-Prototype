@@ -25,6 +25,7 @@
         settingsButton: document.getElementById("settingsButton"),
         settingsPanel: document.getElementById("settingsPanel"),
         settingsClose: document.getElementById("settingsClose"),
+        settingsFullscreen: document.getElementById("settingsFullscreen"),
         settingsMainMenu: document.getElementById("settingsMainMenu"),
         adminButton: document.getElementById("adminButton"),
         adminPanel: document.getElementById("adminPanel"),
@@ -65,6 +66,7 @@
         aimStick: document.getElementById("aimStick"),
         mobileWeaponButton: null,
         mobileRoleButton: null,
+        mobileChatButton: null,
         mobileScoreboardButton: null,
         mobileTacticalMapButton: null,
         mobileSpectatorChatButton: null,
@@ -165,6 +167,7 @@
       this.ensureProneIndicator();
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
       this.nodes.mobileRoleButton = this.createMobileRoleButton();
+      this.nodes.mobileChatButton = this.createMobileChatButton();
       this.nodes.mobileScoreboardButton = this.createMobileScoreboardButton();
       this.nodes.mobileTacticalMapButton = this.createMobileTacticalMapButton();
       this.nodes.mobileSpectatorChatButton = this.createMobileSpectatorButton("chat", "채팅", "관전자 채팅 열기");
@@ -222,6 +225,10 @@
     bindSettingsControls() {
       this.nodes.settingsButton?.addEventListener("click", () => this.toggleSettingsPanel());
       this.nodes.settingsClose?.addEventListener("click", () => this.toggleSettingsPanel(false));
+      this.nodes.settingsFullscreen?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (game) game.requestAppFullscreen?.();
+      });
       this.nodes.settingsMainMenu?.addEventListener("click", () => {
         const game = IronLine.game;
         if (game) game.returnToMainMenu?.();
@@ -377,6 +384,19 @@
       return button;
     }
 
+    createMobileChatButton() {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mobile-action mobile-chat-toggle hidden";
+      button.textContent = "채팅";
+      button.setAttribute("aria-label", "채팅 열기");
+      controls.append(button);
+      return button;
+    }
+
     createMobileScoreboardButton() {
       const controls = this.nodes.mobileControls;
       if (!controls) return null;
@@ -458,11 +478,13 @@
       const canDrone = Boolean(game.activePlayerDrone?.());
       const canInteract = Boolean(canPickupDrone || controlledDrone || canDrone || inTank || game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.());
       const roleChangeAvailable = Boolean(showPlayerControls && !inTank && !controlledDrone && !game.roleChange?.open && game.roleChange?.canChangeNow?.().available);
+      const radioOpen = Boolean(this.commandRadio?.open);
 
       this.mobileControlsVisible = showControls;
 
       this.nodes.orientationOverlay?.classList.toggle("visible", enabled && portrait);
       this.nodes.mobileControls?.classList.toggle("hidden", !showControls);
+      this.nodes.mobileControls?.classList.toggle("radio-open", radioOpen);
       this.nodes.mobileControls?.classList.toggle("spectator-controls", showSpectatorControls);
       this.nodes.mobileControls?.classList.toggle("in-tank", inTank);
       this.nodes.mobileControls?.classList.toggle("can-interact", showPlayerControls && canInteract);
@@ -472,6 +494,7 @@
       document.body.classList.toggle("mobile-player-in-tank", showControls && inTank);
       this.nodes.mobileSpectatorChatButton?.classList.toggle("hidden", !showSpectatorControls);
       this.nodes.mobileSpectatorHomeButton?.classList.toggle("hidden", !showSpectatorControls);
+      this.nodes.mobileChatButton?.classList.toggle("hidden", !showPlayerControls);
       this.nodes.mobileRoleButton?.classList.toggle("hidden", !roleChangeAvailable);
       this.nodes.mobileScoreboardButton?.classList.toggle("hidden", !showControls);
       this.nodes.mobileScoreboardButton?.classList.toggle("active", Boolean(this.scoreboardPinned));
@@ -1335,9 +1358,8 @@
         node.fill.style.height = `${progress * 100}%`;
       }
 
-      const holdText = this.holdText(game);
-      strip.dataset.hold = holdText;
-      strip.classList.toggle("holding", Boolean(holdText));
+      strip.dataset.hold = "";
+      strip.classList.remove("holding");
     }
 
     createObjectiveNode(point) {

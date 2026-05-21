@@ -102,3 +102,125 @@
   background: rgba(255, 209, 102, 0.94);
   box-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
 }
+
+.mobile-action.mobile-chat-toggle {
+  position: fixed;
+  left: max(28px, env(safe-area-inset-left));
+  top: max(74px, env(safe-area-inset-top));
+  width: 68px;
+  height: 44px;
+  border-radius: 10px;
+  border-color: rgba(142, 216, 255, 0.42);
+  background: rgba(9, 16, 18, 0.84);
+  color: rgba(237, 244, 239, 0.96);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.mobile-action.mobile-chat-toggle.hidden {
+  display: none;
+}
+
+.mobile-controls.radio-open .move-stick,
+.mobile-controls.radio-open .mobile-aim-zone,
+.mobile-controls.radio-open .mobile-ammo-row,
+.mobile-controls.radio-open .mobile-action[data-mobile-key],
+.mobile-controls.radio-open .mobile-action[data-mobile-mouse],
+.mobile-controls.radio-open .mobile-action.weapon-cycle,
+.mobile-controls.radio-open .mobile-action.role-change,
+.mobile-controls.radio-open .mobile-action.scoreboard-toggle,
+.mobile-controls.radio-open .mobile-action.tactical-map-toggle,
+.mobile-controls.radio-open .mobile-action.mobile-chat-toggle {
+  display: none !important;
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .command-panel {
+    left: max(8px, env(safe-area-inset-left));
+    bottom: max(8px, calc(env(safe-area-inset-bottom) + 8px));
+    width: min(252px, calc(100vw - 16px));
+    transform: scale(0.86);
+    transform-origin: left bottom;
+  }
+
+  .command-radio-antenna,
+  .command-radio-device::before,
+  .command-radio-device::after,
+  .command-speaker {
+    display: none;
+  }
+
+  .command-radio-shell {
+    gap: 6px;
+    padding: 10px;
+    border-width: 1px;
+    border-radius: 14px;
+  }
+
+  .command-radio-brand {
+    min-height: 20px;
+    padding-right: 62px;
+  }
+
+  .command-radio-brand span,
+  .command-radio-brand b,
+  .command-head span,
+  .command-memory span,
+  .command-log span {
+    font-size: 10px;
+  }
+
+  .command-head {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  .command-head strong {
+    font-size: 13px;
+  }
+
+  .command-control-deck {
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .command-channels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .command-memory {
+    min-height: 26px;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .command-assets,
+  .command-buttons,
+  .command-specials {
+    gap: 5px;
+  }
+
+  .command-assets button,
+  .command-buttons button,
+  .command-specials button {
+    min-height: 28px;
+    padding: 5px 6px;
+    font-size: 10px;
+  }
+
+  .command-log {
+    max-height: 30px;
+    overflow: hidden;
+  }
+
+  .command-tactical-map {
+    left: 276px;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, calc(env(safe-area-inset-bottom) + 8px));
+    width: auto;
+    height: min(178px, calc(100vh - 16px));
+    min-width: 0;
+    min-height: 0;
+  }
+}

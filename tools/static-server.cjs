@@ -9,6 +9,12 @@ const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "41
 const port = Number.isFinite(requestedPort) ? requestedPort : 4173;
 const host = process.env.HOST || "0.0.0.0";
 const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+const dataDir = process.env.IRONLINE_DATA_DIR
+  ? path.resolve(process.env.IRONLINE_DATA_DIR)
+  : path.join(root, ".data");
+const roomsStorePath = process.env.IRONLINE_ROOMS_FILE
+  ? path.resolve(process.env.IRONLINE_ROOMS_FILE)
+  : path.join(dataDir, "online-rooms.json");
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -267,6 +273,38 @@ function applyClientRoomToServer(body = {}) {
   return room;
 }
 
+function persistRooms() {
+  if (!onlineRegistry) return false;
+  try {
+    fs.mkdirSync(path.dirname(roomsStorePath), { recursive: true });
+    const rooms = Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room));
+    const tempPath = `${roomsStorePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify({ version: 1, rooms }, null, 2), "utf8");
+    fs.renameSync(tempPath, roomsStorePath);
+    return true;
+  } catch (error) {
+    console.warn(`Room persistence failed: ${error?.message || error}`);
+    return false;
+  }
+}
+
+function loadPersistedRooms() {
+  if (!onlineRegistry) return 0;
+  try {
+    if (!fs.existsSync(roomsStorePath)) return 0;
+    const payload = JSON.parse(fs.readFileSync(roomsStorePath, "utf8"));
+    const rooms = Array.isArray(payload?.rooms) ? payload.rooms : Array.isArray(payload) ? payload : [];
+    let count = 0;
+    for (const room of rooms) {
+      if (applyClientRoomToServer(room)) count += 1;
+    }
+    return count;
+  } catch (error) {
+    console.warn(`Room persistence load failed: ${error?.message || error}`);
+    return 0;
+  }
+}
+
 async function handleRoomsApi(req, res) {
   if (!onlineRegistry) {
     sendJson(res, 503, { ok: false, reason: "online_registry_unavailable", rooms: [] });
@@ -296,12 +334,14 @@ async function handleRoomsApi(req, res) {
       sendJson(res, 400, { ok: false, reason: "room_id_required" });
       return;
     }
+    persistRooms();
     sendJson(res, 200, { ok: true, room: exportClientRoom(room) });
     return;
   }
 
   if (req.method === "DELETE" && roomId) {
     onlineRegistry.rooms.delete(roomId);
+    persistRooms();
     sendJson(res, 200, { ok: true, roomId });
     return;
   }
@@ -357,6 +397,8 @@ try {
   const { RoomRegistry } = require("../server/room-registry");
   const { attachOnlineSocketServer } = require("../server/websocket");
   onlineRegistry = new RoomRegistry();
+  const persistedCount = loadPersistedRooms();
+  if (persistedCount > 0) console.log(`Loaded ${persistedCount} persisted online room(s).`);
   onlineSocket = attachOnlineSocketServer({ server, registry: onlineRegistry });
 } catch (error) {
   onlineSocket = { enabled: false, reason: error?.message || "online_socket_setup_failed" };
