@@ -49,6 +49,9 @@
       this.transportPickupOrderId = "";
       this.trafficHoldTimer = 0;
       this.trafficHoldTarget = "";
+      this.trafficHoldAge = 0;
+      this.trafficBypassTimer = 0;
+      this.trafficBypassTarget = "";
       this.debug = {
         state: this.state,
         goal: "",
@@ -471,13 +474,17 @@
     }
 
     driveVector(dt, vx, vy, intensity, options = {}) {
-      if (this.handleTrafficHold(dt, vx, vy)) return;
-
       const recovery = this.navigation.getRecoveryDrive();
       if (recovery) {
-        this.applyDrive(dt, recovery.throttle, recovery.turn);
+        const step = this.normalizeTrafficTimers(dt);
+        const throttle = options.allowReverse === false && recovery.throttle < 0 && !recovery.edge
+          ? Math.max(0.18, Math.abs(recovery.throttle) * 0.42)
+          : recovery.throttle;
+        this.applyDrive(step, throttle, recovery.turn);
         return;
       }
+
+      if (this.handleTrafficHold(dt, vx, vy)) return;
 
       const steer = this.avoidanceVector(vx, vy);
       const desiredAngle = Math.atan2(steer.y, steer.x);
@@ -532,19 +539,45 @@
       return { x: ax / length, y: ay / length };
     }
 
+    normalizeTrafficTimers(dt) {
+      const step = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+      this.trafficHoldTimer = Number.isFinite(this.trafficHoldTimer)
+        ? Math.max(0, this.trafficHoldTimer - step)
+        : 0;
+      this.trafficHoldAge = Number.isFinite(this.trafficHoldAge)
+        ? Math.max(0, this.trafficHoldAge)
+        : 0;
+      this.trafficBypassTimer = Number.isFinite(this.trafficBypassTimer)
+        ? Math.max(0, this.trafficBypassTimer - step)
+        : 0;
+      if (this.trafficBypassTimer <= 0) this.trafficBypassTarget = "";
+      return step;
+    }
+
     handleTrafficHold(dt, vx, vy) {
-      this.trafficHoldTimer = Math.max(0, this.trafficHoldTimer - dt);
+      const step = this.normalizeTrafficTimers(dt);
       const blocker = this.frontFriendlyVehicle(vx, vy);
       if (blocker) {
+        const blockerId = blocker.callSign || "";
+        if (blockerId && blockerId === this.trafficHoldTarget) this.trafficHoldAge += step;
+        else this.trafficHoldAge = blockerId ? step : 0;
+        if (this.trafficHoldAge > 1.55) {
+          this.trafficBypassTarget = blockerId;
+          this.trafficBypassTimer = 1.0;
+          this.trafficHoldTimer = 0;
+          this.trafficHoldAge = 0;
+          return false;
+        }
         const wait = 0.58 + (this.vehicle.callSign || "").length % 5 * 0.08;
         this.trafficHoldTimer = Math.max(this.trafficHoldTimer, wait);
-        this.trafficHoldTarget = blocker.callSign || "";
+        this.trafficHoldTarget = blockerId;
       } else if (this.trafficHoldTimer <= 0) {
         this.trafficHoldTarget = "";
+        this.trafficHoldAge = 0;
       }
 
       if (this.trafficHoldTimer <= 0) return false;
-      this.applyDrive(dt, 0, 0);
+      this.applyDrive(step, 0, 0);
       return true;
     }
 
@@ -553,6 +586,7 @@
       const candidates = [];
       for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (other === this.vehicle || !other.alive || other.team !== this.vehicle.team) continue;
+        if (this.trafficBypassTimer > 0 && (other.callSign || "") === this.trafficBypassTarget) continue;
         const dx = other.x - this.vehicle.x;
         const dy = other.y - this.vehicle.y;
         const forward = dx * vx + dy * vy;
@@ -595,6 +629,8 @@
       this.debug.passengers = this.vehicle.passengerCount?.() || 0;
       this.debug.trafficHoldTimer = this.trafficHoldTimer;
       this.debug.trafficHoldTarget = this.trafficHoldTarget;
+      this.debug.trafficHoldAge = this.trafficHoldAge;
+      this.debug.trafficBypassTimer = this.trafficBypassTimer;
     }
   }
 
