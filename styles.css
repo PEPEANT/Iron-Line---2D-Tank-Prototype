@@ -968,6 +968,10 @@ body {
   border-radius: 50%;
   font-size: 0;
 }
+.map-marker.player-human{z-index:3;width:22px;height:22px;border-color:rgba(186,255,197,.92);border-radius:50%;background:#2ee86f;color:#07120a;font-size:11px}
+.map-marker.player-human.local{background:#b6ff82}
+.map-marker-name{position:absolute;left:50%;top:calc(100% + 3px);transform:translateX(-50%);padding:1px 5px;border-radius:999px;background:rgba(5,12,8,.88);color:#baffc5;font-size:10px;line-height:1.2;white-space:nowrap;pointer-events:none}
+.map-marker-name.above{top:auto;bottom:calc(100% + 3px)}
 
 .map-marker.inspectable {
   cursor: pointer;

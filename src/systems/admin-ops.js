@@ -111,6 +111,7 @@
         rooms: registryRooms,
         selectedRoomId,
         room,
+        players,
         match: {
           ...match,
           teams,
@@ -454,6 +455,7 @@
             team: slot.team,
             slotId: slot.id,
             roleId: slot.roleId || "",
+            position: null,
             ready: false,
             host: false
           }));
@@ -467,6 +469,11 @@
         team: player.team,
         slotId: player.slotId || "",
         roleId: player.roleId || "",
+        position: player.position || null,
+        x: player.x ?? player.position?.x ?? null,
+        y: player.y ?? player.position?.y ?? null,
+        alive: player.alive !== false,
+        inVehicle: Boolean(player.inVehicle || player.position?.inVehicle),
         ready: Boolean(player.ready),
         host: Boolean(player.host)
       }));

@@ -288,6 +288,10 @@
       this.onlineSession.aiFillEmptySlots = room.aiFillEmptySlots !== false;
       this.onlineSession.blueFactionId = room.blueFactionId || "korea";
       this.onlineSession.redFactionId = room.redFactionId || "russia";
+      if (!this.onlineSession.roleSlots?.length) this.onlineSession.roleSlots = this.createRoleSlots?.() || [];
+      this.onlineSession.players = Array.isArray(room.players) ? room.players.map((player) => ({ ...player })) : [];
+      this.onlineSession.spectators = Array.isArray(room.spectators) ? room.spectators.map((player) => ({ ...player })) : [];
+      this.hud?.sessionFlow?.syncRoomParticipants?.(this, room);
       this.adminApplyRoomMatchSettings(room);
       if (this.matchConfig.mode === "conquest") this.conquest = this.defaultConquestState?.() || this.conquest;
       else this.resetAnnihilationState?.();

@@ -973,6 +973,7 @@
           });
         }
         map.appendChild(marker);
+        return marker;
       };
 
       for (const point of snapshot.capturePoints || []) {
@@ -988,6 +989,13 @@
       for (const vehicle of snapshot.vehicles || []) {
         addMarker(`unit-${vehicle.team === TEAM.BLUE ? "blue" : "red"}`, "", vehicle.x, vehicle.y, "vehicle", vehicle.id);
       }
+      (snapshot.players || []).forEach((player, index) => {
+        const point = this.humanSnapshotPoint(player);
+        if (!point || point.alive === false) return;
+        const name = player.name || player.nickname || player.id || "Player";
+        const marker = addMarker("player-human", this.playerInitial(name), point.x, point.y);
+        this.decorateHumanMapMarker(marker, { name }, index);
+      });
     }
 
     buildMapMarkers(game, map) {
@@ -1070,8 +1078,10 @@
         }
 
         if (game.sessionMode === "online") {
+          let humanIndex = 0;
           for (const human of this.humanMapMarkers(game)) {
             const marker = addMarker(`player-human ${human.local ? "local" : ""}`, human.label, human.x, human.y);
+            this.decorateHumanMapMarker(marker, human, humanIndex++);
             marker.title = `${human.name} · 실제 플레이어`;
           }
         }
@@ -1135,8 +1145,47 @@
       return zone ? { x: zone.x, y: zone.y, alive: sessionPlayer.alive !== false } : null;
     }
 
+    humanSnapshotPoint(player = {}) {
+      const raw = player.position || player;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return {
+        x,
+        y,
+        alive: raw.alive !== false && player.alive !== false
+      };
+    }
+
+    decorateHumanMapMarker(marker, human = {}, index = 0) {
+      if (!marker) return;
+      const name = String(human.name || human.nickname || human.id || "Player").trim() || "Player";
+      marker.title = `${name} · 실제 플레이어`;
+      const label = document.createElement("span");
+      label.className = `map-marker-name ${index % 2 ? "above" : ""}`;
+      label.textContent = name.slice(0, 10);
+      marker.append(label);
+    }
+
     playerInitial(name = "") {
       return String(name || "P").trim().slice(0, 1).toUpperCase() || "P";
+    }
+
+    adminRoomPlayerNames(room = {}) {
+      const names = (room.players || [])
+        .filter((player) => (player.participantType || "player") === "player")
+        .map((player) => player.name || player.nickname || player.id || "")
+        .filter(Boolean)
+        .slice(0, 4);
+      return names.length ? ` · 플레이어 ${names.join(", ")}` : "";
+    }
+
+    adminSlotPlayerLabel(game, snapshot, slot = {}) {
+      const playerId = slot.playerId || "";
+      const players = snapshot?.players || game?.onlineSession?.players || [];
+      const player = players.find((item) => item.id === playerId || item.playerId === playerId);
+      const name = player?.name || player?.nickname || playerId;
+      return name ? `플레이어 ${name}` : "플레이어";
     }
 
     teamStats(game, team) {
@@ -1352,6 +1401,8 @@
     updateObjectiveStrip(game) {
       const strip = this.nodes.objectiveStrip;
       if (!strip) return;
+      const reserveScoreBanner = game.matchConfig?.mode === "annihilation" && window.innerWidth > 760;
+      strip.style.marginTop = reserveScoreBanner ? "48px" : "";
 
       for (const point of game.capturePoints) {
         if (!this.objectiveNodes.has(point.name)) {

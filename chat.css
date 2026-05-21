@@ -122,9 +122,18 @@
   display: none;
 }
 
+.spectator-panel.collapsed {
+  width: min(220px, calc(100vw - 28px));
+}
+
+.spectator-panel.collapsed .spectator-panel-counts,
+.spectator-panel.collapsed .spectator-panel-chat {
+  display: none;
+}
+
 .spectator-panel header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -219,6 +228,14 @@ body.mobile-spectator-controls-active .spectator-panel {
   right: calc(max(28px, env(safe-area-inset-right)) + 90px);
   bottom: max(28px, env(safe-area-inset-bottom));
   width: min(260px, calc(100vw - 132px));
+}
+
+@media (min-width: 761px) {
+  .chat-panel {
+    left: max(18px, env(safe-area-inset-left));
+    top: max(58px, env(safe-area-inset-top));
+    width: min(420px, calc(100vw - 36px));
+  }
 }
 
 @media (max-width: 760px) {

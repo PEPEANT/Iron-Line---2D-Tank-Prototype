@@ -138,7 +138,10 @@
           room.players?.length || 0,
           room.spectators?.length || 0,
           room.admins?.length || 0,
-          room.chat?.length || 0
+          room.chat?.length || 0,
+          room.chat?.[room.chat.length - 1]?.id || "",
+          room.events?.length || 0,
+          room.events?.[room.events.length - 1]?.id || ""
         ].join(":"))
         .join("|");
     }

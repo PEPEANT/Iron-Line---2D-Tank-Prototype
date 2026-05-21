@@ -11,7 +11,9 @@
     spectator: "\uad00\uc804",
     admin: "\uad00\ub9ac\uc790",
     emptyChat: "\uad00\uc804 \ucc44\ud305 \ub300\uae30",
-    defaultName: "\uad00\uc804\uc790"
+    defaultName: "\uad00\uc804\uc790",
+    close: "\ub2eb\uae30",
+    open: "\uc5f4\uae30"
   };
 
   const hudSpectatorPanelMethods = {
@@ -25,6 +27,7 @@
         <header>
           <strong>${LABEL.title}</strong>
           <button type="button" id="spectatorChatOpen">${LABEL.chat}</button>
+          <button type="button" id="spectatorPanelToggle">${LABEL.close}</button>
         </header>
         <div class="spectator-panel-counts" id="spectatorPanelCounts"></div>
         <div class="spectator-panel-chat" id="spectatorPanelChat"></div>
@@ -34,10 +37,17 @@
       this.nodes.spectatorPanelCounts = panel.querySelector("#spectatorPanelCounts");
       this.nodes.spectatorPanelChat = panel.querySelector("#spectatorPanelChat");
       this.nodes.spectatorChatOpen = panel.querySelector("#spectatorChatOpen");
+      this.nodes.spectatorPanelToggle = panel.querySelector("#spectatorPanelToggle");
       this.nodes.spectatorChatOpen?.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
         IronLine.game?.chat?.openInput?.();
+      });
+      this.nodes.spectatorPanelToggle?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.spectatorPanelCollapsed = !this.spectatorPanelCollapsed;
+        this.applySpectatorPanelCollapsed();
       });
       return panel;
     },
@@ -54,6 +64,7 @@
       );
       panel.classList.toggle("hidden", !visible);
       if (!visible) return;
+      this.applySpectatorPanelCollapsed();
 
       const data = this.spectatorPanelData(game);
       const signature = JSON.stringify(data);
@@ -147,6 +158,15 @@
         text.textContent = message.text;
         row.append(sender, text);
         root.append(row);
+      }
+    },
+
+    applySpectatorPanelCollapsed() {
+      const collapsed = Boolean(this.spectatorPanelCollapsed);
+      this.nodes.spectatorPanel?.classList.toggle("collapsed", collapsed);
+      if (this.nodes.spectatorPanelToggle) {
+        this.nodes.spectatorPanelToggle.textContent = collapsed ? LABEL.open : LABEL.close;
+        this.nodes.spectatorPanelToggle.setAttribute("aria-expanded", String(!collapsed));
       }
     }
   };

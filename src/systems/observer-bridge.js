@@ -126,6 +126,19 @@
           squadIds: (slot.squadIds || []).slice(),
           vehicleIds: (slot.vehicleIds || []).slice()
         })),
+        players: (game.onlineSession?.players || []).map((player) => ({
+          id: player.id,
+          name: player.name || player.nickname || player.id || "Player",
+          nickname: player.nickname || player.name || player.id || "Player",
+          team: player.team,
+          slotId: player.slotId || "",
+          participantType: player.participantType || "player",
+          position: player.position || null,
+          x: player.x ?? player.position?.x ?? null,
+          y: player.y ?? player.position?.y ?? null,
+          alive: player.alive !== false,
+          inVehicle: Boolean(player.inVehicle || player.position?.inVehicle)
+        })).filter((player) => player.participantType === "player"),
         squads: (game.squads || []).map((squad) => this.squadSnapshot(squad)).filter(Boolean),
         vehicles: [...(game.tanks || []), ...(game.humvees || [])]
           .filter((vehicle) => vehicle.alive)

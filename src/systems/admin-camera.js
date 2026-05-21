@@ -11,6 +11,8 @@
       this.followTarget = null;
       this.initialized = false;
       this.drag = null;
+      this.touchPointers = new Map();
+      this.pinch = null;
       this.dragClickThreshold = 6;
       this.wheelHandler = (event) => this.onWheel(event);
       this.pointerDownHandler = (event) => this.onPointerDown(event);
@@ -156,20 +158,29 @@
 
     onWheel(event) {
       const game = this.game;
-      if (!game.adminObserverMode || event.target?.closest?.("#adminPanel, #chatPanel")) return;
+      if (!game.adminObserverMode || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
       event.preventDefault();
       if (!this.initialized) this.fitWorld();
       const zoomFactor = event.deltaY < 0 ? 1.12 : 0.89;
-      game.camera.zoom = clamp((game.camera.zoom || 1) * zoomFactor, 0.12, 2.4);
-      this.applyCamera();
+      this.zoomAt(event.clientX, event.clientY, zoomFactor);
       game.input.updateWorld(game.camera);
     }
 
     onPointerDown(event) {
       const game = this.game;
-      if (!game.adminObserverMode || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel")) return;
+      if (!game.adminObserverMode || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
       if (!this.initialized) this.fitWorld();
       event.preventDefault();
+      if (event.pointerType === "touch") {
+        this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        game.canvas?.setPointerCapture?.(event.pointerId);
+        if (this.touchPointers.size >= 2) {
+          this.drag = null;
+          this.followTarget = null;
+          this.pinch = this.pinchState();
+          return;
+        }
+      }
       this.drag = {
         id: event.pointerId,
         x: event.clientX,
@@ -182,6 +193,25 @@
     }
 
     onPointerMove(event) {
+      if (this.touchPointers.has(event.pointerId)) {
+        this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (this.touchPointers.size >= 2) {
+          event.preventDefault();
+          if (!this.initialized) this.fitWorld();
+          const next = this.pinchState();
+          if (this.pinch && this.pinch.distance > 24 && next.distance > 24) {
+            const factor = clamp(next.distance / this.pinch.distance, 0.88, 1.14);
+            this.zoomAt(next.x, next.y, factor);
+            const zoom = Math.max(0.1, this.game.camera.zoom || 1);
+            this.center.x -= (next.x - this.pinch.x) / zoom;
+            this.center.y -= (next.y - this.pinch.y) / zoom;
+            this.applyCamera();
+            this.game.input.updateWorld(this.game.camera);
+          }
+          this.pinch = next;
+          return;
+        }
+      }
       if (!this.drag || event.pointerId !== this.drag.id) return;
       event.preventDefault();
       const game = this.game;
@@ -201,12 +231,39 @@
     }
 
     onPointerUp(event) {
+      if (this.touchPointers.has(event.pointerId)) {
+        this.touchPointers.delete(event.pointerId);
+        if (this.touchPointers.size < 2) this.pinch = null;
+      }
       if (!this.drag || event.pointerId !== this.drag.id) return;
       event?.preventDefault?.();
       const wasClick = !this.drag.moved &&
         Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) < this.dragClickThreshold;
       if (wasClick) this.followTargetAt(event.clientX, event.clientY);
       this.drag = null;
+    }
+
+    pinchState() {
+      const items = Array.from(this.touchPointers.values()).slice(0, 2);
+      if (items.length < 2) return null;
+      return {
+        x: (items[0].x + items[1].x) / 2,
+        y: (items[0].y + items[1].y) / 2,
+        distance: Math.hypot(items[0].x - items[1].x, items[0].y - items[1].y)
+      };
+    }
+
+    zoomAt(clientX, clientY, factor) {
+      const camera = this.game.camera;
+      const oldZoom = Math.max(0.1, camera.zoom || 1);
+      const worldX = camera.x + clientX / oldZoom;
+      const worldY = camera.y + clientY / oldZoom;
+      camera.zoom = clamp(oldZoom * factor, 0.12, 2.4);
+      camera.viewWidth = camera.width / Math.max(0.1, camera.zoom || 1);
+      camera.viewHeight = camera.height / Math.max(0.1, camera.zoom || 1);
+      this.center.x = worldX - clientX / camera.zoom + camera.viewWidth / 2;
+      this.center.y = worldY - clientY / camera.zoom + camera.viewHeight / 2;
+      this.applyCamera();
     }
 
     followTargetAt(clientX, clientY) {

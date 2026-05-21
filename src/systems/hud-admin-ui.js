@@ -787,7 +787,7 @@
           id: room.id || "local",
           phase: room.phase || "waiting",
           title: `${room.id || "local"} · ${room.name || "전장"}`,
-          meta: `${this.adminRoomPhaseLabel(room.phase)} · ${room.mode === "conquest" ? "점령전" : "섬멸전"} · ${this.factionName(room.blueFactionId)} vs ${this.factionName(room.redFactionId)} · 슬롯 ${players}/${capacity} · 관전 ${spectators}/${spectatorCapacity} · 전차 ${room.blueAiTanks ?? 0}/${room.redTanks ?? 0} · AI ${this.adminDifficultyLabel(room.difficulty)}`,
+          meta: `${this.adminRoomPhaseLabel(room.phase)} · ${room.mode === "conquest" ? "점령전" : "섬멸전"} · ${this.factionName(room.blueFactionId)} vs ${this.factionName(room.redFactionId)} · 슬롯 ${players}/${capacity} · 관전 ${spectators}/${spectatorCapacity} · 전차 ${room.blueAiTanks ?? 0}/${room.redTanks ?? 0} · AI ${this.adminDifficultyLabel(room.difficulty)}${this.adminRoomPlayerNames?.(room) || ""}`,
           selected: room.id === selectedId
         };
       });
@@ -1004,7 +1004,7 @@
         const title = document.createElement("strong");
         title.textContent = `${this.teamName(slot.team)} ${slot.label}`;
         const meta = document.createElement("span");
-        const owner = slot.playerId ? "플레이어" : "AI";
+        const owner = slot.playerId ? this.adminSlotPlayerLabel?.(game, snapshot, slot) || "플레이어" : "AI";
         const assets = [`분대 ${slot.squadIds?.length || 0}`];
         if ((slot.vehicleIds?.length || 0) > 0) assets.push(`차량 ${slot.vehicleIds.length}`);
         meta.textContent = `${owner} · ${assets.join(" / ")}`;

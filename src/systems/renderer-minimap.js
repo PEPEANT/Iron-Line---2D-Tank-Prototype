@@ -137,7 +137,8 @@
     drawHumanMinimapMarkers(game, map, viewerTeam, playerEntity) {
       const ctx = this.ctx;
       const entries = this.humanMinimapEntries(game, playerEntity);
-      for (const entry of entries) {
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
         if (!this.shouldDrawHumanMinimapEntry(game, entry, viewerTeam)) continue;
         const px = map.x + entry.x * map.sx;
         const py = map.y + entry.y * map.sy;
@@ -162,7 +163,26 @@
           ctx.stroke();
         }
         ctx.restore();
+        if (game.adminObserverMode || entries.length <= 6) this.drawHumanMinimapLabel(ctx, entry, px, py, index);
       }
+    },
+
+    drawHumanMinimapLabel(ctx, entry, px, py, index = 0) {
+      const text = String(entry.name || entry.id || "Player").slice(0, 10);
+      if (!text) return;
+      const above = index % 2 === 1;
+      const y = py + (above ? -9 : 14);
+      ctx.save();
+      ctx.font = "800 10px system-ui, sans-serif";
+      const w = Math.ceil(ctx.measureText(text).width) + 8;
+      ctx.fillStyle = "rgba(5, 12, 8, 0.82)";
+      roundRect(ctx, px - w / 2, y - 6, w, 12, 6);
+      ctx.fill();
+      ctx.fillStyle = "#baffc5";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, px, y);
+      ctx.restore();
     },
 
     shouldDrawHumanMinimapEntry(game, entry, viewerTeam) {

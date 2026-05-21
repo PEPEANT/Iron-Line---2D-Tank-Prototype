@@ -286,6 +286,28 @@ function removeParticipantFromRoom(room, playerId = "") {
   return changed;
 }
 
+function roomRecordTime(record = {}) {
+  const numeric = Number(record.createdAt || record.updatedAt || 0);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const parsed = Date.parse(record.createdAt || record.updatedAt || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mergeRoomRecords(existing = [], incoming = [], limit = 120) {
+  const records = new Map();
+  let fallbackIndex = 0;
+  for (const item of [...(existing || []), ...(incoming || [])]) {
+    if (!item || typeof item !== "object") continue;
+    const id = String(item.id || `${roomRecordTime(item)}:${item.senderId || item.playerId || item.type || "record"}:${fallbackIndex++}`);
+    const next = { ...item, id };
+    const previous = records.get(id);
+    if (!previous || roomRecordTime(next) >= roomRecordTime(previous)) records.set(id, next);
+  }
+  return Array.from(records.values())
+    .sort((a, b) => roomRecordTime(a) - roomRecordTime(b))
+    .slice(-limit);
+}
+
 function applyClientRoomToServer(body = {}) {
   if (!onlineRegistry) return null;
   const roomId = String(body.id || body.roomId || "").trim().slice(0, 48);
@@ -342,8 +364,8 @@ function applyClientRoomToServer(body = {}) {
     slot.aiControlled = !player;
   }
 
-  room.chat = Array.isArray(body.chat) ? body.chat.slice(-120) : room.chat;
-  room.events = Array.isArray(body.events) ? body.events.slice(-80) : room.events;
+  room.chat = Array.isArray(body.chat) ? mergeRoomRecords(room.chat, body.chat, 120) : room.chat;
+  room.events = Array.isArray(body.events) ? mergeRoomRecords(room.events, body.events, 80) : room.events;
   room.moderation = Array.isArray(body.moderation) ? body.moderation.slice(-80) : [];
   room.commandAuthorities = Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : [];
   room.commandAuthorityRequests = Array.isArray(body.commandAuthorityRequests) ? body.commandAuthorityRequests.slice(-16) : [];
