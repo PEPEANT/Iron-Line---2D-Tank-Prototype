@@ -87,6 +87,32 @@ Current bug report:
 - Because live is stale, do not judge the latest online sync work from `https://iron-line-2d-tank-prototype.onrender.com/` until Render serves `/api/build` and the build badge.
 - Likely next action is a Render manual deploy or checking whether the Render service is connected to a different repo/branch/root directory.
 
+## Shutdown Gate Run
+
+Run date: 2026-05-21 KST.
+
+Requested shutdown condition:
+
+- Commit/push must succeed.
+- Render live must reflect the latest GitHub `main`.
+- Render live basic page and browser console must have no fatal issue.
+- Only then run `shutdown /s /t 0`.
+
+Result:
+
+- Shutdown was not executed.
+- Local repo was clean at start.
+- Local `main` and `origin/main` matched `1c4a91a docs: record live stabilization results`.
+- Render live `/api/build` returned `404`.
+- Render live `index.html` did not include `build-info.css` or `src/core/build-info.js`.
+- Render live `src/main.js` did not include `updateOnlineCombatEvents`, `updateOnlineWorldSync`, or the latest tank machine-gun online shot path.
+- Render live `src/systems/renderer.js` did not include `remoteHumanStates` or `drawRemoteDroneCue`.
+- Render live basic entry page loaded with no browser console errors, but no build badge was present.
+
+Blocking reason:
+
+- Deployment is still stale. The Render service is not serving the latest GitHub `main`, so the shutdown gate failed.
+
 ## Rules
 
 - Do not do a large refactor while deployment is uncertain.
