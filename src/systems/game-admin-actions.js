@@ -197,6 +197,7 @@
       if (action === "room-create") {
         room = registry.createRoom(roomPatch);
         this.adminApplyRoom(room, { live: false });
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`방 생성: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -223,6 +224,7 @@
         room = registry.updateRoom(selectedId, roomPatch);
         if (!room) return false;
         this.adminApplyRoom(room, { live: false });
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`방 설정 저장: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -233,6 +235,7 @@
         room = registry.startRoom(selectedId);
         if (!room) return false;
         this.adminApplyRoom(room, { live: true });
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`관리자 시작: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -249,6 +252,7 @@
           this.result = "ended";
           this.resultReason = "관리자가 방을 종료했습니다.";
         }
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`방 종료: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -258,6 +262,7 @@
         room = registry.resetRoom(selectedId);
         if (!room) return false;
         this.adminApplyRoom(room, { live: false });
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`방 초기화: ${room.id}`);
         this.hud?.update?.(this);
         return true;
@@ -265,6 +270,7 @@
 
       if (action === "room-delete") {
         registry.deleteRoom(selectedId);
+        registry.refreshRemoteRooms?.();
         this.adminNotify(`방 삭제: ${selectedId}`);
         this.hud?.update?.(this);
         return true;

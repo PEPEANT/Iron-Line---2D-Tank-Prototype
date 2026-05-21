@@ -2,6 +2,7 @@
 
 (function bootGame(global) {
   const IronLine = global.IronLine;
+  const FULLSCREEN_DISABLED_KEY = "iron-line-fullscreen-disabled-v1";
   const { TEAM, AMMO, INFANTRY_WEAPONS, INFANTRY_CLASSES, PLAYER_CLASS_ORDER } = IronLine.constants;
   const {
     clamp,
@@ -43,8 +44,10 @@
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
       this.fullscreenRequestPending = false;
+      this.fullscreenWasActive = this.isFullscreenActive();
       this.testLab = this.requestedTestLab();
       this.adminObserverMode = this.requestedObserverMode();
+      this.installFullscreenPreferenceListener();
       this.installInitialFullscreen();
       this.cameraZoomPreference = 1;
       this.input.setVirtualEnabled(this.settings.mobileControls);
@@ -185,12 +188,14 @@
         (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0);
       return {
         mobileLike: Boolean(mobileLike),
-        mobileControls: Boolean(mobileLike)
+        mobileControls: Boolean(mobileLike),
+        fullscreenDisabled: this.loadFullscreenDisabled()
       };
     }
 
     installInitialFullscreen() {
       if (this.adminObserverMode || this.isAdminStandalonePage?.()) return;
+      if (this.settings?.fullscreenDisabled) return;
       let inputAttempted = false;
       const trigger = () => {
         if (inputAttempted) return;
@@ -203,14 +208,47 @@
       setTimeout(() => this.requestAppFullscreen(), 120);
     }
 
+    installFullscreenPreferenceListener() {
+      const sync = () => {
+        const active = this.isFullscreenActive();
+        if (!active && this.fullscreenWasActive) this.setFullscreenDisabled(true);
+        this.fullscreenWasActive = active;
+      };
+      document.addEventListener("fullscreenchange", sync);
+      document.addEventListener("webkitfullscreenchange", sync);
+    }
+
+    loadFullscreenDisabled() {
+      try {
+        return localStorage.getItem(FULLSCREEN_DISABLED_KEY) === "1";
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    setFullscreenDisabled(disabled) {
+      const value = Boolean(disabled);
+      if (this.settings) this.settings.fullscreenDisabled = value;
+      try {
+        if (value) localStorage.setItem(FULLSCREEN_DISABLED_KEY, "1");
+        else localStorage.removeItem(FULLSCREEN_DISABLED_KEY);
+      } catch (_error) {}
+      return value;
+    }
+
+    isFullscreenActive() {
+      return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
     requestMobileFullscreen() {
       return this.requestAppFullscreen();
     }
 
-    requestAppFullscreen() {
+    requestAppFullscreen(options = {}) {
       if (this.adminObserverMode || this.isAdminStandalonePage?.()) return false;
-      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fullscreenElement || this.fullscreenRequestPending) return false;
+      if (this.settings?.fullscreenDisabled && !options.userInitiated) return false;
+      if (options.userInitiated) this.setFullscreenDisabled(false);
+      if (this.isFullscreenActive() || this.fullscreenRequestPending) return false;
 
       const target = document.documentElement;
       const requestFullscreen = target.requestFullscreen || target.webkitRequestFullscreen;
@@ -246,6 +284,25 @@
         this.fullscreenRequestPending = false;
         return false;
       }
+    }
+
+    exitAppFullscreen(options = {}) {
+      if (this.adminObserverMode || this.isAdminStandalonePage?.()) return false;
+      if (options.persist !== false) this.setFullscreenDisabled(true);
+      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+      if (!this.isFullscreenActive() || !exitFullscreen) return false;
+      try {
+        const result = document.exitFullscreen ? document.exitFullscreen() : exitFullscreen.call(document);
+        if (result?.catch) result.catch(() => {});
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    toggleAppFullscreen() {
+      if (this.isFullscreenActive()) return this.exitAppFullscreen({ persist: true });
+      return this.requestAppFullscreen({ userInitiated: true });
     }
 
     setDebugOption(key, enabled) {

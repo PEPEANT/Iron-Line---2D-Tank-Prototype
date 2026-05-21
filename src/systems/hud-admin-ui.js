@@ -548,6 +548,7 @@
         this.nodes.mobileControlsToggle.checked = Boolean(game.settings?.mobileControls);
       }
 
+      this.updateFullscreenSettingButton?.(game);
       this.nodes.settingsButton?.setAttribute(
         "aria-expanded",
         String(!this.nodes.settingsPanel?.classList.contains("hidden"))

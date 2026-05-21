@@ -24,6 +24,8 @@
       this.remoteSignature = "";
       this.remoteOnline = false;
       this.remoteRefreshInFlight = false;
+      this.pendingRemoteRoomIds = new Set();
+      this.deletedRemoteRoomIds = new Set();
       window.addEventListener("storage", (event) => {
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
       });
@@ -113,15 +115,28 @@
         const response = await fetch(this.roomsApiUrl(), { cache: "no-store" });
         if (!response.ok) throw new Error(`rooms_api_${response.status}`);
         const payload = await response.json();
-        const rooms = Array.isArray(payload.rooms)
+        const serverRooms = Array.isArray(payload.rooms)
           ? payload.rooms.map((room) => this.normalizeRoom(room)).filter(Boolean)
           : [];
+        const serverIds = new Set(serverRooms.map((room) => room.id));
+        for (const id of Array.from(this.deletedRemoteRoomIds)) {
+          if (!serverIds.has(id)) this.deletedRemoteRoomIds.delete(id);
+        }
+        const roomsById = new Map();
+        for (const room of serverRooms) {
+          if (!this.deletedRemoteRoomIds.has(room.id)) roomsById.set(room.id, room);
+        }
+        for (const localRoom of this.readLocalRooms()) {
+          if (!this.pendingRemoteRoomIds.has(localRoom.id) || this.deletedRemoteRoomIds.has(localRoom.id)) continue;
+          if (!roomsById.has(localRoom.id)) roomsById.set(localRoom.id, localRoom);
+        }
+        const rooms = Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
         const signature = this.remoteRoomSignature(rooms);
         const changed = signature !== this.remoteSignature || !this.remoteOnline;
         this.remoteRooms = rooms;
         this.remoteSignature = signature;
         this.remoteOnline = true;
-        this.publishLocalRoomsMissingFromRemote(rooms);
+        this.writeLocalRooms(rooms);
         if (changed) this.emit();
       } catch (_error) {
         const changed = this.remoteOnline;
@@ -133,43 +148,64 @@
     }
 
     publishRoom(room) {
-      if (!this.canUseRemoteApi() || !room?.id) return;
-      fetch(this.roomsApiUrl(), {
+      if (!this.canUseRemoteApi() || !room?.id) return Promise.resolve(null);
+      const optimisticRoom = this.normalizeRoom(room);
+      if (optimisticRoom) {
+        this.pendingRemoteRoomIds.add(optimisticRoom.id);
+        this.deletedRemoteRoomIds.delete(optimisticRoom.id);
+        this.upsertRemoteRoom(optimisticRoom);
+        this.emit();
+      }
+      return fetch(this.roomsApiUrl(), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(room)
-      })
+        })
         .then((response) => response.ok ? response.json() : null)
         .then((payload) => {
           const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
-          if (!remoteRoom) return;
-          const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== remoteRoom.id);
-          nextRooms.push(remoteRoom);
-          this.remoteRooms = nextRooms;
-          this.remoteSignature = this.remoteRoomSignature(nextRooms);
+          if (!remoteRoom) {
+            if (optimisticRoom) this.pendingRemoteRoomIds.delete(optimisticRoom.id);
+            return null;
+          }
+          this.pendingRemoteRoomIds.delete(remoteRoom.id);
+          this.upsertRemoteRoom(remoteRoom);
           this.remoteOnline = true;
           this.emit();
+          return remoteRoom;
         })
         .catch(() => {
+          if (optimisticRoom) this.pendingRemoteRoomIds.delete(optimisticRoom.id);
           this.remoteOnline = false;
+          return null;
         });
     }
 
-    publishLocalRoomsMissingFromRemote(remoteRooms = []) {
-      const remoteById = new Map((remoteRooms || []).map((room) => [room.id, room]));
-      for (const localRoom of this.readLocalRooms()) {
-        if (!localRoom?.id) continue;
-        const remoteRoom = remoteById.get(localRoom.id);
-        if (remoteRoom && Number(remoteRoom.updatedAt) >= Number(localRoom.updatedAt)) continue;
-        this.publishRoom(localRoom);
-      }
+    upsertRemoteRoom(room) {
+      if (!room?.id) return;
+      const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== room.id);
+      nextRooms.push(room);
+      this.remoteRooms = nextRooms.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+      this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
+      this.writeLocalRooms(this.remoteRooms);
     }
 
     deleteRemoteRoom(id) {
-      if (!this.canUseRemoteApi() || !id) return;
-      fetch(this.roomsApiUrl(id), { method: "DELETE", keepalive: true }).catch(() => {});
+      if (!this.canUseRemoteApi() || !id) return Promise.resolve(false);
+      this.pendingRemoteRoomIds.delete(id);
+      this.deletedRemoteRoomIds.add(id);
       this.remoteRooms = (this.remoteRooms || []).filter((room) => room.id !== id);
       this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
+      this.writeLocalRooms(this.remoteRooms);
+      return fetch(this.roomsApiUrl(id), { method: "DELETE", keepalive: true })
+        .then((response) => {
+          if (!response.ok) this.deletedRemoteRoomIds.delete(id);
+          return response.ok;
+        })
+        .catch(() => {
+          this.deletedRemoteRoomIds.delete(id);
+          return false;
+        });
     }
 
     createRoom(input = {}) {
@@ -710,8 +746,14 @@
     }
 
     saveRooms(rooms) {
-      localStorage.setItem(this.storageKey, JSON.stringify(rooms));
+      this.writeLocalRooms(rooms);
       this.emit();
+    }
+
+    writeLocalRooms(rooms) {
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify((rooms || []).map((room) => this.normalizeRoom(room)).filter(Boolean)));
+      } catch (_error) {}
     }
 
     onChange(listener) {

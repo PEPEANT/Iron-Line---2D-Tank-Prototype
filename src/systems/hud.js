@@ -227,12 +227,22 @@
       this.nodes.settingsClose?.addEventListener("click", () => this.toggleSettingsPanel(false));
       this.nodes.settingsFullscreen?.addEventListener("click", () => {
         const game = IronLine.game;
-        if (game) game.requestAppFullscreen?.();
+        if (game) game.toggleAppFullscreen?.();
       });
       this.nodes.settingsMainMenu?.addEventListener("click", () => {
         const game = IronLine.game;
         if (game) game.returnToMainMenu?.();
       });
+    }
+
+    updateFullscreenSettingButton(game) {
+      const button = this.nodes.settingsFullscreen;
+      if (!button) return;
+      button.textContent = game?.isFullscreenActive?.()
+        ? "전체화면 끄기"
+        : game?.settings?.fullscreenDisabled
+          ? "전체화면 다시 켜기"
+          : "전체화면 켜기";
     }
 
     bindAdminControls() {
