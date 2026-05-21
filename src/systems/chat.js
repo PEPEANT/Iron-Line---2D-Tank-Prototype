@@ -125,7 +125,7 @@
 
     availableModes() {
       if (this.game.casterMode) return ["caster", "spectator", "all"];
-      if (this.game.spectatorMode) return ["spectator", "all"];
+      if (this.game.spectatorMode || this.game.isRoundSpectatorMode?.()) return ["spectator", "all"];
       return ["team", "all"];
     }
 

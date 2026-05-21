@@ -3,6 +3,7 @@
 (function registerAdminObserverCamera(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { clamp } = IronLine.math;
+  const { TEAM } = IronLine.constants || {};
 
   class AdminObserverCamera {
     constructor(game) {
@@ -32,19 +33,36 @@
 
     update(dt) {
       const game = this.game;
-      if (!game.adminObserverMode) return false;
+      if (!this.isCameraActive()) return false;
       this.ensureHelp();
-      if (!this.initialized) this.fitWorld();
+      if (!this.initialized) this.initializeView();
       if (game.input.consumePress("Escape")) this.followTarget = null;
       if (game.input.consumePress("Home")) {
         this.followTarget = null;
         this.fitWorld();
       }
+      if (game.input.consumePress("KeyN")) this.cycleFollowTarget(1);
+      if (game.input.consumePress("KeyB")) this.cycleFollowTarget(-1);
       this.updateFollowTarget();
       this.applyKeyboard(dt);
       this.applyCamera();
       game.input.updateWorld(game.camera);
       return true;
+    }
+
+    isCameraActive() {
+      const game = this.game;
+      return Boolean(game.adminObserverMode || game.spectatorMode || game.isRoundSpectatorMode?.());
+    }
+
+    isSpectatorCamera() {
+      const game = this.game;
+      return Boolean(game.spectatorMode || game.isRoundSpectatorMode?.());
+    }
+
+    initializeView() {
+      if (this.isSpectatorCamera() && this.focusDefaultSpectatorTarget()) return;
+      this.fitWorld();
     }
 
     fitWorld() {
@@ -57,6 +75,23 @@
       this.center.y = game.world.height / 2;
       this.initialized = true;
       this.applyCamera();
+    }
+
+    focusDefaultSpectatorTarget() {
+      const game = this.game;
+      const nearPoint = game.isRoundSpectatorMode?.() && game.player
+        ? { x: game.player.x, y: game.player.y }
+        : null;
+      const target = this.spectatorTargets({ nearPoint })[0] || null;
+      if (!target) return false;
+      game.camera.zoom = clamp(Math.max(game.camera.zoom || 0, 0.92), 0.72, 1.45);
+      this.followTarget = { kind: target.kind, id: target.id };
+      this.center.x = target.x;
+      this.center.y = target.y;
+      this.initialized = true;
+      this.applyCamera();
+      game.input.updateWorld(game.camera);
+      return true;
     }
 
     availableViewSize() {
@@ -93,10 +128,79 @@
       const target = this.resolveInspectTarget(kind, id);
       if (!target) return false;
       this.followTarget = { kind, id: String(id) };
+      if (this.isSpectatorCamera()) {
+        this.game.camera.zoom = clamp(Math.max(this.game.camera.zoom || 0, 0.9), 0.72, 1.8);
+      }
       this.center.x = target.x;
       this.center.y = target.y;
+      this.initialized = true;
       this.applyCamera();
       return true;
+    }
+
+    cycleFollowTarget(direction = 1) {
+      const targets = this.spectatorTargets();
+      if (!targets.length) {
+        this.followTarget = null;
+        this.fitWorld();
+        return false;
+      }
+      const step = direction < 0 ? -1 : 1;
+      const currentIndex = this.followTarget
+        ? targets.findIndex((item) => item.kind === this.followTarget.kind && item.id === this.followTarget.id)
+        : -1;
+      const baseIndex = currentIndex >= 0 ? currentIndex : (step > 0 ? -1 : 0);
+      const next = targets[(baseIndex + step + targets.length) % targets.length];
+      return this.followInspectTarget(next.kind, next.id);
+    }
+
+    currentTargetInfo() {
+      if (!this.followTarget) return null;
+      return this.spectatorTargets().find((item) => (
+        item.kind === this.followTarget.kind && item.id === this.followTarget.id
+      )) || null;
+    }
+
+    targetLabel() {
+      const target = this.currentTargetInfo();
+      if (!target) return "";
+      return target.label || target.id || "";
+    }
+
+    spectatorTargets(options = {}) {
+      const game = this.game;
+      const targets = [];
+      const teamLabel = (team) => team === TEAM?.RED ? "\uD64D\uD300" : "\uCCAD\uD300";
+      const add = (kind, entity, label, priority = 50) => {
+        if (!entity?.callSign || entity.alive === false || entity.active === false || entity.destroyed === true) return;
+        if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+        if (entity.inVehicle) return;
+        const distance = options.nearPoint
+          ? Math.hypot(entity.x - options.nearPoint.x, entity.y - options.nearPoint.y)
+          : 0;
+        targets.push({
+          kind,
+          id: String(entity.callSign),
+          label: `${entity.callSign} · ${teamLabel(entity.team)} ${label}`,
+          x: entity.x,
+          y: entity.y,
+          team: entity.team || "",
+          priority,
+          distance
+        });
+      };
+
+      for (const vehicle of game.tanks || []) add("vehicle", vehicle, "\uC804\uCC28", 10);
+      for (const vehicle of game.humvees || []) add("vehicle", vehicle, "\uAE30\uAC11", 18);
+      for (const unit of game.infantry || []) add("infantry", unit, "\uBCF4\uBCD1", 30);
+      for (const crew of game.crews || []) add("crew", crew, "\uC2B9\uBB34\uC6D0", 35);
+      for (const drone of game.drones || []) add("drone", drone, "\uB4DC\uB860", 40);
+
+      targets.sort((a, b) => {
+        if (options.nearPoint && Math.abs(a.distance - b.distance) > 1) return a.distance - b.distance;
+        return a.priority - b.priority || String(a.team).localeCompare(String(b.team)) || a.id.localeCompare(b.id);
+      });
+      return targets;
     }
 
     updateFollowTarget() {
@@ -158,9 +262,9 @@
 
     onWheel(event) {
       const game = this.game;
-      if (!game.adminObserverMode || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
+      if (!this.isCameraActive() || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
       event.preventDefault();
-      if (!this.initialized) this.fitWorld();
+      if (!this.initialized) this.initializeView();
       const zoomFactor = event.deltaY < 0 ? 1.12 : 0.89;
       this.zoomAt(event.clientX, event.clientY, zoomFactor);
       game.input.updateWorld(game.camera);
@@ -168,8 +272,8 @@
 
     onPointerDown(event) {
       const game = this.game;
-      if (!game.adminObserverMode || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
-      if (!this.initialized) this.fitWorld();
+      if (!this.isCameraActive() || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel, #spectatorPanel")) return;
+      if (!this.initialized) this.initializeView();
       event.preventDefault();
       if (event.pointerType === "touch") {
         this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });

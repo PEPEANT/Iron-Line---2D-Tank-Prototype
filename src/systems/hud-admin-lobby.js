@@ -24,6 +24,7 @@
     },
 
     updateAdminOpsLobby(snapshot) {
+      this.ensureAdminOpsChatPlacement();
       const status = this.nodes.adminOpsLobbyStatus;
       const chat = this.nodes.adminOpsLobbyChat;
       const input = this.nodes.adminOpsLobbyChatInput;
@@ -32,6 +33,7 @@
 
       const room = this.selectedAdminRoom(snapshot);
       const hasRoom = Boolean(room?.id && room.id !== "local");
+      this.updateAdminOpsChatHeader(room, hasRoom);
       if (input) input.disabled = !hasRoom;
       if (send) send.disabled = !hasRoom;
 
@@ -71,6 +73,31 @@
 
       this.renderAdminLobbyStatus(status, room, statusRows, participantRows, hasRoom);
       this.renderAdminLobbyChat(chat, messages, hasRoom);
+    },
+
+    ensureAdminOpsChatPlacement() {
+      const lobby = this.nodes.adminOpsLobby;
+      const page = this.nodes.adminPages?.find?.((item) => item.dataset.adminPage === "ops");
+      if (!lobby || !page) return;
+      const live = lobby.closest(".admin-room-live-chat");
+      if (!live || live.closest(".admin-ops-chat-block")) return;
+      const block = this.adminObserverBlock("운영 채팅", live);
+      block.classList.add("admin-ops-chat-block");
+      const roomBlock = this.nodes.adminRoomControls?.closest?.(".admin-observer-block");
+      page.insertBefore(block, roomBlock || page.firstChild);
+    },
+
+    updateAdminOpsChatHeader(room, hasRoom) {
+      const live = this.nodes.adminOpsLobby?.closest?.(".admin-room-live-chat");
+      if (!live) return;
+      const title = live.querySelector(".admin-room-live-chat-head strong");
+      const meta = live.querySelector(".admin-room-live-chat-head span");
+      const playing = hasRoom && room?.phase === "playing";
+      if (title) title.textContent = playing ? "인게임 채팅" : "대기방 채팅";
+      if (meta) meta.textContent = hasRoom ? `${room.id} · 관리자와 참가자 공용` : "방을 만들면 채팅 가능";
+      if (this.nodes.adminOpsLobbyChatInput) {
+        this.nodes.adminOpsLobbyChatInput.placeholder = playing ? "인게임 메시지" : "대기방 메시지";
+      }
     },
 
     touchAdminOpsPresence(roomId) {
@@ -192,16 +219,17 @@
       const text = String(input.value || "").replace(/\s+/g, " ").trim();
       if (!text) return false;
       const registry = IronLine.roomRegistry;
-      const room = registry?.selectedRoom?.();
+      const room = this.adminSelectedRoomForChat();
       if (!room?.id) {
         IronLine.game?.adminNotify?.("선택된 방이 없습니다.");
         return false;
       }
+      registry?.selectRoom?.(room.id);
       const saved = registry.pushChat(room.id, {
         channel: "all",
         sender: "관리자",
         participantType: "admin",
-        playerId: "admin",
+        playerId: this.adminOpsPresenceId(),
         text
       });
       if (!saved) return false;
@@ -211,6 +239,13 @@
       IronLine.game?.adminNotify?.("운영 채팅 전송");
       this.updateAdminOps(IronLine.game);
       return true;
+    },
+
+    adminSelectedRoomForChat() {
+      const registry = IronLine.roomRegistry;
+      if (!registry) return null;
+      const selectedId = this.nodes.adminRoomSelect?.value || registry.selectedRoomId?.() || "";
+      return (selectedId ? registry.getRoom?.(selectedId) : null) || registry.selectedRoom?.() || null;
     },
 
     warnAdminParticipant(roomId, playerId) {

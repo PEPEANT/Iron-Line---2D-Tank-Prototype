@@ -56,8 +56,11 @@
 .admin-observer-mode .command-panel,
 .admin-observer-mode .command-tactical-map,
 .admin-observer-mode .hud-bottom,
-.admin-observer-mode .mobile-controls,
 .admin-observer-mode .orientation-overlay {
+  display: none !important;
+}
+
+.admin-observer-mode:not(.spectator-mode) .mobile-controls {
   display: none !important;
 }
 

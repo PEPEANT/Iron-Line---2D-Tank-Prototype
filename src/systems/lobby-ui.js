@@ -552,6 +552,7 @@
       card.classList.toggle("is-local", local);
       card.classList.toggle("is-ready", ready);
       card.classList.toggle("is-ai", !player);
+      card.classList.toggle("empty", !player);
 
       const avatar = document.createElement("div");
       avatar.className = "lobby-player-avatar";
@@ -560,16 +561,16 @@
       const body = document.createElement("div");
       body.className = "lobby-player-main";
       const name = document.createElement("strong");
-      name.textContent = `${this.roleLabel(slot.roleId)} · ${player?.name || "AI 대기"}`;
-      const assets = this.slotAssetText(slot);
+      name.textContent = player ? `${this.roleLabel(slot.roleId)} · ${player.name || "Player"}` : "\ube48 \uc2ac\ub86f";
       const badges = document.createElement("span");
       badges.textContent = player
         ? this.playerBadges({ local, ready, loadout: this.playerLoadoutText(player, slot) })
-        : `AI 운용${assets ? ` · ${assets}` : ""}`;
-      body.append(name, badges);
+        : "";
+      if (player) body.append(name, badges);
+      else body.append(name);
 
       const state = document.createElement("em");
-      state.textContent = player ? (ready ? "준비" : "대기") : "AI";
+      state.textContent = player ? (ready ? "준비" : "대기") : "";
       const canSelect = !player || local;
       if (canSelect) {
         const action = document.createElement("button");

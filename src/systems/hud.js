@@ -71,6 +71,7 @@
         mobileTacticalMapButton: null,
         mobileSpectatorChatButton: null,
         mobileSpectatorHomeButton: null,
+        mobileSpectatorNextButton: null,
         mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyF'], [data-mobile-key='KeyE']"),
         mobileKeyButtons: Array.from(document.querySelectorAll("[data-mobile-key]")),
         mobileMouseButtons: Array.from(document.querySelectorAll("[data-mobile-mouse]")),
@@ -171,6 +172,7 @@
       this.nodes.mobileScoreboardButton = this.createMobileScoreboardButton();
       this.nodes.mobileTacticalMapButton = this.createMobileTacticalMapButton();
       this.nodes.mobileSpectatorChatButton = this.createMobileSpectatorButton("chat", "채팅", "관전자 채팅 열기");
+      this.nodes.mobileSpectatorNextButton = this.createMobileSpectatorButton("next", "다음", "다음 관전 대상");
       this.nodes.mobileSpectatorHomeButton = this.createMobileSpectatorButton("home", "전체", "전장 전체 보기");
     }
 
@@ -313,6 +315,10 @@
       this.nodes.mobileTacticalMapButton?.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         IronLine.game?.toggleTacticalMap?.();
+      });
+      this.nodes.mobileSpectatorNextButton?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        IronLine.game?.adminCamera?.cycleFollowTarget?.(1);
       });
     }
 
@@ -476,7 +482,7 @@
     updateMobileControls(game) {
       const enabled = Boolean(game.settings?.mobileControls);
       const portrait = window.innerHeight > window.innerWidth;
-      const spectator = Boolean(game.spectatorMode);
+      const spectator = Boolean(game.spectatorMode || game.isRoundSpectatorMode?.());
       const activeScreen = !game.entryOpen && !game.deploymentOpen && !game.lobbyOpen && !game.roomListOpen && !game.result;
       const playerReady = !game.playerDeathActive && !game.playerDowned && game.player.hp > 0;
       const showControls = enabled && !portrait && activeScreen && (spectator || playerReady);
@@ -501,8 +507,11 @@
       this.nodes.mobileControls?.classList.toggle("can-role-change", roleChangeAvailable);
       document.body.classList.toggle("mobile-controls-active", showControls);
       document.body.classList.toggle("mobile-spectator-controls-active", showSpectatorControls);
+      document.body.classList.toggle("spectator-mode", spectator);
+      document.body.classList.toggle("round-spectator-mode", Boolean(game.isRoundSpectatorMode?.()));
       document.body.classList.toggle("mobile-player-in-tank", showControls && inTank);
       this.nodes.mobileSpectatorChatButton?.classList.toggle("hidden", !showSpectatorControls);
+      this.nodes.mobileSpectatorNextButton?.classList.toggle("hidden", !showSpectatorControls);
       this.nodes.mobileSpectatorHomeButton?.classList.toggle("hidden", !showSpectatorControls);
       this.nodes.mobileChatButton?.classList.toggle("hidden", !showPlayerControls);
       this.nodes.mobileRoleButton?.classList.toggle("hidden", !roleChangeAvailable);

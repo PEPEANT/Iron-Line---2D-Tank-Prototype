@@ -12,6 +12,10 @@
     admin: "\uad00\ub9ac\uc790",
     emptyChat: "\uad00\uc804 \ucc44\ud305 \ub300\uae30",
     defaultName: "\uad00\uc804\uc790",
+    freeCamera: "\uc790\uc720 \uce74\uba54\ub77c",
+    prev: "\uc774\uc804",
+    next: "\ub2e4\uc74c",
+    map: "\uc804\uccb4",
     close: "\ub2eb\uae30",
     open: "\uc5f4\uae30"
   };
@@ -29,11 +33,21 @@
           <button type="button" id="spectatorChatOpen">${LABEL.chat}</button>
           <button type="button" id="spectatorPanelToggle">${LABEL.close}</button>
         </header>
+        <div class="spectator-camera-target" id="spectatorCameraTarget"></div>
+        <div class="spectator-camera-controls">
+          <button type="button" id="spectatorPrevTarget">${LABEL.prev}</button>
+          <button type="button" id="spectatorNextTarget">${LABEL.next}</button>
+          <button type="button" id="spectatorMapView">${LABEL.map}</button>
+        </div>
         <div class="spectator-panel-counts" id="spectatorPanelCounts"></div>
         <div class="spectator-panel-chat" id="spectatorPanelChat"></div>
       `;
       document.body.append(panel);
       this.nodes.spectatorPanel = panel;
+      this.nodes.spectatorCameraTarget = panel.querySelector("#spectatorCameraTarget");
+      this.nodes.spectatorPrevTarget = panel.querySelector("#spectatorPrevTarget");
+      this.nodes.spectatorNextTarget = panel.querySelector("#spectatorNextTarget");
+      this.nodes.spectatorMapView = panel.querySelector("#spectatorMapView");
       this.nodes.spectatorPanelCounts = panel.querySelector("#spectatorPanelCounts");
       this.nodes.spectatorPanelChat = panel.querySelector("#spectatorPanelChat");
       this.nodes.spectatorChatOpen = panel.querySelector("#spectatorChatOpen");
@@ -49,13 +63,31 @@
         this.spectatorPanelCollapsed = !this.spectatorPanelCollapsed;
         this.applySpectatorPanelCollapsed();
       });
+      this.nodes.spectatorPrevTarget?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        IronLine.game?.adminCamera?.cycleFollowTarget?.(-1);
+      });
+      this.nodes.spectatorNextTarget?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        IronLine.game?.adminCamera?.cycleFollowTarget?.(1);
+      });
+      this.nodes.spectatorMapView?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const camera = IronLine.game?.adminCamera;
+        if (!camera) return;
+        camera.followTarget = null;
+        camera.fitWorld?.();
+      });
       return panel;
     },
 
     updateSpectatorPanel(game) {
       const panel = this.ensureSpectatorPanel();
       const visible = Boolean(
-        game?.spectatorMode &&
+        (game?.spectatorMode || game?.isRoundSpectatorMode?.()) &&
         !game.entryOpen &&
         !game.deploymentOpen &&
         !game.lobbyOpen &&
@@ -70,6 +102,7 @@
       const signature = JSON.stringify(data);
       if (panel.dataset.signature === signature) return;
       panel.dataset.signature = signature;
+      this.renderSpectatorCameraTarget(data.cameraLabel);
       this.renderSpectatorPanelCounts(data.counts);
       this.renderSpectatorPanelChat(data.messages);
     },
@@ -113,6 +146,7 @@
           channel: message.channel || "spectator"
         }));
       return {
+        cameraLabel: game.adminCamera?.targetLabel?.() || LABEL.freeCamera,
         counts: {
           players: playersCount,
           spectators: spectatorCount,
@@ -121,6 +155,12 @@
         },
         messages
       };
+    },
+
+    renderSpectatorCameraTarget(label) {
+      const root = this.nodes.spectatorCameraTarget;
+      if (!root) return;
+      root.textContent = label || LABEL.freeCamera;
     },
 
     renderSpectatorPanelCounts(counts) {
