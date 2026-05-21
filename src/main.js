@@ -43,6 +43,8 @@
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
       this.fullscreenRequestPending = false;
+      this.testLab = this.requestedTestLab();
+      this.adminObserverMode = this.requestedObserverMode();
       this.installInitialFullscreen();
       this.cameraZoomPreference = 1;
       this.input.setVirtualEnabled(this.settings.mobileControls);
@@ -50,10 +52,8 @@
       this.matchConfig = this.defaultMatchConfig();
       this.matchPhase = "deployment";
       this.lobbyOpen = false;
-      this.testLab = this.requestedTestLab();
       this.spectatorMode = false;
       this.casterMode = false;
-      this.adminObserverMode = this.requestedObserverMode();
       this.adminCamera = IronLine.AdminObserverCamera ? new IronLine.AdminObserverCamera(this) : null;
       this.adminEnabled = this.requestedAdminMode() || this.adminObserverMode;
       this.localProfile = this.loadLocalProfile();
@@ -190,6 +190,7 @@
     }
 
     installInitialFullscreen() {
+      if (this.adminObserverMode || this.isAdminStandalonePage?.()) return;
       let inputAttempted = false;
       const trigger = () => {
         if (inputAttempted) return;
@@ -207,6 +208,7 @@
     }
 
     requestAppFullscreen() {
+      if (this.adminObserverMode || this.isAdminStandalonePage?.()) return false;
       const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
       if (fullscreenElement || this.fullscreenRequestPending) return false;
 
