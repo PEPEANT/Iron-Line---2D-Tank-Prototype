@@ -464,11 +464,17 @@
     assignPlayerToSlot(playerId, slotId, options = {}) {
       if (!this.onlineSession || this.matchStarted || this.countdownStarted) return false;
       const player = this.sessionPlayerById(playerId);
-      if (player?.participantType && player.participantType !== "player") return false;
+      const localSpectatorClaim = Boolean(
+        player &&
+        playerId === this.onlineSession.playerId &&
+        ["spectator", "caster"].includes(player.participantType || this.onlineSession.participantType)
+      );
+      if (player?.participantType && player.participantType !== "player" && !localSpectatorClaim) return false;
       const nextSlot = this.sessionSlotById(slotId);
       if (!player || !nextSlot || nextSlot.locked) return false;
       const occupied = nextSlot.playerId && nextSlot.playerId !== playerId;
       if (occupied) return false;
+      if (localSpectatorClaim && !this.convertLocalSpectatorToPlayer()) return false;
       const keepReady = Boolean(options.preserveReady && player.ready);
 
       for (const slot of this.onlineSession.roleSlots || []) {
@@ -528,6 +534,23 @@
         this.hud?.sessionFlow?.publishLocalPlayer?.(this, { force: true });
       }
       this.hud?.update?.(this);
+      return true;
+    }
+
+    convertLocalSpectatorToPlayer() {
+      const session = this.onlineSession;
+      const player = this.localSessionPlayer?.();
+      if (!session || !player) return false;
+      const room = session.roomId ? IronLine.roomRegistry?.getRoom?.(session.roomId) : null;
+      const phase = room?.phase || "waiting";
+      if (room?.locked || ["playing", "loading", "ended"].includes(phase)) return false;
+      session.participantType = "player";
+      session.localReady = false;
+      session.spectators = (session.spectators || []).filter((item) => item.id !== session.playerId);
+      player.participantType = "player";
+      player.ready = false;
+      this.spectatorMode = false;
+      this.casterMode = false;
       return true;
     }
 
