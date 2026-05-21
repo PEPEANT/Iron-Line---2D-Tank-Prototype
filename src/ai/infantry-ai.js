@@ -2127,6 +2127,7 @@
     }
 
     formationTarget(order) {
+      const baseEgressTarget = this.baseEgressTarget?.(order); if (baseEgressTarget) return baseEgressTarget;
       const formation = order.formation;
       const count = Math.max(1, formation ? order.roleSlotCount || 1 : order.slotCount || 1);
       const slot = clamp(formation ? order.roleSlotIndex || 0 : order.slotIndex || 0, 0, count - 1);

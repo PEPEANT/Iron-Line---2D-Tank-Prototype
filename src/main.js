@@ -619,7 +619,7 @@
       for (const spawn of prepared) {
         const classId = spawn.classId || "infantry";
         if (classId === "scout") {
-          const reconDroneAmmo = Math.max(1, Number(spawn.reconDroneAmmo ?? spawn.equipmentAmmo?.reconDrone ?? 0) || 0);
+          const reconDroneAmmo = 1;
           spawn.reconDroneAmmo = reconDroneAmmo;
           spawn.equipmentAmmo = {
             ...(spawn.equipmentAmmo || {}),
