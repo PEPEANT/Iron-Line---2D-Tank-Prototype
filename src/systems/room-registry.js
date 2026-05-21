@@ -9,7 +9,7 @@
   const PRODUCTION_ROOMS_API_BASE = "https://iron-line-2d-tank-prototype.onrender.com";
   const DEFAULT_SPECTATOR_CAPACITY = 12;
   const MAX_SPECTATOR_CAPACITY = 12;
-  const REMOTE_REFRESH_INTERVAL_MS = 1200;
+  const REMOTE_REFRESH_INTERVAL_MS = 650;
   const MAX_COMBAT_EVENTS = 140;
   const MAX_WORLD_UNITS = 96;
   const ROOM_SETTING_LIMITS = Object.freeze({

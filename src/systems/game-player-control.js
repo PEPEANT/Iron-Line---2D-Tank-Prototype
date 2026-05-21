@@ -267,7 +267,9 @@
         this.publishOnlineGunShot?.(weapon, targetX, targetY, {
           aimed: true,
           range: weapon.range,
-          extraHitRadius: 8
+          extraHitRadius: 8,
+          shooter: tank,
+          muzzle: tank.machineGunMuzzlePoint?.()
         });
       }
       return fired;
@@ -290,7 +292,18 @@
       tank.machineGunAngle = rotateTowards(tank.machineGunAngle, targetAngle, tank.machineGunTurnRate * dt);
       const aimError = Math.abs(normalizeAngle(tank.machineGunAngle - targetAngle));
       if (aimError > 0.16) return false;
-      return tank.fireMachineGun(this, target.x, target.y, { target });
+      const fired = tank.fireMachineGun(this, target.x, target.y, { target });
+      if (fired && tank === this.player?.inTank) {
+        const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
+        this.publishOnlineGunShot?.(weapon, target.x, target.y, {
+          aimed: true,
+          range: weapon.range,
+          extraHitRadius: 8,
+          shooter: tank,
+          muzzle: tank.machineGunMuzzlePoint?.()
+        });
+      }
+      return fired;
     },
     findAutoTankMachineGunTarget(tank) {
       const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;

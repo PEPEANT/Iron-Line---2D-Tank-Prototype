@@ -1882,19 +1882,26 @@
     }
 
     onlineGunShotLine(weapon, targetX, targetY, options = {}) {
-      if (!this.player || !weapon) return null;
+      const shooter = options.shooter || this.player;
+      if (!shooter || !weapon) return null;
       const scoped = this.isPlayerScoutAimMode?.() && weapon.id === "sniper";
       const machineGunAim = this.isPlayerMachineGunAimMode?.() && (weapon.id === "machinegun" || weapon.id === "lmg");
       const pistolAim = this.isPlayerPistolAimMode?.() && weapon.id === "pistol";
       const baseRange = scoped ? weapon.range * 1.28 : machineGunAim ? weapon.range * 1.08 : pistolAim ? weapon.range * 1.12 : weapon.range;
       const range = this.effectivePlayerGunRange(weapon, options.range || baseRange || 560);
-      const angle = angleTo(this.player.x, this.player.y, targetX, targetY);
+      const origin = options.muzzle && Number.isFinite(options.muzzle.x) && Number.isFinite(options.muzzle.y)
+        ? options.muzzle
+        : shooter.machineGunMuzzlePoint?.() || null;
+      const sourceX = Number.isFinite(origin?.x) ? origin.x : shooter.x;
+      const sourceY = Number.isFinite(origin?.y) ? origin.y : shooter.y;
+      if (!Number.isFinite(sourceX) || !Number.isFinite(sourceY)) return null;
+      const angle = angleTo(sourceX, sourceY, targetX, targetY);
       const spread = (weapon.spread || 0.22) * (options.aimed ? 0.035 : 0.08);
       const shotAngle = angle + (Math.random() - 0.5) * spread;
-      const muzzleDistance = this.player.radius + (weapon.visualLength || 16) + 5;
-      const x1 = this.player.x + Math.cos(shotAngle) * muzzleDistance;
-      const y1 = this.player.y + Math.sin(shotAngle) * muzzleDistance;
-      const aimDistance = Math.max(1, distXY(this.player.x, this.player.y, targetX, targetY));
+      const muzzleDistance = origin ? 0 : (shooter.radius || this.player?.radius || 10) + (weapon.visualLength || 16) + 5;
+      const x1 = sourceX + Math.cos(shotAngle) * muzzleDistance;
+      const y1 = sourceY + Math.sin(shotAngle) * muzzleDistance;
+      const aimDistance = Math.max(1, distXY(sourceX, sourceY, targetX, targetY));
       const distance = Math.min(range, aimDistance);
       return {
         x1,
