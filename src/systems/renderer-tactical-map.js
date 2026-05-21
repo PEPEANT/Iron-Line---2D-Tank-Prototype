@@ -127,8 +127,8 @@
         ctx.beginPath();
         ctx.moveTo(map.x + road[0].x * map.sx, map.y + road[0].y * map.sy);
         for (let i = 1; i < road.length; i += 1) ctx.lineTo(map.x + road[i].x * map.sx, map.y + road[i].y * map.sy);
-        ctx.strokeStyle = "rgba(158, 151, 118, 0.48)";
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = "rgba(60, 67, 70, 0.76)";
+        ctx.lineWidth = 6;
         ctx.stroke();
       }
 

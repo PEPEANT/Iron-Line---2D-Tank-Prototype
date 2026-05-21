@@ -12,6 +12,7 @@
     segmentDistanceToPoint
   } = IronLine.math;
   const { AMMO } = IronLine.constants;
+  const wreckCover = IronLine.wreckCover || {};
   const sceneryMovementBlockers = new Set([
     "sandbag",
     "barricade",
@@ -245,7 +246,10 @@
     return [...(game.tanks || []), ...(game.humvees || [])].some((tank) => {
       if (tank === entity || ignoreTanks.has(tank)) return false;
       if (!tank.alive && (!options.blockWrecks || !vehicleWreckBlocks(tank, options))) return false;
-      return distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
+      const hit = distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
+      if (!hit) return false;
+      if (!tank.alive && tryBreakVehicleWreckOnImpact(game, entity, tank, options)) return false;
+      return true;
     });
   }
 
@@ -258,8 +262,42 @@
     const minimum = options.impactMinSpeed ?? (options.vehicleKind === "humvee" ? 34 : 24);
     if (speed < minimum) return 0;
     const mass = options.impactMass ?? (options.vehicleKind === "humvee" ? 0.94 : 1.34);
-    const hardness = target?.kind === "base-wall" ? 1.05 : target?.kind === "concrete" ? 1 : 0.88;
+    const type = worldItemType(target);
+    const hardness = type === "building" ? 1.32 : type === "base-wall" ? 1.05 : type === "concrete" ? 1 : 0.88;
     return (20 + speed * 0.86) * mass / hardness;
+  }
+
+  function vehicleWreckImpactDamage(entity, wreck, options) {
+    if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !isVehicleWreck(wreck)) return 0;
+    const speed = vehicleImpactSpeed(entity, options);
+    if (speed < (options.vehicleKind === "tank" ? 18 : 32)) return 0;
+    const mass = options.impactMass ?? (options.vehicleKind === "humvee" ? 0.94 : 1.34);
+    const wreckScale = wreck?.vehicleType === "humvee" ? 1.18 : 1;
+    return (30 + speed * 0.82) * mass * wreckScale;
+  }
+
+  function tryBreakVehicleWreckOnImpact(game, entity, wreck, options) {
+    const damage = vehicleWreckImpactDamage(entity, wreck, options);
+    if (damage <= 0) return false;
+    const now = game?.matchTime || 0;
+    if (now - (wreck.lastVehicleRamAt || -99) < 0.16) return false;
+    wreck.lastVehicleRamAt = now;
+    const destroyed = wreckCover.damageVehicleWreck?.(game, wreck, damage, { ammoId: "ram" });
+    if (destroyed) shakeVehicleOnBreak(entity, options);
+    else if (entity) entity.impactShake = Math.max(entity.impactShake || 0, 0.18);
+    return Boolean(destroyed);
+  }
+
+  function heavyObstacleGrindDamage(game, obstacle, options) {
+    if (options.vehicleKind !== "tank") return 0;
+    const type = worldItemType(obstacle);
+    if (!["building", "base-wall", "concrete"].includes(type)) return 0;
+    const now = game?.matchTime || 0;
+    if (now - (obstacle.lastVehicleGrindAt || -99) < 0.32) return 0;
+    obstacle.lastVehicleGrindAt = now;
+    if (type === "building") return 18;
+    if (type === "base-wall") return 28;
+    return 24;
   }
 
   function vehicleBreakOptions(entity, target, options) {
@@ -309,13 +347,14 @@
   }
 
   function tryBreakObstacleOnImpact(game, entity, obstacle, options, context) {
-    if (!options.destroyObstaclesOnImpact || obstacle?.kind === "building" || obstacle?.destroyed) return false;
+    if (!options.destroyObstaclesOnImpact || obstacle?.destroyed) return false;
     const damaged = context.damagedObstacles || (context.damagedObstacles = new Set());
     if (damaged.has(obstacle)) return obstacle.destroyed;
     let damage = vehicleImpactDamage(entity, obstacle, options);
     if (damage <= 0 && isVehicleCrushThrough(obstacle, options)) {
       damage = options.vehicleKind === "tank" ? 54 : 36;
     }
+    if (damage <= 0) damage = heavyObstacleGrindDamage(game, obstacle, options);
     if (damage <= 0) return false;
     damaged.add(obstacle);
     const destroyed = IronLine.combat?.damageObstacle?.(game, obstacle, damage, vehicleBreakOptions(entity, obstacle, options));

@@ -71,24 +71,12 @@
     moveBurstMin: 1.25,
     moveBurstMax: 2.15,
     observePauseMin: 0.48,
-    observePauseMax: 0.95
+    observePauseMax: 0.95, tankAssaultAcquireRange: 96, tankAssaultAttachRange: 24, tankAssaultSuppressionLimit: 76
   };
 
-  const TEMPO_MOVE_STATES = new Set([
-    "advance",
-    "secure",
-    "report-move",
-    "support-position",
-    "pre-assault-position",
-    "hold-wall-position",
-    "recon-move",
-    "recon-patrol",
-    "squad-regroup",
-    "rally-tank"
-  ]);
+  const TEMPO_MOVE_STATES = new Set(["advance", "secure", "report-move", "support-position", "pre-assault-position", "hold-wall-position", "recon-move", "recon-patrol", "squad-regroup", "rally-tank"]);
 
   IronLine.InfantryAIConfig = INFANTRY_CONFIG;
-
   class InfantryAI {
     constructor(unit, game) {
       this.unit = unit;
@@ -143,7 +131,7 @@
       this.observePauseTimer = 0;
       this.movementTempoKey = "";
       this.movementTempoTarget = null;
-      this.movementTempoPaused = false;
+      this.movementTempoPaused = false; this.tankAssaultTarget = null; this.tankAssaultCooldown = 1.5 + Math.random() * 2.4;
       this.moveHeading = unit.angle;
       this.seed = this.hash(unit.callSign);
       this.thoughtText = "";
@@ -367,6 +355,7 @@
       this.thoughtCooldown = Math.max(0, this.thoughtCooldown - dt);
       this.actionLockTimer = Math.max(0, this.actionLockTimer - dt);
       this.squadOrderLockTimer = Math.max(0, this.squadOrderLockTimer - dt);
+      this.tankAssaultCooldown = Math.max(0, (this.tankAssaultCooldown || 0) - dt);
       this.movementTempoPaused = false;
       if (this.unit.inVehicle) {
         this.clearProne(0, true);
@@ -403,6 +392,8 @@
         reportedVehicleThreat = null;
         reportedContact = null;
       }
+
+      if (this.handleActiveTankAssault(dt, beforeX, beforeY)) return;
 
       if (!order?.point) {
         this.clearProne(0, true);
@@ -610,6 +601,10 @@
           }
           return evadeTarget;
         };
+
+        if (this.canStartTankAssault(tankThreat, tankDistance, order, contact)) {
+          return this.startTankAssault(tankThreat, dt, beforeX, beforeY);
+        }
 
         if (tankDistance < (hasRpg ? INFANTRY_CONFIG.rpgDangerRange : 330)) {
           const closeEvadeTarget = getEvadeTarget();
@@ -2733,106 +2728,115 @@
       const grouped = (squadStatus.cohesion || Infinity) < 130;
 
       if (this.unit.inVehicle || this.state === "mounted-transport") {
-        return { key: "transport:ride", text: this.thoughtLine(["차량 이동 중", "하차 지점까지 이동"], "transport-ride"), repeat: true, cooldown: 6.4 };
+        return { key: "transport:ride", text: this.thoughtLine(["차량 내부 대기", "하차 지점 확인", "문 열리면 이동"], "transport-ride"), repeat: true, cooldown: 6.4 };
       }
       if (this.state === "reboard-transport" && roleVoice) {
-        return { key: "transport:remount", text: this.thoughtLine(["후퇴 차량 탑승", "부상자 태우고 이탈", "재탑승 후 빠진다"], "transport-remount"), repeat: true, cooldown: 5.2 };
+        return { key: "transport:remount", text: this.thoughtLine(["후송차 붙어", "부상자 먼저", "차량 타고 이탈"], "transport-remount"), repeat: true, cooldown: 5.2 };
       }
       if (this.state === "board-transport" && roleVoice) {
-        return { key: "transport:mount", text: this.thoughtLine(["차량 도착, 탑승", "수송차에 오른다", "빠르게 탑승"], "transport-mount"), repeat: true, cooldown: 5.8 };
+        return { key: "transport:mount", text: this.thoughtLine(["탑승 시작", "차량에 붙어", "빠르게 올라"], "transport-mount"), repeat: true, cooldown: 5.8 };
       }
 
       if (this.target?.weaponId === "sniper" && roleVoice) {
-        return { key: "report:sniper", text: this.thoughtLine(["적 저격수 발견", "저격수 위치 보고", "원거리 사수 확인"], "sniper-report"), repeat: true, cooldown: 6.2 };
+        return { key: "report:sniper", text: this.thoughtLine(["저격수 확인", "원거리 사수", "저격선 조심"], "sniper-report"), repeat: true, cooldown: 6.2 };
       }
 
       if (this.state === "repair-tank") {
-        return { key: "state:repair", text: this.thoughtLine(["손상 차량 수리", "공병, 수리 들어간다"], "repair"), repeat: true, cooldown: 5.4 };
+        return { key: "state:repair", text: this.thoughtLine(["공병 붙었다", "차량 복구 중", "엔진실 확인"], "repair"), repeat: true, cooldown: 5.4 };
       }
       if (this.state === "avoid-fire-lane") {
-        return { key: "state:fire-lane", text: "아군 사선 비운다", repeat: false };
+        return { key: "state:fire-lane", text: this.thoughtLine(["사선 열어", "왼쪽으로 빠져", "뒤로 한 발"], "fire-lane"), repeat: false };
       }
       if (this.state === "suppressed") {
-        return { key: "state:suppressed", text: this.thoughtLine(["제압당함, 낮게", "탄막 심하다, 엎드려", "엄폐 필요"], "suppressed"), repeat: true, cooldown: 4.7 };
+        return { key: "state:suppressed", text: this.thoughtLine(["고개 낮춰", "탄막 온다", "엄폐 붙어"], "suppressed"), repeat: true, cooldown: 4.7 };
       }
       if (this.state === "prone-fire") {
         const text = role === "support"
-          ? this.thoughtLine(["엎드려 엄호", "LMG 낮게 깔아", "지원화기 고정"], "prone-support")
-          : this.thoughtLine(["낮게 쏜다", "엎드려 반격", "자세 낮춰"], "prone-assault");
+          ? this.thoughtLine(["지원화기 엎드려", "낮게 깔아", "사격선 고정"], "prone-support")
+          : this.thoughtLine(["자세 낮춰", "낮게 반격", "엎드려 버텨"], "prone-assault");
         return { key: `state:prone:${role}`, text, repeat: true, cooldown: 5.2 };
       }
       if (this.state === "cover") {
-        return { key: "state:cover", text: "엄폐로 이동", repeat: false };
+        return { key: "state:cover", text: this.thoughtLine(["엄폐 붙어", "벽 뒤로 붙어", "몸 낮춰"], "cover"), repeat: false };
       }
       if (this.state === "rpg-position") {
-        return { key: "state:rpg-position", text: "RPG 각 잡는다", repeat: true, cooldown: 5.2 };
+        return { key: "state:rpg-position", text: this.thoughtLine(["RPG 준비", "장갑 표적", "후폭풍 비워"], "rpg-position"), repeat: true, cooldown: 5.2 };
       }
       if (this.state === "rpg-attack") {
-        return { key: "state:rpg-attack", text: "RPG 발사", repeat: false };
+        return { key: "state:rpg-attack", text: this.thoughtLine(["RPG 발사", "쏜다!", "장갑차 쏜다"], "rpg-attack"), repeat: false };
+      }
+      if (this.state === "tank-assault-approach") {
+        return { key: "tank-assault:approach", text: this.thoughtLine(["전차 옆으로", "폭약조 접근", "궤도 쪽으로"], "tank-assault-approach"), repeat: true, cooldown: 4.8 };
+      }
+      if (this.state === "tank-assault-climb") {
+        return { key: "tank-assault:climb", text: this.thoughtLine(["전차 올라탄다", "해치에 붙어", "붙었다"], "tank-assault-climb"), repeat: true, cooldown: 4.4 };
+      }
+      if (this.state === "tank-assault-plant") {
+        return { key: "tank-assault:plant", text: this.thoughtLine(["폭약 설치", "궤도에 설치", "조금만 버텨"], "tank-assault-plant"), repeat: true, cooldown: 4.2 };
       }
       if (this.state === "recon-move") {
-        return { key: "recon:move", text: this.thoughtLine(["측면 정찰 이동", "외곽으로 돈다", "관측점으로 이동"], "recon-move"), repeat: true, cooldown: 6.2 };
+        return { key: "recon:move", text: this.thoughtLine(["외곽으로 이동", "우측 돌아", "관측점 잡아"], "recon-move"), repeat: true, cooldown: 6.2 };
       }
       if (this.state === "recon-watch") {
         const reportText = (this.debug.scoutReports || 0) > 0
-          ? this.thoughtLine(["적 위치 보고", "접촉 보고 올린다", "표적 좌표 공유"], "recon-report")
-          : this.thoughtLine(["외곽 감시 중", "사각 감시 유지", "측면 보고 대기"], "recon-watch");
+          ? this.thoughtLine(["접촉 보고", "표적 공유", "좌표 올린다"], "recon-report")
+          : this.thoughtLine(["외곽 감시", "사각 확인", "측면 대기"], "recon-watch");
         return { key: "recon:watch", text: reportText, repeat: true, cooldown: 6.8 };
       }
       if (this.state === "recon-snipe") {
-        return { key: "recon:snipe", text: this.thoughtLine(["측면 사선 잡았다", "쏘고 위치 바꾼다", "원거리에서 끊는다"], "recon-snipe"), repeat: true, cooldown: 5.7 };
+        return { key: "recon:snipe", text: this.thoughtLine(["원거리 교전", "한 발 끊고 이동", "위치 바꾼다"], "recon-snipe"), repeat: true, cooldown: 5.7 };
       }
       if (this.state === "recon-evade") {
-        return { key: "recon:evade", text: this.thoughtLine(["위치 노출, 이탈", "들켰다, 빠진다"], "recon-evade"), repeat: false };
+        return { key: "recon:evade", text: this.thoughtLine(["위치 노출", "빠져", "엄폐로 이탈"], "recon-evade"), repeat: false };
       }
 
       if (supportRequest && voiceLead) {
         const requestText = {
-          "need-armor-support": this.thoughtLine(["장갑 지원 요청", "전차 지원 필요"], "need-armor"),
-          "need-fire-support": this.thoughtLine(["화력지원 요청", "기관총 지원 필요", "지원 화력 불러"], "need-fire"),
-          "need-regroup": this.thoughtLine(["분대 재집결", "흩어졌다, 다시 모여"], "need-regroup")
+          "need-armor-support": this.thoughtLine(["장갑 지원 요청", "전차 앞으로", "장갑차 붙여"], "need-armor"),
+          "need-fire-support": this.thoughtLine(["화력 지원 요청", "기관총 눌러", "지원 사격 필요"], "need-fire"),
+          "need-regroup": this.thoughtLine(["분대 모여", "대형 다시", "집결 신호"], "need-regroup")
         }[supportRequest] || "지원 요청";
         return { key: `request:${supportRequest}`, text: requestText, repeat: true, cooldown: 6 };
       }
 
       if (mode === "pre-assault" && roleVoice) {
         const text = role === "support"
-          ? this.thoughtLine(["LMG 자리 잡는다", "엄호조 사선 확보", "지원화기 준비"], "pre-support")
+          ? this.thoughtLine(["지원조 자리", "사격선 확보", "엄호 준비"], "pre-support")
           : role === "security"
-            ? this.thoughtLine(["측면 경계 선다", "우회로 확인", "측면 차단 준비"], "pre-security")
+            ? this.thoughtLine(["측면 경계", "우회로 확인", "옆길 막아"], "pre-security")
             : grouped
-              ? this.thoughtLine(["분대 집결, 진입 준비", "엄호 확인 후 돌입", "대형 맞추고 진입"], "pre-assault-grouped")
-              : this.thoughtLine(["돌격조 전진 준비", "엄호 기다린 뒤 진입"], "pre-assault");
+              ? this.thoughtLine(["진입 준비", "엄호 확인", "대형 맞춰"], "pre-assault-grouped")
+              : this.thoughtLine(["전진 준비", "엄호 기다려", "신호 보고 진입"], "pre-assault");
         return { key: `mode:pre-assault:${role}`, text, repeat: true, cooldown: 5.6 };
       }
       if (mode === "support-fire" && roleVoice) {
         const text = role === "support"
-          ? this.thoughtLine(["엄호 사격 유지", "돌격조 가려준다", "사선 열어둔다"], "support-role")
+          ? this.thoughtLine(["엄호 유지", "돌격조 엄호", "사격 계속"], "support-role")
           : role === "security"
-            ? this.thoughtLine(["측면을 막는다", "우회 접근 차단"], "security-role")
-            : this.thoughtLine(["엄호 받으며 전진", "짧게 뛰고 멈춘다", "엄호선 맞춰 이동"], "assault-support-fire");
+            ? this.thoughtLine(["측면 차단", "우회 접근 막아", "뒤쪽 확인"], "security-role")
+            : this.thoughtLine(["엄호 받고 전진", "짧게 이동", "다음 엄폐까지"], "assault-support-fire");
         return { key: `mode:support-fire:${role}`, text, repeat: true, cooldown: 5.4 };
       }
       if (mode === "hold-wall" && roleVoice) {
         const text = role === "support"
-          ? this.thoughtLine(["벽 뒤에서 엄호", "방어 사선 유지"], "hold-support")
-          : this.thoughtLine(["엄폐선 유지", "벽 뒤에서 버틴다"], "hold-wall");
+          ? this.thoughtLine(["벽 뒤 엄호", "방어선 유지", "지원조 고정"], "hold-support")
+          : this.thoughtLine(["엄폐선 유지", "벽에 붙어", "구역 버텨"], "hold-wall");
         return { key: `mode:hold-wall:${role}`, text, repeat: true, cooldown: 6.2 };
       }
       if (mode === "fallback" && voiceLead) {
-        return { key: "mode:fallback", text: this.thoughtLine(["압박 크다, 후퇴", "뒤로 빼서 재정비"], "fallback"), repeat: true, cooldown: 5.4 };
+        return { key: "mode:fallback", text: this.thoughtLine(["압박 크다", "뒤로 재정비", "천천히 빠져"], "fallback"), repeat: true, cooldown: 5.4 };
       }
       if (mode === "regroup" && voiceLead) {
-        return { key: "mode:regroup", text: this.thoughtLine(["분대 재집결", "대형 다시 맞춘다", "모여서 다시 간다"], "regroup"), repeat: true, cooldown: 5.8 };
+        return { key: "mode:regroup", text: this.thoughtLine(["분대 집결", "대형 다시", "모여서 이동"], "regroup"), repeat: true, cooldown: 5.8 };
       }
       if (mode === "rally-with-tank" && voiceLead) {
-        return { key: "mode:rally-tank", text: this.thoughtLine(["전차 엄호선 맞춘다", "장갑 지원에 맞춰 진입", "전차 뒤에서 진입"], "rally-tank"), repeat: true, cooldown: 6 };
+        return { key: "mode:rally-tank", text: this.thoughtLine(["전차 뒤로", "장갑 따라 진입", "전차 우측 비워"], "rally-tank"), repeat: true, cooldown: 6 };
       }
       if ((mode === "hold" || order.role === "hold") && voiceLead) {
-        return { key: "mode:hold", text: "구역 유지 중", repeat: true, cooldown: 7 };
+        return { key: "mode:hold", text: this.thoughtLine(["구역 유지", "여기서 버텨", "진입로 감시"], "hold"), repeat: true, cooldown: 7 };
       }
       if (!order.point && voiceLead) {
-        return { key: "state:idle", text: "명령 대기", repeat: true, cooldown: 7.2 };
+        return { key: "state:idle", text: this.thoughtLine(["명령 대기", "신호 대기", "분대장 확인"], "idle"), repeat: true, cooldown: 7.2 };
       }
 
       return null;

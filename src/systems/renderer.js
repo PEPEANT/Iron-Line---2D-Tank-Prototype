@@ -314,15 +314,15 @@
       const roadWidth = world.roadWidth || 84;
       const junctions = collectRoadJunctions(roads);
       const roadStyle = world.roadStyle || {};
-      const roadBody = roadStyle.body || "#64614a";
-      const roadEdge = roadStyle.edge || "#50523d";
-      const laneColor = roadStyle.lane || "rgba(211, 197, 139, 0.32)";
+      const roadBody = roadStyle.body || "#343a3d";
+      const roadEdge = roadStyle.edge || "#202528";
+      const laneColor = roadStyle.lane || "rgba(245, 198, 70, 0.9)";
 
       ctx.save();
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      for (const road of roads) this.strokeRoadPath(road, roadEdge, (road.width || roadWidth) + 10);
+      for (const road of roads) this.strokeRoadPath(road, roadEdge, (road.width || roadWidth) + 16);
       for (const road of roads) this.strokeRoadPath(road, roadBody, road.width || roadWidth);
       for (const junction of junctions) {
         const radius = Math.max(28, roadWidth * 0.54);
@@ -334,7 +334,7 @@
 
       for (const road of roads) {
         const width = road.width || roadWidth;
-        this.strokeRoadPath(road, laneColor, Math.max(5, width * 0.08), [28, 36]);
+        this.strokeRoadPath(road, laneColor, Math.max(5, width * 0.055), [34, 34]);
       }
 
       for (const junction of junctions) {
@@ -1989,8 +1989,8 @@
       const blueName = game.annihilationTeamName?.(TEAM.BLUE) || "청팀";
       const redName = game.annihilationTeamName?.(TEAM.RED) || "홍팀";
       const score = game.annihilationScoreText?.() || `${state.score?.[TEAM.BLUE] || 0} : ${state.score?.[TEAM.RED] || 0}`;
-      const roundText = `R${state.round || 1}/${state.maxRounds || 3}`;
-      const topText = `${blueName} ${score} ${redName} · ${roundText}`;
+      const targetScore = game.annihilationObjectiveScoreTarget?.() || state.targetScore || 300;
+      const topText = `${blueName} ${score} ${redName} · 목표 ${targetScore}점`;
 
       ctx.save();
       ctx.textAlign = "center";
@@ -2009,7 +2009,7 @@
       ctx.fillText(topText, camera.width / 2, topY + 17);
 
       if (game.isRoundSpectatorMode?.()) {
-        const specText = "라운드 관전 중";
+        const specText = "관전 중";
         ctx.font = "900 12px Inter, sans-serif";
         const specWidth = Math.min(camera.width - 28, Math.max(160, ctx.measureText(specText).width + 34));
         const specX = camera.width / 2 - specWidth / 2;
@@ -2023,30 +2023,6 @@
         ctx.fillText(specText, camera.width / 2, specY + 14);
       }
 
-      if (state.state === "intermission") {
-        const w = Math.min(560, camera.width * 0.86);
-        const h = 162;
-        const x = camera.width / 2 - w / 2;
-        const y = camera.height * 0.34;
-        const remaining = Math.max(1, Math.ceil(state.intermissionRemaining || 0));
-        ctx.fillStyle = "rgba(5, 9, 8, 0.34)";
-        ctx.fillRect(0, 0, camera.width, camera.height);
-        roundRect(ctx, x, y, w, h, 8);
-        ctx.fillStyle = "rgba(8, 14, 12, 0.9)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(237, 244, 239, 0.2)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.fillStyle = "#ffd166";
-        ctx.font = "900 30px Inter, sans-serif";
-        ctx.fillText(state.banner || "라운드 종료", camera.width / 2, y + 42);
-        ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
-        ctx.font = "900 17px Inter, sans-serif";
-        ctx.fillText(state.detail || `현재 점수 ${score}`, camera.width / 2, y + 80);
-        ctx.fillStyle = "rgba(237, 244, 239, 0.74)";
-        ctx.font = "800 14px Inter, sans-serif";
-        ctx.fillText(`재정비 중... ${remaining}초 후 다음 라운드 시작`, camera.width / 2, y + 118);
-      }
       ctx.restore();
     }
 

@@ -29,6 +29,30 @@
       rooms.id = "adminOpsRooms";
       rooms.className = "admin-observer-list admin-ops-rooms";
 
+      const lobby = document.createElement("div");
+      lobby.id = "adminOpsLobby";
+      lobby.className = "admin-ops-lobby";
+      const lobbyStatus = document.createElement("div");
+      lobbyStatus.id = "adminOpsLobbyStatus";
+      lobbyStatus.className = "admin-ops-lobby-status";
+      const lobbyChat = document.createElement("div");
+      lobbyChat.id = "adminOpsLobbyChat";
+      lobbyChat.className = "admin-ops-lobby-chat";
+      const lobbyForm = document.createElement("form");
+      lobbyForm.id = "adminOpsLobbyChatForm";
+      lobbyForm.className = "admin-ops-lobby-chat-form";
+      const lobbyInput = document.createElement("input");
+      lobbyInput.id = "adminOpsLobbyChatInput";
+      lobbyInput.type = "text";
+      lobbyInput.maxLength = 120;
+      lobbyInput.autocomplete = "off";
+      lobbyInput.placeholder = "관리자 메시지";
+      const lobbySend = document.createElement("button");
+      lobbySend.type = "submit";
+      lobbySend.textContent = "전송";
+      lobbyForm.append(lobbyInput, lobbySend);
+      lobby.append(lobbyStatus, lobbyChat, lobbyForm);
+
       const events = document.createElement("div");
       events.id = "adminOpsEvents";
       events.className = "admin-observer-list admin-ops-events";
@@ -62,6 +86,36 @@
             <select id="adminRoomSelect"></select>
           </label>
         </div>
+        <div class="admin-room-detail-grid">
+          <label>
+            <span>인원 제한</span>
+            <input id="adminRoomCapacity" type="number" min="1" max="8" step="1" value="8">
+          </label>
+          <label>
+            <span>AI 난이도</span>
+            <select id="adminRoomDifficulty">
+              <option value="easy">쉬움</option>
+              <option value="normal" selected>보통</option>
+              <option value="hard">어려움</option>
+            </select>
+          </label>
+          <label>
+            <span>청팀 전차</span>
+            <input id="adminBlueTanks" type="number" min="0" max="8" step="1" value="3">
+          </label>
+          <label>
+            <span>홍팀 전차</span>
+            <input id="adminRedTanks" type="number" min="1" max="10" step="1" value="5">
+          </label>
+          <label>
+            <span>청팀 보병</span>
+            <input id="adminBlueInfantry" type="number" min="4" max="56" step="1" value="21">
+          </label>
+          <label>
+            <span>홍팀 보병</span>
+            <input id="adminRedInfantry" type="number" min="4" max="64" step="1" value="24">
+          </label>
+        </div>
         <div class="admin-grid-actions admin-room-actions">
           <button type="button" data-admin-action="room-create">방 생성</button>
           <button type="button" data-admin-action="room-save">설정 저장</button>
@@ -71,6 +125,17 @@
           <button type="button" data-admin-action="room-delete">삭제</button>
         </div>
       `;
+      const roomLive = document.createElement("div");
+      roomLive.className = "admin-room-live-chat";
+      const roomLiveHead = document.createElement("div");
+      roomLiveHead.className = "admin-room-live-chat-head";
+      const roomLiveTitle = document.createElement("strong");
+      roomLiveTitle.textContent = "대기방 / 인게임 채팅";
+      const roomLiveMeta = document.createElement("span");
+      roomLiveMeta.textContent = "관리자와 참가자 공용";
+      roomLiveHead.append(roomLiveTitle, roomLiveMeta);
+      roomLive.append(roomLiveHead, lobby);
+      roomControls.prepend(roomLive);
 
       const backup = document.createElement("div");
       backup.id = "adminOpsBackup";
@@ -126,6 +191,17 @@
       ui.adminBlueFaction = roomControls.querySelector("#adminBlueFaction");
       ui.adminRedFaction = roomControls.querySelector("#adminRedFaction");
       ui.adminRoomSelect = roomControls.querySelector("#adminRoomSelect");
+      ui.adminRoomCapacity = roomControls.querySelector("#adminRoomCapacity");
+      ui.adminRoomDifficulty = roomControls.querySelector("#adminRoomDifficulty");
+      ui.adminBlueTanks = roomControls.querySelector("#adminBlueTanks");
+      ui.adminRedTanks = roomControls.querySelector("#adminRedTanks");
+      ui.adminBlueInfantry = roomControls.querySelector("#adminBlueInfantry");
+      ui.adminRedInfantry = roomControls.querySelector("#adminRedInfantry");
+      ui.adminOpsLobby = lobby;
+      ui.adminOpsLobbyStatus = lobbyStatus;
+      ui.adminOpsLobbyChat = lobbyChat;
+      ui.adminOpsLobbyChatForm = lobbyForm;
+      ui.adminOpsLobbyChatInput = lobbyInput;
       ui.adminOpsRooms = rooms;
       ui.adminOpsEvents = events;
       ui.adminMapToolsSummary = mapTools.querySelector?.("#adminMapToolsSummary") || null;
@@ -133,6 +209,10 @@
       ui.adminPlaytestNotesInput = notes.querySelector("#adminPlaytestNotesInput");
       ui.adminOpsBackup = backup;
       ui.adminBackupFile = fileInput;
+      lobbyForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        this.submitAdminLobbyChat();
+      });
       },
       adminActionButton(action, label) {
       const button = document.createElement("button");
@@ -431,6 +511,7 @@
       this.updateScoreboard(game);
       this.updateSettings(game);
       this.updateAdminPanel(game);
+      this.updateSpectatorPanel?.(game);
       this.updateMobileControls(game);
 
       const inTank = Boolean(game.player.inTank);
@@ -526,6 +607,7 @@
       const snapshot = game.adminOps?.createSnapshot?.({ lite: true }) || null;
       this.updateAdminOpsStats(snapshot);
       this.updateAdminRoomControls(snapshot);
+      this.updateAdminOpsLobby(snapshot);
       this.updateAdminOpsRooms(snapshot);
       this.updateAdminOpsEvents(snapshot);
       this.updateAdminMapTools(snapshot);
@@ -569,8 +651,14 @@
       this.updateAdminFactionSelect(this.nodes.adminBlueFaction, selectedRoom?.blueFactionId || "singularity", roomChanged);
       this.updateAdminFactionSelect(this.nodes.adminRedFaction, selectedRoom?.redFactionId || "military-gallery", roomChanged);
       if (selectedRoom) {
-        if (this.nodes.adminRoomName && (roomChanged || !this.nodes.adminRoomName.value)) this.nodes.adminRoomName.value = selectedRoom.name || "";
-        if (this.nodes.adminRoomMode && (roomChanged || !this.nodes.adminRoomMode.value)) this.nodes.adminRoomMode.value = selectedRoom.mode || "conquest";
+        this.setAdminRoomControlValue(this.nodes.adminRoomName, selectedRoom.name || "", roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRoomMode, selectedRoom.mode || "conquest", roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRoomCapacity, selectedRoom.capacity || 8, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRoomDifficulty, selectedRoom.difficulty || "normal", roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminBlueTanks, selectedRoom.blueAiTanks ?? 3, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRedTanks, selectedRoom.redTanks ?? 5, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminBlueInfantry, selectedRoom.blueInfantry ?? 21, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRedInfantry, selectedRoom.redInfantry ?? 24, roomChanged);
       }
       if (this.nodes.adminRoomControls) this.nodes.adminRoomControls.dataset.selectedRoomKey = roomKey;
       const signature = JSON.stringify({
@@ -583,7 +671,13 @@
           room.redFactionId,
           this.adminRoomPlayerCount(room),
           this.adminRoomSpectatorCount(room),
-          room.capacity
+          room.capacity,
+          room.spectatorCapacity,
+          room.difficulty,
+          room.blueAiTanks,
+          room.blueInfantry,
+          room.redTanks,
+          room.redInfantry
         ]),
         selectedId
       });
@@ -639,14 +733,18 @@
       const ai = snapshot.ai?.summary || {};
       const playerCount = this.adminRoomPlayerCount(room);
       const spectatorCount = server.spectatorCount ?? this.adminRoomSpectatorCount(room);
+      const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
       const values = [
         { label: "연결", value: `${server.clientCount || 0}명` },
         { label: "관리자", value: `${server.adminCount || 0}명` },
         { label: "방", value: `${server.roomCount || 0}개` },
         { label: "플레이어", value: `${playerCount || 0}/${(room.roleSlots || []).length || room.capacity || 0}` },
-        { label: "관전", value: `${spectatorCount || 0}명` },
+        { label: "관전", value: `${spectatorCount || 0}/${spectatorCapacity}` },
         { label: "경기", value: match.started ? "진행 중" : room.phase === "lobby" ? "로비" : "대기" },
         { label: "모드", value: match.mode === "conquest" ? "점령전" : "섬멸전" },
+        { label: "난이도", value: this.adminDifficultyLabel(room.difficulty || match.difficulty) },
+        { label: "전차", value: `${room.blueAiTanks ?? "-"} / ${room.redTanks ?? "-"}` },
+        { label: "보병", value: `${room.blueInfantry ?? "-"} / ${room.redInfantry ?? "-"}` },
         { label: "AI", value: `${ai.total || 0}개` },
         { label: "경고", value: `${ai.warnings || 0}건` },
         { label: "저장", value: snapshot.backup?.local ? "임시 있음" : "임시 없음" }
@@ -682,11 +780,12 @@
         const players = this.adminRoomPlayerCount(room);
         const spectators = this.adminRoomSpectatorCount(room);
         const capacity = room.capacity || 8;
+        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
         return {
           id: room.id || "local",
           phase: room.phase || "waiting",
           title: `${room.id || "local"} · ${room.name || "전장"}`,
-          meta: `${this.adminRoomPhaseLabel(room.phase)} · ${room.mode === "conquest" ? "점령전" : "섬멸전"} · ${this.factionName(room.blueFactionId)} vs ${this.factionName(room.redFactionId)} · 슬롯 ${players}/${capacity} · 관전 ${spectators}`,
+          meta: `${this.adminRoomPhaseLabel(room.phase)} · ${room.mode === "conquest" ? "점령전" : "섬멸전"} · ${this.factionName(room.blueFactionId)} vs ${this.factionName(room.redFactionId)} · 슬롯 ${players}/${capacity} · 관전 ${spectators}/${spectatorCapacity} · 전차 ${room.blueAiTanks ?? 0}/${room.redTanks ?? 0} · AI ${this.adminDifficultyLabel(room.difficulty)}`,
           selected: room.id === selectedId
         };
       });
@@ -852,7 +951,7 @@
         ? (snapshot.commands || []).filter((entry) => entry.accepted).length
         : (game.commandBus?.log || []).filter((entry) => entry.accepted).length;
       const match = snapshot?.match || {};
-      const localScore = game.matchConfig?.mode === "conquest" ? game.conquest?.score : game.annihilation?.score;
+      const localScore = ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score : game.annihilation?.score;
       const localTime = game.matchConfig?.mode === "conquest"
         ? game.conquest?.remaining ?? 0
         : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0;
@@ -1488,8 +1587,6 @@
       if (team === TEAM.BLUE) return "청팀";
       return "중립";
     }
-
-
   };
 
   function installHudAdminUi(Hud) {
@@ -1498,5 +1595,3 @@
 
   IronLine.installHudAdminUi = installHudAdminUi;
 })(window);
-
-

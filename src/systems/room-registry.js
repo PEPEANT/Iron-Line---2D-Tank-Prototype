@@ -5,18 +5,45 @@
 
   const STORAGE_KEY = "iron-line-room-registry-v1";
   const SELECTED_KEY = "iron-line-selected-room-v1";
+  const DEFAULT_SPECTATOR_CAPACITY = 12;
+  const MAX_SPECTATOR_CAPACITY = 12;
+  const ROOM_SETTING_LIMITS = Object.freeze({
+    capacity: { min: 1, max: 8, fallback: 8 },
+    blueAiTanks: { min: 0, max: 8, fallback: 3 },
+    blueInfantry: { min: 4, max: 56, fallback: 21 },
+    redTanks: { min: 1, max: 10, fallback: 5 },
+    redInfantry: { min: 4, max: 64, fallback: 24 }
+  });
 
   class RoomRegistry {
     constructor() {
       this.storageKey = STORAGE_KEY;
       this.selectedKey = SELECTED_KEY;
       this.listeners = new Set();
+      this.remoteRooms = [];
+      this.remoteSignature = "";
+      this.remoteOnline = false;
+      this.remoteRefreshInFlight = false;
       window.addEventListener("storage", (event) => {
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
       });
+      if (this.canUseRemoteApi()) {
+        window.setTimeout(() => this.refreshRemoteRooms(), 200);
+        window.setInterval(() => this.refreshRemoteRooms(), 2500);
+      }
     }
 
     listRooms() {
+      const roomsById = new Map();
+      for (const room of this.readLocalRooms()) roomsById.set(room.id, room);
+      for (const room of this.remoteRooms || []) {
+        const previous = roomsById.get(room.id);
+        if (!previous || Number(room.updatedAt) >= Number(previous.updatedAt)) roomsById.set(room.id, room);
+      }
+      return Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+    }
+
+    readLocalRooms() {
       try {
         const data = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
         if (!Array.isArray(data)) return [];
@@ -48,10 +75,97 @@
       return this.listRooms().find((room) => room.id === id) || null;
     }
 
+    canUseRemoteApi() {
+      return typeof fetch === "function" &&
+        typeof location !== "undefined" &&
+        (location.protocol === "http:" || location.protocol === "https:");
+    }
+
+    roomsApiUrl(id = "") {
+      return id ? `/api/rooms/${encodeURIComponent(id)}` : "/api/rooms";
+    }
+
+    remoteRoomSignature(rooms = []) {
+      return rooms
+        .map((room) => [
+          room.id,
+          room.phase,
+          room.locked ? 1 : 0,
+          room.updatedAt,
+          room.capacity,
+          room.difficulty,
+          room.blueAiTanks,
+          room.blueInfantry,
+          room.redTanks,
+          room.redInfantry,
+          room.players?.length || 0,
+          room.spectators?.length || 0,
+          room.admins?.length || 0,
+          room.chat?.length || 0
+        ].join(":"))
+        .join("|");
+    }
+
+    async refreshRemoteRooms() {
+      if (!this.canUseRemoteApi() || this.remoteRefreshInFlight) return;
+      this.remoteRefreshInFlight = true;
+      try {
+        const response = await fetch(this.roomsApiUrl(), { cache: "no-store" });
+        if (!response.ok) throw new Error(`rooms_api_${response.status}`);
+        const payload = await response.json();
+        const rooms = Array.isArray(payload.rooms)
+          ? payload.rooms.map((room) => this.normalizeRoom(room)).filter(Boolean)
+          : [];
+        const signature = this.remoteRoomSignature(rooms);
+        const changed = signature !== this.remoteSignature || !this.remoteOnline;
+        this.remoteRooms = rooms;
+        this.remoteSignature = signature;
+        this.remoteOnline = true;
+        if (changed) this.emit();
+      } catch (_error) {
+        const changed = this.remoteOnline;
+        this.remoteOnline = false;
+        if (changed) this.emit();
+      } finally {
+        this.remoteRefreshInFlight = false;
+      }
+    }
+
+    publishRoom(room) {
+      if (!this.canUseRemoteApi() || !room?.id) return;
+      fetch(this.roomsApiUrl(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(room)
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
+          if (!remoteRoom) return;
+          const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== remoteRoom.id);
+          nextRooms.push(remoteRoom);
+          this.remoteRooms = nextRooms;
+          this.remoteSignature = this.remoteRoomSignature(nextRooms);
+          this.remoteOnline = true;
+          this.emit();
+        })
+        .catch(() => {
+          this.remoteOnline = false;
+        });
+    }
+
+    deleteRemoteRoom(id) {
+      if (!this.canUseRemoteApi() || !id) return;
+      fetch(this.roomsApiUrl(id), { method: "DELETE", keepalive: true }).catch(() => {});
+      this.remoteRooms = (this.remoteRooms || []).filter((room) => room.id !== id);
+      this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
+    }
+
     createRoom(input = {}) {
-      const rooms = this.listRooms();
+      const rooms = this.readLocalRooms();
+      const knownRooms = this.listRooms();
       const room = this.normalizeRoom({
-        id: input.id || this.nextRoomId(rooms),
+        id: input.id || this.nextRoomId(knownRooms),
         name: input.name || "\uc628\ub77c\uc778 \ud14c\uc2a4\ud2b8\ubc29",
         mode: input.mode || "conquest",
         blueFactionId: input.blueFactionId || "singularity",
@@ -62,10 +176,18 @@
         createdBy: "admin",
         startedBy: "",
         players: [],
-        capacity: 8,
+        capacity: input.capacity,
         spectators: [],
-        spectatorCapacity: 24,
+        spectatorCapacity: input.spectatorCapacity,
+        difficulty: input.difficulty,
+        aiDensityPreset: input.aiDensityPreset || "custom",
+        blueAiTanks: input.blueAiTanks,
+        blueInfantry: input.blueInfantry,
+        redTanks: input.redTanks,
+        redInfantry: input.redInfantry,
+        admins: [],
         spectatorChatVisibleToPlayers: true,
+        moderation: [],
         commandAuthorities: [],
         commandAuthorityRequests: [],
         chat: [],
@@ -81,21 +203,25 @@
       });
       rooms.push(room);
       this.saveRooms(rooms);
+      this.publishRoom(room);
       this.selectRoom(room.id);
       return room;
     }
 
     updateRoom(id, patch = {}) {
-      const rooms = this.listRooms();
+      const rooms = this.readLocalRooms();
       const index = rooms.findIndex((room) => room.id === id);
-      if (index < 0) return null;
+      const base = index >= 0 ? rooms[index] : this.getRoom(id);
+      if (!base) return null;
       const next = this.normalizeRoom({
-        ...rooms[index],
+        ...base,
         ...patch,
         updatedAt: Date.now()
       });
-      rooms[index] = next;
+      if (index >= 0) rooms[index] = next;
+      else rooms.push(next);
       this.saveRooms(rooms);
+      this.publishRoom(next);
       return next;
     }
 
@@ -140,6 +266,7 @@
         endedAt: 0,
         players: [],
         spectators: [],
+        admins: [],
         events: this.nextEvents(room, {
           type: "room_reset",
           severity: "warning",
@@ -150,10 +277,12 @@
     }
 
     deleteRoom(id) {
-      const rooms = this.listRooms().filter((room) => room.id !== id);
+      const rooms = this.readLocalRooms().filter((room) => room.id !== id);
       this.saveRooms(rooms);
+      this.deleteRemoteRoom(id);
       if (this.selectedRoomId() === id) {
-        if (rooms[0]) localStorage.setItem(this.selectedKey, rooms[0].id);
+        const nextRoom = this.listRooms()[0] || null;
+        if (nextRoom) localStorage.setItem(this.selectedKey, nextRoom.id);
         else localStorage.removeItem(this.selectedKey);
       }
       this.emit();
@@ -164,6 +293,7 @@
       const room = this.getRoom(roomId);
       if (!room || !player.id) return null;
       const participantType = this.normalizeParticipantType(player.participantType);
+      if (this.isKicked(room, player.id)) return null;
       const position = this.normalizePlayerPosition(player);
       const previous = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === player.id) || null;
       const players = Array.isArray(room.players)
@@ -201,7 +331,12 @@
         updatedAt: Date.now()
       };
       if (participantType === "player") players.push(nextPlayer);
-      else spectators.push(nextPlayer);
+      else {
+        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY));
+        const alreadySpectating = Boolean(previous && previous.participantType !== "player");
+        if (!alreadySpectating && spectators.length >= spectatorCapacity) return null;
+        spectators.push(nextPlayer);
+      }
       const event = this.playerEvent(previous, nextPlayer);
       return this.updateRoom(roomId, {
         players,
@@ -243,18 +378,96 @@
       });
     }
 
+    touchAdmin(roomId, admin = {}) {
+      const room = this.getRoom(roomId);
+      if (!room) return null;
+      const now = Date.now();
+      const id = String(admin.id || "admin-local").slice(0, 36);
+      const admins = (room.admins || []).filter((item) => item.id !== id);
+      admins.push({
+        id,
+        name: String(admin.name || "\uad00\ub9ac\uc790").slice(0, 24),
+        participantType: "admin",
+        updatedAt: now
+      });
+      return this.updateRoom(roomId, { admins });
+    }
+
+    warnParticipant(roomId, playerId, reason = "관리자 경고") {
+      const room = this.getRoom(roomId);
+      if (!room || !playerId) return null;
+      const target = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === playerId);
+      if (!target) return null;
+      const name = target.name || target.nickname || "Player";
+      const text = `${name}님에게 관리자 경고가 전달되었습니다.`;
+      return this.updateRoom(roomId, {
+        moderation: this.nextModeration(room, {
+          type: "warning",
+          playerId,
+          playerName: name,
+          reason
+        }),
+        chat: this.nextSystemChat(room, text),
+        events: this.nextEvents(room, {
+          type: "participant_warned",
+          severity: "warning",
+          title: "관리자 경고",
+          detail: `${name}님에게 경고가 전달되었습니다.`
+        })
+      });
+    }
+
+    isKicked(room, playerId) {
+      const id = String(playerId || "");
+      if (!room || !id) return false;
+      return (room.moderation || []).some((item) => item.type === "kick" && item.playerId === id);
+    }
+
+    kickParticipant(roomId, playerId, reason = "관리자 강퇴") {
+      const room = this.getRoom(roomId);
+      if (!room || !playerId) return null;
+      const target = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === playerId);
+      if (!target) return null;
+      const name = target.name || target.nickname || "Player";
+      const players = (room.players || []).filter((item) => item.id !== playerId);
+      const spectators = (room.spectators || []).filter((item) => item.id !== playerId);
+      return this.updateRoom(roomId, {
+        players,
+        spectators,
+        moderation: this.nextModeration(room, {
+          type: "kick",
+          playerId,
+          playerName: name,
+          reason
+        }),
+        chat: this.nextSystemChat(room, `${name}님이 관리자에 의해 강퇴되었습니다.`),
+        events: this.nextEvents(room, {
+          type: "participant_kicked",
+          severity: "warning",
+          title: "관리자 강퇴",
+          detail: `${name}님이 방에서 강퇴되었습니다.`
+        })
+      });
+    }
+
     cleanupStaleParticipants(maxAgeMs = 45000) {
       const now = Date.now();
       let changed = false;
       const rooms = this.listRooms().map((room) => {
         const players = (room.players || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
         const spectators = (room.spectators || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
-        if (players.length === (room.players || []).length && spectators.length === (room.spectators || []).length) return room;
+        const admins = (room.admins || []).filter((admin) => now - (Number(admin.updatedAt) || 0) <= maxAgeMs);
+        if (
+          players.length === (room.players || []).length &&
+          spectators.length === (room.spectators || []).length &&
+          admins.length === (room.admins || []).length
+        ) return room;
         changed = true;
         return {
           ...room,
           players,
           spectators,
+          admins,
           updatedAt: now,
           events: this.nextEvents(room, {
             type: "stale_participants_removed",
@@ -440,6 +653,36 @@
       return events;
     }
 
+    nextSystemChat(room, text) {
+      const chat = Array.isArray(room?.chat) ? room.chat.slice(-119) : [];
+      chat.push({
+        id: `${room.id}:chat:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+        roomId: room.id,
+        createdAt: Date.now(),
+        channel: "system",
+        sender: "관리자",
+        playerId: "admin",
+        team: "",
+        participantType: "admin",
+        text: String(text || "").slice(0, 120)
+      });
+      return chat;
+    }
+
+    nextModeration(room, entry = {}) {
+      const moderation = Array.isArray(room?.moderation) ? room.moderation.slice(-79) : [];
+      moderation.push({
+        id: entry.id || `${room.id}:mod:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+        roomId: room.id,
+        type: entry.type === "kick" ? "kick" : "warning",
+        playerId: String(entry.playerId || ""),
+        playerName: String(entry.playerName || "Player").slice(0, 24),
+        reason: String(entry.reason || "").slice(0, 80),
+        createdAt: Date.now()
+      });
+      return moderation;
+    }
+
     participantTypeLabel(value) {
       if (value === "caster") return "\ud574\uc124\uc790";
       if (value === "admin") return "\uad00\ub9ac\uc790";
@@ -492,10 +735,12 @@
       if (!id) return null;
       const mode = room.mode === "annihilation" ? "annihilation" : "conquest";
       const phase = ["waiting", "loading", "playing", "ended"].includes(room.phase) ? room.phase : "waiting";
-      const capacity = Math.max(1, Math.min(32, Math.round(Number(room.capacity) || 8)));
-      const spectatorCapacity = Math.max(0, Math.min(64, Math.round(Number(room.spectatorCapacity) || 24)));
+      const capacity = this.normalizeRoomNumber(room.capacity, ROOM_SETTING_LIMITS.capacity);
+      const spectatorCapacity = Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY)));
       const players = Array.isArray(room.players) ? room.players.slice(0, capacity) : [];
       const spectators = Array.isArray(room.spectators) ? room.spectators.slice(0, spectatorCapacity) : [];
+      const admins = this.normalizeAdmins(room.admins);
+      const matchSettings = this.normalizeRoomMatchSettings(room);
       return {
         id,
         name: String(room.name || id).slice(0, 32),
@@ -511,7 +756,10 @@
         capacity,
         spectators,
         spectatorCapacity,
+        ...matchSettings,
+        admins,
         spectatorChatVisibleToPlayers: room.spectatorChatVisibleToPlayers !== false,
+        moderation: this.normalizeModeration(room.moderation),
         commandAuthorities: this.normalizeCommandAuthorities(room.commandAuthorities),
         commandAuthorityRequests: this.normalizeCommandAuthorityRequests(room.commandAuthorityRequests),
         chat: Array.isArray(room.chat) ? room.chat.slice(-120) : [],
@@ -521,6 +769,48 @@
         startedAt: Number(room.startedAt) || 0,
         endedAt: Number(room.endedAt) || 0
       };
+    }
+
+    normalizeRoomNumber(value, limit) {
+      const fallback = Number(limit?.fallback) || 0;
+      const numeric = Math.round(Number(value));
+      const safe = Number.isFinite(numeric) ? numeric : fallback;
+      return Math.max(limit.min, Math.min(limit.max, safe));
+    }
+
+    normalizeRoomMatchSettings(room = {}) {
+      const difficulty = ["easy", "normal", "hard"].includes(room.difficulty) ? room.difficulty : "normal";
+      return {
+        difficulty,
+        aiDensityPreset: String(room.aiDensityPreset || "custom").slice(0, 24),
+        blueAiTanks: this.normalizeRoomNumber(room.blueAiTanks, ROOM_SETTING_LIMITS.blueAiTanks),
+        blueInfantry: this.normalizeRoomNumber(room.blueInfantry, ROOM_SETTING_LIMITS.blueInfantry),
+        redTanks: this.normalizeRoomNumber(room.redTanks, ROOM_SETTING_LIMITS.redTanks),
+        redInfantry: this.normalizeRoomNumber(room.redInfantry, ROOM_SETTING_LIMITS.redInfantry)
+      };
+    }
+
+    normalizeModeration(value) {
+      if (!Array.isArray(value)) return [];
+      return value.slice(-80).map((item) => ({
+        id: String(item?.id || `mod:${Date.now()}`),
+        roomId: String(item?.roomId || ""),
+        type: item?.type === "kick" ? "kick" : "warning",
+        playerId: String(item?.playerId || ""),
+        playerName: String(item?.playerName || "Player").slice(0, 24),
+        reason: String(item?.reason || "").slice(0, 80),
+        createdAt: Number(item?.createdAt) || Date.now()
+      })).filter((item) => item.playerId);
+    }
+
+    normalizeAdmins(value) {
+      if (!Array.isArray(value)) return [];
+      return value.slice(0, 8).map((item) => ({
+        id: String(item?.id || "admin-local").slice(0, 36),
+        name: String(item?.name || "\uad00\ub9ac\uc790").slice(0, 24),
+        participantType: "admin",
+        updatedAt: Number(item?.updatedAt) || Date.now()
+      })).filter((item) => item.id);
     }
 
     normalizeParticipantType(value) {

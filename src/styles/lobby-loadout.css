@@ -140,7 +140,7 @@
 
 .lobby-loadout-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
 }
@@ -166,7 +166,7 @@
 }
 
 .lobby-loadout-head em {
-  max-width: 118px;
+  max-width: 138px;
   padding: 5px 8px;
   border-radius: 999px;
   background: rgba(237, 244, 239, 0.1);
@@ -175,6 +175,25 @@
   font-style: normal;
   font-weight: 950;
   text-align: center;
+}
+
+.lobby-actions #lobbyLoadoutButton {
+  border-color: rgba(255, 209, 102, 0.28);
+  background: rgba(255, 209, 102, 0.08);
+  color: #ffe2a3;
+}
+
+.lobby-actions #lobbyLoadoutButton.active {
+  border-color: rgba(255, 209, 102, 0.56);
+  background: rgba(255, 209, 102, 0.16);
+  color: #ffd166;
+}
+
+.lobby-ready-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .lobby-loadout-toggle {
@@ -353,6 +372,11 @@
   .lobby-loadout-slot,
   .lobby-loadout-roles {
     grid-template-columns: 1fr;
+  }
+
+  .lobby-ready-actions {
+    grid-column: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .lobby-loadout-head em {

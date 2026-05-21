@@ -35,8 +35,8 @@
         ctx.beginPath();
         ctx.moveTo(x + road[0].x * sx, y + road[0].y * sy);
         for (let i = 1; i < road.length; i += 1) ctx.lineTo(x + road[i].x * sx, y + road[i].y * sy);
-        ctx.strokeStyle = "rgba(158, 151, 118, 0.45)";
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgba(58, 64, 67, 0.82)";
+        ctx.lineWidth = 5;
         ctx.stroke();
       }
 

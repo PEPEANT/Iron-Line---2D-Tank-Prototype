@@ -22,6 +22,34 @@
     adminTeamLabel(team) {
       return team === TEAM.BLUE || team === "blue" ? "아군" : "적군";
     },
+    adminReadRoomPatch() {
+      const match = this.matchConfig || this.defaultMatchConfig?.() || {};
+      const bounds = this.matchSettingBounds?.() || {
+        blueAiTanks: { min: 0, max: 8 },
+        blueInfantry: { min: 4, max: 56 },
+        redTanks: { min: 1, max: 10 },
+        redInfantry: { min: 4, max: 64 }
+      };
+      const readInt = (id, fallback, limit) => {
+        const value = document.getElementById(id)?.value;
+        const numeric = Math.round(Number(value));
+        return clamp(Number.isFinite(numeric) ? numeric : fallback, limit.min, limit.max);
+      };
+      const difficulty = document.getElementById("adminRoomDifficulty")?.value || match.difficulty || "normal";
+      return {
+        name: document.getElementById("adminRoomName")?.value || "온라인 테스트방",
+        mode: document.getElementById("adminRoomMode")?.value || "conquest",
+        blueFactionId: document.getElementById("adminBlueFaction")?.value || "singularity",
+        redFactionId: document.getElementById("adminRedFaction")?.value || "military-gallery",
+        capacity: readInt("adminRoomCapacity", 8, { min: 1, max: 8 }),
+        difficulty: ["easy", "normal", "hard"].includes(difficulty) ? difficulty : "normal",
+        aiDensityPreset: "custom",
+        blueAiTanks: readInt("adminBlueTanks", match.blueAiTanks ?? 3, bounds.blueAiTanks),
+        blueInfantry: readInt("adminBlueInfantry", match.blueInfantry ?? 21, bounds.blueInfantry),
+        redTanks: readInt("adminRedTanks", match.redTanks ?? 5, bounds.redTanks),
+        redInfantry: readInt("adminRedInfantry", match.redInfantry ?? 24, bounds.redInfantry)
+      };
+    },
     adminClassLabel(classId) {
       if (classId === "engineer") return "공병";
       if (classId === "scout") return "정찰병";
@@ -163,14 +191,11 @@
       }
 
       const selectedId = document.getElementById("adminRoomSelect")?.value || registry.selectedRoomId();
-      const name = document.getElementById("adminRoomName")?.value || "온라인 테스트방";
-      const mode = document.getElementById("adminRoomMode")?.value || "conquest";
-      const blueFactionId = document.getElementById("adminBlueFaction")?.value || "singularity";
-      const redFactionId = document.getElementById("adminRedFaction")?.value || "military-gallery";
+      const roomPatch = this.adminReadRoomPatch();
       let room = null;
 
       if (action === "room-create") {
-        room = registry.createRoom({ name, mode, blueFactionId, redFactionId });
+        room = registry.createRoom(roomPatch);
         this.adminApplyRoom(room, { live: false });
         this.adminNotify(`방 생성: ${room.id}`);
         this.hud?.update?.(this);
@@ -195,7 +220,7 @@
       }
 
       if (action === "room-save") {
-        room = registry.updateRoom(selectedId, { name, mode, blueFactionId, redFactionId });
+        room = registry.updateRoom(selectedId, roomPatch);
         if (!room) return false;
         this.adminApplyRoom(room, { live: false });
         this.adminNotify(`방 설정 저장: ${room.id}`);
@@ -204,7 +229,7 @@
       }
 
       if (action === "room-start") {
-        registry.updateRoom(selectedId, { name, mode, blueFactionId, redFactionId });
+        registry.updateRoom(selectedId, roomPatch);
         room = registry.startRoom(selectedId);
         if (!room) return false;
         this.adminApplyRoom(room, { live: true });
@@ -257,7 +282,7 @@
       this.onlineSession.aiFillEmptySlots = room.aiFillEmptySlots !== false;
       this.onlineSession.blueFactionId = room.blueFactionId || "korea";
       this.onlineSession.redFactionId = room.redFactionId || "russia";
-      this.matchConfig.mode = room.mode || "conquest";
+      this.adminApplyRoomMatchSettings(room);
       if (this.matchConfig.mode === "conquest") this.conquest = this.defaultConquestState?.() || this.conquest;
       else this.resetAnnihilationState?.();
       this.entryOpen = false;
@@ -287,6 +312,27 @@
       }
       IronLine.factionVisuals?.syncGame?.(this);
       return true;
+    },
+    adminApplyRoomMatchSettings(room = {}) {
+      const bounds = this.matchSettingBounds?.() || {
+        blueAiTanks: { min: 0, max: 8 },
+        blueInfantry: { min: 4, max: 56 },
+        redTanks: { min: 1, max: 10 },
+        redInfantry: { min: 4, max: 64 }
+      };
+      this.matchConfig = this.matchConfig || this.defaultMatchConfig?.() || {};
+      this.matchConfig.mode = room.mode || this.matchConfig.mode || "conquest";
+      this.matchConfig.difficulty = ["easy", "normal", "hard"].includes(room.difficulty)
+        ? room.difficulty
+        : this.matchConfig.difficulty || "normal";
+      for (const key of ["blueAiTanks", "blueInfantry", "redTanks", "redInfantry"]) {
+        const limit = bounds[key];
+        if (!limit) continue;
+        const value = Number(room[key]);
+        if (Number.isFinite(value)) this.matchConfig[key] = clamp(Math.round(value), limit.min, limit.max);
+      }
+      this.matchConfig.aiDensityPreset = room.aiDensityPreset || "custom";
+      return this.matchConfig;
     },
     adminResetPlayerPosition() {
       if (!this.player) return false;

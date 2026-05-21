@@ -46,6 +46,7 @@
         adminPlaytestNotesInput: document.getElementById("adminPlaytestNotesInput"),
         adminOpsBackup: document.getElementById("adminOpsBackup"),
         adminBackupFile: document.getElementById("adminBackupFile"),
+        lobbyLoadoutButton: document.getElementById("lobbyLoadoutButton"),
         adminObserverMap: document.getElementById("adminObserverMap"),
         adminObserverStats: document.getElementById("adminObserverStats"),
         adminObserverSlots: document.getElementById("adminObserverSlots"),
@@ -1238,10 +1239,10 @@
       const players = (game.onlineSession?.players || []).filter((player) => (player.participantType || "player") === "player");
       const spectators = game.onlineSession?.spectators || [];
       const aiSlots = (game.onlineSession?.roleSlots || []).filter((slot) => slot.aiControlled !== false && !slot.playerId).length;
-      const round = game.matchConfig?.mode === "annihilation" && game.annihilation
-        ? `R${game.annihilation.round || 1}/${game.annihilation.maxRounds || 3} · ${game.annihilationScoreText?.() || "0 : 0"}`
+      const matchInfo = game.matchConfig?.mode === "annihilation" && game.annihilation
+        ? `목표 ${game.annihilationObjectiveScoreTarget?.() || game.annihilation.targetScore || 300}점 · ${game.annihilationScoreText?.() || "0 : 0"}`
         : this.formatTime(seconds);
-      return `플레이어 ${players.length} · 관전 ${spectators.length} · AI ${aiSlots} · ${round}`;
+      return `플레이어 ${players.length} · 관전 ${spectators.length} · AI ${aiSlots} · ${matchInfo}`;
     }
 
     scoreboardRoster(game) {
@@ -1361,6 +1362,13 @@
         return `점령전 ${blue} : ${red}`;
       }
 
+      if (game.matchConfig?.mode === "annihilation") {
+        const blue = Math.floor(game.conquest?.score?.[TEAM.BLUE] || game.annihilation?.score?.[TEAM.BLUE] || 0);
+        const red = Math.floor(game.conquest?.score?.[TEAM.RED] || game.annihilation?.score?.[TEAM.RED] || 0);
+        const target = game.annihilationObjectiveScoreTarget?.() || game.annihilation?.targetScore || 300;
+        return `섬멸전 ${blue} : ${red} / 목표 ${target}점`;
+      }
+
       if ((game.objectiveHold?.[TEAM.BLUE] || 0) > 0) {
         const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.BLUE]));
         return `청팀 거점 장악 ${remaining}s`;
@@ -1414,6 +1422,13 @@
         return `점령전 ${remaining} · ${blue} : ${red}`;
       }
 
+      if (game.matchConfig?.mode === "annihilation") {
+        const blue = Math.floor(game.conquest?.score?.[TEAM.BLUE] || game.annihilation?.score?.[TEAM.BLUE] || 0);
+        const red = Math.floor(game.conquest?.score?.[TEAM.RED] || game.annihilation?.score?.[TEAM.RED] || 0);
+        const target = game.annihilationObjectiveScoreTarget?.() || game.annihilation?.targetScore || 300;
+        return `섬멸전 ${blue} : ${red} / 목표 ${target}점`;
+      }
+
       if ((game.objectiveHold?.[TEAM.BLUE] || 0) > 0) {
         const remaining = Math.max(0, Math.ceil(game.objectiveHoldDuration - game.objectiveHold[TEAM.BLUE]));
         return `청팀 거점 장악 ${remaining}s`;
@@ -1429,7 +1444,9 @@
   });
 
   IronLine.installHudAdminNotes?.(Hud);
+  IronLine.installHudAdminLobby?.(Hud);
   IronLine.installHudAdminUi?.(Hud);
+  IronLine.installHudSpectatorPanel?.(Hud);
 
   IronLine.Hud = Hud;
 })(window);

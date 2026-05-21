@@ -65,6 +65,10 @@
       this.destructionTimer = 0;
       this.destructionDelay = 0;
       this.criticalEffectTimer = 0;
+      this.infantryAssault = null;
+      this.assaultMobilityTimer = 0;
+      this.assaultDisabledTimer = 0;
+      this.assaultEffectPulse = 0;
     }
 
     hasCrew() {
@@ -93,7 +97,8 @@
       const throttleInput = clamp(Number(throttle) || 0, -1, 1);
       const turnInput = clamp(Number(turn) || 0, -1, 1);
       const speedAbs = Math.abs(this.speed);
-      const speedScale = options.speedScale ?? 1;
+      const mobilityScale = this.assaultMobilityScale();
+      const speedScale = (options.speedScale ?? 1) * mobilityScale.speed;
       const speedLimit = this.maxSpeed * speedScale;
       const speedRatio = clamp(speedAbs / Math.max(speedLimit, 1), 0, 1);
       const throttleActive = Math.abs(throttleInput) > 0.01;
@@ -115,7 +120,7 @@
       if (Math.abs(this.speed) < 0.35) this.speed = 0;
 
       const turnAuthority = (0.62 + (1 - speedRatio) * 0.38) * (speedAbs < 16 ? 0.82 : 1);
-      const targetTurnVelocity = turnInput * this.turnRate * turnAuthority * (options.turnScale ?? 1);
+      const targetTurnVelocity = turnInput * this.turnRate * turnAuthority * (options.turnScale ?? 1) * mobilityScale.turn;
       const turnAccel = this.turnRate * (options.turnAccel ?? 3.7) * (0.82 + (1 - speedRatio) * 0.38);
       this.turnVelocity = approach(this.turnVelocity, targetTurnVelocity, turnAccel * dt);
 
@@ -270,7 +275,7 @@
     update(game, dt) {
       if (!this.alive) {
         this.wreckTimer += dt;
-        if (!this.coverDestroyed && this.wreckTimer > 14) {
+        if (!this.coverDestroyed && this.wreckTimer > 8) {
           this.coverDestroyed = true;
           this.coverCollapsePulse = Math.max(this.coverCollapsePulse || 0, 0.7);
         }
@@ -285,6 +290,9 @@
       this.fireCooldown = Math.max(0, this.fireCooldown - dt);
       this.smokeCooldown = Math.max(0, this.smokeCooldown - dt);
       this.machineGunCooldown = Math.max(0, this.machineGunCooldown - dt);
+      this.assaultMobilityTimer = Math.max(0, (this.assaultMobilityTimer || 0) - dt);
+      this.assaultDisabledTimer = Math.max(0, (this.assaultDisabledTimer || 0) - dt);
+      this.assaultEffectPulse = Math.max(0, (this.assaultEffectPulse || 0) - dt);
       this.repairHoldTimer = Math.max(0, (this.repairHoldTimer || 0) - dt);
       if (this.repairHoldTimer <= 0) this.repairHoldSource = "";
       this.recoil = Math.max(0, this.recoil - dt * 4);
@@ -293,6 +301,7 @@
       this.impactShake = Math.max(0, this.impactShake - dt * 3.8);
       this.dustCooldown = Math.max(0, this.dustCooldown - dt);
       if (this.weaponMode === "mg" && !this.hasMachineGunner()) this.weaponMode = "cannon";
+      this.updateInfantryAssault(game, dt);
 
       if (this.reload.active) {
         this.reload.progress += dt;
@@ -304,6 +313,124 @@
       }
 
       if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
+    }
+
+    assaultMobilityScale() {
+      if ((this.assaultDisabledTimer || 0) > 0) return { speed: 0.08, turn: 0.16 };
+      if ((this.assaultMobilityTimer || 0) > 0) return { speed: 0.48, turn: 0.58 };
+      return { speed: 1, turn: 1 };
+    }
+
+    assaultSlotPoint(attacker = null, game = null, slotIndex = null) {
+      const slots = [
+        Math.PI * 0.78,
+        -Math.PI * 0.78,
+        Math.PI,
+        Math.PI * 0.52,
+        -Math.PI * 0.52
+      ];
+      const index = Number.isFinite(slotIndex)
+        ? Math.max(0, Math.min(slots.length - 1, slotIndex))
+        : Math.abs(String(attacker?.callSign || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % slots.length;
+      const angle = normalizeAngle(this.angle + slots[index]);
+      const distance = (this.radius || 38) + (attacker?.radius || 10) + 18;
+      const margin = Math.max(14, attacker?.radius || 10);
+      return {
+        x: clamp(this.x + Math.cos(angle) * distance, margin, Math.max(margin, (game?.world?.width || 0) - margin)),
+        y: clamp(this.y + Math.sin(angle) * distance, margin, Math.max(margin, (game?.world?.height || 0) - margin)),
+        angle,
+        slotIndex: index,
+        stopDistance: 9,
+        final: true,
+        tankAssaultSlot: true
+      };
+    }
+
+    canReserveInfantryAssault(attacker) {
+      if (!this.alive || this.destructionPending || !attacker?.alive || attacker.inVehicle) return false;
+      if (attacker.team === this.team) return false;
+      const current = this.infantryAssault;
+      return !current || current.attacker === attacker || !current.attacker?.alive;
+    }
+
+    reserveInfantryAssault(attacker, game, options = {}) {
+      if (!this.canReserveInfantryAssault(attacker)) return null;
+      const current = this.infantryAssault;
+      if (current?.attacker === attacker) return current;
+      const slot = this.assaultSlotPoint(attacker, game, options.slotIndex);
+      this.infantryAssault = {
+        attacker,
+        team: attacker.team,
+        progress: 0,
+        phase: "approach",
+        slotIndex: slot.slotIndex,
+        attached: false,
+        lastAttachedAt: game?.matchTime || 0,
+        startedAt: game?.matchTime || 0,
+        lastPhase: ""
+      };
+      return this.infantryAssault;
+    }
+
+    renewInfantryAssault(attacker) {
+      if (this.infantryAssault?.attacker !== attacker) return false;
+      this.infantryAssault.attached = true;
+      return true;
+    }
+
+    cancelInfantryAssault(reason = "") {
+      const state = this.infantryAssault;
+      if (!state) return false;
+      const attackerAi = state.attacker?.ai;
+      if (attackerAi) {
+        attackerAi.tankAssaultTarget = null;
+        attackerAi.tankAssaultCooldown = Math.max(attackerAi.tankAssaultCooldown || 0, reason === "completed" ? 5.5 : 2.8);
+      }
+      this.infantryAssault = null;
+      return true;
+    }
+
+    updateInfantryAssault(game, dt) {
+      const state = this.infantryAssault;
+      if (!state) return;
+      const attacker = state.attacker;
+      if (!attacker?.alive || attacker.inVehicle || attacker.team === this.team || this.destructionPending) {
+        this.cancelInfantryAssault("invalid");
+        return;
+      }
+
+      const slot = this.assaultSlotPoint(attacker, game, state.slotIndex);
+      const distanceToSlot = distXY(attacker.x, attacker.y, slot.x, slot.y);
+      const distanceToTank = distXY(attacker.x, attacker.y, this.x, this.y);
+      if (distanceToTank > (this.radius || 38) + 130 || attacker.suppression > 96) {
+        this.cancelInfantryAssault("broken");
+        return;
+      }
+
+      const shakenOff = Math.abs(this.speed || 0) > 78 || Math.abs(this.turnVelocity || 0) > 0.82;
+      if (distanceToSlot <= 24) {
+        state.attached = true;
+        state.phase = state.progress >= 7 ? "disabled" : state.progress >= 3 ? "planting" : "climbing";
+        state.lastAttachedAt = game?.matchTime || state.lastAttachedAt;
+        state.progress = clamp(state.progress + dt * (shakenOff ? 0.34 : 1), 0, 7.8);
+      } else {
+        state.attached = false;
+        state.phase = "approach";
+        state.progress = Math.max(0, state.progress - dt * 0.9);
+      }
+
+      if (shakenOff) state.progress = Math.max(0, state.progress - dt * 0.9);
+      if (state.progress <= 0 && distanceToTank > (this.radius || 38) + 92) {
+        this.cancelInfantryAssault("lost");
+        return;
+      }
+
+      if (state.progress >= 3) this.assaultMobilityTimer = Math.max(this.assaultMobilityTimer || 0, 0.35);
+      if (state.progress >= 7) this.assaultDisabledTimer = Math.max(this.assaultDisabledTimer || 0, 0.35);
+      if (state.phase !== state.lastPhase) {
+        state.lastPhase = state.phase;
+        this.assaultEffectPulse = Math.max(this.assaultEffectPulse || 0, 0.4);
+      }
     }
 
     updateDestructionPending(game, dt) {

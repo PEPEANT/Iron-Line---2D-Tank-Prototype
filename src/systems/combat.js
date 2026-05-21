@@ -46,8 +46,7 @@
   }
 
   const vehicleBreakableObstacleKinds = new Set([
-    "base-wall",
-    "concrete",
+    "building", "base-wall", "concrete",
     "sandbag",
     "barricade",
     "wood-fence",
@@ -57,12 +56,14 @@
   ]);
 
   function isVehicleBreakableObstacle(obstacle) {
-    if (!obstacle || obstacle.destroyed || obstacle.kind === "building") return false;
+    if (!obstacle || obstacle.destroyed) return false;
     return Boolean(obstacle.destructible || vehicleBreakableObstacleKinds.has(obstacle.kind));
   }
 
   function obstacleImpactHp(kind) {
     switch (kind) {
+      case "building":
+        return 360;
       case "base-wall":
         return 128;
       case "concrete":

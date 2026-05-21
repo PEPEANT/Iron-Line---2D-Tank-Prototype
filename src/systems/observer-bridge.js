@@ -96,12 +96,12 @@
             ? game.conquest?.remaining ?? 0
             : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0,
           score: {
-            [TEAM.BLUE]: game.matchConfig?.mode === "conquest" ? game.conquest?.score?.[TEAM.BLUE] || 0 : game.annihilation?.score?.[TEAM.BLUE] || 0,
-            [TEAM.RED]: game.matchConfig?.mode === "conquest" ? game.conquest?.score?.[TEAM.RED] || 0 : game.annihilation?.score?.[TEAM.RED] || 0
+            [TEAM.BLUE]: ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score?.[TEAM.BLUE] || 0 : game.annihilation?.score?.[TEAM.BLUE] || 0,
+            [TEAM.RED]: ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score?.[TEAM.RED] || 0 : game.annihilation?.score?.[TEAM.RED] || 0
           },
           round: {
             current: game.annihilation?.round || 1,
-            max: game.annihilation?.maxRounds || 3,
+            max: game.annihilation?.maxRounds || 1,
             state: game.annihilation?.state || ""
           }
         },

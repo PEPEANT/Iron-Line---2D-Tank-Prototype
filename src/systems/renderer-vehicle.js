@@ -36,6 +36,18 @@
       ctx.scale(1.14, 1.14);
 
       if (!humvee.alive) {
+        if (humvee.coverDestroyed) {
+          ctx.globalAlpha = 0.34;
+          ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+          ctx.beginPath();
+          ctx.ellipse(2, 7, 34, 18, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(28, 26, 22, 0.76)";
+          roundRect(ctx, -23, -10, 48, 20, 4);
+          ctx.fill();
+          ctx.restore();
+          return;
+        }
         ctx.globalAlpha = 0.86;
         ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
         ctx.beginPath();
@@ -145,13 +157,14 @@
 
       this.drawTankHullLayer(game, tank, colors);
       if (!tank.alive) {
-        this.drawTankLabel(tank);
+        if (!tank.coverDestroyed) this.drawTankLabel(tank);
         return;
       }
 
       this.drawTankTurretLayer(game, tank, colors);
       this.drawTankMachineGun(game, tank, colors);
       this.drawTankHealth(tank);
+      this.drawTankAssaultIndicator(tank);
       this.drawTankLabel(tank);
     },
 
@@ -198,6 +211,17 @@
 
     drawTankWreck(tank) {
       const ctx = this.ctx;
+      if (tank.coverDestroyed) {
+        ctx.globalAlpha = 0.34;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+        ctx.beginPath();
+        ctx.ellipse(2, 7, 42, 23, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(27, 25, 21, 0.78)";
+        roundRect(ctx, -29, -15, 58, 30, 5);
+        ctx.fill();
+        return;
+      }
       ctx.globalAlpha = 0.82;
       ctx.fillStyle = "#151615";
       roundRect(ctx, -36, -25, 72, 50, 6);
@@ -506,6 +530,39 @@
       ctx.fillStyle = tank.team === TEAM.BLUE ? "#6bbcff" : "#ff6d66";
       roundRect(ctx, -width / 2, -5, width * pct, 8, 4);
       ctx.fill();
+      ctx.restore();
+    },
+
+    drawTankAssaultIndicator(tank) {
+      const assault = tank.infantryAssault;
+      if (!assault || !tank.alive || tank.destructionPending) return;
+
+      const ctx = this.ctx;
+      const progress = clamp((assault.progress || 0) / 7, 0, 1);
+      const disabled = (tank.assaultDisabledTimer || 0) > 0 || progress >= 1;
+      const impaired = (tank.assaultMobilityTimer || 0) > 0 || progress >= 0.43;
+      const label = disabled ? "기동 무력화" : impaired ? "폭약 설치 중" : "전차 강습";
+      const width = 96;
+      const y = tank.y - 88;
+
+      ctx.save();
+      ctx.translate(tank.x, y);
+      ctx.fillStyle = "rgba(9, 15, 13, 0.82)";
+      roundRect(ctx, -width / 2, -17, width, 30, 6);
+      ctx.fill();
+      ctx.strokeStyle = disabled ? "rgba(255, 109, 102, 0.72)" : "rgba(255, 209, 102, 0.54)";
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+
+      ctx.fillStyle = disabled ? "#ff8b80" : "#ffd166";
+      roundRect(ctx, -width / 2 + 8, 4, (width - 16) * progress, 5, 2.5);
+      ctx.fill();
+
+      ctx.fillStyle = "#edf4ef";
+      ctx.font = "800 10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, 0, -5);
       ctx.restore();
     },
 

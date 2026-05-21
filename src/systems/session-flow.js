@@ -61,9 +61,25 @@
       return false;
     }
 
-    joinOnlineRoom(room) {
+    joinOnlineRoom(room, options = {}) {
       const selected = room?.id ? this.registry?.selectRoom?.(room.id) || room : room;
-      return this.openLobby({ host: false, roomId: selected?.id || room?.id || "", room: selected || room });
+      const game = this.game();
+      const playerId = game?.localProfile?.playerId || game?.onlineSession?.playerId || "";
+      if (this.isPlayerKicked(selected, playerId)) {
+        this.handleJoinDenied("관리자에 의해 강퇴된 방에는 다시 입장할 수 없습니다.");
+        return false;
+      }
+      const participantType = this.resolveParticipantType(selected, options);
+      if (this.isSpectatorType(participantType) && this.isSpectatorFull(selected, playerId)) {
+        this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
+        return false;
+      }
+      return this.openLobby({
+        host: false,
+        roomId: selected?.id || room?.id || "",
+        room: selected || room,
+        participantType
+      });
     }
 
     openLobby(options = {}) {
@@ -75,10 +91,10 @@
       game.deploymentOpen = false;
       game.lobbyOpen = true;
       game.matchPhase = "lobby";
-      game.matchConfig.mode = options.room?.mode || "annihilation";
+      this.applyRoomMatchSettings(game, options.room);
       if (game.matchConfig.mode === "conquest") game.conquest = game.defaultConquestState?.() || game.conquest;
       else game.resetAnnihilationState?.();
-      this.prepareOnlineSession(game, options);
+      if (!this.prepareOnlineSession(game, options)) return false;
       game.resetScenarioForMatch?.();
       game.syncOnlineSlotAssets?.();
       if (game.isLocalSpectator?.() && options.room?.phase === "playing") {
@@ -125,6 +141,14 @@
       const player = game.localSessionPlayer?.() || session.players?.[0];
       const room = options.room || this.registry?.getRoom?.(options.roomId) || null;
       const participantType = this.resolveParticipantType(room, options);
+      if (this.isPlayerKicked(room, game.localProfile?.playerId || session.playerId)) {
+        this.handleJoinDenied("관리자에 의해 강퇴된 방에는 다시 입장할 수 없습니다.");
+        return false;
+      }
+      if (this.isSpectatorType(participantType) && this.isSpectatorFull(room, game.localProfile?.playerId || session.playerId)) {
+        this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
+        return false;
+      }
       session.roomId = options.roomId || room?.id || session.roomId || "";
       session.playerId = game.localProfile?.playerId || session.playerId;
       session.hostId = options.host ? session.playerId : room?.createdBy || "admin";
@@ -156,7 +180,7 @@
           }
         }
       }
-      this.publishLocalPlayer(game, { force: true });
+      return this.publishLocalPlayer(game, { force: true }) !== false;
     }
 
     resolveParticipantType(room, options = {}) {
@@ -168,6 +192,39 @@
       return "player";
     }
 
+    isSpectatorType(participantType) {
+      return participantType === "spectator" || participantType === "caster";
+    }
+
+    isPlayerKicked(room = null, playerId = "") {
+      const id = String(playerId || "");
+      if (!room || !id) return false;
+      return (room.moderation || []).some((item) => item.type === "kick" && item.playerId === id);
+    }
+
+    isSpectatorFull(room = null, playerId = "") {
+      if (!room) return false;
+      const capacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+      const id = String(playerId || "");
+      const spectators = Array.isArray(room.spectators) ? room.spectators : [];
+      const alreadyInside = id && spectators.some((item) => item.id === id);
+      return !alreadyInside && spectators.length >= capacity;
+    }
+
+    handleJoinDenied(message = "") {
+      const game = this.game();
+      if (game) {
+        game.roomListOpen = true;
+        game.lobbyOpen = true;
+        game.matchPhase = "rooms";
+        game.adminNotify?.(message);
+      }
+      const status = this.hud?.nodes?.entryStatus;
+      if (status) status.textContent = message;
+      game?.hud?.update?.(game);
+      return false;
+    }
+
     isHost(game = this.game()) {
       const player = game?.localSessionPlayer?.();
       return Boolean(player?.host || (game?.onlineSession?.hostId && game.onlineSession.hostId === game.onlineSession.playerId));
@@ -175,13 +232,30 @@
 
     publishLocalPlayer(game = this.game(), options = {}) {
       if (!game?.onlineSession?.roomId || !this.registry) return;
+      const room = this.registry.getRoom(game.onlineSession.roomId);
+      if (this.isLocalKicked(game, room)) {
+        this.handleLocalKick(game, room);
+        return;
+      }
       const now = Date.now();
       if (!options.force && now - this.lastPublishAt < this.publishIntervalMs) return;
       this.lastPublishAt = now;
       const player = game.localSessionPlayer?.();
       if (!player) return;
       this.syncLocalPlayerPresence(game, player, now);
-      this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
+      const saved = this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
+      if (!saved) {
+        const latestRoom = this.registry.getRoom(game.onlineSession.roomId);
+        if (this.isLocalKicked(game, latestRoom)) {
+          this.handleLocalKick(game, latestRoom);
+          return false;
+        }
+        if (this.isSpectatorType(player.participantType) && this.isSpectatorFull(latestRoom, player.id)) {
+          this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
+          return false;
+        }
+      }
+      return Boolean(saved);
     }
 
     syncLocalPlayerPresence(game, sessionPlayer, now = Date.now()) {
@@ -247,8 +321,12 @@
         }
         return;
       }
+      if (this.isLocalKicked(game, room)) {
+        this.handleLocalKick(game, room);
+        return;
+      }
 
-      game.matchConfig.mode = room.mode || game.matchConfig.mode || "annihilation";
+      this.applyRoomMatchSettings(game, room);
       if (game.matchConfig.mode === "conquest" && !game.conquest) game.conquest = game.defaultConquestState?.() || game.conquest;
       if (game.matchConfig.mode === "annihilation" && !game.annihilation) game.resetAnnihilationState?.();
       game.onlineSession.joinLocked = Boolean(room.locked);
@@ -276,6 +354,35 @@
       if (game.result === "ended" && game.matchPhase === "ended") {
         game.resultReason = "관리자가 방을 종료했습니다.";
       }
+    }
+
+    isLocalKicked(game = this.game(), room = null) {
+      const playerId = game?.onlineSession?.playerId || game?.localProfile?.playerId || "";
+      return this.isPlayerKicked(room, playerId);
+    }
+
+    handleLocalKick(game = this.game(), room = null) {
+      if (!game?.onlineSession) return false;
+      const kick = (room?.moderation || []).find((item) => item.type === "kick" && item.playerId === game.onlineSession.playerId);
+      game.chat?.addSystemMessage?.(kick?.reason || "관리자에 의해 방에서 강퇴되었습니다.");
+      game.onlineSession.roomId = "";
+      game.onlineSession.localReady = false;
+      game.onlineSession.participantType = "player";
+      game.onlineSession.spectators = [];
+      game.matchStarted = false;
+      game.countdownStarted = false;
+      game.lobbyOpen = false;
+      game.roomListOpen = true;
+      game.entryOpen = true;
+      game.matchPhase = "rooms";
+      const player = game.localSessionPlayer?.();
+      if (player) {
+        player.ready = false;
+        player.participantType = "player";
+      }
+      game.adminNotify?.("관리자에 의해 방에서 나갔습니다.");
+      game.hud?.update?.(game);
+      return true;
     }
 
     syncRoomParticipants(game, room) {
@@ -308,6 +415,33 @@
 
     makeRoomId() {
       return `ROOM-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    applyRoomMatchSettings(game = this.game(), room = null) {
+      if (!game) return null;
+      game.matchConfig = game.matchConfig || game.defaultMatchConfig?.() || {};
+      if (!room) {
+        game.matchConfig.mode = game.matchConfig.mode || "annihilation";
+        return game.matchConfig;
+      }
+      const bounds = game.matchSettingBounds?.() || {
+        blueAiTanks: { min: 0, max: 8 },
+        blueInfantry: { min: 4, max: 56 },
+        redTanks: { min: 1, max: 10 },
+        redInfantry: { min: 4, max: 64 }
+      };
+      game.matchConfig.mode = room.mode || game.matchConfig.mode || "annihilation";
+      game.matchConfig.difficulty = ["easy", "normal", "hard"].includes(room.difficulty)
+        ? room.difficulty
+        : game.matchConfig.difficulty || "normal";
+      for (const key of ["blueAiTanks", "blueInfantry", "redTanks", "redInfantry"]) {
+        const limit = bounds[key];
+        const raw = Number(room[key]);
+        if (!limit || !Number.isFinite(raw)) continue;
+        game.matchConfig[key] = Math.max(limit.min, Math.min(limit.max, Math.round(raw)));
+      }
+      game.matchConfig.aiDensityPreset = room.aiDensityPreset || "custom";
+      return game.matchConfig;
     }
 
     applyRoomFactionToLocalPlayer(game = this.game()) {

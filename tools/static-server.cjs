@@ -22,12 +22,291 @@ const mimeTypes = new Map([
   [".webp", "image/webp"]
 ]);
 
+let onlineRegistry = null;
+const DEFAULT_SPECTATOR_CAPACITY = 12;
+const MAX_SPECTATOR_CAPACITY = 12;
+const MAX_ROOM_HUMANS = 8;
+
+function clampInt(value, min, max, fallback) {
+  const numeric = Math.round(Number(value));
+  const safe = Number.isFinite(numeric) ? numeric : fallback;
+  return Math.max(min, Math.min(max, safe));
+}
+
+function normalizeDifficulty(value) {
+  return ["easy", "normal", "hard"].includes(value) ? value : "normal";
+}
+
 function send(res, status, body, type = "text/plain; charset=utf-8") {
   res.writeHead(status, {
     "content-type": type,
     "cache-control": "no-store"
   });
   res.end(body);
+}
+
+function sendJson(res, status, payload) {
+  send(res, status, JSON.stringify(payload), "application/json; charset=utf-8");
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString("utf8");
+      if (body.length > 1024 * 1024) req.destroy();
+    });
+    req.on("end", () => {
+      if (!body.trim()) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (_error) {
+        resolve(null);
+      }
+    });
+    req.on("error", () => resolve(null));
+  });
+}
+
+function toClientTimestamp(value) {
+  if (Number.isFinite(value)) return value;
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function serverPhaseToClient(phase) {
+  if (phase === "lobby") return "waiting";
+  return ["waiting", "loading", "playing", "ended"].includes(phase) ? phase : "waiting";
+}
+
+function clientPhaseToServer(phase) {
+  if (phase === "waiting" || phase === "loading") return "lobby";
+  return ["playing", "ended"].includes(phase) ? phase : "lobby";
+}
+
+function normalizeParticipant(input = {}, fallbackType = "player") {
+  const participantType = ["player", "spectator", "caster", "admin"].includes(input.participantType)
+    ? input.participantType
+    : fallbackType;
+  const id = String(input.playerId || input.id || input.clientId || "").slice(0, 48);
+  if (!id) return null;
+  return {
+    ...input,
+    id,
+    playerId: id,
+    nickname: String(input.nickname || input.name || id || "Player").slice(0, 24),
+    name: String(input.name || input.nickname || id || "Player").slice(0, 24),
+    participantType,
+    team: input.team === "red" ? "red" : input.team === "blue" ? "blue" : "",
+    slotId: String(input.slotId || ""),
+    ready: Boolean(input.ready),
+    connected: input.connected !== false,
+    joinedAt: input.joinedAt || new Date().toISOString(),
+    lastSeenAt: input.lastSeenAt || new Date().toISOString(),
+    updatedAt: toClientTimestamp(input.updatedAt || input.lastSeenAt || Date.now())
+  };
+}
+
+function exportParticipant(input = {}, fallbackType = "player") {
+  const participant = normalizeParticipant(input, fallbackType);
+  if (!participant) return null;
+  return {
+    id: participant.playerId,
+    name: participant.name || participant.nickname || participant.playerId,
+    nickname: participant.nickname || participant.name || participant.playerId,
+    team: participant.team,
+    slotId: participant.slotId,
+    roleId: participant.roleId || "",
+    classId: participant.classId || "",
+    currentClassId: participant.currentClassId || participant.classId || "",
+    combatRoleId: participant.combatRoleId || "",
+    weaponId: participant.weaponId || "",
+    weaponInventory: Array.isArray(participant.weaponInventory) ? participant.weaponInventory.slice(0, 4) : [],
+    equipmentAmmo: participant.equipmentAmmo && typeof participant.equipmentAmmo === "object" ? participant.equipmentAmmo : {},
+    stats: participant.stats && typeof participant.stats === "object" ? participant.stats : { kills: 0, deaths: 0 },
+    position: participant.position || null,
+    x: Number.isFinite(participant.x) ? participant.x : null,
+    y: Number.isFinite(participant.y) ? participant.y : null,
+    alive: participant.alive !== false,
+    inVehicle: Boolean(participant.inVehicle),
+    participantType: participant.participantType,
+    factionId: participant.factionId || participant.skinId || "",
+    skinId: participant.skinId || participant.factionId || "",
+    ready: Boolean(participant.ready),
+    host: Boolean(participant.host),
+    updatedAt: toClientTimestamp(participant.updatedAt || participant.lastSeenAt || Date.now())
+  };
+}
+
+function exportClientRoom(room) {
+  const config = room?.config || {};
+  const players = Array.from(room?.players?.values?.() || [])
+    .map((item) => exportParticipant(item, "player"))
+    .filter(Boolean);
+  const spectators = Array.from(room?.spectators?.values?.() || [])
+    .map((item) => exportParticipant(item, "spectator"))
+    .filter(Boolean);
+  const admins = Array.from(room?.admins?.values?.() || [])
+    .map((item) => exportParticipant(item, "admin"))
+    .filter(Boolean);
+  return {
+    id: config.roomId || "local",
+    name: String(config.name || config.roomId || "Iron Line Room").slice(0, 32),
+    mode: config.mode === "conquest" ? "conquest" : "annihilation",
+    blueFactionId: config.blueFactionId || "singularity",
+    redFactionId: config.redFactionId || "military-gallery",
+    phase: serverPhaseToClient(room?.phase),
+    locked: Boolean(config.joinLocked || room?.phase === "playing" || room?.phase === "ended"),
+    aiFillEmptySlots: config.aiFillEmptySlots !== false,
+    createdBy: config.createdBy || "admin",
+    startedBy: config.startedBy || "",
+    players,
+    capacity: clampInt(config.maxHumans, 1, MAX_ROOM_HUMANS, 8),
+    spectators,
+    spectatorCapacity: Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(config.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY))),
+    difficulty: normalizeDifficulty(config.difficulty),
+    aiDensityPreset: String(config.aiDensityPreset || "custom").slice(0, 24),
+    blueAiTanks: clampInt(config.blueAiTanks, 0, 8, 3),
+    blueInfantry: clampInt(config.blueInfantry, 4, 56, 21),
+    redTanks: clampInt(config.redTanks, 1, 10, 5),
+    redInfantry: clampInt(config.redInfantry, 4, 64, 24),
+    admins,
+    spectatorChatVisibleToPlayers: config.spectatorChatVisibleToPlayers !== false,
+    moderation: Array.isArray(room?.moderation) ? room.moderation.slice(-80) : [],
+    commandAuthorities: Array.isArray(room?.commandAuthorities) ? room.commandAuthorities.slice(-16) : [],
+    commandAuthorityRequests: Array.isArray(room?.commandAuthorityRequests) ? room.commandAuthorityRequests.slice(-16) : [],
+    chat: Array.isArray(room?.chat) ? room.chat.slice(-120) : [],
+    events: Array.isArray(room?.events) ? room.events.slice(-80) : [],
+    createdAt: toClientTimestamp(config.createdAt),
+    updatedAt: toClientTimestamp(room?.updatedAt),
+    startedAt: toClientTimestamp(config.startedAt || 0) || 0,
+    endedAt: toClientTimestamp(config.endedAt || 0) || 0
+  };
+}
+
+function importParticipants(room, participants = [], fallbackType = "player") {
+  const targetMap = fallbackType === "admin"
+    ? (room.admins || (room.admins = new Map()))
+    : fallbackType === "player"
+      ? room.players
+      : room.spectators;
+  targetMap.clear();
+  const source = fallbackType === "spectator"
+    ? participants.slice(0, Math.max(0, Math.round(Number(room.config?.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY)))
+    : participants;
+  for (const participant of source) {
+    const normalized = normalizeParticipant(participant, fallbackType);
+    if (!normalized) continue;
+    targetMap.set(normalized.playerId, normalized);
+    if (fallbackType !== "admin") room.participants.set(normalized.playerId, normalized);
+  }
+}
+
+function applyClientRoomToServer(body = {}) {
+  if (!onlineRegistry) return null;
+  const roomId = String(body.id || body.roomId || "").trim().slice(0, 48);
+  if (!roomId) return null;
+  let room = onlineRegistry.rooms?.get(roomId) || null;
+  if (!room) {
+    room = onlineRegistry.createRoom({
+      roomId,
+      name: body.name,
+      mode: body.mode,
+      maxHumans: Number(body.capacity) || 8,
+      maxSpectators: Number(body.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY,
+      difficulty: body.difficulty,
+      aiDensityPreset: body.aiDensityPreset,
+      blueAiTanks: body.blueAiTanks,
+      blueInfantry: body.blueInfantry,
+      redTanks: body.redTanks,
+      redInfantry: body.redInfantry,
+      spectatorChatVisibleToPlayers: body.spectatorChatVisibleToPlayers !== false
+    });
+  }
+
+  room.config.name = String(body.name || room.config.name || roomId).slice(0, 32);
+  room.config.mode = body.mode === "conquest" ? "conquest" : "annihilation";
+  room.config.maxHumans = clampInt(body.capacity, 1, MAX_ROOM_HUMANS, room.config.maxHumans || 8);
+  room.config.maxSpectators = Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(body.spectatorCapacity) || room.config.maxSpectators || DEFAULT_SPECTATOR_CAPACITY)));
+  room.config.blueFactionId = body.blueFactionId || room.config.blueFactionId || "singularity";
+  room.config.redFactionId = body.redFactionId || room.config.redFactionId || "military-gallery";
+  room.config.difficulty = normalizeDifficulty(body.difficulty || room.config.difficulty);
+  room.config.aiDensityPreset = String(body.aiDensityPreset || room.config.aiDensityPreset || "custom").slice(0, 24);
+  room.config.blueAiTanks = clampInt(body.blueAiTanks, 0, 8, room.config.blueAiTanks ?? 3);
+  room.config.blueInfantry = clampInt(body.blueInfantry, 4, 56, room.config.blueInfantry ?? 21);
+  room.config.redTanks = clampInt(body.redTanks, 1, 10, room.config.redTanks ?? 5);
+  room.config.redInfantry = clampInt(body.redInfantry, 4, 64, room.config.redInfantry ?? 24);
+  room.config.aiFillEmptySlots = body.aiFillEmptySlots !== false;
+  room.config.spectatorChatVisibleToPlayers = body.spectatorChatVisibleToPlayers !== false;
+  room.config.joinLocked = Boolean(body.locked);
+  room.config.createdBy = body.createdBy || room.config.createdBy || "admin";
+  room.config.startedBy = body.startedBy || room.config.startedBy || "";
+  room.config.startedAt = body.startedAt || room.config.startedAt || 0;
+  room.config.endedAt = body.endedAt || room.config.endedAt || 0;
+  room.phase = clientPhaseToServer(body.phase);
+
+  room.participants.clear();
+  importParticipants(room, Array.isArray(body.players) ? body.players : [], "player");
+  importParticipants(room, Array.isArray(body.spectators) ? body.spectators : [], "spectator");
+  importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
+
+  for (const slot of room.slots || []) {
+    const player = Array.from(room.players.values()).find((item) => item.slotId === slot.id);
+    slot.playerId = player?.playerId || null;
+    slot.nickname = player?.nickname || "";
+    slot.ready = Boolean(player?.ready);
+    slot.aiControlled = !player;
+  }
+
+  room.chat = Array.isArray(body.chat) ? body.chat.slice(-120) : room.chat;
+  room.events = Array.isArray(body.events) ? body.events.slice(-80) : room.events;
+  room.moderation = Array.isArray(body.moderation) ? body.moderation.slice(-80) : [];
+  room.commandAuthorities = Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : [];
+  room.commandAuthorityRequests = Array.isArray(body.commandAuthorityRequests) ? body.commandAuthorityRequests.slice(-16) : [];
+  room.updatedAt = new Date(Number(body.updatedAt) || Date.now()).toISOString();
+  return room;
+}
+
+async function handleRoomsApi(req, res) {
+  if (!onlineRegistry) {
+    sendJson(res, 503, { ok: false, reason: "online_registry_unavailable", rooms: [] });
+    return;
+  }
+
+  const url = new URL(req.url || "/", `http://${host}:${port}`);
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  const roomId = pathParts[1] === "rooms" ? decodeURIComponent(pathParts[2] || "") : "";
+
+  if (req.method === "GET" && url.pathname === "/api/rooms") {
+    sendJson(res, 200, {
+      ok: true,
+      rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room))
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/rooms") {
+    const body = await readJsonBody(req);
+    if (!body) {
+      sendJson(res, 400, { ok: false, reason: "invalid_json" });
+      return;
+    }
+    const room = applyClientRoomToServer(body);
+    if (!room) {
+      sendJson(res, 400, { ok: false, reason: "room_id_required" });
+      return;
+    }
+    sendJson(res, 200, { ok: true, room: exportClientRoom(room) });
+    return;
+  }
+
+  if (req.method === "DELETE" && roomId) {
+    onlineRegistry.rooms.delete(roomId);
+    sendJson(res, 200, { ok: true, roomId });
+    return;
+  }
+
+  sendJson(res, 404, { ok: false, reason: "not_found" });
 }
 
 function resolveRequestPath(requestUrl) {
@@ -42,6 +321,13 @@ function resolveRequestPath(requestUrl) {
 const server = http.createServer((req, res) => {
   if ((req.url || "/") === "/health") {
     send(res, 200, JSON.stringify({ ok: true, service: "iron-line" }), "application/json; charset=utf-8");
+    return;
+  }
+
+  if ((req.url || "/").startsWith("/api/rooms")) {
+    handleRoomsApi(req, res).catch((error) => {
+      sendJson(res, 500, { ok: false, reason: error?.message || "rooms_api_failed" });
+    });
     return;
   }
 
@@ -70,7 +356,8 @@ let onlineSocket = null;
 try {
   const { RoomRegistry } = require("../server/room-registry");
   const { attachOnlineSocketServer } = require("../server/websocket");
-  onlineSocket = attachOnlineSocketServer({ server, registry: new RoomRegistry() });
+  onlineRegistry = new RoomRegistry();
+  onlineSocket = attachOnlineSocketServer({ server, registry: onlineRegistry });
 } catch (error) {
   onlineSocket = { enabled: false, reason: error?.message || "online_socket_setup_failed" };
 }

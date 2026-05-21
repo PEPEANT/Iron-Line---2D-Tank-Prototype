@@ -99,3 +99,138 @@
 #chatInput:focus {
   border-color: rgba(107, 188, 255, 0.75);
 }
+
+.spectator-panel {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 12;
+  width: min(310px, calc(100vw - 28px));
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(190, 170, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(7, 12, 11, 0.78);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(237, 244, 239, 0.05);
+  color: rgba(237, 244, 239, 0.94);
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+}
+
+.spectator-panel.hidden {
+  display: none;
+}
+
+.spectator-panel header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.spectator-panel header strong {
+  color: #ddd4ff;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.spectator-panel header button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid rgba(190, 170, 255, 0.34);
+  border-radius: 7px;
+  background: rgba(190, 170, 255, 0.12);
+  color: #ddd4ff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.spectator-panel-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spectator-panel-counts div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(237, 244, 239, 0.08);
+  border-radius: 7px;
+  background: rgba(237, 244, 239, 0.05);
+}
+
+.spectator-panel-counts span {
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.58);
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spectator-panel-counts strong {
+  color: #edf4ef;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.spectator-panel-chat {
+  display: grid;
+  gap: 5px;
+  min-height: 22px;
+}
+
+.spectator-panel-empty,
+.spectator-panel-message {
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.68);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.spectator-panel-message {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.spectator-panel-message b {
+  overflow: hidden;
+  color: #ddd4ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spectator-panel-message span {
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.9);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mobile-spectator-controls-active .spectator-panel {
+  right: calc(max(28px, env(safe-area-inset-right)) + 90px);
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: min(260px, calc(100vw - 132px));
+}
+
+@media (max-width: 760px) {
+  .spectator-panel {
+    width: min(280px, calc(100vw - 112px));
+  }
+
+  .spectator-panel-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .spectator-panel-message {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+}

@@ -7,7 +7,7 @@
   Object.assign(IronLine.map01, {
     width: 6562,
     height: 4397,
-    roadWidth: 84,
+    roadWidth: 112,
     roads: [
       [
         { x: 0, y: 1899 },
@@ -386,8 +386,8 @@
     });
 
     world.scenery = [
-      { id: "blue-gate-sandbags-1", type: "sandbag", shape: "rect", x: 1180, y: 4860, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.18 },
-      { id: "blue-gate-sandbags-2", type: "sandbag", shape: "rect", x: 1310, y: 5020, w: 150, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.16 },
+      { id: "blue-gate-sandbags-1", type: "sandbag", shape: "rect", x: 980, y: 4640, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.18 },
+      { id: "blue-gate-sandbags-2", type: "sandbag", shape: "rect", x: 1560, y: 5165, w: 150, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.16 },
       { id: "blue-fence-1", type: "wood-fence", shape: "rect", x: 1560, y: 4580, w: 180, h: 24, hp: 50, maxHp: 50, destructible: true, stopsProjectiles: true, angle: 0.45 },
       brush("blue-brush-1", 980, 4480, 128, "brush", 38),
       brush("blue-brush-2", 1230, 4325, 114, "tall-grass", 32),
@@ -435,7 +435,7 @@
       roadProp("d-road-bench-1", "bench", 5270, 3705, 112, 36, 0.46, 32, "wood"),
       roadProp("d-road-billboard-1", "billboard", 6500, 3195, 168, 74, -0.24, 50, "checkpoint"),
 
-      { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 6900, y: 780, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.1 },
+      { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 7240, y: 760, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.1 },
       { id: "red-gate-sandbags-2", type: "sandbag", shape: "rect", x: 6600, y: 1100, w: 160, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.35 },
       { id: "red-fence-1", type: "wood-fence", shape: "rect", x: 6270, y: 1450, w: 190, h: 24, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true, angle: -0.42 },
       brush("red-brush-1", 6380, 1680, 148, "brush", 42),

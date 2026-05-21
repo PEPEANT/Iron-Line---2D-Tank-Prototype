@@ -266,10 +266,10 @@
         item.stopsProjectiles = item.baseStopsProjectiles;
       }
 
-      const vehicleBreakableKinds = ["base-wall", "concrete", "sandbag", "barricade", "wood-fence", "tree", "brush", "rubble"];
+      const vehicleBreakableKinds = ["building", "base-wall", "concrete", "sandbag", "barricade", "wood-fence", "tree", "brush", "rubble"];
       for (const obstacle of this.world?.obstacles || []) {
         if (obstacle.baseStopsProjectiles === undefined) obstacle.baseStopsProjectiles = obstacle.stopsProjectiles !== false;
-        const breakableByVehicle = obstacle.kind !== "building" && (obstacle.destructible || vehicleBreakableKinds.includes(obstacle.kind));
+        const breakableByVehicle = obstacle.destructible || vehicleBreakableKinds.includes(obstacle.kind);
         if (!breakableByVehicle) {
           obstacle.destroyed = false;
           obstacle.damageFlash = 0;
@@ -983,13 +983,15 @@
     }
 
     updateConquestScoring(dt) {
-      if (!this.isConquestMode() || !this.matchStarted || this.result) return;
-      this.conquest.remaining = Math.max(0, this.conquest.duration - this.matchTime);
+      const objectiveScoringMode = this.isConquestMode() || this.isAnnihilationMode?.();
+      if (!objectiveScoringMode || !this.matchStarted || this.result) return;
+      if (this.isConquestMode()) this.conquest.remaining = Math.max(0, this.conquest.duration - this.matchTime);
       for (const point of this.capturePoints) {
         if (point.owner !== TEAM.BLUE && point.owner !== TEAM.RED) continue;
         if (point.contested) continue;
         this.conquest.score[point.owner] += this.conquest.scoreRate * dt;
       }
+      if (this.isAnnihilationMode?.()) this.syncAnnihilationObjectiveScore?.();
     }
 
     updateConquestRespawns(dt) {
@@ -1732,7 +1734,7 @@
         this.playerRespawnTimer = this.conquest.respawnDelay.player;
       } else if (this.isRoundSpectatorMode?.()) {
         this.playerRoundSpectator = true;
-        this.chat?.addSystemMessage?.("라운드가 끝날 때까지 관전합니다.");
+        this.chat?.addSystemMessage?.("경기가 끝날 때까지 관전합니다.");
       }
       this.input.clear();
       this.hud?.toggleSettingsPanel?.(false);

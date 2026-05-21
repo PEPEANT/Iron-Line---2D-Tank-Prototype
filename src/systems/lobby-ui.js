@@ -9,7 +9,7 @@
       this.hud = hud;
       this.lobbyChatMode = "all";
       this.lobbyLocalChat = [];
-      this.lobbyLoadoutOpen = true;
+      this.lobbyLoadoutOpen = false;
     }
 
     get nodes() {
@@ -98,6 +98,13 @@
       ready.id = "lobbyReadyButton";
       ready.type = "button";
       ready.textContent = "준비 완료";
+      const loadoutButton = document.createElement("button");
+      loadoutButton.id = "lobbyLoadoutButton";
+      loadoutButton.type = "button";
+      loadoutButton.textContent = "출전 장비";
+      const readyActions = document.createElement("div");
+      readyActions.className = "lobby-ready-actions";
+      readyActions.append(ready, loadoutButton);
       const start = document.createElement("button");
       start.id = "lobbyStartButton";
       start.type = "button";
@@ -107,7 +114,7 @@
       back.id = "lobbyBackButton";
       back.type = "button";
       back.textContent = "방 목록으로";
-      actions.append(team, ready, start, back);
+      actions.append(team, readyActions, start, back);
 
       panel.append(header, slots, loadout, summary, actions);
       card.append(mapWrap, panel);
@@ -130,12 +137,19 @@
       ui.lobbyLoadout = loadout;
       ui.lobbySummary = summary;
       ui.lobbyTeamButton = team;
+      ui.lobbyReadyActions = readyActions;
       ui.lobbyReadyButton = ready;
+      ui.lobbyLoadoutButton = loadoutButton;
       ui.lobbyStartButton = start;
       ui.lobbyBackButton = back;
 
       team.addEventListener("click", () => IronLine.game?.toggleLocalTeam?.());
       ready.addEventListener("click", () => IronLine.game?.toggleLocalReady?.());
+      loadoutButton.addEventListener("click", () => {
+        this.lobbyLoadoutOpen = !this.lobbyLoadoutOpen;
+        if (this.nodes.lobbyLoadout) this.nodes.lobbyLoadout.dataset.signature = "";
+        this.update(IronLine.game);
+      });
       start.addEventListener("click", () => IronLine.game?.beginDeploymentCountdown?.());
       back.addEventListener("click", () => {
         const game = IronLine.game;
@@ -179,6 +193,12 @@
         ui.lobbyReadyButton.classList.toggle("active", Boolean(session.localReady));
         ui.lobbyReadyButton.classList.toggle("hidden", Boolean(localSpectator));
       }
+      if (ui.lobbyLoadoutButton) {
+        ui.lobbyLoadoutButton.textContent = this.lobbyLoadoutOpen ? "장비 닫기" : "출전 장비";
+        ui.lobbyLoadoutButton.classList.toggle("active", Boolean(this.lobbyLoadoutOpen));
+        ui.lobbyLoadoutButton.classList.toggle("hidden", Boolean(localSpectator));
+      }
+      if (ui.lobbyReadyActions) ui.lobbyReadyActions.classList.toggle("hidden", Boolean(localSpectator));
       if (ui.lobbyStartButton) ui.lobbyStartButton.classList.add("hidden");
       if (ui.lobbyBackButton) ui.lobbyBackButton.textContent = game.sessionMode === "online" ? "방 목록으로" : "설정으로 돌아가기";
 
@@ -329,16 +349,17 @@
       const root = this.nodes.lobbySummary;
       if (!root) return;
       const state = game.annihilation || game.defaultAnnihilationState?.();
+      const objectiveTarget = game.annihilationObjectiveScoreTarget?.() || state?.targetScore || 300;
       const values = conquest ? [
         { label: "승리 조건", value: "거점 점수 우위" },
         { label: "경기 시간", value: this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) },
         { label: "리스폰", value: "가능" },
         { label: "목표", value: "거점 유지" }
       ] : [
-        { label: "승리 조건", value: "전 병력 섬멸" },
-        { label: "라운드", value: `${state?.targetScore || 2}선승 / ${state?.maxRounds || 3}판` },
-        { label: "사망 처리", value: "라운드 관전" },
-        { label: "재정비", value: `${Math.round(state?.intermissionDuration || 20)}초` }
+        { label: "승리 조건", value: "거점 점수 도달" },
+        { label: "목표 점수", value: `${objectiveTarget}점` },
+        { label: "라운드", value: "단판" },
+        { label: "사망 처리", value: "관전 전환" }
       ];
       const signature = JSON.stringify(values);
       root.classList.remove("hidden");
@@ -361,7 +382,7 @@
       const root = this.nodes.lobbyHeaderMeta;
       if (!root) return;
       const roomId = game.onlineSession?.roomId || "대기";
-      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) : "3판 2선승";
+      const time = options.conquest ? this.hud.formatTime(game.conquest?.duration || MATCH_RULES?.conquestDuration || 20 * 60) : "단판";
       const values = [
         { label: "방 코드", value: roomId },
         { label: "슬롯", value: `${options.filled}/${options.total}` },
@@ -587,6 +608,13 @@
         return;
       }
 
+      if (!this.lobbyLoadoutOpen) {
+        root.classList.add("hidden");
+        root.textContent = "";
+        root.dataset.signature = "closed";
+        return;
+      }
+
       const slot = game.sessionSlotById?.(localPlayer.slotId) ||
         session.roleSlots?.find((item) => item.id === localPlayer.slotId) ||
         null;
@@ -606,7 +634,6 @@
         slotId: slot?.id || "",
         roleId: slot?.roleId || localPlayer.roleId || "",
         locked,
-        open: this.lobbyLoadoutOpen,
         equipment,
         loadoutSlots,
         roleOptions
@@ -616,7 +643,7 @@
       if (root.dataset.signature === signature) return;
       root.dataset.signature = signature;
       root.textContent = "";
-      root.classList.toggle("is-collapsed", !this.lobbyLoadoutOpen);
+      root.classList.remove("is-collapsed");
 
       const head = document.createElement("div");
       head.className = "lobby-loadout-head";
@@ -628,18 +655,7 @@
       titleWrap.append(title, meta);
       const state = document.createElement("em");
       state.textContent = locked ? "경기 시작 중" : "언제든 변경 가능";
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "lobby-loadout-toggle";
-      toggle.textContent = this.lobbyLoadoutOpen ? "접기" : "열기";
-      toggle.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        this.lobbyLoadoutOpen = !this.lobbyLoadoutOpen;
-        root.dataset.signature = "";
-        this.updateLoadout(game, options);
-      });
-      head.append(titleWrap, state, toggle);
+      head.append(titleWrap, state);
 
       const roleSection = document.createElement("section");
       roleSection.className = "lobby-loadout-roles";

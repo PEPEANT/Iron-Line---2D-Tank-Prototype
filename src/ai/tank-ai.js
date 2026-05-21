@@ -76,6 +76,8 @@
         this.strafeTimer = 1.4 + Math.random() * 2.2;
       }
 
+      if (this.handleInfantryAssaultThreat(dt, beforeX, beforeY)) return;
+
       const order = this.resolveOrder();
       const decision = this.combat.update(dt, order);
       let moveTarget = null;
@@ -114,6 +116,23 @@
       this.updateMachineGun(dt);
       this.navigation.recordMovement(dt, beforeX, beforeY, stillHasMoveTarget);
       this.updateDebugState(order, decision, moveTarget);
+    }
+
+    handleInfantryAssaultThreat(dt, beforeX, beforeY) {
+      const assault = this.tank.infantryAssault;
+      const attacker = assault?.attacker;
+      if (!attacker?.alive || attacker.team === this.tank.team || this.tank.assaultDisabledTimer > 0) return false;
+
+      this.state = "repel-assault";
+      this.currentOrder = null;
+      this.targetPoint = null;
+      this.targetTank = attacker;
+      this.aimTurretAtPoint(attacker, dt, 0.9);
+      this.driveAwayFrom(dt, attacker.x, attacker.y, 0.82, { allowReverse: true });
+      this.updateMachineGun(dt);
+      this.navigation.recordMovement(dt, beforeX, beforeY, true);
+      this.updateDebugState(null, { mode: "repel-assault", target: attacker }, attacker);
+      return true;
     }
 
     resolveOrder() {
@@ -505,6 +524,9 @@
 
       for (const drone of this.game.drones || []) {
         addTarget(drone, drone.droneRole === "attack" ? 210 : 120);
+      }
+      if (this.tank.infantryAssault?.attacker) {
+        addTarget(this.tank.infantryAssault.attacker, 520);
       }
       for (const unit of this.game.infantry || []) {
         if (!unit.inVehicle) addTarget(unit, unit.classId === "engineer" ? 180 : 120);

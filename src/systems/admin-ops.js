@@ -72,6 +72,14 @@
         phase: selectedRegistryRoom?.phase || match.phase || game.matchPhase || "deployment",
         players: selectedRegistryRoom?.players || players,
         spectators: selectedRegistryRoom?.spectators || [],
+        capacity: selectedRegistryRoom?.capacity || 8,
+        spectatorCapacity: selectedRegistryRoom?.spectatorCapacity || 12,
+        difficulty: selectedRegistryRoom?.difficulty || game.matchConfig?.difficulty || "normal",
+        aiDensityPreset: selectedRegistryRoom?.aiDensityPreset || game.matchConfig?.aiDensityPreset || "custom",
+        blueAiTanks: selectedRegistryRoom?.blueAiTanks ?? game.matchConfig?.blueAiTanks ?? 3,
+        blueInfantry: selectedRegistryRoom?.blueInfantry ?? game.matchConfig?.blueInfantry ?? 21,
+        redTanks: selectedRegistryRoom?.redTanks ?? game.matchConfig?.redTanks ?? 5,
+        redInfantry: selectedRegistryRoom?.redInfantry ?? game.matchConfig?.redInfantry ?? 24,
         playerCount: selectedRegistryRoom?.players?.filter?.((player) => player.participantType !== "spectator").length ?? players.length,
         spectatorCount: selectedRegistryRoom?.spectators?.length || 0,
         humanSlots: roleSlots.filter((slot) => slot.playerId && !slot.aiControlled).length,
@@ -404,12 +412,12 @@
           ? game.conquest?.remaining ?? 0
           : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0,
         score: {
-          [TEAM.BLUE]: game.matchConfig?.mode === "conquest" ? game.conquest?.score?.[TEAM.BLUE] || 0 : game.annihilation?.score?.[TEAM.BLUE] || 0,
-          [TEAM.RED]: game.matchConfig?.mode === "conquest" ? game.conquest?.score?.[TEAM.RED] || 0 : game.annihilation?.score?.[TEAM.RED] || 0
+          [TEAM.BLUE]: ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score?.[TEAM.BLUE] || 0 : game.annihilation?.score?.[TEAM.BLUE] || 0,
+          [TEAM.RED]: ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score?.[TEAM.RED] || 0 : game.annihilation?.score?.[TEAM.RED] || 0
         },
         round: {
           current: game.annihilation?.round || 1,
-          max: game.annihilation?.maxRounds || 3,
+          max: game.annihilation?.maxRounds || 1,
           state: game.annihilation?.state || ""
         }
       };

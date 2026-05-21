@@ -11,6 +11,7 @@
       this.followTarget = null;
       this.initialized = false;
       this.drag = null;
+      this.dragClickThreshold = 6;
       this.wheelHandler = (event) => this.onWheel(event);
       this.pointerDownHandler = (event) => this.onPointerDown(event);
       this.pointerMoveHandler = (event) => this.onPointerMove(event);
@@ -32,6 +33,7 @@
       if (!game.adminObserverMode) return false;
       this.ensureHelp();
       if (!this.initialized) this.fitWorld();
+      if (game.input.consumePress("Escape")) this.followTarget = null;
       if (game.input.consumePress("Home")) {
         this.followTarget = null;
         this.fitWorld();
@@ -119,6 +121,15 @@
         return [...(game.tanks || []), ...(game.humvees || [])]
           .find((vehicle) => vehicle.callSign === key && vehicle.alive !== false) || null;
       }
+      if (kind === "infantry" || kind === "unit") {
+        return (game.infantry || []).find((unit) => unit.callSign === key && unit.alive !== false && !unit.inVehicle) || null;
+      }
+      if (kind === "crew") {
+        return (game.crews || []).find((crew) => crew.callSign === key && crew.alive !== false) || null;
+      }
+      if (kind === "drone") {
+        return (game.drones || []).find((drone) => drone.callSign === key && drone.active !== false && drone.destroyed !== true) || null;
+      }
       if (kind === "objective") {
         return (game.capturePoints || []).find((point) => point.name === key) || null;
       }
@@ -148,9 +159,8 @@
       if (!game.adminObserverMode || event.target?.closest?.("#adminPanel, #chatPanel")) return;
       event.preventDefault();
       if (!this.initialized) this.fitWorld();
-      this.followTarget = null;
       const zoomFactor = event.deltaY < 0 ? 1.12 : 0.89;
-      game.camera.zoom = clamp((game.camera.zoom || 1) * zoomFactor, 0.16, 1.25);
+      game.camera.zoom = clamp((game.camera.zoom || 1) * zoomFactor, 0.12, 2.4);
       this.applyCamera();
       game.input.updateWorld(game.camera);
     }
@@ -160,8 +170,14 @@
       if (!game.adminObserverMode || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel")) return;
       if (!this.initialized) this.fitWorld();
       event.preventDefault();
-      this.followTarget = null;
-      this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      this.drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false
+      };
       game.canvas?.setPointerCapture?.(event.pointerId);
     }
 
@@ -169,6 +185,12 @@
       if (!this.drag || event.pointerId !== this.drag.id) return;
       event.preventDefault();
       const game = this.game;
+      const totalMove = Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY);
+      if (!this.drag.moved && totalMove < this.dragClickThreshold) return;
+      if (!this.drag.moved) {
+        this.drag.moved = true;
+        this.followTarget = null;
+      }
       const zoom = Math.max(0.1, game.camera.zoom || 1);
       this.center.x -= (event.clientX - this.drag.x) / zoom;
       this.center.y -= (event.clientY - this.drag.y) / zoom;
@@ -181,45 +203,55 @@
     onPointerUp(event) {
       if (!this.drag || event.pointerId !== this.drag.id) return;
       event?.preventDefault?.();
+      const wasClick = !this.drag.moved &&
+        Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) < this.dragClickThreshold;
+      if (wasClick) this.followTargetAt(event.clientX, event.clientY);
       this.drag = null;
     }
 
-    ensureHelp() {
-      const existing = document.getElementById("adminObserverHelp");
-      const title = this.game.spectatorMode ? "관전자" : "관리자 관전";
-      const html = `<strong>${title}</strong>WASD/방향키 이동 · 드래그 이동 · 휠 확대 · Home 전체 지도 · 목록 클릭 추적`;
-      if (existing) {
-        if (existing.dataset.title === title) return;
-        existing.dataset.title = title;
-        existing.innerHTML = html;
-        return;
+    followTargetAt(clientX, clientY) {
+      const target = this.pickInspectTargetAt(clientX, clientY);
+      if (!target) return false;
+      return this.followInspectTarget(target.kind, target.id);
+    }
+
+    pickInspectTargetAt(clientX, clientY) {
+      const game = this.game;
+      const zoom = Math.max(0.1, game.camera.zoom || 1);
+      const worldX = clientX / zoom + game.camera.x;
+      const worldY = clientY / zoom + game.camera.y;
+      const candidates = [];
+      const addCandidate = (kind, entity, radius) => {
+        if (!entity?.callSign || entity.alive === false || entity.active === false || entity.destroyed === true) return;
+        if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+        const distance = Math.hypot(entity.x - worldX, entity.y - worldY);
+        const hitRadius = Math.max(8, radius || entity.radius || 18);
+        if (distance > hitRadius) return;
+        candidates.push({
+          kind,
+          id: entity.callSign,
+          distance,
+          priority: kind === "vehicle" ? 1 : kind === "infantry" ? 2 : 3
+        });
+      };
+
+      for (const vehicle of [...(game.tanks || []), ...(game.humvees || [])]) {
+        addCandidate("vehicle", vehicle, (vehicle.radius || 34) + 12);
       }
-      const help = document.createElement("div");
-      help.id = "adminObserverHelp";
-      help.className = "admin-observer-help";
-      help.dataset.title = title;
-      help.innerHTML = html;
-      document.body.append(help);
+      for (const unit of game.infantry || []) {
+        if (unit.inVehicle) continue;
+        addCandidate("infantry", unit, 18);
+      }
+      for (const crew of game.crews || []) addCandidate("crew", crew, 16);
+      for (const drone of game.drones || []) addCandidate("drone", drone, 16);
+      candidates.sort((a, b) => a.distance - b.distance || a.priority - b.priority);
+      return candidates[0] || null;
+    }
+
+    ensureHelp() {
+      document.getElementById("adminObserverHelp")?.remove?.();
     }
   }
-
-  AdminObserverCamera.prototype.ensureHelp = function ensureHelp() {
-    const existing = document.getElementById("adminObserverHelp");
-    const title = this.game.spectatorMode ? "관전자" : "관리자 관전";
-    const html = `<strong>${title}</strong>WASD/방향키 이동 · 드래그 이동 · 휠 확대 · Home 전체 지도 · 목록 클릭 추적`;
-    if (existing) {
-      if (existing.dataset.title === title) return;
-      existing.dataset.title = title;
-      existing.innerHTML = html;
-      return;
-    }
-    const help = document.createElement("div");
-    help.id = "adminObserverHelp";
-    help.className = "admin-observer-help";
-    help.dataset.title = title;
-    help.innerHTML = html;
-    document.body.append(help);
-  };
 
   IronLine.AdminObserverCamera = AdminObserverCamera;
 })(window);

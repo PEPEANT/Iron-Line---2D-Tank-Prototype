@@ -541,7 +541,7 @@
         return defensivePressure ? "hold-wall" : "hold";
       }
       if (status.casualtyRatio >= 0.48 || status.avgSuppression >= 68 || status.maxSuppression >= 92) return "fallback";
-      if (status.cohesion > 305 && status.alive > 1) return "regroup";
+      if (status.cohesion > this.regroupCohesionThreshold(status) && status.alive > 1) return "regroup";
       if (
         this.order.forcedTacticalMode &&
         (!this.order.forcedTacticalUntil || performance.now() < this.order.forcedTacticalUntil)
@@ -554,6 +554,17 @@
       if (this.shouldPreAssault(status)) return "pre-assault";
       if (this.shouldRallyWithTank(status)) return "rally-with-tank";
       return "advance";
+    }
+
+    regroupCohesionThreshold(status) {
+      const baseThreshold = 305;
+      if (!status?.center) return baseThreshold;
+      const safeZone = (this.game.world.safeZones || []).find((zone) => zone.team === this.team);
+      if (!safeZone) return baseThreshold;
+      const distanceFromBase = distXY(status.center.x, status.center.y, safeZone.x, safeZone.y);
+      if (distanceFromBase <= (safeZone.radius || 0) + 180) return 560;
+      if (distanceFromBase <= (safeZone.radius || 0) + 420) return 430;
+      return baseThreshold;
     }
 
     shouldRallyWithTank(status) {

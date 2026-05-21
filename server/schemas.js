@@ -8,6 +8,18 @@ const TEAMS = Object.freeze({
 const ROLES = Object.freeze(["infantry", "engineer", "scout", "armor"]);
 const PARTICIPANT_TYPES = Object.freeze(["player", "spectator", "caster", "admin"]);
 const CHAT_CHANNELS = Object.freeze(["all", "team", "spectator", "caster", "system"]);
+const DEFAULT_MAX_SPECTATORS = 12;
+const MAX_ROOM_HUMANS = 8;
+
+function clampInt(value, min, max, fallback) {
+  const numeric = Math.round(Number(value));
+  const safe = Number.isFinite(numeric) ? numeric : fallback;
+  return Math.max(min, Math.min(max, safe));
+}
+
+function normalizeDifficulty(value) {
+  return ["easy", "normal", "hard"].includes(value) ? value : "normal";
+}
 
 function createRoomConfig(input = {}) {
   const mode = input.mode === "conquest" ? "conquest" : "annihilation";
@@ -15,8 +27,14 @@ function createRoomConfig(input = {}) {
     roomId: input.roomId || "local",
     name: input.name || input.roomId || "Iron Line Room",
     mode,
-    maxHumans: Number.isFinite(input.maxHumans) ? input.maxHumans : 8,
-    maxSpectators: Number.isFinite(input.maxSpectators) ? input.maxSpectators : 24,
+    maxHumans: clampInt(input.maxHumans, 1, MAX_ROOM_HUMANS, 8),
+    maxSpectators: clampInt(input.maxSpectators, 0, DEFAULT_MAX_SPECTATORS, DEFAULT_MAX_SPECTATORS),
+    difficulty: normalizeDifficulty(input.difficulty),
+    aiDensityPreset: String(input.aiDensityPreset || "custom").slice(0, 24),
+    blueAiTanks: clampInt(input.blueAiTanks, 0, 8, 3),
+    blueInfantry: clampInt(input.blueInfantry, 4, 56, 21),
+    redTanks: clampInt(input.redTanks, 1, 10, 5),
+    redInfantry: clampInt(input.redInfantry, 4, 64, 24),
     teamSize: Number.isFinite(input.teamSize) ? input.teamSize : 4,
     allowMidMatchJoin: Boolean(input.allowMidMatchJoin),
     joinLocked: Boolean(input.joinLocked),

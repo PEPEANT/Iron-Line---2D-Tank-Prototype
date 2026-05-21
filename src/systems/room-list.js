@@ -79,6 +79,8 @@
       }
 
       for (const room of rooms) {
+        const wrap = document.createElement("div");
+        wrap.className = "room-list-item-wrap";
         const button = document.createElement("button");
         button.type = "button";
         button.className = "room-list-item";
@@ -89,17 +91,34 @@
         const playerCount = players.length;
         const spectatorCount = (room.spectators || []).length;
         const capacity = room.capacity || 8;
+        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+        const spectatorFull = spectatorCount >= spectatorCapacity;
         const spectatorJoin = room.phase === "playing" || room.locked || playerCount >= capacity;
-        const joinLabel = spectatorJoin ? "관전 입장" : "참가";
+        const joinLabel = spectatorJoin ? (spectatorFull ? "관전 만석" : "관전 입장") : "참가";
         button.dataset.phase = room.phase || "waiting";
         button.classList.toggle("is-spectator-join", spectatorJoin);
+        button.disabled = room.phase === "ended" || (spectatorJoin && spectatorFull);
         button.innerHTML = `
           <strong>${this.escape(room.name)}</strong>
-          <span>${this.modeLabel(room.mode)} · ${this.phaseLabel(room.phase)} · ${blueFaction} vs ${redFaction} · 슬롯 ${playerCount}/${capacity} · 관전 ${spectatorCount}</span>
+          <span>${this.modeLabel(room.mode)} · ${this.phaseLabel(room.phase)} · ${blueFaction} vs ${redFaction} · 슬롯 ${playerCount}/${capacity} · 관전 ${spectatorCount}/${spectatorCapacity}</span>
           <em>${this.escape(room.id)} · ${joinLabel}</em>
         `;
         button.addEventListener("click", () => this.flow.joinOnlineRoom(room));
-        this.nodes.items.append(button);
+        wrap.append(button);
+        if (room.phase !== "ended") {
+          const spectator = document.createElement("button");
+          spectator.type = "button";
+          spectator.className = "room-list-spectator";
+          spectator.textContent = spectatorFull ? "관전 만석" : "관전자 입장";
+          spectator.disabled = spectatorFull;
+          spectator.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.flow.joinOnlineRoom(room, { participantType: "spectator" });
+          });
+          wrap.append(spectator);
+        }
+        this.nodes.items.append(wrap);
       }
     }
 
