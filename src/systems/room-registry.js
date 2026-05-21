@@ -5,6 +5,8 @@
 
   const STORAGE_KEY = "iron-line-room-registry-v1";
   const SELECTED_KEY = "iron-line-selected-room-v1";
+  const API_BASE_KEY = "iron-line-rooms-api-base-v1";
+  const PRODUCTION_ROOMS_API_BASE = "https://iron-line-2d-tank-prototype.onrender.com";
   const DEFAULT_SPECTATOR_CAPACITY = 12;
   const MAX_SPECTATOR_CAPACITY = 12;
   const ROOM_SETTING_LIMITS = Object.freeze({
@@ -26,6 +28,7 @@
       this.remoteRefreshInFlight = false;
       this.pendingRemoteRoomIds = new Set();
       this.deletedRemoteRoomIds = new Set();
+      this.apiBase = this.resolveRoomsApiBase();
       window.addEventListener("storage", (event) => {
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
       });
@@ -83,8 +86,30 @@
         (location.protocol === "http:" || location.protocol === "https:");
     }
 
+    resolveRoomsApiBase() {
+      const normalized = (value) => {
+        const text = String(value || "").trim();
+        if (!text || text === "relative" || text === "local") return "";
+        if (!/^https?:\/\//i.test(text)) return "";
+        return text.replace(/\/+$/, "");
+      };
+      try {
+        const params = new URLSearchParams(location.search || "");
+        const explicit = normalized(params.get("roomsApi") || params.get("apiBase"));
+        if (explicit) {
+          localStorage.setItem(API_BASE_KEY, explicit);
+          return explicit;
+        }
+        const stored = normalized(localStorage.getItem(API_BASE_KEY));
+        if (stored) return stored;
+      } catch (_error) {}
+      if (location.hostname === "pepeant.github.io") return PRODUCTION_ROOMS_API_BASE;
+      return "";
+    }
+
     roomsApiUrl(id = "") {
-      return id ? `/api/rooms/${encodeURIComponent(id)}` : "/api/rooms";
+      const path = id ? `/api/rooms/${encodeURIComponent(id)}` : "/api/rooms";
+      return `${this.apiBase || ""}${path}`;
     }
 
     remoteRoomSignature(rooms = []) {

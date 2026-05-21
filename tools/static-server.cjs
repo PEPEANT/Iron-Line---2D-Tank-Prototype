@@ -46,7 +46,10 @@ function normalizeDifficulty(value) {
 function send(res, status, body, type = "text/plain; charset=utf-8") {
   res.writeHead(status, {
     "content-type": type,
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type"
   });
   res.end(body);
 }
@@ -359,6 +362,11 @@ function resolveRequestPath(requestUrl) {
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === "OPTIONS") {
+    send(res, 204, "");
+    return;
+  }
+
   if ((req.url || "/") === "/health") {
     send(res, 200, JSON.stringify({ ok: true, service: "iron-line" }), "application/json; charset=utf-8");
     return;
