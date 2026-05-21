@@ -10,8 +10,16 @@
       this.center = { x: 0, y: 0 };
       this.followTarget = null;
       this.initialized = false;
+      this.drag = null;
       this.wheelHandler = (event) => this.onWheel(event);
+      this.pointerDownHandler = (event) => this.onPointerDown(event);
+      this.pointerMoveHandler = (event) => this.onPointerMove(event);
+      this.pointerUpHandler = (event) => this.onPointerUp(event);
       window.addEventListener("wheel", this.wheelHandler, { passive: false });
+      game.canvas?.addEventListener("pointerdown", this.pointerDownHandler);
+      game.canvas?.addEventListener("pointermove", this.pointerMoveHandler);
+      game.canvas?.addEventListener("pointerup", this.pointerUpHandler);
+      game.canvas?.addEventListener("pointercancel", this.pointerUpHandler);
     }
 
     activate() {
@@ -64,7 +72,7 @@
     }
 
     applyKeyboard(dt) {
-      if (document.activeElement?.closest?.("#adminPanel")) return;
+      if (document.activeElement?.closest?.("#adminPanel") || this.game.chat?.open) return;
       const input = this.game.input;
       const x = input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
       const y = input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
@@ -137,7 +145,7 @@
 
     onWheel(event) {
       const game = this.game;
-      if (!game.adminObserverMode || event.target?.closest?.("#adminPanel")) return;
+      if (!game.adminObserverMode || event.target?.closest?.("#adminPanel, #chatPanel")) return;
       event.preventDefault();
       if (!this.initialized) this.fitWorld();
       this.followTarget = null;
@@ -147,10 +155,39 @@
       game.input.updateWorld(game.camera);
     }
 
+    onPointerDown(event) {
+      const game = this.game;
+      if (!game.adminObserverMode || event.button > 0 || event.target?.closest?.("#adminPanel, #chatPanel")) return;
+      if (!this.initialized) this.fitWorld();
+      event.preventDefault();
+      this.followTarget = null;
+      this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      game.canvas?.setPointerCapture?.(event.pointerId);
+    }
+
+    onPointerMove(event) {
+      if (!this.drag || event.pointerId !== this.drag.id) return;
+      event.preventDefault();
+      const game = this.game;
+      const zoom = Math.max(0.1, game.camera.zoom || 1);
+      this.center.x -= (event.clientX - this.drag.x) / zoom;
+      this.center.y -= (event.clientY - this.drag.y) / zoom;
+      this.drag.x = event.clientX;
+      this.drag.y = event.clientY;
+      this.applyCamera();
+      game.input.updateWorld(game.camera);
+    }
+
+    onPointerUp(event) {
+      if (!this.drag || event.pointerId !== this.drag.id) return;
+      event?.preventDefault?.();
+      this.drag = null;
+    }
+
     ensureHelp() {
       const existing = document.getElementById("adminObserverHelp");
       const title = this.game.spectatorMode ? "관전자" : "관리자 관전";
-      const html = `<strong>${title}</strong>WASD/방향키 이동 · Shift 빠른 이동 · 휠 줌 · Home 전체 지도 · 목록 클릭 추적`;
+      const html = `<strong>${title}</strong>WASD/방향키 이동 · 드래그 이동 · 휠 확대 · Home 전체 지도 · 목록 클릭 추적`;
       if (existing) {
         if (existing.dataset.title === title) return;
         existing.dataset.title = title;
@@ -169,7 +206,7 @@
   AdminObserverCamera.prototype.ensureHelp = function ensureHelp() {
     const existing = document.getElementById("adminObserverHelp");
     const title = this.game.spectatorMode ? "관전자" : "관리자 관전";
-    const html = `<strong>${title}</strong>WASD/방향키 이동 · Shift 빠른 이동 · 휠 줌 · Home 전체 지도 · 목록 클릭 추적`;
+    const html = `<strong>${title}</strong>WASD/방향키 이동 · 드래그 이동 · 휠 확대 · Home 전체 지도 · 목록 클릭 추적`;
     if (existing) {
       if (existing.dataset.title === title) return;
       existing.dataset.title = title;

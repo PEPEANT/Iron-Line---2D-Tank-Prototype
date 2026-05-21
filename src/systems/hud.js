@@ -55,10 +55,13 @@
         debugControls: Array.from(document.querySelectorAll("[data-debug-option]")),
         mobileControlsToggle: document.querySelector("[data-mobile-controls]"),
         mobileControls: document.getElementById("mobileControls"),
+        mobileActionGrid: document.querySelector(".mobile-action-grid"),
         orientationOverlay: document.getElementById("orientationOverlay"),
         moveStick: document.getElementById("moveStick"),
         aimStick: document.getElementById("aimStick"),
         mobileWeaponButton: null,
+        mobileSpectatorChatButton: null,
+        mobileSpectatorHomeButton: null,
         mobileInteractButton: document.querySelector("[data-mobile-interact], [data-mobile-key='KeyE']"),
         mobileKeyButtons: Array.from(document.querySelectorAll("[data-mobile-key]")),
         mobileMouseButtons: Array.from(document.querySelectorAll("[data-mobile-mouse]")),
@@ -148,6 +151,8 @@
       this.ensureAdminAiLabPanel();
       this.ensureProneIndicator();
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
+      this.nodes.mobileSpectatorChatButton = this.createMobileSpectatorButton("chat", "채팅", "관전자 채팅 열기");
+      this.nodes.mobileSpectatorHomeButton = this.createMobileSpectatorButton("home", "전체", "전장 전체 보기");
     }
 
     bindHudControls() {
@@ -323,6 +328,19 @@
       return button;
     }
 
+    createMobileSpectatorButton(kind, label, ariaLabel) {
+      const controls = this.nodes.mobileControls;
+      if (!controls) return null;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `mobile-action mobile-spectator-action mobile-spectator-${kind} hidden`;
+      button.textContent = label;
+      button.setAttribute("aria-label", ariaLabel || label);
+      controls.append(button);
+      return button;
+    }
+
     ensureProneIndicator() {
       const root = this.nodes.bottomHud;
       if (!root || this.nodes.proneIndicator) return;
@@ -353,7 +371,12 @@
     updateMobileControls(game) {
       const enabled = Boolean(game.settings?.mobileControls);
       const portrait = window.innerHeight > window.innerWidth;
-      const showControls = enabled && !portrait && !game.entryOpen && !game.deploymentOpen && !game.lobbyOpen && !game.result && !game.playerDeathActive && !game.playerDowned && game.player.hp > 0;
+      const spectator = Boolean(game.spectatorMode);
+      const activeScreen = !game.entryOpen && !game.deploymentOpen && !game.lobbyOpen && !game.roomListOpen && !game.result;
+      const playerReady = !game.playerDeathActive && !game.playerDowned && game.player.hp > 0;
+      const showControls = enabled && !portrait && activeScreen && (spectator || playerReady);
+      const showPlayerControls = showControls && !spectator;
+      const showSpectatorControls = showControls && spectator;
       const inTank = Boolean(game.player?.inTank);
       const controlledDrone = Boolean(game.player?.controlledDrone);
       const canPickupDrone = Boolean(game.nearbyPlayerDroneForPickup?.());
@@ -364,10 +387,14 @@
 
       this.nodes.orientationOverlay?.classList.toggle("visible", enabled && portrait);
       this.nodes.mobileControls?.classList.toggle("hidden", !showControls);
+      this.nodes.mobileControls?.classList.toggle("spectator-controls", showSpectatorControls);
       this.nodes.mobileControls?.classList.toggle("in-tank", inTank);
-      this.nodes.mobileControls?.classList.toggle("can-interact", canInteract);
+      this.nodes.mobileControls?.classList.toggle("can-interact", showPlayerControls && canInteract);
       document.body.classList.toggle("mobile-controls-active", showControls);
+      document.body.classList.toggle("mobile-spectator-controls-active", showSpectatorControls);
       document.body.classList.toggle("mobile-player-in-tank", showControls && inTank);
+      this.nodes.mobileSpectatorChatButton?.classList.toggle("hidden", !showSpectatorControls);
+      this.nodes.mobileSpectatorHomeButton?.classList.toggle("hidden", !showSpectatorControls);
 
       if (this.nodes.mobileInteractButton) {
         const label = canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
@@ -378,7 +405,7 @@
         );
       }
 
-      this.updateMobileWeaponButton(game, showControls, inTank);
+      this.updateMobileWeaponButton(game, showPlayerControls, inTank);
     }
 
     updateMobileWeaponButton(game, showControls, inTank) {
@@ -589,12 +616,12 @@
         const signalSuffix = weakSignal ? ` · 신호 약함 ${Math.round(signalStrength * 100)}%` : "";
         if (attackDrone) {
           const pct = IronLine.math.clamp(activeDrone.boostCharge ?? 1, 0, 1);
-          ui.weaponState.textContent = `자폭드론 준비 · E 조종 · 좌클릭 공격${signalSuffix}`;
+          ui.weaponState.textContent = `자폭드론 준비 · 조종키 조종 · 좌클릭 공격${signalSuffix}`;
           ui.reloadBar.style.width = `${pct * 100}%`;
           return;
         }
 
-        ui.weaponState.textContent = `정찰드론 대기 · E 조종${signalSuffix}`;
+        ui.weaponState.textContent = `정찰드론 대기 · 조종키 조종${signalSuffix}`;
         ui.reloadBar.style.width = `${IronLine.math.clamp(signalStrength, 0, 1) * 100}%`;
         return;
       }

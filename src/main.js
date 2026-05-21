@@ -25,8 +25,11 @@
         this.canvas.focus();
         this.requestMobileFullscreen();
       });
+      this.canvas.addEventListener("wheel", (event) => this.onPlayerCameraWheel(event), { passive: false });
       this.canvas.focus();
-      this.world = IronLine.map01;
+      this.liveWorld = IronLine.map01;
+      this.testLabWorld = null;
+      this.world = this.liveWorld;
       this.camera = {
         x: 0,
         y: 0,
@@ -40,6 +43,7 @@
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
       this.fullscreenRequestPending = false;
+      this.cameraZoomPreference = 1;
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
@@ -141,6 +145,7 @@
       this.syncOnlineSlotAssets();
       if (this.testLab) this.activateTestLab(this.testLab);
       if (this.adminObserverMode) this.enterAdminObserverMode();
+      this.testLabUI = IronLine.TestLabUI ? new IronLine.TestLabUI(this) : null;
       window.addEventListener("resize", () => this.renderer.resize());
       requestAnimationFrame((now) => this.loop(now));
     }
@@ -150,6 +155,21 @@
         [TEAM.BLUE]: new IronLine.CommanderAI(this, TEAM.BLUE, IronLine.commandPlans[TEAM.BLUE]),
         [TEAM.RED]: new IronLine.CommanderAI(this, TEAM.RED, IronLine.commandPlans[TEAM.RED])
       };
+    }
+
+    setWorld(world) {
+      if (!world || this.world === world) return;
+      this.world = world;
+      this.navGraph = new IronLine.NavGraph(this.world.navGraph, this.world);
+    }
+
+    useLiveWorld() {
+      this.setWorld(this.liveWorld || IronLine.map01);
+    }
+
+    useTestLabWorld() {
+      this.testLabWorld = IronLine.createTestLabMap?.() || IronLine.testLabMap || this.liveWorld || IronLine.map01;
+      this.setWorld(this.testLabWorld);
     }
 
     defaultSettings() {
@@ -209,6 +229,15 @@
       this.settings.mobileControls = Boolean(enabled);
       this.input.setVirtualEnabled(this.settings.mobileControls);
       return true;
+    }
+
+    onPlayerCameraWheel(event) {
+      if (this.adminObserverMode || this.entryOpen || this.deploymentOpen || this.lobbyOpen || this.roomListOpen || this.result) return;
+      if (!this.matchStarted || this.playerDeathActive || this.playerDowned) return;
+      if (event.target?.closest?.("#adminPanel, #chatPanel, #settingsPanel, .command-panel, .deployment-map")) return;
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.1 : 0.9;
+      this.cameraZoomPreference = clamp((this.cameraZoomPreference || 1) * factor, 0.78, 1.45);
     }
 
     resetWorldSceneryState() {
@@ -625,6 +654,7 @@
       this.input.updateWorld(this.camera);
       this.updateDebugToggles();
       this.updateTestLabHotkeys();
+      this.testLabUI?.update?.(this, dt);
       this.updateCommandRadioHotkey();
       this.updateAdminMessage(dt);
       this.updateCombatFeedback(dt);
@@ -1471,6 +1501,7 @@
     returnToMainMenu() {
       this.input.clear();
       this.testLab = "";
+      this.useLiveWorld();
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
       this.lobbyOpen = true;
@@ -1495,6 +1526,7 @@
 
     activateTestLab(id = "drone") {
       this.testLab = id || "drone";
+      this.useTestLabWorld();
       this.deploymentOpen = false;
       this.lobbyOpen = false;
       this.matchPhase = "live";
@@ -1510,7 +1542,7 @@
       this.droneDesignation = null;
       this.testLabAiPaused = true;
       this.testLabSpawnIndex = 0;
-      this.testLabRoofPoint = { x: 2680, y: 2680 };
+      this.testLabRoofPoint = this.world.testLab?.roofPoint || { x: 2680, y: 2680 };
 
       this.projectiles = [];
       this.effects = {
@@ -1559,6 +1591,7 @@
       this.createCommanders();
       this.hud?.toggleSettingsPanel?.(false);
       this.hud?.invalidateDeploymentMap?.();
+      this.testLabUI?.setMode?.(this.testLab);
       this.canvas.focus();
     }
 
@@ -1606,7 +1639,7 @@
         weapon,
         targetX: roof.x,
         targetY: roof.y,
-        callSign: "LAB-UAV"
+        callSign: "실험드론"
       });
       this.setReconDroneWaypoint(drone, roof.x, roof.y);
       drone.recallable = true;
@@ -1657,7 +1690,7 @@
         x,
         y,
         team: TEAM.RED,
-        callSign: spawn.callSign || `LAB-INF-${index + 1}`,
+        callSign: spawn.callSign || `실험보병-${index + 1}`,
         factionId: spawn.factionId || IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: angleTo(x, y, this.player.x, this.player.y),
         equipmentAmmo: {
@@ -1676,7 +1709,7 @@
         x: 3380 + offset,
         y: 2720,
         team: TEAM.RED,
-        callSign: `LAB-TNK-${this.tanks.length + 1}`,
+        callSign: `실험전차-${this.tanks.length + 1}`,
         factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: Math.PI,
         maxHp: 110
@@ -1684,7 +1717,7 @@
       tank.ai = new IronLine.TankAI(tank, this);
       this.tanks.push(tank);
       this.spawnCrewForTank(tank, {
-        callSign: `${tank.callSign}-DRV`,
+        callSign: `${tank.callSign}-승무원`,
         boardImmediately: true
       });
       return tank;
@@ -1696,7 +1729,7 @@
         x: 3300 + offset,
         y: 2920,
         team: TEAM.RED,
-        callSign: `LAB-HMV-${(this.humvees || []).length + 1}`,
+        callSign: `실험험비-${(this.humvees || []).length + 1}`,
         factionId: IronLine.factionVisuals?.factionIdForTeam?.(this, TEAM.RED),
         angle: Math.PI,
         maxHp: 68
@@ -1704,7 +1737,7 @@
       humvee.ai = new IronLine.HumveeAI(humvee, this);
       this.humvees.push(humvee);
       this.spawnCrewForTank(humvee, {
-        callSign: `${humvee.callSign}-DRV`,
+        callSign: `${humvee.callSign}-승무원`,
         role: "driver",
         boardImmediately: true
       });
@@ -2270,11 +2303,22 @@
       const machineGunAimMode = Boolean(!this.player.inTank && !droneControlMode && this.isPlayerMachineGunAimMode());
       const scoutObservation = scoutAimMode ? this.scoutObservationCameraTarget() : null;
       const scoutObservationFocus = scoutObservation ? this.scoutObservationCameraFocus(scoutObservation) : null;
-      const targetZoom = tankAimMode
+      const cameraZoomPreference = this.cameraZoomPreference || 1;
+      const aimingCameraMode = tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode;
+      const tacticalZoomCap = scoutAimMode
+        ? 1
+        : tankAimMode || rpgAimMode || droneControlMode
+          ? 1.05
+          : machineGunAimMode ? 1.08 : 1.45;
+      const effectiveZoomPreference = aimingCameraMode
+        ? Math.min(cameraZoomPreference, tacticalZoomCap)
+        : cameraZoomPreference;
+      const baseTargetZoom = tankAimMode
         ? 0.76
         : scoutAimMode
           ? scoutObservationFocus?.zoom || 0.72
           : rpgAimMode ? 0.82 : droneControlMode ? 0.82 : machineGunAimMode ? 0.88 : 1;
+      const targetZoom = clamp(baseTargetZoom * effectiveZoomPreference, 0.6, 1.45);
       this.camera.zoom = lerp(this.camera.zoom || 1, targetZoom, 1 - Math.pow(0.0002, dt));
       this.camera.viewWidth = this.camera.width / this.camera.zoom;
       this.camera.viewHeight = this.camera.height / this.camera.zoom;
@@ -2287,7 +2331,7 @@
       }
       if (tankAimMode || scoutAimMode || rpgAimMode || droneControlMode || machineGunAimMode) {
         const mouseDistance = distXY(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
-        const lookAhead = tankAimMode
+        const lookAhead = (tankAimMode
           ? clamp(mouseDistance * 0.42, 0, 520)
           : scoutAimMode
             ? scoutObservationFocus ? clamp(mouseDistance * 0.18, 0, 220) : clamp(mouseDistance * 0.52, 0, 650)
@@ -2295,7 +2339,8 @@
               ? clamp(mouseDistance * 0.38, 0, 440)
               : droneControlMode
                 ? clamp(mouseDistance * 0.34, 0, 360)
-                : clamp(mouseDistance * 0.44, 0, 520);
+                : clamp(mouseDistance * 0.44, 0, 520)) *
+          (effectiveZoomPreference > 1 ? clamp(1 - (effectiveZoomPreference - 1) * 0.72, 0.58, 1) : 1);
         const lookAngle = angleTo(focus.x, focus.y, this.input.mouse.worldX, this.input.mouse.worldY);
         focusX += Math.cos(lookAngle) * lookAhead;
         focusY += Math.sin(lookAngle) * lookAhead;

@@ -21,7 +21,7 @@ function createRoomConfig(input = {}) {
     allowMidMatchJoin: Boolean(input.allowMidMatchJoin),
     joinLocked: Boolean(input.joinLocked),
     spectatorChatVisibleToPlayers: input.spectatorChatVisibleToPlayers !== false,
-    timeLimitSec: mode === "conquest" ? Number(input.timeLimitSec || 35 * 60) : 0,
+    timeLimitSec: mode === "conquest" ? Number(input.timeLimitSec || 20 * 60) : 0,
     createdAt: input.createdAt || new Date().toISOString()
   };
 }

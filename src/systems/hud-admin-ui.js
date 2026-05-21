@@ -76,6 +76,7 @@
       backup.id = "adminOpsBackup";
       backup.className = "admin-observer-list admin-ops-backup";
 
+      const testHub = IronLine.createAdminTestHubBlock?.(this) || document.createElement("div");
       const mapTools = IronLine.createAdminMapToolsBlock?.(this) || document.createElement("div");
       const notes = this.createAdminPlaytestNotesBlock();
 
@@ -106,6 +107,7 @@
         this.adminObserverBlock("방 제어", roomControls),
         this.adminObserverBlock("방 / 접속", rooms),
         this.adminObserverBlock("전황 이벤트", events),
+        this.adminObserverBlock("테스트 허브", testHub),
         this.adminObserverBlock("맵 도구", mapTools),
         this.adminObserverBlock("플레이테스트 노트", notes),
         this.adminObserverBlock("백업 / 복원", backup),
@@ -401,6 +403,13 @@
       });
 
       bindTap(this.nodes.mobileWeaponButton, () => IronLine.game?.cycleMobileWeapon?.());
+      bindTap(this.nodes.mobileSpectatorChatButton, () => IronLine.game?.chat?.openInput?.());
+      bindTap(this.nodes.mobileSpectatorHomeButton, () => {
+        const game = IronLine.game;
+        if (!game?.adminCamera) return;
+        game.adminCamera.followTarget = null;
+        game.adminCamera.fitWorld?.();
+      });
       },
       update(game) {
       const ui = this.nodes;

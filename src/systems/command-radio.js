@@ -38,8 +38,22 @@
 
       const panel = document.createElement("section");
       panel.id = "commandPanel";
-      panel.className = "command-panel hidden";
+      panel.className = "command-panel command-radio-device hidden";
       panel.setAttribute("aria-label", "분대 무전기");
+
+      const antenna = document.createElement("div");
+      antenna.className = "command-radio-antenna";
+
+      const shell = document.createElement("div");
+      shell.className = "command-radio-shell";
+
+      const brand = document.createElement("div");
+      brand.className = "command-radio-brand";
+      const brandName = document.createElement("span");
+      brandName.textContent = "야전 무전기";
+      const channel = document.createElement("b");
+      channel.textContent = "작전 채널";
+      brand.append(brandName, channel);
 
       const head = document.createElement("div");
       head.className = "command-head";
@@ -51,9 +65,19 @@
       status.textContent = "명령 대기";
       head.append(role, status);
 
+      const speaker = document.createElement("div");
+      speaker.className = "command-speaker";
+      speaker.setAttribute("aria-hidden", "true");
+      for (let index = 0; index < 7; index += 1) {
+        const slot = document.createElement("i");
+        speaker.append(slot);
+      }
+
       const assets = document.createElement("div");
       assets.id = "commandAssets";
       assets.className = "command-assets";
+      assets.hidden = true;
+      assets.setAttribute("aria-hidden", "true");
 
       const buttons = document.createElement("div");
       buttons.className = "command-buttons";
@@ -62,7 +86,7 @@
         ["attack", "공격"],
         ["defend", "방어"],
         ["rally", "집결"],
-        ["cancel", "취소"]
+        ["close", "닫기"]
       ];
       for (const [type, label] of commands) {
         const button = document.createElement("button");
@@ -71,6 +95,10 @@
         button.textContent = label;
         button.addEventListener("click", (event) => {
           event.stopPropagation();
+          if (type === "close") {
+            this.toggle(false);
+            return;
+          }
           this.selectType(type);
         });
         buttons.append(button);
@@ -93,7 +121,12 @@
       log.id = "commandLog";
       log.className = "command-log";
 
-      panel.append(head, assets, buttons, log);
+      const controlDeck = document.createElement("div");
+      controlDeck.className = "command-control-deck";
+      controlDeck.append(assets, buttons, log);
+
+      shell.append(brand, head, speaker, controlDeck);
+      panel.append(antenna, shell);
       panel.addEventListener("pointerdown", (event) => event.stopPropagation());
       panel.addEventListener("mousedown", (event) => event.stopPropagation());
       panel.addEventListener("click", (event) => event.stopPropagation());
@@ -132,7 +165,7 @@
       if (!ui.commandPanel) return;
 
       const visible = Boolean(game.matchStarted && !game.deploymentOpen && !game.lobbyOpen && !game.result && !game.playerDeathActive);
-      ui.commandRadioToggle?.classList.toggle("hidden", !visible);
+      ui.commandRadioToggle?.classList.toggle("hidden", !visible || this.open);
       ui.commandMap?.classList.toggle("hidden", true);
       if (!visible) {
         ui.commandPanel.classList.add("hidden");
@@ -161,8 +194,8 @@
         const label = this.commandLabel(this.selectedType);
         const cooldown = game.commandBus?.cooldownRemainingForSlot?.(slot, this.selectedType) || 0;
         const objectiveMode = this.selectedType === "attack" || this.selectedType === "defend";
-        const defaultStatus = ["cancel", "move", "rally"].includes(this.selectedType)
-          ? `${label}: 버튼으로 즉시 실행`
+        const defaultStatus = ["move", "rally"].includes(this.selectedType)
+          ? this.selectedAssetSummary(game, slot)
           : cooldown > 0
             ? `명령 대기 ${cooldown.toFixed(1)}초`
             : objectiveMode
@@ -172,10 +205,11 @@
       }
 
       ui.commandButtons?.forEach((button) => {
-        const allowed = game.commandBus?.isTypeAllowedForSlot?.(slot, button.dataset.commandType) ?? true;
+        const isClose = button.dataset.commandType === "close";
+        const allowed = isClose || (game.commandBus?.isTypeAllowedForSlot?.(slot, button.dataset.commandType) ?? true);
         button.disabled = !allowed;
         button.title = allowed ? "" : "현재 역할 권한 없음";
-        button.classList.toggle("active", allowed && button.dataset.commandType === this.selectedType);
+        button.classList.toggle("active", !isClose && allowed && button.dataset.commandType === this.selectedType);
       });
 
       this.updateAssets(game, slot);
@@ -364,10 +398,36 @@
       }
     }
 
+    selectedAssetSummary(game, slot) {
+      const labels = [];
+      for (const id of this.selectedSquads) {
+        if (!slot?.squadIds?.includes(id)) continue;
+        labels.push(this.assetName(game, "squad", id));
+      }
+      for (const id of this.selectedVehicles) {
+        if (!slot?.vehicleIds?.includes(id)) continue;
+        labels.push(this.assetName(game, "vehicle", id));
+      }
+      if (!labels.length) return "지정 분대 없음";
+      const visible = labels.slice(0, 3).join(" · ");
+      const extra = labels.length > 3 ? ` 외 ${labels.length - 3}` : "";
+      return `${visible}${extra}`;
+    }
+
+    assetName(game, kind, id) {
+      if (kind === "vehicle") {
+        const vehicle = game?.vehicleById?.(id);
+        return `차량 ${vehicle?.callSign || id}`;
+      }
+      const squad = game?.squadById?.(id);
+      return `분대 ${squad?.callSign || id}`;
+    }
+
     commandLabel(type) {
       if (type === "attack") return "공격";
       if (type === "defend") return "방어";
       if (type === "rally") return "집결";
+      if (type === "close") return "닫기";
       if (type === "cancel") return "취소";
       if (type === "assault") return "돌격";
       if (type === "repair") return "수리";

@@ -55,7 +55,7 @@
       document.body.append(root);
 
       this.nodes = { root, log, form, mode, input };
-      this.addSystemMessage("T \ucc44\ud305 \u00b7 Enter \uc804\uc1a1 \u00b7 Tab \uc804\uccb4/\ud300 \uc804\ud658");
+      this.addSystemMessage("채팅키 열기 · 전송키 보내기 · 전환키 전체/팀");
     }
 
     onKeyDown(event) {

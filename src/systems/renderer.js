@@ -99,6 +99,15 @@
       if (!game.testLab) return;
 
       const ctx = this.ctx;
+      const labels = {
+        hub: "통합",
+        unit: "유닛",
+        drone: "드론",
+        balance: "밸런스",
+        audio: "음원",
+        skin: "스킨",
+        objects: "오브젝트"
+      };
       const x = 16;
       const y = 82;
       const width = 330;
@@ -115,24 +124,26 @@
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(237, 244, 239, 0.94)";
-      ctx.font = "700 13px Rajdhani, sans-serif";
-      ctx.fillText(`TEST LAB: ${String(game.testLab).toUpperCase()}  AI ${game.testLabAiPaused ? "PAUSED" : "ACTIVE"}`, x + 12, y + 10);
-      ctx.font = "11px Rajdhani, sans-serif";
+      ctx.font = "800 13px Inter, sans-serif";
+      ctx.fillText(`실험장: ${labels[game.testLab] || "시험"} · 인공지능 ${game.testLabAiPaused ? "정지" : "작동"}`, x + 12, y + 10);
+      ctx.font = "11px Inter, sans-serif";
       ctx.fillStyle = "rgba(183, 223, 213, 0.84)";
-      ctx.fillText("F1 infantry  F2 tank  F3 humvee  F4 AI", x + 12, y + 34);
-      ctx.fillText("F5 refill  F6 roof drone  F7 debug", x + 12, y + 52);
+      ctx.fillText("단축 1 보병  단축 2 전차  단축 3 험비", x + 12, y + 34);
+      ctx.fillText("단축 4 인공지능  단축 5 보급  단축 6 드론 지붕", x + 12, y + 52);
       ctx.fillStyle = "rgba(255, 209, 102, 0.78)";
-      ctx.fillText("Open: index.html?testLab=drone", x + 12, y + 70);
+      ctx.fillText("모드 변경은 우측 실험 콘솔에서 합니다", x + 12, y + 70);
       ctx.restore();
     }
 
     drawTerrain(game) {
       const ctx = this.ctx;
       const world = game.world;
+      const terrainStyle = world.terrainStyle || {};
+      const gradientStops = terrainStyle.gradient || ["#213922", "#263d26", "#1f3429"];
       const gradient = ctx.createLinearGradient(0, 0, world.width, world.height);
-      gradient.addColorStop(0, "#213922");
-      gradient.addColorStop(0.48, "#263d26");
-      gradient.addColorStop(1, "#1f3429");
+      gradient.addColorStop(0, gradientStops[0] || "#213922");
+      gradient.addColorStop(0.48, gradientStops[1] || gradientStops[0] || "#263d26");
+      gradient.addColorStop(1, gradientStops[2] || gradientStops[1] || "#1f3429");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, world.width, world.height);
 
@@ -149,16 +160,17 @@
       this.drawRoadNetwork(world);
 
       ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.strokeStyle = "#d9e5cf";
+      ctx.globalAlpha = terrainStyle.gridAlpha ?? 0.14;
+      ctx.strokeStyle = terrainStyle.gridColor || "#d9e5cf";
       ctx.lineWidth = 1;
-      for (let x = 0; x <= world.width; x += 120) {
+      const gridSize = terrainStyle.gridSize || 120;
+      for (let x = 0; x <= world.width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, world.height);
         ctx.stroke();
       }
-      for (let y = 0; y <= world.height; y += 120) {
+      for (let y = 0; y <= world.height; y += gridSize) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(world.width, y);
@@ -172,13 +184,16 @@
       const roads = world.roads || [];
       const roadWidth = world.roadWidth || 84;
       const junctions = collectRoadJunctions(roads);
-      const roadBody = "#64614a";
+      const roadStyle = world.roadStyle || {};
+      const roadBody = roadStyle.body || "#64614a";
+      const roadEdge = roadStyle.edge || "#50523d";
+      const laneColor = roadStyle.lane || "rgba(211, 197, 139, 0.32)";
 
       ctx.save();
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      for (const road of roads) this.strokeRoadPath(road, "#50523d", (road.width || roadWidth) + 10);
+      for (const road of roads) this.strokeRoadPath(road, roadEdge, (road.width || roadWidth) + 10);
       for (const road of roads) this.strokeRoadPath(road, roadBody, road.width || roadWidth);
       for (const junction of junctions) {
         const radius = Math.max(28, roadWidth * 0.54);
@@ -190,7 +205,7 @@
 
       for (const road of roads) {
         const width = road.width || roadWidth;
-        this.strokeRoadPath(road, "rgba(211, 197, 139, 0.32)", Math.max(5, width * 0.08), [28, 36]);
+        this.strokeRoadPath(road, laneColor, Math.max(5, width * 0.08), [28, 36]);
       }
 
       for (const junction of junctions) {
@@ -1720,7 +1735,7 @@
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
       ctx.font = "800 12px Inter, sans-serif";
-      ctx.fillText("E 탑승 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
+      ctx.fillText("탑승키 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
       ctx.restore();
     }
 

@@ -56,6 +56,7 @@
       if (this.player) Object.assign(this.player, { alive: false, hp: 0, inTank: null });
       if (this.playerTank) this.playerTank.playerControlled = false;
       this.adminCamera?.activate?.();
+      if (!this.chat && IronLine.ChatSystem) this.chat = new IronLine.ChatSystem(this);
       this.chat?.addSystemMessage?.(this.casterMode ? "해설자 관전으로 입장했습니다." : "관전자로 입장했습니다.");
       this.hud?.update?.(this);
       this.canvas?.focus?.();
@@ -467,6 +468,7 @@
     if (this.player) Object.assign(this.player, { alive: false, hp: 0, inTank: null });
     if (this.playerTank) this.playerTank.playerControlled = false;
     this.adminCamera?.activate?.();
+    if (!this.chat && IronLine.ChatSystem) this.chat = new IronLine.ChatSystem(this);
     this.chat?.addSystemMessage?.(this.casterMode ? "해설자 관전으로 입장했습니다." : "관전자로 입장했습니다.");
     this.hud?.update?.(this);
     this.canvas?.focus?.();
