@@ -461,7 +461,7 @@
       return ["spectator", "caster", "admin"].includes(this.localSessionParticipantType());
     }
 
-    assignPlayerToSlot(playerId, slotId) {
+    assignPlayerToSlot(playerId, slotId, options = {}) {
       if (!this.onlineSession || this.matchStarted || this.countdownStarted) return false;
       const player = this.sessionPlayerById(playerId);
       if (player?.participantType && player.participantType !== "player") return false;
@@ -469,17 +469,20 @@
       if (!player || !nextSlot || nextSlot.locked) return false;
       const occupied = nextSlot.playerId && nextSlot.playerId !== playerId;
       if (occupied) return false;
+      const keepReady = Boolean(options.preserveReady && player.ready);
 
       for (const slot of this.onlineSession.roleSlots || []) {
         if (slot.playerId === playerId) {
           slot.playerId = null;
           slot.aiControlled = true;
+          slot.ready = false;
           this.clearSlotCommandAuthority(slot, playerId);
         }
       }
 
       nextSlot.playerId = playerId;
       nextSlot.aiControlled = false;
+      nextSlot.ready = keepReady;
       player.slotId = nextSlot.id;
       player.roleId = nextSlot.roleId;
       player.role = nextSlot.role;
@@ -516,11 +519,14 @@
         nextSlot.weaponId = player.weaponId;
         nextSlot.equipmentAmmo = { ...(player.equipmentAmmo || {}) };
       }
-      player.ready = false;
+      player.ready = keepReady;
       this.setSlotCommandAuthority(nextSlot, playerId, player.name || player.nickname || playerId, "owner");
-      if (playerId === this.onlineSession.playerId) this.onlineSession.localReady = false;
+      if (playerId === this.onlineSession.playerId) this.onlineSession.localReady = keepReady;
       IronLine.factionVisuals?.syncGame?.(this);
       this.syncOnlineSlotAssets();
+      if (playerId === this.onlineSession.playerId) {
+        this.hud?.sessionFlow?.publishLocalPlayer?.(this, { force: true });
+      }
       this.hud?.update?.(this);
       return true;
     }

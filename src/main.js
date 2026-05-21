@@ -1321,6 +1321,7 @@
       this.onlineSession.localReady = !this.onlineSession.localReady;
       const player = this.localSessionPlayer();
       if (player) player.ready = this.onlineSession.localReady;
+      this.hud?.sessionFlow?.publishLocalPlayer?.(this, { force: true });
       this.hud?.update?.(this);
       return true;
     }

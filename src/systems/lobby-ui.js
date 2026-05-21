@@ -9,6 +9,7 @@
       this.hud = hud;
       this.lobbyChatMode = "all";
       this.lobbyLocalChat = [];
+      this.lobbyLoadoutOpen = true;
     }
 
     get nodes() {
@@ -593,25 +594,29 @@
       const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
       const equipment = game.deploymentEquipmentForClass?.(classId) ||
         (infantryClass?.equipment || []).slice();
-      const locked = Boolean(localPlayer.ready || session.localReady || game.countdownStarted || game.matchStarted);
+      const locked = Boolean(game.countdownStarted || game.matchStarted);
       const loadoutSlots = equipment.map((weaponId, index) => ({
         index,
         weaponId,
         choices: game.equipmentChoiceOptions?.(classId, index) || [weaponId]
       }));
+      const roleOptions = this.loadoutRoleOptions(game, session, localPlayer, slot);
       const signature = JSON.stringify({
         classId,
         slotId: slot?.id || "",
         roleId: slot?.roleId || localPlayer.roleId || "",
         locked,
+        open: this.lobbyLoadoutOpen,
         equipment,
-        loadoutSlots
+        loadoutSlots,
+        roleOptions
       });
 
       root.classList.remove("hidden");
       if (root.dataset.signature === signature) return;
       root.dataset.signature = signature;
       root.textContent = "";
+      root.classList.toggle("is-collapsed", !this.lobbyLoadoutOpen);
 
       const head = document.createElement("div");
       head.className = "lobby-loadout-head";
@@ -622,8 +627,53 @@
       meta.textContent = `${this.roleLabel(slot?.roleId)} · ${this.classLabel(classId)}`;
       titleWrap.append(title, meta);
       const state = document.createElement("em");
-      state.textContent = locked ? "준비 완료 후 잠김" : "준비 전 변경 가능";
-      head.append(titleWrap, state);
+      state.textContent = locked ? "경기 시작 중" : "언제든 변경 가능";
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "lobby-loadout-toggle";
+      toggle.textContent = this.lobbyLoadoutOpen ? "접기" : "열기";
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.lobbyLoadoutOpen = !this.lobbyLoadoutOpen;
+        root.dataset.signature = "";
+        this.updateLoadout(game, options);
+      });
+      head.append(titleWrap, state, toggle);
+
+      const roleSection = document.createElement("section");
+      roleSection.className = "lobby-loadout-roles";
+      const roleLabel = document.createElement("span");
+      roleLabel.className = "lobby-loadout-role-label";
+      roleLabel.textContent = "역할";
+      const roleChoices = document.createElement("div");
+      roleChoices.className = "lobby-loadout-role-choices";
+      for (const option of roleOptions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lobby-loadout-role";
+        button.classList.toggle("active", option.active);
+        button.classList.toggle("occupied", option.occupied);
+        button.disabled = locked || option.active || option.occupied || !option.slotId;
+        button.textContent = option.label;
+        button.title = option.occupied
+          ? `${option.occupiedName || "다른 플레이어"} 사용 중`
+          : `${option.label} 역할 선택`;
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const liveGame = IronLine.game;
+          if (!liveGame || locked || option.active || option.occupied) return;
+          if (liveGame.countdownStarted || liveGame.matchStarted) return;
+          const changed = liveGame.assignPlayerToSlot?.(session.playerId, option.slotId, { preserveReady: true });
+          if (!changed) return;
+          root.dataset.signature = "";
+          if (this.nodes.lobbySlots) this.nodes.lobbySlots.dataset.signature = "";
+          liveGame.hud?.update?.(liveGame);
+        });
+        roleChoices.append(button);
+      }
+      roleSection.append(roleLabel, roleChoices);
 
       const grid = document.createElement("div");
       grid.className = "lobby-loadout-slots";
@@ -653,9 +703,7 @@
             event.stopPropagation();
             const liveGame = IronLine.game;
             if (!liveGame || locked) return;
-            const liveSession = liveGame.onlineSession || {};
-            const livePlayer = liveSession.players?.find((player) => player.id === liveSession.playerId);
-            if (livePlayer?.ready || liveSession.localReady || liveGame.countdownStarted || liveGame.matchStarted) return;
+            if (liveGame.countdownStarted || liveGame.matchStarted) return;
             if (liveGame.player?.classId !== classId) {
               liveGame.applyFullPlayerClassLoadout?.(classId, {
                 resetAmmo: true,
@@ -681,9 +729,36 @@
       const hint = document.createElement("p");
       hint.className = "lobby-loadout-hint";
       hint.textContent = locked
-        ? "장비를 바꾸려면 준비 해제 후 다시 선택하십시오."
-        : "선택한 장비는 경기 시작 시 현재 슬롯의 병과 장비로 적용됩니다.";
-      root.append(head, grid, hint);
+        ? "경기 시작 중에는 장비를 변경할 수 없습니다."
+        : "준비 완료 후에도 경기 시작 전까지 장비를 바꿀 수 있습니다.";
+      root.append(head, roleSection, grid, hint);
+    }
+
+    loadoutRoleOptions(game, session = {}, localPlayer = null, activeSlot = null) {
+      const playerTeam = activeSlot?.team || localPlayer?.team || TEAM.BLUE;
+      const roleSlots = (session.roleSlots || game.onlineSession?.roleSlots || [])
+        .filter((slot) => slot.team === playerTeam);
+      const roleDefinitions = game.sessionRoleDefinitions?.() || [
+        { id: "infantry", label: "보병" },
+        { id: "engineer", label: "공병" },
+        { id: "recon", label: "정찰" },
+        { id: "armor", label: "기갑" }
+      ];
+      return roleDefinitions.map((role) => {
+        const slot = roleSlots.find((item) => item.roleId === role.id) || null;
+        const owner = slot?.playerId
+          ? (session.players || []).find((player) => player.id === slot.playerId)
+          : null;
+        const occupied = Boolean(owner && owner.id !== localPlayer?.id);
+        return {
+          roleId: role.id,
+          slotId: slot?.id || "",
+          label: this.roleLabel(role.id) || role.label || role.id,
+          active: Boolean(slot?.id && slot.id === localPlayer?.slotId),
+          occupied,
+          occupiedName: owner?.name || owner?.nickname || ""
+        };
+      });
     }
 
     roleClassId(roleId) {
