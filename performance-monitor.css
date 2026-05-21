@@ -1,0 +1,55 @@
+.performance-overlay {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 80;
+  width: min(260px, calc(100vw - 24px));
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(237, 244, 239, 0.18);
+  border-radius: 8px;
+  background: rgba(5, 9, 8, 0.82);
+  color: #edf4ef;
+  font: 800 11px Inter, system-ui, sans-serif;
+  pointer-events: none;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(7px);
+}
+
+.performance-overlay.hidden {
+  display: none;
+}
+
+.performance-overlay-head,
+.performance-overlay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.performance-overlay-head {
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(237, 244, 239, 0.12);
+  color: #ffd166;
+  letter-spacing: 0.04em;
+}
+
+.performance-overlay-head span,
+.performance-overlay-row span {
+  color: rgba(237, 244, 239, 0.58);
+}
+
+.performance-overlay-row b {
+  color: rgba(237, 244, 239, 0.92);
+  font-weight: 950;
+}
+
+.performance-overlay-row.warn b {
+  color: #ffd166;
+}
+
+.performance-overlay-row.danger b {
+  color: #ff8e7f;
+}

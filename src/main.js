@@ -67,6 +67,8 @@
       this.adminOps = IronLine.AdminOps ? new IronLine.AdminOps(this) : null;
       this.chat = !this.adminObserverMode && IronLine.ChatSystem ? new IronLine.ChatSystem(this) : null;
       this.roleChange = !this.adminObserverMode && IronLine.RoleChangeSystem ? new IronLine.RoleChangeSystem(this) : null;
+      this.perfMonitor = IronLine.PerformanceMonitor ? new IronLine.PerformanceMonitor() : null;
+      this.aiObservatoryTick = 0;
       this.observerSnapshot = null;
       this.conquest = this.defaultConquestState();
       this.annihilation = this.defaultAnnihilationState?.() || null;
@@ -94,7 +96,8 @@
       this.createCommanders();
       this.debug = {
         ai: false,
-        navGraph: false
+        navGraph: false,
+        performance: false
       };
 
       this.projectiles = [];
@@ -317,10 +320,11 @@
         callSign: "RAVEN-MG",
         maxSpeed: 126,
         role: "machine-gunner",
-        dedicated: true
+        dedicated: true,
+        boardImmediately: true
       });
 
-      for (const spawn of this.scaledSpawns(this.world.spawns.blue, config.blueAiTanks, "B-TNK", 32)) {
+      for (const spawn of this.scaledSpawns(this.world.spawns.blue, config.blueAiTanks, "B-TNK", 44)) {
         const tank = new IronLine.Tank({
           x: spawn.x,
           y: spawn.y,
@@ -341,7 +345,7 @@
       const blueInfantry = this.spawnInfantry(blueInfantrySpawns, TEAM.BLUE, difficulty);
       this.createSquads(TEAM.BLUE, blueInfantry, "B-SQD");
 
-      for (const spawn of this.scaledSpawns(this.world.spawns.red, config.redTanks, "R-TNK", 34)) {
+      for (const spawn of this.scaledSpawns(this.world.spawns.red, config.redTanks, "R-TNK", 44)) {
         const tank = new IronLine.Tank({
           x: spawn.x,
           y: spawn.y,
@@ -413,7 +417,7 @@
 
       const reserved = [];
       spawns.forEach((spawn, index) => {
-        const point = this.findOpenSpawnNear(spawn, index, 0, 32, reserved);
+        const point = this.findOpenSpawnNear(spawn, index, 0, 42, reserved);
         reserved.push(point);
         const humvee = new IronLine.Humvee({
           ...spawn,
@@ -630,9 +634,10 @@
     spawnPointClear(x, y, radius, reserved = []) {
       const blockedByObstacle = this.world.obstacles.some((obstacle) => circleRectCollision(x, y, radius, obstacle));
       if (blockedByObstacle) return false;
-      const blockedByReserved = reserved.some((point) => distXY(x, y, point.x, point.y) < radius * 2 + 8);
+      const reservedGap = radius >= 30 ? radius * 2.75 : radius * 2 + 8;
+      const blockedByReserved = reserved.some((point) => distXY(x, y, point.x, point.y) < reservedGap);
       if (blockedByReserved) return false;
-      return !circleIntersectsTank(this, null, x, y, radius, { padding: 8 });
+      return !circleIntersectsTank(this, null, x, y, radius, { padding: radius >= 30 ? 24 : 8 });
     }
 
     createSquads(team, units, prefix) {
@@ -706,7 +711,8 @@
     }
 
     spawnCrewForTank(tank, options = {}) {
-      const spawn = options.boardImmediately ? { x: tank.x, y: tank.y } : this.findCrewSpawn(tank);
+      const boardImmediately = options.boardImmediately ?? true;
+      const spawn = boardImmediately ? { x: tank.x, y: tank.y } : this.findCrewSpawn(tank);
       const crew = new IronLine.CrewMember({
         x: spawn.x,
         y: spawn.y,
@@ -720,7 +726,7 @@
         targetTank: tank
       });
       this.crews.push(crew);
-      if (options.boardImmediately) crew.boardTargetTank();
+      if (boardImmediately) crew.boardTargetTank();
       return crew;
     }
 
@@ -753,9 +759,15 @@
       const rawDt = (now - this.lastTime) / 1000;
       const dt = Number.isFinite(rawDt) ? Math.min(0.033, Math.max(0, rawDt)) : 0;
       this.lastTime = now;
+      this.perfMonitor?.beginFrame(dt);
       try {
+        this.perfMonitor?.begin("update");
         this.update(dt);
+        this.perfMonitor?.end("update");
+        this.perfMonitor?.begin("render");
         this.renderer.draw(this);
+        this.perfMonitor?.end("render");
+        this.perfMonitor?.finishFrame(this);
         this.input.endFrame();
       } catch (error) {
         this.handleLoopError(error);
@@ -874,42 +886,84 @@
 
     updateBattlefield(dt) {
       if (!this.matchStarted || this.result) return;
+      const perf = this.perfMonitor;
+      perf?.begin("battlefield");
       if (this.updateAnnihilationIntermission?.(dt)) {
+        perf?.begin("combat.effects");
         IronLine.combat.updateEffects(this, dt);
-        this.aiObservatory?.update?.(dt);
+        perf?.end("combat.effects");
+        this.updateAiObservatoryBudgeted(dt);
+        perf?.end("battlefield");
         return;
       }
 
       this.matchTime += dt;
       this.updateDroneDesignation(dt);
       this.updateConquestRespawns(dt);
+      perf?.begin("crews");
       for (const crew of this.crews) crew.update(this, dt);
+      perf?.end("crews");
       if (!this.testLabAiPaused) {
+        perf?.begin("ai.commanders");
         for (const commander of Object.values(this.commanders)) commander.update(dt);
+        perf?.end("ai.commanders");
       }
       this.refreshFollowPlayerOrders();
       this.coverSlots.update(dt);
       if (!this.testLabAiPaused) {
+        perf?.begin("ai.squads");
         for (const squad of this.squads) squad.update(dt);
+        perf?.end("ai.squads");
       }
 
+      perf?.begin("drones");
       this.updateDrones(dt);
+      perf?.end("drones");
+      perf?.begin("ai.infantry");
       for (const unit of this.infantry) unit.update(this, dt);
+      perf?.end("ai.infantry");
+      perf?.begin("reports");
       this.updateTeamReports(dt);
+      perf?.end("reports");
 
+      perf?.begin("vehicles");
       for (const tank of this.tanks) tank.update(this, dt);
       for (const humvee of this.humvees || []) humvee.update(this, dt);
+      perf?.end("vehicles");
 
+      perf?.begin("combat.projectiles");
       IronLine.combat.updateProjectiles(this, dt);
+      perf?.end("combat.projectiles");
+      perf?.begin("combat.effects");
       IronLine.combat.updateEffects(this, dt);
+      perf?.end("combat.effects");
 
+      perf?.begin("objectives");
       for (const point of this.capturePoints) point.update(this, dt);
       this.updateConquestScoring(dt);
+      perf?.end("objectives");
 
+      perf?.begin("spacing");
       resolveTankSpacing(this, dt);
       resolveInfantryTankSpacing(this);
+      perf?.end("spacing");
+      perf?.begin("result");
       this.updateResult(dt);
-      this.aiObservatory?.update?.(dt);
+      perf?.end("result");
+      this.updateAiObservatoryBudgeted(dt);
+      perf?.end("battlefield");
+    }
+
+    updateAiObservatoryBudgeted(dt) {
+      if (!this.aiObservatory?.update) return;
+      this.aiObservatoryTick = (this.aiObservatoryTick || 0) + dt;
+      const interval = this.adminObserverMode ? 0.16 : 0.24;
+      if (this.aiObservatoryTick < interval) return;
+      const elapsed = this.aiObservatoryTick;
+      this.aiObservatoryTick = 0;
+      this.perfMonitor?.begin("ai.observer");
+      this.aiObservatory.update(elapsed);
+      this.perfMonitor?.end("ai.observer");
     }
 
     refreshFollowPlayerOrders() {
@@ -1000,7 +1054,8 @@
 
     respawnVehicle(vehicle) {
       const spawn = vehicle.respawn || this.respawnPointForTeam(vehicle.team);
-      const point = this.findOpenSpawnNear(spawn, 0, 0, vehicle.radius || 34);
+      const vehicleClearanceRadius = Math.max(vehicle.radius || 34, vehicle.vehicleType === "humvee" ? 42 : 44);
+      const point = this.findOpenSpawnNear(spawn, 0, 0, vehicleClearanceRadius);
       vehicle.x = point.x;
       vehicle.y = point.y;
       vehicle.angle = spawn.angle || vehicle.angle || 0;
@@ -1011,6 +1066,10 @@
       vehicle.speed = 0;
       vehicle.turnVelocity = 0;
       vehicle.wreckTimer = 0;
+      vehicle.coverDestroyed = false;
+      vehicle.coverHp = undefined;
+      vehicle.coverMaxHp = undefined;
+      vehicle.coverCollapsePulse = 0;
       vehicle.destructionPending = false;
       vehicle.destructionTimer = 0;
       vehicle.loadedAmmo = null;
@@ -1037,12 +1096,14 @@
       if (!crew) {
         this.spawnCrewForTank(vehicle, {
           callSign: vehicle.vehicleType === "humvee" ? `${vehicle.callSign}-DRV` : `${vehicle.callSign}-CREW`,
-          role: vehicle.vehicleType === "humvee" ? "driver" : "crew"
+          role: vehicle.isPlayerTank ? "machine-gunner" : vehicle.vehicleType === "humvee" ? "driver" : "crew",
+          dedicated: Boolean(vehicle.isPlayerTank),
+          boardImmediately: true
         });
         return;
       }
 
-      const spawn = this.findCrewSpawn(vehicle);
+      const spawn = { x: vehicle.x, y: vehicle.y };
       if (crew.inTank) crew.inTank.leaveCrew?.(crew);
       vehicle.crew = null;
       crew.x = spawn.x;
@@ -1057,6 +1118,11 @@
       crew.inTank = null;
       crew.state = "mounting";
       crew.mountTimer = 0;
+      if (vehicle.isPlayerTank) {
+        crew.role = "machine-gunner";
+        crew.dedicated = true;
+      }
+      crew.boardTargetTank();
       IronLine.factionVisuals?.syncEntity?.(this, crew);
     }
 

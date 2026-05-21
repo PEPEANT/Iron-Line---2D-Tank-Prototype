@@ -199,6 +199,8 @@
           padding,
           includeScenery: false,
           includeWrecks: true,
+          ignoreVehicleCrushThrough: true,
+          vehicleKind: this.tank.vehicleType === "humvee" ? "humvee" : "tank",
           ignore: [this.tank],
           ignoreBlockerContainingA: true
         });

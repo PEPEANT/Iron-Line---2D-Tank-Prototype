@@ -57,7 +57,8 @@
       this.countdownStarted = false;
       this.startCountdown = 0;
       this.matchPhase = "waiting";
-      this.debug.ai = true;
+      this.debug.ai = false;
+      this.debug.navGraph = false;
       if (this.player) Object.assign(this.player, { alive: false, hp: 0, inTank: null });
       if (this.playerTank) this.playerTank.playerControlled = false;
       if (room) this.adminApplyRoom?.(room, { live: false });
@@ -491,6 +492,29 @@
       if (playerId === this.onlineSession.playerId && this.player) {
         this.player.factionId = factionId;
         this.player.skinId = factionId;
+      }
+      const classId = this.sessionRoleClassId?.(nextSlot.roleId) || "infantry";
+      if (playerId === this.onlineSession.playerId && this.player) {
+        const changed = this.applyFullPlayerClassLoadout?.(classId, {
+          resetAmmo: true,
+          clearDrones: false
+        });
+        if (!changed) {
+          if (this.player.classId !== classId) this.player.setClass?.(classId);
+          this.applyPlayerLoadoutOverrides?.(this.player, { resetAmmo: false });
+          this.syncLocalCombatRoleState?.(this.player);
+        }
+      } else {
+        const equipment = this.deploymentEquipmentForClass?.(classId) || [];
+        player.classId = classId;
+        player.currentClassId = classId;
+        player.combatRoleId = IronLine.playerLoadouts?.classRoleId?.(classId) || nextSlot.roleId || "infantry";
+        player.weaponInventory = equipment.slice();
+        player.weaponId = equipment[0] || player.weaponId || "machinegun";
+        player.equipmentAmmo = IronLine.playerLoadouts?.classAmmo?.(classId, equipment) || player.equipmentAmmo || {};
+        nextSlot.currentClassId = classId;
+        nextSlot.weaponId = player.weaponId;
+        nextSlot.equipmentAmmo = { ...(player.equipmentAmmo || {}) };
       }
       player.ready = false;
       this.setSlotCommandAuthority(nextSlot, playerId, player.name || player.nickname || playerId, "owner");

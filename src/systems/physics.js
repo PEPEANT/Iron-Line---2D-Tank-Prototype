@@ -46,6 +46,12 @@
     return Boolean(vehicle && !vehicle.coverDestroyed && (!vehicle.alive || vehicle.hp <= 0 || vehicle.destructionPending));
   }
 
+  function vehicleWreckBlocks(vehicle, options = {}) {
+    if (!isVehicleWreck(vehicle)) return false;
+    const blockSeconds = options.wreckBlockSeconds ?? (vehicle.vehicleType === "humvee" ? 10 : 14);
+    return (vehicle.wreckTimer || 0) <= blockSeconds;
+  }
+
   function isVehicleCrushThrough(item, options = {}) {
     if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !item?.destructible || item.destroyed) return false;
     return vehicleCrushThroughTypes.has(worldItemType(item));
@@ -133,7 +139,7 @@
 
     if (includeWrecks) {
       for (const wreck of [...(game.tanks || []), ...(game.humvees || [])]) {
-        if (!isVehicleWreck(wreck)) continue;
+        if (!vehicleWreckBlocks(wreck, options)) continue;
         const r = Math.max(22, (wreck.radius || 18) * 1.05);
         blockers.push({
           x: wreck.x - r,
@@ -158,6 +164,11 @@
 
     const blockedBy = (item) => {
       if (!item || ignore.has(item) || !itemBlocksSight(item)) return false;
+      if (options.ignoreVehicleCrushThrough && isVehicleCrushThrough(item, {
+        ...options,
+        destroyObstaclesOnImpact: true,
+        vehicleKind: options.vehicleKind || "tank"
+      })) return false;
       if (ignoreA && pointInsideItem(x1, y1, item, padding)) return false;
       if (ignoreB && pointInsideItem(x2, y2, item, padding)) return false;
       return lineBlockedByItem(x1, y1, x2, y2, item, padding);
@@ -175,7 +186,7 @@
 
     if (options.includeWrecks !== false) {
       for (const wreck of [...(game.tanks || []), ...(game.humvees || [])]) {
-        if (!isVehicleWreck(wreck) || ignore.has(wreck)) continue;
+        if (!vehicleWreckBlocks(wreck, options) || ignore.has(wreck)) continue;
         const blocker = { x: wreck.x, y: wreck.y, r: Math.max(22, (wreck.radius || 18) * 1.05), type: "vehicle-wreck" };
         if (ignoreA && pointInsideItem(x1, y1, blocker, padding)) continue;
         if (ignoreB && pointInsideItem(x2, y2, blocker, padding)) continue;
@@ -233,8 +244,7 @@
 
     return [...(game.tanks || []), ...(game.humvees || [])].some((tank) => {
       if (tank === entity || ignoreTanks.has(tank)) return false;
-      const wreck = isVehicleWreck(tank);
-      if (!tank.alive && (!options.blockWrecks || !wreck)) return false;
+      if (!tank.alive && (!options.blockWrecks || !vehicleWreckBlocks(tank, options))) return false;
       return distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
     });
   }
@@ -403,42 +413,66 @@
 
   function resolveInfantryTankSpacing(game) {
     for (const unit of game.infantry || []) {
-      if (!unit.inVehicle) resolveCircleAgainstTanks(game, unit, 5);
+      if (!unit.inVehicle) resolveCircleAgainstTanks(game, unit, 18);
     }
-    for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 5);
-    if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 5);
+    for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 18);
+    if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 12);
   }
 
   function resolveTankSpacing(game, dt) {
     const tanks = [...(game.tanks || []), ...(game.humvees || [])];
-    for (let i = 0; i < tanks.length; i += 1) {
-      const a = tanks[i];
-      if (!a.alive) continue;
+    const world = game.world || {};
+    const passes = tanks.length > 6 ? 2 : 3;
+    for (let pass = 0; pass < passes; pass += 1) {
+      for (let i = 0; i < tanks.length; i += 1) {
+        const a = tanks[i];
+        if (!a.alive) continue;
 
-      for (let j = i + 1; j < tanks.length; j += 1) {
-        const b = tanks[j];
-        if (!b.alive) continue;
+        for (let j = i + 1; j < tanks.length; j += 1) {
+          const b = tanks[j];
+          if (!b.alive) continue;
 
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const d = Math.max(1, Math.hypot(dx, dy));
-        const minDist = a.radius + b.radius + 4;
-        if (d >= minDist) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          let d = Math.hypot(dx, dy);
+          const minDist = a.radius + b.radius + 10;
+          if (d >= minDist) continue;
 
-        const push = (minDist - d) * 0.5;
-        const nx = dx / d;
-        const ny = dy / d;
-        a.x -= nx * push * dt * 14;
-        a.y -= ny * push * dt * 14;
-        b.x += nx * push * dt * 14;
-        b.y += ny * push * dt * 14;
-        const impact = clamp((minDist - d) / Math.max(minDist, 1), 0.08, 0.45);
-        a.impactShake = Math.max(a.impactShake || 0, impact);
-        b.impactShake = Math.max(b.impactShake || 0, impact);
-        if (a.turnVelocity !== undefined) a.turnVelocity *= 0.9;
-        if (b.turnVelocity !== undefined) b.turnVelocity *= 0.9;
-        a.speed *= 0.82;
-        b.speed *= 0.82;
+          let nx = dx / Math.max(d, 1);
+          let ny = dy / Math.max(d, 1);
+          if (d < 1) {
+            const angle = (b.angle || 0) + Math.PI / 2;
+            nx = Math.cos(angle);
+            ny = Math.sin(angle);
+            d = 1;
+          }
+
+          const overlap = minDist - d;
+          const severity = clamp(overlap / Math.max(minDist, 1), 0.08, 0.9);
+          const push = clamp(overlap * 0.72, 2.5, 28);
+          let aShare = 0.5;
+          let bShare = 0.5;
+          if (a.playerControlled && !b.playerControlled) {
+            aShare = 0.18;
+            bShare = 0.82;
+          } else if (b.playerControlled && !a.playerControlled) {
+            aShare = 0.82;
+            bShare = 0.18;
+          }
+
+          a.x = clamp(a.x - nx * push * aShare, a.radius, (world.width || a.x) - a.radius);
+          a.y = clamp(a.y - ny * push * aShare, a.radius, (world.height || a.y) - a.radius);
+          b.x = clamp(b.x + nx * push * bShare, b.radius, (world.width || b.x) - b.radius);
+          b.y = clamp(b.y + ny * push * bShare, b.radius, (world.height || b.y) - b.radius);
+
+          const impact = clamp(severity * 0.8, 0.08, 0.55);
+          a.impactShake = Math.max(a.impactShake || 0, impact);
+          b.impactShake = Math.max(b.impactShake || 0, impact);
+          if (a.turnVelocity !== undefined) a.turnVelocity *= 0.62;
+          if (b.turnVelocity !== undefined) b.turnVelocity *= 0.62;
+          if (a.speed !== undefined) a.speed *= severity > 0.32 ? -0.1 : 0.42;
+          if (b.speed !== undefined) b.speed *= severity > 0.32 ? -0.1 : 0.42;
+        }
       }
     }
   }
@@ -451,6 +485,7 @@
     itemBlocksMovement,
     circleBlockedByWorld,
     isVehicleWreck,
+    vehicleWreckBlocks,
     tryMoveCircle,
     resolveTankSpacing,
     resolveInfantryTankSpacing,

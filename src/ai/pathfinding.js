@@ -16,6 +16,9 @@
       this.neighbors = new Map(this.nodes.map((node) => [node.id, []]));
       this.openEdges = [];
       this.edgeKeys = new Set();
+      this.segmentCache = new Map();
+      this.segmentCacheSignature = "";
+      this.pathCache = new Map();
 
       for (const edge of config.edges || []) {
         this.addEdge(edge[0], edge[1], edge[2], 22);
@@ -27,11 +30,12 @@
 
     nearestNode(x, y, options = {}) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-      let best = null;
-      let bestDistance = Infinity;
       let fallback = null;
       let fallbackDistance = Infinity;
       const padding = options.padding ?? 58;
+      const candidates = [];
+      const searchRange = options.nearestSearchRange ?? 680;
+      const candidateLimit = options.nearestCandidateLimit ?? 64;
 
       for (const node of this.nodes) {
         const d = distXY(x, y, node.x, node.y);
@@ -39,15 +43,18 @@
           fallback = node;
           fallbackDistance = d;
         }
-        const blocked = d > 90 && this.segmentBlocked(x, y, node.x, node.y, padding, options);
-        if (blocked) continue;
-        if (d < bestDistance) {
-          best = node;
-          bestDistance = d;
-        }
+        if (d <= 90) return node;
+        if (d <= searchRange) candidates.push({ node, distance: d });
       }
 
-      return best || fallback;
+      candidates.sort((a, b) => a.distance - b.distance);
+      const limit = Math.min(candidates.length, candidateLimit);
+      for (let index = 0; index < limit; index += 1) {
+        const item = candidates[index];
+        if (!this.segmentBlocked(x, y, item.node.x, item.node.y, padding, options)) return item.node;
+      }
+
+      return fallback;
     }
 
     nodeForObjective(name) {
@@ -58,6 +65,9 @@
     findPath(startId, goalId, options = {}) {
       if (!this.nodeById.has(startId) || !this.nodeById.has(goalId)) return [];
       if (startId === goalId) return [this.nodeById.get(startId)];
+      this.ensureSegmentCacheFresh();
+      const cacheKey = this.pathCacheKey(startId, goalId, options);
+      if (this.pathCache.has(cacheKey)) return this.pathCache.get(cacheKey);
 
       const open = new Set([startId]);
       const cameFrom = new Map();
@@ -70,7 +80,7 @@
         iterations += 1;
         const current = this.lowestScoreNode(open, fScore);
         if (!current) break;
-        if (current === goalId) return this.reconstructPath(cameFrom, current);
+        if (current === goalId) return this.cachePath(cacheKey, this.reconstructPath(cameFrom, current));
 
         open.delete(current);
         for (const neighbor of this.neighbors.get(current) || []) {
@@ -86,7 +96,7 @@
         }
       }
 
-      return [];
+      return this.cachePath(cacheKey, []);
     }
 
     edgeBlockedForOptions(fromId, neighbor, options = {}) {
@@ -109,6 +119,20 @@
 
     segmentBlocked(x1, y1, x2, y2, padding = 56, options = {}) {
       if (!this.world?.obstacles) return false;
+      const useCache = options.cache !== false;
+      if (useCache) {
+        this.ensureSegmentCacheFresh();
+        const key = this.segmentCacheKey(x1, y1, x2, y2, padding, options);
+        if (this.segmentCache.has(key)) return this.segmentCache.get(key);
+        const blocked = this.computeSegmentBlocked(x1, y1, x2, y2, padding, options);
+        this.segmentCache.set(key, blocked);
+        if (this.segmentCache.size > 24000) this.segmentCache.clear();
+        return blocked;
+      }
+      return this.computeSegmentBlocked(x1, y1, x2, y2, padding, options);
+    }
+
+    computeSegmentBlocked(x1, y1, x2, y2, padding = 56, options = {}) {
       if (IronLine.physics?.lineBlockedByWorld) {
         return IronLine.physics.lineBlockedByWorld({ world: this.world, tanks: [], humvees: [] }, x1, y1, x2, y2, {
           padding,
@@ -119,6 +143,48 @@
       return this.world.obstacles.some((obstacle) => (
         lineIntersectsRect(x1, y1, x2, y2, expandedRect(obstacle, padding))
       ));
+    }
+
+    ensureSegmentCacheFresh() {
+      const signature = this.blockerSignature();
+      if (signature === this.segmentCacheSignature) return;
+      this.segmentCacheSignature = signature;
+      this.segmentCache.clear();
+      this.pathCache.clear();
+    }
+
+    blockerSignature() {
+      const obstacles = this.world?.obstacles || [];
+      const scenery = this.world?.scenery || [];
+      let signature = `${obstacles.length}:${scenery.length}`;
+      for (let index = 0; index < obstacles.length; index += 1) {
+        if (obstacles[index]?.destroyed) signature += `|o${index}`;
+      }
+      for (let index = 0; index < scenery.length; index += 1) {
+        if (scenery[index]?.destroyed) signature += `|s${index}`;
+      }
+      return signature;
+    }
+
+    segmentCacheKey(x1, y1, x2, y2, padding, options = {}) {
+      const a = `${Math.round(x1)},${Math.round(y1)}`;
+      const b = `${Math.round(x2)},${Math.round(y2)}`;
+      const ends = a < b ? `${a}|${b}` : `${b}|${a}`;
+      const scenery = options.blockScenery === false ? "0" : "1";
+      return `${ends}|${Math.round(padding)}|${scenery}`;
+    }
+
+    pathCacheKey(startId, goalId, options = {}) {
+      const scenery = options.blockScenery === false ? "0" : "1";
+      const padding = Math.round(options.padding ?? 34);
+      const edgePadding = options.edgePadding === undefined ? "n" : Math.round(options.edgePadding);
+      return `${startId}|${goalId}|${padding}|${edgePadding}|${scenery}`;
+    }
+
+    cachePath(key, path) {
+      this.pathCache.set(key, path);
+      if (this.pathCache.size > 3000) this.pathCache.clear();
+      return path;
     }
 
     addNode(node) {

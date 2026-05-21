@@ -54,6 +54,12 @@
     return "infantry";
   }
 
+  function roleClassId(roleId) {
+    if (roleId === "engineer") return "engineer";
+    if (roleId === "recon") return "scout";
+    return "infantry";
+  }
+
   function installPlayerLoadout(Game) {
     Object.assign(Game.prototype, {
       applyPlayerLoadoutOverrides(player = this.player, options = {}) {
@@ -118,6 +124,10 @@
           IronLine.roomRegistry?.addOrUpdatePlayer?.(this.onlineSession.roomId, sessionPlayer);
         }
         return true;
+      },
+
+      sessionRoleClassId(roleId) {
+        return roleClassId(roleId);
       },
 
       setLoadoutChoiceForClass(classId, slotIndex, weaponId, options = {}) {
@@ -214,7 +224,8 @@
 
   IronLine.playerLoadouts = {
     classAmmo,
-    classRoleId
+    classRoleId,
+    roleClassId
   };
   IronLine.installPlayerLoadout = installPlayerLoadout;
 })(window);

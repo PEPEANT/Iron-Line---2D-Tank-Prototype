@@ -429,7 +429,7 @@
       if (!tank.alive) return;
       const ctx = this.ctx;
       const manned = tank.hasMachineGunner?.();
-      const active = manned && tank.weaponMode === "mg" && (tank.ammo?.mg || 0) > 0;
+      const active = manned && (tank.weaponMode === "mg" || (tank.machineGunKick || 0) > 0.02) && (tank.ammo?.mg || 0) > 0;
       const baseAngle = tank.turretAngle ?? tank.angle;
       const mount = tank.machineGunMountPoint?.() || {
         x: tank.x + Math.cos(baseAngle) * -4 + Math.cos(baseAngle + Math.PI / 2) * -15,

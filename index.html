@@ -10,7 +10,9 @@
     <link rel="stylesheet" href="map-markers.css">
     <link rel="stylesheet" href="tactical-map.css">
     <link rel="stylesheet" href="command-radio.css">
+    <link rel="stylesheet" href="performance-monitor.css">
     <link rel="stylesheet" href="session-flow.css">
+    <link rel="stylesheet" href="src/styles/lobby-loadout.css">
     <link rel="stylesheet" href="deployment-mobile.css">
     <link rel="stylesheet" href="chat.css">
     <link rel="stylesheet" href="role-change.css">
@@ -37,6 +39,11 @@
           <input type="checkbox" data-debug-option="navGraph">
           <span>경로 그리드 표시</span>
           <small>N</small>
+        </label>
+        <label class="settings-toggle">
+          <input type="checkbox" data-debug-option="performance">
+          <span>성능 계측 표시</span>
+          <small>P</small>
         </label>
         <label class="settings-toggle">
           <input type="checkbox" data-mobile-controls>
@@ -392,6 +399,7 @@
     <script src="src/systems/fog-of-war.js"></script>
     <script src="src/systems/test-lab-ui.js"></script>
     <script src="src/systems/test-lab-objects.js"></script>
+    <script src="src/systems/performance-monitor.js"></script>
     <script src="src/main.js"></script>
   </body>
 </html>

@@ -76,7 +76,7 @@
     }
 
     hasMachineGunner() {
-      return this.alive && !this.destructionPending && this.playerControlled && Boolean(this.crew);
+      return this.alive && !this.destructionPending && Boolean(this.crew);
     }
 
     isOperational() {
@@ -270,6 +270,10 @@
     update(game, dt) {
       if (!this.alive) {
         this.wreckTimer += dt;
+        if (!this.coverDestroyed && this.wreckTimer > 14) {
+          this.coverDestroyed = true;
+          this.coverCollapsePulse = Math.max(this.coverCollapsePulse || 0, 0.7);
+        }
         return;
       }
 

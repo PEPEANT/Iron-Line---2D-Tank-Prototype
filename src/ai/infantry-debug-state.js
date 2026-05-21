@@ -46,6 +46,9 @@
       this.debug.path = this.path;
       this.debug.pathIndex = this.pathIndex;
       this.debug.stuckTimer = this.stuckTimer;
+      this.debug.actionLockTimer = this.actionLockTimer || 0;
+      this.debug.squadOrderLockTimer = this.squadOrderLockTimer || 0;
+      this.debug.movementTempoPaused = Boolean(this.movementTempoPaused);
     },
 
     activeTransportDebug() {

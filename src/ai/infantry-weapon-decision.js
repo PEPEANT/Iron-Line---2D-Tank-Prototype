@@ -85,6 +85,24 @@
 
       return targets;
     },
+    selectGrenadeTargetBudgeted(contact, tankThreat) {
+      const cached = this.cachedGrenadeTarget;
+      const target = cached?.target || null;
+      const weapon = cached?.weapon || null;
+      const ammoKey = weapon?.ammoKey || weapon?.id || "";
+      const cacheValid = cached &&
+        weapon &&
+        (!target || target.alive !== false) &&
+        (!ammoKey || (this.unit.equipmentAmmo?.[ammoKey] || 0) > 0);
+
+      if (!this.grenadePreparing && this.grenadeDecisionTimer > 0) {
+        return cacheValid ? cached : null;
+      }
+
+      this.grenadeDecisionTimer = 0.16 + (this.seed % 7) * 0.018 + Math.random() * 0.06;
+      this.cachedGrenadeTarget = this.selectGrenadeTarget(contact, tankThreat);
+      return this.cachedGrenadeTarget;
+    },
     selectGrenadeTarget(contact, tankThreat) {
       const weapons = this.grenadeWeapons();
       if (!weapons.length) {

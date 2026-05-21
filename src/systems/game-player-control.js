@@ -25,6 +25,10 @@
       if (this.input.consumePress("KeyN")) {
         this.debug.navGraph = !this.debug.navGraph;
       }
+
+      if (this.input.consumePress("KeyP")) {
+        this.debug.performance = !this.debug.performance;
+      }
     },
     updateMountedPlayer(dt) {
       const vehicle = this.player.inTank;

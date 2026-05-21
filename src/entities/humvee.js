@@ -140,6 +140,10 @@
     update(game, dt) {
       if (!this.alive) {
         this.wreckTimer += dt;
+        if (!this.coverDestroyed && this.wreckTimer > 10) {
+          this.coverDestroyed = true;
+          this.coverCollapsePulse = Math.max(this.coverCollapsePulse || 0, 0.7);
+        }
         return;
       }
 

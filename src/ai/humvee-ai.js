@@ -13,6 +13,25 @@
     lineIntersectsRect
   } = IronLine.math;
   const { hasLineOfSight } = IronLine.physics;
+  const vehicleCrushThroughTypes = new Set([
+    "sandbag",
+    "barricade",
+    "wood-fence",
+    "brush",
+    "tree",
+    "rubble",
+    "streetlight",
+    "billboard",
+    "bench"
+  ]);
+
+  function obstacleType(item) {
+    return String(item?.type || item?.kind || "");
+  }
+
+  function canDriveThroughObstacle(item) {
+    return Boolean(item?.destructible && !item.destroyed && vehicleCrushThroughTypes.has(obstacleType(item)));
+  }
 
   class HumveeAI {
     constructor(vehicle, game) {
@@ -28,6 +47,8 @@
       this.transportDismountTimer = 0;
       this.transportPickupCooldown = 0;
       this.transportPickupOrderId = "";
+      this.trafficHoldTimer = 0;
+      this.trafficHoldTarget = "";
       this.debug = {
         state: this.state,
         goal: "",
@@ -450,12 +471,11 @@
     }
 
     driveVector(dt, vx, vy, intensity, options = {}) {
+      if (this.handleTrafficHold(dt, vx, vy)) return;
+
       const recovery = this.navigation.getRecoveryDrive();
       if (recovery) {
-        const throttle = options.allowReverse === false
-          ? Math.max(0.14, Math.abs(recovery.throttle) * 0.35)
-          : recovery.throttle;
-        this.applyDrive(dt, throttle, recovery.turn);
+        this.applyDrive(dt, recovery.throttle, recovery.turn);
         return;
       }
 
@@ -478,10 +498,12 @@
       let ay = vy;
 
       for (const obstacle of this.game.world.obstacles) {
-        const expanded = expandedRect(obstacle, 62);
-        const lookX = this.vehicle.x + vx * 96;
-        const lookY = this.vehicle.y + vy * 96;
+        const crushable = canDriveThroughObstacle(obstacle);
+        const expanded = expandedRect(obstacle, crushable ? 16 : 58);
+        const lookX = this.vehicle.x + vx * (crushable ? 48 : 92);
+        const lookY = this.vehicle.y + vy * (crushable ? 48 : 92);
         if (!lineIntersectsRect(this.vehicle.x, this.vehicle.y, lookX, lookY, expanded)) continue;
+        if (crushable) continue;
 
         const nearestX = clamp(this.vehicle.x, obstacle.x, obstacle.x + obstacle.w);
         const nearestY = clamp(this.vehicle.y, obstacle.y, obstacle.y + obstacle.h);
@@ -496,6 +518,7 @@
         if (other === this.vehicle) continue;
         const wreck = IronLine.physics?.isVehicleWreck?.(other) ||
           Boolean(!other.alive && !other.coverDestroyed && (other.hp <= 0 || other.destructionPending));
+        if (wreck && IronLine.physics?.vehicleWreckBlocks && !IronLine.physics.vehicleWreckBlocks(other)) continue;
         if (!other.alive && !wreck) continue;
         const distance = distXY(this.vehicle.x, this.vehicle.y, other.x, other.y);
         const avoidRange = (this.vehicle.radius || 30) + (other.radius || 32) + (wreck ? 46 : 26);
@@ -507,6 +530,47 @@
 
       const length = Math.max(0.001, Math.hypot(ax, ay));
       return { x: ax / length, y: ay / length };
+    }
+
+    handleTrafficHold(dt, vx, vy) {
+      this.trafficHoldTimer = Math.max(0, this.trafficHoldTimer - dt);
+      const blocker = this.frontFriendlyVehicle(vx, vy);
+      if (blocker) {
+        const wait = 0.58 + (this.vehicle.callSign || "").length % 5 * 0.08;
+        this.trafficHoldTimer = Math.max(this.trafficHoldTimer, wait);
+        this.trafficHoldTarget = blocker.callSign || "";
+      } else if (this.trafficHoldTimer <= 0) {
+        this.trafficHoldTarget = "";
+      }
+
+      if (this.trafficHoldTimer <= 0) return false;
+      this.applyDrive(dt, 0, 0);
+      return true;
+    }
+
+    frontFriendlyVehicle(vx, vy) {
+      const ownRadius = this.vehicle.radius || 31;
+      const candidates = [];
+      for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
+        if (other === this.vehicle || !other.alive || other.team !== this.vehicle.team) continue;
+        const dx = other.x - this.vehicle.x;
+        const dy = other.y - this.vehicle.y;
+        const forward = dx * vx + dy * vy;
+        const otherRadius = other.radius || 32;
+        const followRange = ownRadius + otherRadius + (other.vehicleType === "humvee" ? 76 : 92);
+        if (forward <= 0 || forward > followRange) continue;
+        const headingDot = Math.cos(other.angle || 0) * vx + Math.sin(other.angle || 0) * vy;
+        if (headingDot < -0.35 && this.vehicleYieldKey(this.vehicle) <= this.vehicleYieldKey(other)) continue;
+        const lateral = Math.abs(dx * -vy + dy * vx);
+        const laneWidth = ownRadius + otherRadius + 16;
+        if (lateral > laneWidth) continue;
+        candidates.push({ vehicle: other, score: forward + lateral * 0.68 });
+      }
+      return candidates.sort((a, b) => a.score - b.score)[0]?.vehicle || null;
+    }
+
+    vehicleYieldKey(vehicle) {
+      return String(vehicle?.callSign || vehicle?.id || vehicle?.spawnKey || "");
     }
 
     applyDrive(dt, throttle, turn) {
@@ -529,6 +593,8 @@
       this.debug.supportRequest = order?.supportRequestType || "";
       this.debug.supportRequestId = order?.supportRequestId || "";
       this.debug.passengers = this.vehicle.passengerCount?.() || 0;
+      this.debug.trafficHoldTimer = this.trafficHoldTimer;
+      this.debug.trafficHoldTarget = this.trafficHoldTarget;
     }
   }
 

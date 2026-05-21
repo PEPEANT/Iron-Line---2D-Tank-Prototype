@@ -14,7 +14,26 @@
     expandedRect,
     lineIntersectsRect
   } = IronLine.math;
-  const { tryMoveCircle } = IronLine.physics;
+  const { tryMoveCircle, hasLineOfSight } = IronLine.physics;
+  const vehicleCrushThroughTypes = new Set([
+    "sandbag",
+    "barricade",
+    "wood-fence",
+    "brush",
+    "tree",
+    "rubble",
+    "streetlight",
+    "billboard",
+    "bench"
+  ]);
+
+  function obstacleType(item) {
+    return String(item?.type || item?.kind || "");
+  }
+
+  function canDriveThroughObstacle(item) {
+    return Boolean(item?.destructible && !item.destroyed && vehicleCrushThroughTypes.has(obstacleType(item)));
+  }
 
   class TankAI {
     constructor(tank, game) {
@@ -28,6 +47,8 @@
       this.combat = new IronLine.CombatController(tank, game);
       this.strafe = Math.random() < 0.5 ? -1 : 1;
       this.strafeTimer = 1 + Math.random() * 2;
+      this.trafficHoldTimer = 0;
+      this.trafficHoldTarget = "";
       this.debug = {
         state: this.state,
         goal: "",
@@ -87,6 +108,7 @@
         moveTarget.x,
         moveTarget.y
       ) > (moveTarget.stopDistance || 0) + 24;
+      this.updateMachineGun(dt);
       this.navigation.recordMovement(dt, beforeX, beforeY, stillHasMoveTarget);
       this.updateDebugState(order, decision, moveTarget);
     }
@@ -354,12 +376,11 @@
     }
 
     driveVector(dt, vx, vy, intensity, options = {}) {
+      if (this.handleTrafficHold(dt, vx, vy)) return;
+
       const recovery = this.navigation.getRecoveryDrive();
       if (recovery) {
-        const throttle = options.allowReverse === false
-          ? Math.max(0.14, Math.abs(recovery.throttle) * 0.35)
-          : recovery.throttle;
-        this.applyDrive(dt, throttle, recovery.turn);
+        this.applyDrive(dt, recovery.throttle, recovery.turn);
         return;
       }
 
@@ -384,20 +405,22 @@
       let ay = vy;
 
       for (const obstacle of this.game.world.obstacles) {
-        const expanded = expandedRect(obstacle, 82);
-        const lookX = this.tank.x + vx * 116;
-        const lookY = this.tank.y + vy * 116;
+        const crushable = canDriveThroughObstacle(obstacle);
+        const expanded = expandedRect(obstacle, crushable ? 18 : 64);
+        const lookX = this.tank.x + vx * (crushable ? 58 : 108);
+        const lookY = this.tank.y + vy * (crushable ? 58 : 108);
         const nearObstacle = pointInRect(this.tank.x, this.tank.y, expanded);
         const projectedHit = pointInRect(lookX, lookY, expanded) ||
           lineIntersectsRect(this.tank.x, this.tank.y, lookX, lookY, expanded);
         if (!nearObstacle && !projectedHit) continue;
+        if (crushable) continue;
 
         const nearestX = clamp(this.tank.x, obstacle.x, obstacle.x + obstacle.w);
         const nearestY = clamp(this.tank.y, obstacle.y, obstacle.y + obstacle.h);
         const awayX = this.tank.x - nearestX;
         const awayY = this.tank.y - nearestY;
         const distance = Math.max(1, Math.hypot(awayX, awayY));
-        const force = Math.max(projectedHit ? 0.72 : 0, clamp((145 - distance) / 145, 0, 1)) * 1.18;
+        const force = Math.max(projectedHit ? 0.58 : 0, clamp((132 - distance) / 132, 0, 1)) * 1.02;
         ax += (awayX / distance) * force;
         ay += (awayY / distance) * force;
       }
@@ -406,11 +429,12 @@
         if (other === this.tank) continue;
         const wreck = IronLine.physics?.isVehicleWreck?.(other) ||
           Boolean(!other.alive && !other.coverDestroyed && (other.hp <= 0 || other.destructionPending));
+        if (wreck && IronLine.physics?.vehicleWreckBlocks && !IronLine.physics.vehicleWreckBlocks(other)) continue;
         if (!other.alive && !wreck) continue;
         const distance = distXY(this.tank.x, this.tank.y, other.x, other.y);
-        const avoidRange = (this.tank.radius || 38) + (other.radius || 32) + (wreck ? 44 : 22);
+        const avoidRange = (this.tank.radius || 38) + (other.radius || 32) + (wreck ? 56 : 64);
         if (distance > avoidRange || distance < 1) continue;
-        const force = ((avoidRange - distance) / Math.max(avoidRange * 0.5, 1)) * (wreck ? 1.32 : 1);
+        const force = ((avoidRange - distance) / Math.max(avoidRange * 0.46, 1)) * (wreck ? 1.32 : 1.42);
         ax += ((this.tank.x - other.x) / distance) * force;
         ay += ((this.tank.y - other.y) / distance) * force;
       }
@@ -422,6 +446,112 @@
 
       const length = Math.max(0.001, Math.hypot(ax, ay));
       return { x: ax / length, y: ay / length };
+    }
+
+    updateMachineGun(dt) {
+      if (!this.tank?.hasMachineGunner?.() || (this.tank.ammo?.mg || 0) <= 0) return false;
+
+      const target = this.findMachineGunTarget();
+      if (!target) {
+        this.tank.machineGunAngle = rotateTowards(
+          this.tank.machineGunAngle,
+          this.tank.turretAngle,
+          this.tank.machineGunTurnRate * 0.54 * dt
+        );
+        return false;
+      }
+
+      const targetAngle = angleTo(this.tank.x, this.tank.y, target.x, target.y);
+      const turnScale = target.isDrone ? 1.18 : 1;
+      this.tank.machineGunAngle = rotateTowards(
+        this.tank.machineGunAngle,
+        targetAngle,
+        this.tank.machineGunTurnRate * turnScale * dt
+      );
+      const aimError = Math.abs(normalizeAngle(this.tank.machineGunAngle - targetAngle));
+      if (aimError > (target.isDrone ? 0.24 : 0.17)) return false;
+      return this.tank.fireMachineGun(this.game, target.x, target.y, { target });
+    }
+
+    findMachineGunTarget() {
+      const weapon = this.tank.machineGunWeapon?.() || { range: 760 };
+      const muzzle = this.tank.machineGunMuzzlePoint?.() || { x: this.tank.x, y: this.tank.y };
+      const range = weapon.range || 760;
+      const candidates = [];
+
+      const addTarget = (target, priority = 0) => {
+        if (!target || target.alive === false || target.hp <= 0 || target.team === this.tank.team) return;
+        const distance = distXY(muzzle.x, muzzle.y, target.x, target.y);
+        if (distance > range) return;
+        if (hasLineOfSight && !hasLineOfSight(this.game, muzzle, target, { padding: 4 })) return;
+        const threatBonus =
+          target.isDrone ? 260 :
+          target.classId === "engineer" ? 220 :
+          target.weaponId === "rpg" ? 190 :
+          target.weaponId === "machinegun" || target.weaponId === "lmg" ? 130 :
+          0;
+        candidates.push({
+          target,
+          score: distance - threatBonus - priority
+        });
+      };
+
+      for (const drone of this.game.drones || []) {
+        addTarget(drone, drone.droneRole === "attack" ? 210 : 120);
+      }
+      for (const unit of this.game.infantry || []) {
+        if (!unit.inVehicle) addTarget(unit, unit.classId === "engineer" ? 180 : 120);
+      }
+      for (const crew of this.game.crews || []) {
+        if (!crew.inTank) addTarget(crew, 70);
+      }
+
+      if (this.tank.team === TEAM.RED && !this.game.player.inTank && this.game.player.hp > 0 && !this.game.isPlayerInSafeZone?.()) {
+        addTarget(this.game.player, 150);
+      }
+
+      return candidates.sort((a, b) => a.score - b.score)[0]?.target || null;
+    }
+
+    handleTrafficHold(dt, vx, vy) {
+      this.trafficHoldTimer = Math.max(0, this.trafficHoldTimer - dt);
+      const blocker = this.frontFriendlyVehicle(vx, vy);
+      if (blocker) {
+        const wait = 0.72 + (this.seed % 6) * 0.08;
+        this.trafficHoldTimer = Math.max(this.trafficHoldTimer, wait);
+        this.trafficHoldTarget = blocker.callSign || "";
+      } else if (this.trafficHoldTimer <= 0) {
+        this.trafficHoldTarget = "";
+      }
+
+      if (this.trafficHoldTimer <= 0) return false;
+      this.applyDrive(dt, 0, 0);
+      return true;
+    }
+
+    frontFriendlyVehicle(vx, vy) {
+      const ownRadius = this.tank.radius || 38;
+      const candidates = [];
+      for (const other of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
+        if (other === this.tank || !other.alive || other.team !== this.tank.team) continue;
+        const dx = other.x - this.tank.x;
+        const dy = other.y - this.tank.y;
+        const forward = dx * vx + dy * vy;
+        const otherRadius = other.radius || 32;
+        const followRange = ownRadius + otherRadius + (other.vehicleType === "humvee" ? 86 : 104);
+        if (forward <= 0 || forward > followRange) continue;
+        const headingDot = Math.cos(other.angle || 0) * vx + Math.sin(other.angle || 0) * vy;
+        if (headingDot < -0.35 && this.vehicleYieldKey(this.tank) <= this.vehicleYieldKey(other)) continue;
+        const lateral = Math.abs(dx * -vy + dy * vx);
+        const laneWidth = ownRadius + otherRadius + 18;
+        if (lateral > laneWidth) continue;
+        candidates.push({ vehicle: other, score: forward + lateral * 0.65 });
+      }
+      return candidates.sort((a, b) => a.score - b.score)[0]?.vehicle || null;
+    }
+
+    vehicleYieldKey(vehicle) {
+      return String(vehicle?.callSign || vehicle?.id || vehicle?.spawnKey || "");
     }
 
     applyDrive(dt, throttle, turn) {
@@ -464,6 +594,8 @@
       this.debug.decision = decision.decision || null;
       this.debug.supportRequest = order?.supportRequestType || "";
       this.debug.supportRequestId = order?.supportRequestId || "";
+      this.debug.trafficHoldTimer = this.trafficHoldTimer;
+      this.debug.trafficHoldTarget = this.trafficHoldTarget;
     }
   }
 

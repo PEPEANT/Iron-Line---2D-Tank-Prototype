@@ -87,14 +87,20 @@
       this.drawChatBubbles(game);
 
       ctx.restore();
+      game.perfMonitor?.begin("render.minimap");
       this.drawMinimap(game);
+      game.perfMonitor?.end("render.minimap");
+      game.perfMonitor?.begin("render.tactical");
       this.drawTacticalMapOverlay?.(game);
+      game.perfMonitor?.end("render.tactical");
+      game.perfMonitor?.begin("render.canvasHud");
       if (!game.adminObserverMode) this.drawScreenVignette(game);
       this.drawStartCountdown(game);
       this.drawAnnihilationRoundOverlay(game);
       this.drawTestLabOverlay(game);
       if (!game.adminObserverMode) this.drawAimModeOverlay(game);
       if (!game.adminObserverMode) this.drawScoutAimOverlay(game);
+      game.perfMonitor?.end("render.canvasHud");
     }
 
     drawChatBubbles(game) {

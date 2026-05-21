@@ -64,8 +64,28 @@
     rearAwarenessRange: 82,
     reactionDelayMin: 0.18,
     reactionDelayMax: 0.82,
-    fireFacingTolerance: 0.42
+    fireFacingTolerance: 0.42,
+    actionLockMin: 0.72,
+    actionLockMax: 1.42,
+    squadOrderLockDuration: 1.45,
+    moveBurstMin: 1.25,
+    moveBurstMax: 2.15,
+    observePauseMin: 0.48,
+    observePauseMax: 0.95
   };
+
+  const TEMPO_MOVE_STATES = new Set([
+    "advance",
+    "secure",
+    "report-move",
+    "support-position",
+    "pre-assault-position",
+    "hold-wall-position",
+    "recon-move",
+    "recon-patrol",
+    "squad-regroup",
+    "rally-tank"
+  ]);
 
   IronLine.InfantryAIConfig = INFANTRY_CONFIG;
 
@@ -78,7 +98,7 @@
       this.path = [];
       this.pathIndex = 0;
       this.orderId = "";
-      this.repathTimer = 0;
+      this.repathTimer = 0.12 + Math.random() * 0.45;
       this.stuckTimer = 0;
       this.fireCooldown = Math.random() * 0.35;
       this.grenadeCooldown = 1.4 + Math.random() * 2.2;
@@ -95,6 +115,10 @@
       this.recoveryTarget = null;
       this.recoveryTimer = 0;
       this.reportTimer = Math.random() * 0.35;
+      this.repairDecisionTimer = Math.random() * 0.25;
+      this.cachedRepairTarget = null;
+      this.grenadeDecisionTimer = Math.random() * 0.22;
+      this.cachedGrenadeTarget = null;
       this.target = null;
       this.awarenessTarget = null;
       this.awarenessTimer = 0;
@@ -109,6 +133,17 @@
       this.grenadePreparing = false;
       this.repairDecision = null;
       this.tacticalDecision = null;
+      this.actionLockTimer = 0;
+      this.actionLockKey = "";
+      this.lockedTacticalDecision = null;
+      this.lockedTacticalOrderKey = "";
+      this.squadOrderLockTimer = 0;
+      this.squadOrderLockKey = "";
+      this.moveBurstTimer = 0.7 + Math.random() * 0.8;
+      this.observePauseTimer = 0;
+      this.movementTempoKey = "";
+      this.movementTempoTarget = null;
+      this.movementTempoPaused = false;
       this.moveHeading = unit.angle;
       this.seed = this.hash(unit.callSign);
       this.thoughtText = "";
@@ -151,7 +186,10 @@
         thought: "",
         path: [],
         pathIndex: 0,
-        stuckTimer: 0
+        stuckTimer: 0,
+        actionLockTimer: 0,
+        squadOrderLockTimer: 0,
+        movementTempoPaused: false
       };
     }
 
@@ -211,6 +249,113 @@
       this.unit.isProne = false;
     }
 
+    tacticalOrderKey(order) {
+      if (!order) return "";
+      return [
+        order.squadId || "solo",
+        order.objectiveName || order.point?.name || "",
+        order.tacticalMode || order.role || "",
+        Math.round(order.point?.x || 0),
+        Math.round(order.point?.y || 0)
+      ].join(":");
+    }
+
+    tacticalDecisionKey(decision) {
+      if (!decision) return "";
+      const target = decision.target
+        ? `${Math.round(decision.target.x || 0)}:${Math.round(decision.target.y || 0)}`
+        : "";
+      return `${decision.decision || ""}:${decision.reason || ""}:${target}`;
+    }
+
+    stabilizeTacticalDecision(decision, order, contact, tankThreat, context = {}) {
+      if (!decision) {
+        if (this.actionLockTimer <= 0) {
+          this.actionLockKey = "";
+          this.lockedTacticalDecision = null;
+        }
+        return null;
+      }
+
+      const orderKey = this.tacticalOrderKey(order);
+      const nextKey = this.tacticalDecisionKey(decision);
+      const lockUsable = this.lockedTacticalDecision &&
+        this.lockedTacticalOrderKey === orderKey &&
+        this.actionLockTimer > 0 &&
+        this.lockedTacticalDecisionUsable(contact, tankThreat);
+
+      if (lockUsable && nextKey !== this.actionLockKey && !this.canBreakActionLock(decision, context)) {
+        return {
+          ...this.lockedTacticalDecision,
+          locked: true,
+          lockRemaining: Math.round(this.actionLockTimer * 100) / 100
+        };
+      }
+
+      if (nextKey !== this.actionLockKey || this.lockedTacticalOrderKey !== orderKey || this.actionLockTimer <= 0) {
+        this.actionLockKey = nextKey;
+        this.lockedTacticalOrderKey = orderKey;
+        this.lockedTacticalDecision = { ...decision };
+        this.actionLockTimer = this.actionLockDuration(decision, order);
+      }
+
+      return decision;
+    }
+
+    lockedTacticalDecisionUsable(contact, tankThreat) {
+      const decision = this.lockedTacticalDecision;
+      if (!decision) return false;
+      if (decision.decision === "fire" && !contact && !tankThreat) return false;
+      if (decision.decision === "spread" && !decision.target) return false;
+      if (decision.target && !this.pointPassable(decision.target.x, decision.target.y, this.unit.radius + 3)) return false;
+      return true;
+    }
+
+    canBreakActionLock(decision, context = {}) {
+      if (context.pressureThreat || this.unit.suppression >= 78) return true;
+      if (decision?.decision === "spread" && (decision.score || 0) >= 0.68) return true;
+      if (decision?.decision === "cover" && (decision.score || 0) >= 0.66) return true;
+      return false;
+    }
+
+    actionLockDuration(decision, order) {
+      const role = order?.squadRole || this.unit.squadRole || this.squadRole();
+      const base = decision?.decision === "hold_position" || decision?.decision === "prone"
+        ? 1.08
+        : decision?.decision === "spread" || decision?.decision === "cover"
+          ? 0.82
+          : 0.94;
+      const roleBonus = role === "support" ? 0.24 : role === "security" ? 0.12 : 0;
+      const jitter = (this.seed % 5) * 0.06;
+      return clamp(base + roleBonus + jitter, INFANTRY_CONFIG.actionLockMin, INFANTRY_CONFIG.actionLockMax);
+    }
+
+    refreshSquadOrderLock(order, contact, tankThreat) {
+      const key = this.tacticalOrderKey(order);
+      if (!order?.squadId || !key) {
+        this.squadOrderLockKey = "";
+        this.squadOrderLockTimer = 0;
+        return;
+      }
+
+      if (key !== this.squadOrderLockKey) {
+        this.squadOrderLockKey = key;
+        this.squadOrderLockTimer = INFANTRY_CONFIG.squadOrderLockDuration + (this.seed % 4) * 0.08;
+      }
+
+      if (contact || tankThreat || this.unit.suppression > 64) {
+        this.squadOrderLockTimer = Math.min(this.squadOrderLockTimer, 0.28);
+      }
+    }
+
+    shouldPrioritizeSquadOrder(order, contact, tankThreat) {
+      if (!order?.squadId || !order?.point) return false;
+      if (contact || tankThreat || this.unit.suppression >= 52) return false;
+      const mode = order.tacticalMode || order.role || "advance";
+      const protectedMode = ["regroup", "fallback", "rally-with-tank", "pre-assault", "hold-wall", "support-fire"].includes(mode);
+      return protectedMode || this.squadOrderLockTimer > 0;
+    }
+
     sightRange() {
       return this.unit.classId === "scout" ? INFANTRY_CONFIG.scoutSightRange : INFANTRY_CONFIG.sightRange;
     }
@@ -220,6 +365,9 @@
       const beforeY = this.unit.y;
       this.thoughtTimer = Math.max(0, this.thoughtTimer - dt);
       this.thoughtCooldown = Math.max(0, this.thoughtCooldown - dt);
+      this.actionLockTimer = Math.max(0, this.actionLockTimer - dt);
+      this.squadOrderLockTimer = Math.max(0, this.squadOrderLockTimer - dt);
+      this.movementTempoPaused = false;
       if (this.unit.inVehicle) {
         this.clearProne(0, true);
         this.state = "mounted-transport";
@@ -234,6 +382,8 @@
       this.droneCommandTimer = Math.max(0, this.droneCommandTimer - dt);
       this.coverTimer = Math.max(0, this.coverTimer - dt);
       this.reportTimer = Math.max(0, this.reportTimer - dt);
+      this.repairDecisionTimer = Math.max(0, this.repairDecisionTimer - dt);
+      this.grenadeDecisionTimer = Math.max(0, this.grenadeDecisionTimer - dt);
       this.rpgHoldReason = "";
       this.repairDecision = null;
       this.tacticalDecision = null;
@@ -246,8 +396,13 @@
       this.target = contact;
       if (this.unit.classId === "scout") this.updateScoutReports();
       else this.shareVisibleContacts(contact, tankThreat);
-      const reportedVehicleThreat = tankThreat ? null : this.selectReportedVehicleThreat();
-      const reportedContact = contact ? null : this.selectReportedSoftContact();
+      this.refreshSquadOrderLock(order, contact, tankThreat);
+      let reportedVehicleThreat = tankThreat ? null : this.selectReportedVehicleThreat();
+      let reportedContact = contact ? null : this.selectReportedSoftContact();
+      if (this.shouldPrioritizeSquadOrder(order, contact, tankThreat)) {
+        reportedVehicleThreat = null;
+        reportedContact = null;
+      }
 
       if (!order?.point) {
         this.clearProne(0, true);
@@ -263,11 +418,11 @@
       const pressureThreat = this.unit.suppression >= INFANTRY_CONFIG.suppressedThreshold
         ? contact || tankThreat || this.unit.lastThreat
         : null;
-      this.tacticalDecision = this.evaluateTacticalDecision?.(order, contact, tankThreat, {
+      this.tacticalDecision = this.stabilizeTacticalDecision(this.evaluateTacticalDecision?.(order, contact, tankThreat, {
         pressureThreat,
         reportedVehicleThreat,
         reportedContact
-      }) || null;
+      }) || null, order, contact, tankThreat, { pressureThreat });
 
       if (this.executeTacticalSpread?.(dt, this.tacticalDecision, tankThreat || pressureThreat, beforeX, beforeY)) return;
 
@@ -315,7 +470,7 @@
 
       if (this.handleSquadTacticalOrder(dt, order, contact, tankThreat, beforeX, beforeY)) return;
 
-      const repairTarget = this.selectRepairTarget(contact, tankThreat);
+      const repairTarget = this.selectRepairTargetBudgeted(contact, tankThreat);
       if (repairTarget) {
         const weapon = INFANTRY_WEAPONS.repairKit;
         const repairDistance = distXY(this.unit.x, this.unit.y, repairTarget.x, repairTarget.y);
@@ -348,7 +503,7 @@
 
       if (this.tryUseAiDrone?.(dt, order, contact, tankThreat || reportedVehicleThreat?.target, beforeX, beforeY)) return;
 
-      const grenadeTarget = this.selectGrenadeTarget(contact, tankThreat);
+      const grenadeTarget = this.selectGrenadeTargetBudgeted(contact, tankThreat);
       if (grenadeTarget) {
         this.faceContact(grenadeTarget, dt);
         const grenadeThrown = this.tryThrowGrenade(grenadeTarget, dt);
@@ -1471,6 +1626,20 @@
       return clamp(best, 0, 1);
     }
 
+    selectRepairTargetBudgeted(contact, tankThreat) {
+      const cached = this.cachedRepairTarget;
+      const cacheValid = cached &&
+        cached.alive &&
+        cached.team === this.unit.team &&
+        cached.hp < cached.maxHp * 0.94 &&
+        !contact;
+      if (this.repairDecisionTimer > 0) return cacheValid ? cached : null;
+
+      this.repairDecisionTimer = 0.2 + (this.seed % 5) * 0.025 + Math.random() * 0.08;
+      this.cachedRepairTarget = this.selectRepairTarget(contact, tankThreat);
+      return this.cachedRepairTarget;
+    }
+
     selectRepairTarget(contact, tankThreat) {
       const weapon = INFANTRY_WEAPONS.repairKit;
       const repairAmmo = this.unit.equipmentAmmo?.repairKit || 0;
@@ -1928,17 +2097,18 @@
         this.orderId = order.id;
         this.path = [];
         this.pathIndex = 0;
-        this.repathTimer = 0;
+        this.repathTimer = 0.08 + (this.seed % 13) * 0.035;
       }
 
       const finalTarget = this.formationTarget(order);
       if (this.canMoveDirect(finalTarget.x, finalTarget.y, 24)) {
         this.path = [];
         this.pathIndex = 0;
+        this.repathTimer = 0;
         return finalTarget;
       }
 
-      if (this.path.length === 0 || this.repathTimer <= 0) this.rebuildPath(order, finalTarget);
+      if (this.repathTimer <= 0) this.rebuildPath(order, finalTarget);
 
       while (
         this.pathIndex < this.path.length &&
@@ -2118,8 +2288,8 @@
       for (const vehicle of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (!vehicle.alive || vehicle.team !== this.unit.team) continue;
         const distance = distXY(x, y, vehicle.x, vehicle.y);
-        if (distance > 112 || distance < 1) continue;
-        score += ((112 - distance) / 112) * 1.25;
+        if (distance > 150 || distance < 1) continue;
+        score += ((150 - distance) / 150) * 1.65;
       }
 
       return score;
@@ -2174,6 +2344,7 @@
         this.unit.speed = approach(this.unit.speed, 0, 260 * dt);
         return;
       }
+      if (this.applyMovementTempo(dt, target, distance)) return;
 
       const desiredAngle = angleTo(this.unit.x, this.unit.y, target.x, target.y);
       const steer = this.avoidanceVector(Math.cos(desiredAngle), Math.sin(desiredAngle), target, distance);
@@ -2191,7 +2362,7 @@
         Math.sin(this.unit.angle) * this.unit.speed,
         this.unit.radius,
         dt,
-        { blockTanks: true, blockWrecks: true, padding: 5 }
+        { blockTanks: true, blockWrecks: true, padding: 12 }
       );
     }
 
@@ -2232,9 +2403,10 @@
       for (const tank of [...(this.game.tanks || []), ...(this.game.humvees || [])]) {
         if (!tank.alive) continue;
         const distance = distXY(this.unit.x, this.unit.y, tank.x, tank.y);
-        const avoidRange = finalArrival && tank.team === this.unit.team ? 108 : 86;
+        const friendlyVehicle = tank.team === this.unit.team;
+        const avoidRange = friendlyVehicle ? (finalArrival ? 150 : 124) : 92;
         if (distance > avoidRange || distance < 1) continue;
-        const force = (avoidRange - distance) / (finalArrival ? 36 : 34);
+        const force = ((avoidRange - distance) / (friendlyVehicle ? 38 : 34)) * (friendlyVehicle ? 1.18 : 0.86);
         ax += ((this.unit.x - tank.x) / distance) * force;
         ay += ((this.unit.y - tank.y) / distance) * force;
       }
@@ -2390,6 +2562,11 @@
     }
 
     recordMovement(dt, beforeX, beforeY, target) {
+      if (this.movementTempoPaused) {
+        this.stuckTimer = Math.max(0, this.stuckTimer - dt * 1.8);
+        return;
+      }
+
       const moved = distXY(beforeX, beforeY, this.unit.x, this.unit.y);
       const trying = target && distXY(this.unit.x, this.unit.y, target.x, target.y) > (target.stopDistance || 20) + 8;
       if (trying && moved < 12 * dt) this.stuckTimer += dt;
@@ -2460,6 +2637,63 @@
       }
 
       return null;
+    }
+
+    movementTempoKeyFor(target) {
+      const bucketX = Math.round((target?.x || 0) / 88);
+      const bucketY = Math.round((target?.y || 0) / 88);
+      return `${this.tacticalOrderKey(this.order)}:${this.state}:${bucketX}:${bucketY}`;
+    }
+
+    resetMovementTempo(key, target) {
+      this.movementTempoKey = key;
+      this.movementTempoTarget = target ? { x: target.x, y: target.y } : null;
+      this.observePauseTimer = 0;
+      this.moveBurstTimer = this.randomTempo(INFANTRY_CONFIG.moveBurstMin, INFANTRY_CONFIG.moveBurstMax);
+    }
+
+    randomTempo(min, max) {
+      return min + Math.random() * Math.max(0, max - min);
+    }
+
+    shouldUseMovementTempo(target, distance) {
+      if (!target || target.recovery || target.fireLaneEscape || target.cover || target.tacticalSpread) return false;
+      if (distance <= (target.stopDistance || 20) + 42) return false;
+      if ((this.unit.suppression || 0) >= 52) return false;
+      return TEMPO_MOVE_STATES.has(this.state);
+    }
+
+    applyMovementTempo(dt, target, distance) {
+      if (!this.shouldUseMovementTempo(target, distance)) return false;
+
+      const key = this.movementTempoKeyFor(target);
+      const targetShifted = this.movementTempoTarget &&
+        distXY(this.movementTempoTarget.x, this.movementTempoTarget.y, target.x, target.y) > 120;
+      if (key !== this.movementTempoKey || targetShifted) {
+        this.resetMovementTempo(key, target);
+      }
+
+      if (this.observePauseTimer > 0) {
+        this.observePauseTimer = Math.max(0, this.observePauseTimer - dt);
+        return this.holdObservation(dt, target);
+      }
+
+      this.moveBurstTimer = Math.max(0, this.moveBurstTimer - dt);
+      if (this.moveBurstTimer <= 0) {
+        this.observePauseTimer = this.randomTempo(INFANTRY_CONFIG.observePauseMin, INFANTRY_CONFIG.observePauseMax);
+        this.moveBurstTimer = this.randomTempo(INFANTRY_CONFIG.moveBurstMin, INFANTRY_CONFIG.moveBurstMax);
+        return this.holdObservation(dt, target);
+      }
+
+      return false;
+    }
+
+    holdObservation(dt, target) {
+      this.movementTempoPaused = true;
+      this.unit.speed = approach(this.unit.speed, 0, 260 * dt);
+      const focus = this.target || this.order?.squadStatus?.lastThreat || this.order?.point || target;
+      if (focus) this.faceContact(focus, dt);
+      return true;
     }
 
     updateThoughtBubble() {

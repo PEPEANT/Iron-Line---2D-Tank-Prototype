@@ -13,6 +13,7 @@
         ? new BroadcastChannel(this.channelName)
         : null;
       this.publishTimer = 0;
+      this.readTimer = 0;
       this.remoteSnapshot = null;
       this.remoteLastSeen = 0;
 
@@ -28,6 +29,9 @@
 
     update(dt) {
       if (this.game.adminObserverMode) {
+        this.readTimer -= dt;
+        if (this.readTimer > 0) return;
+        this.readTimer = 0.25;
         this.readStoredSnapshot();
         return;
       }

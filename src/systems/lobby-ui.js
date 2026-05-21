@@ -2,11 +2,13 @@
 
 (function registerLobbyUI(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM, MATCH_RULES } = IronLine.constants;
+  const { TEAM, MATCH_RULES, INFANTRY_CLASSES, INFANTRY_WEAPONS } = IronLine.constants;
 
   class LobbyUI {
     constructor(hud) {
       this.hud = hud;
+      this.lobbyChatMode = "all";
+      this.lobbyLocalChat = [];
     }
 
     get nodes() {
@@ -31,7 +33,38 @@
       const map = document.createElement("div");
       map.id = "lobbyMap";
       map.className = "deployment-map lobby-map";
-      mapWrap.append(map);
+      const chat = document.createElement("section");
+      chat.id = "lobbyChat";
+      chat.className = "lobby-chat";
+      chat.setAttribute("aria-label", "대기방 채팅");
+      const chatHead = document.createElement("div");
+      chatHead.className = "lobby-chat-head";
+      const chatTitle = document.createElement("strong");
+      chatTitle.textContent = "대기방 채팅";
+      const chatMeta = document.createElement("span");
+      chatMeta.id = "lobbyChatMeta";
+      chatMeta.textContent = "온라인";
+      chatHead.append(chatTitle, chatMeta);
+      const chatLog = document.createElement("div");
+      chatLog.id = "lobbyChatLog";
+      chatLog.className = "lobby-chat-log";
+      const chatForm = document.createElement("form");
+      chatForm.id = "lobbyChatForm";
+      chatForm.className = "lobby-chat-form";
+      const chatMode = document.createElement("button");
+      chatMode.id = "lobbyChatMode";
+      chatMode.type = "button";
+      chatMode.className = "lobby-chat-mode";
+      chatMode.textContent = "전체";
+      const chatInput = document.createElement("input");
+      chatInput.id = "lobbyChatInput";
+      chatInput.type = "text";
+      chatInput.maxLength = 120;
+      chatInput.autocomplete = "off";
+      chatInput.placeholder = "대기방 메시지";
+      chatForm.append(chatMode, chatInput);
+      chat.append(chatHead, chatLog, chatForm);
+      mapWrap.append(map, chat);
 
       const panel = document.createElement("section");
       panel.className = "lobby-panel";
@@ -47,6 +80,9 @@
       const slots = document.createElement("div");
       slots.id = "lobbySlots";
       slots.className = "lobby-teams";
+      const loadout = document.createElement("div");
+      loadout.id = "lobbyLoadout";
+      loadout.className = "lobby-loadout hidden";
       const summary = document.createElement("div");
       summary.id = "lobbySummary";
       summary.className = "lobby-summary hidden";
@@ -72,18 +108,25 @@
       back.textContent = "방 목록으로";
       actions.append(team, ready, start, back);
 
-      panel.append(header, slots, summary, actions);
+      panel.append(header, slots, loadout, summary, actions);
       card.append(mapWrap, panel);
       screen.append(card);
       document.body.insertBefore(screen, ui.deathScreen || ui.resultScreen || null);
 
       ui.lobbyScreen = screen;
       ui.lobbyMap = map;
+      ui.lobbyChat = chat;
+      ui.lobbyChatMeta = chatMeta;
+      ui.lobbyChatLog = chatLog;
+      ui.lobbyChatForm = chatForm;
+      ui.lobbyChatMode = chatMode;
+      ui.lobbyChatInput = chatInput;
       ui.lobbyModeTitle = title;
       ui.lobbyHeaderMeta = headerMeta;
       ui.lobbyStatus = null;
       ui.lobbyRoomCode = null;
       ui.lobbySlots = slots;
+      ui.lobbyLoadout = loadout;
       ui.lobbySummary = summary;
       ui.lobbyTeamButton = team;
       ui.lobbyReadyButton = ready;
@@ -96,6 +139,12 @@
       back.addEventListener("click", () => {
         const game = IronLine.game;
         if (game && !this.hud.sessionFlow?.backFromLobby(game)) game.returnToDeployment?.();
+      });
+      chatMode.addEventListener("click", () => this.toggleLobbyChatMode());
+      chatInput.addEventListener("keydown", (event) => event.stopPropagation());
+      chatForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        this.submitLobbyChat();
       });
     }
 
@@ -133,7 +182,146 @@
       if (ui.lobbyBackButton) ui.lobbyBackButton.textContent = game.sessionMode === "online" ? "방 목록으로" : "설정으로 돌아가기";
 
       this.updateSlots(game);
+      this.updateLoadout(game, { localPlayer, localSpectator, session });
+      this.updateLobbyChat(game, { localPlayer, localSpectator, session, room });
       this.hud.buildMapMarkers(game, ui.lobbyMap);
+    }
+
+    updateLobbyChat(game, options = {}) {
+      const log = this.nodes.lobbyChatLog;
+      const mode = this.nodes.lobbyChatMode;
+      const meta = this.nodes.lobbyChatMeta;
+      const input = this.nodes.lobbyChatInput;
+      if (!log) return;
+
+      const session = options.session || game.onlineSession || {};
+      const localPlayer = options.localPlayer ||
+        session.players?.find((player) => player.id === session.playerId) ||
+        session.players?.[0] ||
+        null;
+      const modes = this.lobbyChatModes(game, localPlayer);
+      if (!modes.includes(this.lobbyChatMode)) this.lobbyChatMode = modes[0] || "all";
+      if (mode) mode.textContent = this.chatModeLabel(this.lobbyChatMode);
+      if (input) input.disabled = Boolean(game.matchStarted || game.countdownStarted);
+
+      const roomId = session.roomId || "";
+      const room = options.room || IronLine.roomRegistry?.getRoom?.(roomId) || null;
+      const messages = roomId
+        ? (IronLine.roomRegistry?.recentChat?.(roomId, 36) || [])
+        : this.lobbyLocalChat.slice(-36);
+      const visible = messages.filter((message) => this.canSeeLobbyChat(game, message)).slice(-16);
+      const signature = JSON.stringify({
+        roomId,
+        mode: this.lobbyChatMode,
+        locked: Boolean(input?.disabled),
+        count: visible.length,
+        ids: visible.map((item) => item.id || `${item.sender}:${item.text}:${item.createdAt}`)
+      });
+
+      if (meta) {
+        const spectators = (room?.spectators || session.spectators || []).length;
+        const players = (room?.players || session.players || []).filter((player) => (player.participantType || "player") === "player").length;
+        meta.textContent = `${players || 0}명 / 관전 ${spectators || 0}`;
+      }
+
+      if (log.dataset.signature === signature) return;
+      log.dataset.signature = signature;
+      log.textContent = "";
+
+      if (visible.length <= 0) {
+        const empty = document.createElement("div");
+        empty.className = "lobby-chat-empty";
+        empty.textContent = "아직 대기 중입니다.";
+        log.append(empty);
+        return;
+      }
+
+      for (const message of visible) {
+        const row = document.createElement("div");
+        row.className = `lobby-chat-message ${message.channel || "all"}`;
+        const badge = document.createElement("b");
+        badge.textContent = this.chatModeLabel(message.channel || "all");
+        const body = document.createElement("span");
+        body.textContent = `${message.sender || "Player"}: ${message.text || ""}`;
+        row.append(badge, body);
+        log.append(row);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+
+    submitLobbyChat() {
+      const game = IronLine.game;
+      const input = this.nodes.lobbyChatInput;
+      if (!game || !input || game.matchStarted || game.countdownStarted) return false;
+      const text = String(input.value || "").replace(/\s+/g, " ").trim();
+      if (!text) return false;
+
+      const session = game.onlineSession || {};
+      const localPlayer = game.localSessionPlayer?.() || session.players?.[0] || {};
+      const payload = {
+        channel: this.lobbyChatMode,
+        sender: game.localProfile?.nickname || localPlayer.name || localPlayer.nickname || "Player",
+        text,
+        team: localPlayer.team || game.player?.team || TEAM.BLUE,
+        participantType: game.localSessionParticipantType?.() || localPlayer.participantType || "player",
+        playerId: session.playerId || game.localProfile?.playerId || ""
+      };
+      const roomId = game.sessionMode === "online" ? session.roomId : "";
+      const saved = roomId ? IronLine.roomRegistry?.pushChat?.(roomId, payload) : null;
+      if (!saved) {
+        this.lobbyLocalChat.push({
+          ...payload,
+          id: `local:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+          createdAt: Date.now()
+        });
+        if (this.lobbyLocalChat.length > 80) this.lobbyLocalChat.splice(0, this.lobbyLocalChat.length - 80);
+      }
+      input.value = "";
+      if (this.nodes.lobbyChatLog) this.nodes.lobbyChatLog.dataset.signature = "";
+      game.hud?.update?.(game);
+      input.focus();
+      return true;
+    }
+
+    toggleLobbyChatMode() {
+      const game = IronLine.game;
+      const localPlayer = game?.localSessionPlayer?.();
+      const modes = this.lobbyChatModes(game, localPlayer);
+      const index = Math.max(0, modes.indexOf(this.lobbyChatMode));
+      this.lobbyChatMode = modes[(index + 1) % modes.length] || "all";
+      if (this.nodes.lobbyChatLog) this.nodes.lobbyChatLog.dataset.signature = "";
+      if (game) this.updateLobbyChat(game);
+    }
+
+    lobbyChatModes(game, localPlayer = null) {
+      const participantType = game?.localSessionParticipantType?.() || localPlayer?.participantType || "player";
+      if (participantType === "caster") return ["caster", "spectator", "all"];
+      if (["spectator", "admin"].includes(participantType)) return ["spectator", "all"];
+      return ["all", "team"];
+    }
+
+    chatModeLabel(mode) {
+      if (mode === "team") return "팀";
+      if (mode === "spectator") return "관전";
+      if (mode === "caster") return "해설";
+      if (mode === "system") return "알림";
+      return "전체";
+    }
+
+    canSeeLobbyChat(game, message) {
+      const channel = message?.channel || "all";
+      if (channel === "system" || channel === "all" || channel === "caster") return true;
+      const participantType = game.localSessionParticipantType?.() || "player";
+      if (channel === "team") {
+        const localPlayer = game.localSessionPlayer?.();
+        return participantType !== "spectator" && message.team === (localPlayer?.team || game.player?.team || TEAM.BLUE);
+      }
+      if (channel === "spectator") {
+        if (["spectator", "caster", "admin"].includes(participantType)) return true;
+        const room = IronLine.roomRegistry?.getRoom?.(game.onlineSession?.roomId || "");
+        return Boolean(room?.spectatorChatVisibleToPlayers);
+      }
+      return true;
     }
 
     updateModeSummary(game, conquest) {
@@ -217,6 +405,10 @@
           slotId: player.slotId,
           participantType: player.participantType || "player",
           roleId: player.roleId,
+          classId: player.classId,
+          currentClassId: player.currentClassId,
+          weaponId: player.weaponId,
+          weaponInventory: player.weaponInventory || [],
           ready: Boolean(player.ready)
         })),
         spectators: spectators.map((player) => ({ id: player.id, name: player.name, participantType: player.participantType })),
@@ -225,6 +417,9 @@
           team: slot.team,
           roleId: slot.roleId,
           playerId: slot.playerId,
+          currentClassId: slot.currentClassId,
+          weaponId: slot.weaponId,
+          equipmentAmmo: slot.equipmentAmmo || {},
           aiControlled: Boolean(slot.aiControlled),
           squadIds: slot.squadIds || [],
           vehicleIds: slot.vehicleIds || []
@@ -347,7 +542,7 @@
       const assets = this.slotAssetText(slot);
       const badges = document.createElement("span");
       badges.textContent = player
-        ? this.playerBadges({ local, ready })
+        ? this.playerBadges({ local, ready, loadout: this.playerLoadoutText(player, slot) })
         : `AI 운용${assets ? ` · ${assets}` : ""}`;
       body.append(name, badges);
 
@@ -371,6 +566,157 @@
         card.append(avatar, body, state);
       }
       return card;
+    }
+
+    updateLoadout(game, options = {}) {
+      const root = this.nodes.lobbyLoadout;
+      if (!root) return;
+      const session = options.session || game.onlineSession || {};
+      const localPlayer = options.localPlayer ||
+        session.players?.find((player) => player.id === session.playerId) ||
+        session.players?.[0] ||
+        null;
+      const localSpectator = options.localSpectator ||
+        (localPlayer?.participantType || "player") !== "player" ||
+        (session.participantType || "player") !== "player";
+      if (!localPlayer || localSpectator) {
+        root.classList.add("hidden");
+        root.textContent = "";
+        root.dataset.signature = "";
+        return;
+      }
+
+      const slot = game.sessionSlotById?.(localPlayer.slotId) ||
+        session.roleSlots?.find((item) => item.id === localPlayer.slotId) ||
+        null;
+      const classId = this.roleClassId(slot?.roleId || localPlayer.roleId || "infantry");
+      const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
+      const equipment = game.deploymentEquipmentForClass?.(classId) ||
+        (infantryClass?.equipment || []).slice();
+      const locked = Boolean(localPlayer.ready || session.localReady || game.countdownStarted || game.matchStarted);
+      const loadoutSlots = equipment.map((weaponId, index) => ({
+        index,
+        weaponId,
+        choices: game.equipmentChoiceOptions?.(classId, index) || [weaponId]
+      }));
+      const signature = JSON.stringify({
+        classId,
+        slotId: slot?.id || "",
+        roleId: slot?.roleId || localPlayer.roleId || "",
+        locked,
+        equipment,
+        loadoutSlots
+      });
+
+      root.classList.remove("hidden");
+      if (root.dataset.signature === signature) return;
+      root.dataset.signature = signature;
+      root.textContent = "";
+
+      const head = document.createElement("div");
+      head.className = "lobby-loadout-head";
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = "출전 장비";
+      const meta = document.createElement("span");
+      meta.textContent = `${this.roleLabel(slot?.roleId)} · ${this.classLabel(classId)}`;
+      titleWrap.append(title, meta);
+      const state = document.createElement("em");
+      state.textContent = locked ? "준비 완료 후 잠김" : "준비 전 변경 가능";
+      head.append(titleWrap, state);
+
+      const grid = document.createElement("div");
+      grid.className = "lobby-loadout-slots";
+      for (const item of loadoutSlots) {
+        const row = document.createElement("section");
+        row.className = "lobby-loadout-slot";
+        const label = document.createElement("div");
+        label.className = "lobby-loadout-slot-label";
+        const key = document.createElement("b");
+        key.textContent = `${item.index + 1}`;
+        const labelText = document.createElement("span");
+        labelText.textContent = this.loadoutSlotLabel(item.index, item.weaponId);
+        label.append(key, labelText);
+
+        const choices = document.createElement("div");
+        choices.className = "lobby-loadout-choices";
+        for (const weaponId of item.choices) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "lobby-loadout-choice";
+          button.classList.toggle("active", weaponId === item.weaponId);
+          button.disabled = locked || weaponId === item.weaponId;
+          button.textContent = this.weaponLabel(weaponId);
+          button.title = INFANTRY_WEAPONS?.[weaponId]?.name || weaponId;
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const liveGame = IronLine.game;
+            if (!liveGame || locked) return;
+            const liveSession = liveGame.onlineSession || {};
+            const livePlayer = liveSession.players?.find((player) => player.id === liveSession.playerId);
+            if (livePlayer?.ready || liveSession.localReady || liveGame.countdownStarted || liveGame.matchStarted) return;
+            if (liveGame.player?.classId !== classId) {
+              liveGame.applyFullPlayerClassLoadout?.(classId, {
+                resetAmmo: true,
+                clearDrones: false
+              });
+            }
+            const changed = liveGame.setLoadoutChoiceForClass?.(classId, item.index, weaponId, {
+              resetAmmo: true,
+              activeSlot: item.index
+            });
+            if (!changed) return;
+            root.dataset.signature = "";
+            if (this.nodes.lobbySlots) this.nodes.lobbySlots.dataset.signature = "";
+            liveGame.hud?.update?.(liveGame);
+          });
+          choices.append(button);
+        }
+
+        row.append(label, choices);
+        grid.append(row);
+      }
+
+      const hint = document.createElement("p");
+      hint.className = "lobby-loadout-hint";
+      hint.textContent = locked
+        ? "장비를 바꾸려면 준비 해제 후 다시 선택하십시오."
+        : "선택한 장비는 경기 시작 시 현재 슬롯의 병과 장비로 적용됩니다.";
+      root.append(head, grid, hint);
+    }
+
+    roleClassId(roleId) {
+      return IronLine.playerLoadouts?.roleClassId?.(roleId) || "infantry";
+    }
+
+    classLabel(classId) {
+      const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
+      return infantryClass?.shortName || infantryClass?.name || "보병";
+    }
+
+    loadoutSlotLabel(slotIndex, weaponId) {
+      if (slotIndex === 0) return "주무장";
+      if (slotIndex === 1) {
+        const type = INFANTRY_WEAPONS?.[weaponId]?.type;
+        return type === "rpg" || type === "grenade" ? "화력장비" : "보조무장";
+      }
+      return "특수장비";
+    }
+
+    weaponLabel(weaponId) {
+      const weapon = INFANTRY_WEAPONS?.[weaponId];
+      return weapon?.shortName || weapon?.name || weaponId || "-";
+    }
+
+    playerLoadoutText(player, slot = null) {
+      const classId = player.currentClassId || player.classId || slot?.currentClassId || this.roleClassId(player.roleId || slot?.roleId);
+      const inventory = Array.isArray(player.weaponInventory) && player.weaponInventory.length > 0
+        ? player.weaponInventory
+        : [player.weaponId || slot?.weaponId].filter(Boolean);
+      const weapons = inventory.slice(0, 3).map((weaponId) => this.weaponLabel(weaponId)).filter(Boolean);
+      const label = this.classLabel(classId);
+      return weapons.length > 0 ? `${label}: ${weapons.join("/")}` : label;
     }
 
     roleInitial(roleId) {
@@ -402,6 +748,7 @@
       const badges = [];
       if (flags.local) badges.push("나");
       badges.push(flags.ready ? "준비" : "미준비");
+      if (flags.loadout) badges.push(flags.loadout);
       return badges.join(" · ");
     }
 
