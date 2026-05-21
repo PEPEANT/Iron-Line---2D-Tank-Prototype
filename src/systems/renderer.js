@@ -3,13 +3,14 @@
 (function registerRenderer(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, TEAM_COLORS, AMMO, INFANTRY_WEAPONS } = IronLine.constants;
-  const { clamp, lerp, distXY, angleTo, roundRect, hexToRgba, lineIntersectsRect } = IronLine.math;
+  const { clamp, lerp, distXY, angleTo, normalizeAngle, roundRect, hexToRgba, lineIntersectsRect } = IronLine.math;
 
   class Renderer {
     constructor(canvas, camera) {
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d");
       this.camera = camera;
+      this.remoteHumanStates = new Map();
       this.resize();
     }
 
@@ -159,16 +160,19 @@
       const players = (session.players || []).filter((player) => (player.participantType || "player") === "player");
       const entries = [];
       const seen = new Set();
+      const active = new Set();
       for (const player of players) {
         const id = String(player.id || "");
         if (!id || seen.has(id) || (localId && id === localId)) continue;
         seen.add(id);
         const point = this.remoteHumanPoint(game, player, now);
         if (!point || point.alive === false) continue;
+        const smoothPoint = this.smoothedRemoteHumanPoint(id, point, now);
+        active.add(id);
         const unit = {
-          x: point.x,
-          y: point.y,
-          angle: point.angle,
+          x: smoothPoint.x,
+          y: smoothPoint.y,
+          angle: smoothPoint.angle,
           team: player.team || point.team || TEAM.BLUE,
           radius: 11,
           hp: 100,
@@ -186,14 +190,15 @@
           id,
           name: player.name || player.nickname || "Player",
           unit,
-          inVehicle: point.inVehicle,
-          vehicleId: point.vehicleId,
-          vehicleType: point.vehicleType,
-          aim: point.aim,
-          drone: point.drone,
+          inVehicle: smoothPoint.inVehicle,
+          vehicleId: smoothPoint.vehicleId,
+          vehicleType: smoothPoint.vehicleType,
+          aim: smoothPoint.aim,
+          drone: smoothPoint.drone,
           alpha: point.alpha
         });
       }
+      this.pruneRemoteHumanStates(active, now);
       return entries;
     }
 
@@ -229,6 +234,72 @@
         } : null,
         alpha: age > 8000 ? 0.42 : age > 3500 ? 0.62 : 0.88
       };
+    }
+
+    smoothedRemoteHumanPoint(id, point, now = Date.now()) {
+      const states = this.remoteHumanStates || (this.remoteHumanStates = new Map());
+      let state = states.get(id);
+      const reset = !state || distXY(state.x, state.y, point.x, point.y) > 520 || now - (state.lastSeen || 0) > 9000;
+      if (reset) {
+        state = {
+          x: point.x,
+          y: point.y,
+          angle: point.angle,
+          aimX: point.aim?.x ?? null,
+          aimY: point.aim?.y ?? null,
+          droneX: point.drone?.x ?? null,
+          droneY: point.drone?.y ?? null,
+          droneAngle: point.drone?.angle ?? 0,
+          renderedAt: now,
+          lastSeen: now
+        };
+        states.set(id, state);
+      } else {
+        const elapsed = Math.max(16, now - (state.renderedAt || now));
+        const factor = clamp(elapsed / 180, 0.08, 0.36);
+        state.x = lerp(state.x, point.x, factor);
+        state.y = lerp(state.y, point.y, factor);
+        state.angle = normalizeAngle(state.angle + normalizeAngle(point.angle - state.angle) * factor);
+        if (point.aim) {
+          state.aimX = state.aimX === null ? point.aim.x : lerp(state.aimX, point.aim.x, Math.min(0.62, factor * 1.7));
+          state.aimY = state.aimY === null ? point.aim.y : lerp(state.aimY, point.aim.y, Math.min(0.62, factor * 1.7));
+        } else {
+          state.aimX = null;
+          state.aimY = null;
+        }
+        if (point.drone) {
+          const droneJump = state.droneX === null || state.droneY === null ||
+            distXY(state.droneX, state.droneY, point.drone.x, point.drone.y) > 620;
+          state.droneX = droneJump ? point.drone.x : lerp(state.droneX, point.drone.x, factor);
+          state.droneY = droneJump ? point.drone.y : lerp(state.droneY, point.drone.y, factor);
+          state.droneAngle = normalizeAngle((state.droneAngle || 0) + normalizeAngle(point.drone.angle - (state.droneAngle || 0)) * factor);
+        } else {
+          state.droneX = null;
+          state.droneY = null;
+          state.droneAngle = 0;
+        }
+        state.renderedAt = now;
+        state.lastSeen = now;
+      }
+
+      return {
+        ...point,
+        x: state.x,
+        y: state.y,
+        angle: state.angle,
+        aim: state.aimX !== null && state.aimY !== null ? { x: state.aimX, y: state.aimY } : null,
+        drone: point.drone && state.droneX !== null && state.droneY !== null
+          ? { ...point.drone, x: state.droneX, y: state.droneY, angle: state.droneAngle }
+          : null
+      };
+    }
+
+    pruneRemoteHumanStates(activeIds, now = Date.now()) {
+      const states = this.remoteHumanStates;
+      if (!states?.size) return;
+      for (const [id, state] of states.entries()) {
+        if (!activeIds.has(id) || now - (state.lastSeen || 0) > 20000) states.delete(id);
+      }
     }
 
     drawRemoteAimCue(entry, alpha = 1) {
