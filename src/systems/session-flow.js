@@ -170,7 +170,7 @@
         player.ready = false;
       }
       if (participantType === "player") {
-        game.assignPlayerToSlot?.(session.playerId, player?.slotId || "blue-infantry");
+        game.assignPlayerToSlot?.(session.playerId, this.resolveJoinSlot(game, room, player));
         this.applyRoomFactionToLocalPlayer(game);
       } else {
         for (const slot of session.roleSlots || []) {
@@ -181,6 +181,41 @@
         }
       }
       return this.publishLocalPlayer(game, { force: true }) !== false;
+    }
+
+    resolveJoinSlot(game, room = null, player = null) {
+      const slots = game?.onlineSession?.roleSlots || game?.createRoleSlots?.() || [];
+      const localId = game?.onlineSession?.playerId || player?.id || "";
+      const validIds = new Set(slots.map((slot) => slot.id));
+      const occupied = new Set(
+        (room?.players || [])
+          .filter((item) => item.id !== localId && (item.participantType || "player") === "player")
+          .map((item) => this.normalizeJoinSlotId(item.slotId))
+          .filter((slotId) => validIds.has(slotId))
+      );
+      const requested = this.normalizeJoinSlotId(player?.slotId || "");
+      if (requested && validIds.has(requested) && !occupied.has(requested)) return requested;
+      const teamOrder = this.joinSlotTeamOrder(occupied);
+      for (const team of teamOrder) {
+        const slot = slots.find((item) => item.team === team && !occupied.has(item.id));
+        if (slot) return slot.id;
+      }
+      return slots.find((slot) => !occupied.has(slot.id))?.id || requested || "blue-infantry";
+    }
+
+    joinSlotTeamOrder(occupied = new Set()) {
+      let blue = 0;
+      let red = 0;
+      for (const slotId of occupied) {
+        if (slotId.startsWith("red-")) red += 1;
+        else if (slotId.startsWith("blue-")) blue += 1;
+      }
+      return blue <= red ? [TEAM.BLUE, TEAM.RED] : [TEAM.RED, TEAM.BLUE];
+    }
+
+    normalizeJoinSlotId(slotId = "") {
+      const text = String(slotId || "");
+      return text.endsWith("-scout") ? text.replace("-scout", "-recon") : text;
     }
 
     resolveParticipantType(room, options = {}) {

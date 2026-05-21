@@ -16,6 +16,16 @@
     redTanks: { min: 1, max: 10, fallback: 5 },
     redInfantry: { min: 4, max: 64, fallback: 24 }
   });
+  const ROLE_SLOT_IDS = Object.freeze([
+    "blue-infantry",
+    "blue-engineer",
+    "blue-recon",
+    "blue-armor",
+    "red-infantry",
+    "red-engineer",
+    "red-recon",
+    "red-armor"
+  ]);
 
   class RoomRegistry {
     constructor() {
@@ -233,6 +243,16 @@
         });
     }
 
+    deleteRemoteParticipant(roomId, playerId) {
+      if (!this.canUseRemoteApi() || !roomId || !playerId) return Promise.resolve(false);
+      return fetch(`${this.roomsApiUrl(roomId)}/participants/${encodeURIComponent(playerId)}`, {
+        method: "DELETE",
+        keepalive: true
+      })
+        .then((response) => response.ok)
+        .catch(() => false);
+    }
+
     createRoom(input = {}) {
       const rooms = this.readLocalRooms();
       const knownRooms = this.listRooms();
@@ -402,7 +422,13 @@
         host: Boolean(player.host),
         updatedAt: Date.now()
       };
-      if (participantType === "player") players.push(nextPlayer);
+      if (participantType === "player") {
+        const slotId = this.resolvePlayerSlot(room, nextPlayer, players);
+        if (!slotId) return null;
+        nextPlayer.slotId = slotId;
+        nextPlayer.team = this.slotTeam(slotId) || nextPlayer.team || "blue";
+        players.push(nextPlayer);
+      }
       else {
         const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY));
         const alreadySpectating = Boolean(previous && previous.participantType !== "player");
@@ -410,11 +436,52 @@
         spectators.push(nextPlayer);
       }
       const event = this.playerEvent(previous, nextPlayer);
-      return this.updateRoom(roomId, {
+      const updated = this.updateRoom(roomId, {
         players,
         spectators,
         events: event ? this.nextEvents(room, event) : room.events
       });
+      return updated;
+    }
+
+    resolvePlayerSlot(room, player = {}, existingPlayers = []) {
+      const slots = ROLE_SLOT_IDS.slice(0, room?.capacity || ROLE_SLOT_IDS.length);
+      const validSlots = new Set(slots);
+      const occupied = new Set(
+        existingPlayers
+          .filter((item) => (item.participantType || "player") === "player")
+          .map((item) => this.normalizeSlotId(item.slotId))
+          .filter((slotId) => validSlots.has(slotId))
+      );
+      const requested = this.normalizeSlotId(player.slotId);
+      if (requested && validSlots.has(requested) && !occupied.has(requested)) return requested;
+      const teams = this.balancedSlotTeams(occupied);
+      for (const team of teams) {
+        const slot = slots.find((slotId) => this.slotTeam(slotId) === team && !occupied.has(slotId));
+        if (slot) return slot;
+      }
+      return slots.find((slotId) => !occupied.has(slotId)) || "";
+    }
+
+    balancedSlotTeams(occupied = new Set()) {
+      const counts = { blue: 0, red: 0 };
+      for (const slotId of occupied) {
+        const team = this.slotTeam(slotId);
+        if (team) counts[team] += 1;
+      }
+      return counts.blue <= counts.red ? ["blue", "red"] : ["red", "blue"];
+    }
+
+    normalizeSlotId(slotId = "") {
+      const text = String(slotId || "");
+      if (text.endsWith("-scout")) return text.replace("-scout", "-recon");
+      return text;
+    }
+
+    slotTeam(slotId = "") {
+      if (String(slotId).startsWith("red-")) return "red";
+      if (String(slotId).startsWith("blue-")) return "blue";
+      return "";
     }
 
     normalizePlayerPosition(player = {}) {
@@ -443,11 +510,13 @@
         title: "\ucc38\uac00\uc790 \uc774\ud0c8",
         detail: `${previous.name || "Player"}\uc774 \ubc29\uc5d0\uc11c \ub098\uac14\uc2b5\ub2c8\ub2e4.${reason === "stale" ? " (\uc751\ub2f5 \uc5c6\uc74c)" : ""}`
       } : null;
-      return this.updateRoom(roomId, {
+      const updated = this.updateRoom(roomId, {
         players,
         spectators,
         events: event ? this.nextEvents(room, event) : room.events
       });
+      this.deleteRemoteParticipant(roomId, playerId);
+      return updated;
     }
 
     touchAdmin(roomId, admin = {}) {
@@ -815,7 +884,7 @@
       const phase = ["waiting", "loading", "playing", "ended"].includes(room.phase) ? room.phase : "waiting";
       const capacity = this.normalizeRoomNumber(room.capacity, ROOM_SETTING_LIMITS.capacity);
       const spectatorCapacity = Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY)));
-      const players = Array.isArray(room.players) ? room.players.slice(0, capacity) : [];
+      const players = this.normalizeRoomPlayers(Array.isArray(room.players) ? room.players.slice(0, capacity) : [], capacity);
       const spectators = Array.isArray(room.spectators) ? room.spectators.slice(0, spectatorCapacity) : [];
       const admins = this.normalizeAdmins(room.admins);
       const matchSettings = this.normalizeRoomMatchSettings(room);
@@ -854,6 +923,20 @@
       const numeric = Math.round(Number(value));
       const safe = Number.isFinite(numeric) ? numeric : fallback;
       return Math.max(limit.min, Math.min(limit.max, safe));
+    }
+
+    normalizeRoomPlayers(players = [], capacity = ROOM_SETTING_LIMITS.capacity.fallback) {
+      const resolved = [];
+      for (const player of players) {
+        if (!player || (player.participantType && player.participantType !== "player")) continue;
+        const nextPlayer = { ...player, participantType: "player" };
+        const slotId = this.resolvePlayerSlot({ capacity }, nextPlayer, resolved);
+        if (!slotId) continue;
+        nextPlayer.slotId = slotId;
+        nextPlayer.team = this.slotTeam(slotId) || nextPlayer.team || "blue";
+        resolved.push(nextPlayer);
+      }
+      return resolved;
     }
 
     normalizeRoomMatchSettings(room = {}) {

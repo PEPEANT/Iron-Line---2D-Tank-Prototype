@@ -5,7 +5,7 @@ const TEAMS = Object.freeze({
   RED: "red"
 });
 
-const ROLES = Object.freeze(["infantry", "engineer", "scout", "armor"]);
+const ROLES = Object.freeze(["infantry", "engineer", "recon", "armor"]);
 const PARTICIPANT_TYPES = Object.freeze(["player", "spectator", "caster", "admin"]);
 const CHAT_CHANNELS = Object.freeze(["all", "team", "spectator", "caster", "system"]);
 const DEFAULT_MAX_SPECTATORS = 12;
@@ -48,7 +48,7 @@ function createDefaultSlots() {
   const labels = {
     infantry: "보병",
     engineer: "공병",
-    scout: "정찰",
+    recon: "정찰",
     armor: "기갑"
   };
   const slots = [];

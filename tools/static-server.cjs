@@ -32,6 +32,16 @@ let onlineRegistry = null;
 const DEFAULT_SPECTATOR_CAPACITY = 12;
 const MAX_SPECTATOR_CAPACITY = 12;
 const MAX_ROOM_HUMANS = 8;
+const ROOM_SLOT_IDS = Object.freeze([
+  "blue-infantry",
+  "blue-engineer",
+  "blue-recon",
+  "blue-armor",
+  "red-infantry",
+  "red-engineer",
+  "red-recon",
+  "red-armor"
+]);
 
 function clampInt(value, min, max, fallback) {
   const numeric = Math.round(Number(value));
@@ -116,6 +126,50 @@ function normalizeParticipant(input = {}, fallbackType = "player") {
   };
 }
 
+function normalizeSlotId(slotId = "") {
+  const text = String(slotId || "");
+  return text.endsWith("-scout") ? text.replace("-scout", "-recon") : text;
+}
+
+function slotTeam(slotId = "") {
+  if (String(slotId).startsWith("red-")) return "red";
+  if (String(slotId).startsWith("blue-")) return "blue";
+  return "";
+}
+
+function balancedSlotTeams(occupied = new Set()) {
+  const counts = { blue: 0, red: 0 };
+  for (const slotId of occupied) {
+    const team = slotTeam(slotId);
+    if (team) counts[team] += 1;
+  }
+  return counts.blue <= counts.red ? ["blue", "red"] : ["red", "blue"];
+}
+
+function resolveParticipantSlot(participant, occupied = new Set(), capacity = MAX_ROOM_HUMANS) {
+  const slots = ROOM_SLOT_IDS.slice(0, Math.max(1, Math.min(MAX_ROOM_HUMANS, Math.round(Number(capacity) || MAX_ROOM_HUMANS))));
+  const validSlots = new Set(slots);
+  const requested = normalizeSlotId(participant.slotId);
+  if (requested && validSlots.has(requested) && !occupied.has(requested)) return requested;
+  for (const team of balancedSlotTeams(occupied)) {
+    const slot = slots.find((slotId) => slotTeam(slotId) === team && !occupied.has(slotId));
+    if (slot) return slot;
+  }
+  return slots.find((slotId) => !occupied.has(slotId)) || "";
+}
+
+function enforceUniquePlayerSlots(room) {
+  if (!room?.players) return;
+  const occupied = new Set();
+  for (const participant of room.players.values()) {
+    const slotId = resolveParticipantSlot(participant, occupied, room.config?.maxHumans || MAX_ROOM_HUMANS);
+    if (!slotId) continue;
+    occupied.add(slotId);
+    participant.slotId = slotId;
+    participant.team = slotTeam(slotId);
+  }
+}
+
 function exportParticipant(input = {}, fallbackType = "player") {
   const participant = normalizeParticipant(input, fallbackType);
   if (!participant) return null;
@@ -193,22 +247,43 @@ function exportClientRoom(room) {
   };
 }
 
-function importParticipants(room, participants = [], fallbackType = "player") {
+function importParticipants(room, participants = [], fallbackType = "player", options = {}) {
   const targetMap = fallbackType === "admin"
     ? (room.admins || (room.admins = new Map()))
     : fallbackType === "player"
       ? room.players
       : room.spectators;
-  targetMap.clear();
+  if (options.replace) targetMap.clear();
   const source = fallbackType === "spectator"
     ? participants.slice(0, Math.max(0, Math.round(Number(room.config?.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY)))
     : participants;
   for (const participant of source) {
     const normalized = normalizeParticipant(participant, fallbackType);
     if (!normalized) continue;
+    if (fallbackType === "player") room.spectators.delete(normalized.playerId);
+    if (fallbackType === "spectator") room.players.delete(normalized.playerId);
     targetMap.set(normalized.playerId, normalized);
     if (fallbackType !== "admin") room.participants.set(normalized.playerId, normalized);
   }
+}
+
+function removeParticipantFromRoom(room, playerId = "") {
+  const id = String(playerId || "");
+  if (!room || !id) return false;
+  let changed = false;
+  for (const map of [room.players, room.spectators, room.participants, room.admins]) {
+    if (map?.delete?.(id)) changed = true;
+  }
+  for (const slot of room.slots || []) {
+    if (slot.playerId !== id) continue;
+    slot.playerId = null;
+    slot.nickname = "";
+    slot.ready = false;
+    slot.aiControlled = true;
+    changed = true;
+  }
+  if (changed) room.updatedAt = new Date().toISOString();
+  return changed;
 }
 
 function applyClientRoomToServer(body = {}) {
@@ -254,10 +329,10 @@ function applyClientRoomToServer(body = {}) {
   room.config.endedAt = body.endedAt || room.config.endedAt || 0;
   room.phase = clientPhaseToServer(body.phase);
 
-  room.participants.clear();
   importParticipants(room, Array.isArray(body.players) ? body.players : [], "player");
   importParticipants(room, Array.isArray(body.spectators) ? body.spectators : [], "spectator");
   importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
+  enforceUniquePlayerSlots(room);
 
   for (const slot of room.slots || []) {
     const player = Array.from(room.players.values()).find((item) => item.slotId === slot.id);
@@ -317,6 +392,7 @@ async function handleRoomsApi(req, res) {
   const url = new URL(req.url || "/", `http://${host}:${port}`);
   const pathParts = url.pathname.split("/").filter(Boolean);
   const roomId = pathParts[1] === "rooms" ? decodeURIComponent(pathParts[2] || "") : "";
+  const participantId = pathParts[3] === "participants" ? decodeURIComponent(pathParts[4] || "") : "";
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
     sendJson(res, 200, {
@@ -339,6 +415,14 @@ async function handleRoomsApi(req, res) {
     }
     persistRooms();
     sendJson(res, 200, { ok: true, room: exportClientRoom(room) });
+    return;
+  }
+
+  if (req.method === "DELETE" && roomId && participantId) {
+    const room = onlineRegistry.rooms.get(roomId);
+    const removed = removeParticipantFromRoom(room, participantId);
+    if (removed) persistRooms();
+    sendJson(res, 200, { ok: true, roomId, participantId, removed });
     return;
   }
 
