@@ -23,7 +23,7 @@
       this.canvas = document.getElementById("game");
       this.canvas.addEventListener("pointerdown", () => {
         this.canvas.focus();
-        this.requestMobileFullscreen();
+        this.requestAppFullscreen();
       });
       this.canvas.addEventListener("wheel", (event) => this.onPlayerCameraWheel(event), { passive: false });
       this.canvas.focus();
@@ -43,6 +43,7 @@
       this.input = new IronLine.Input();
       this.settings = this.defaultSettings();
       this.fullscreenRequestPending = false;
+      this.installAutoFullscreen();
       this.cameraZoomPreference = 1;
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
@@ -188,16 +189,31 @@
       };
     }
 
+    installAutoFullscreen() {
+      const trigger = () => this.requestAppFullscreen();
+      for (const type of ["pointerdown", "touchstart", "mousedown", "keydown"]) {
+        window.addEventListener(type, trigger, { capture: true, passive: true });
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") this.requestAppFullscreen();
+      });
+      setTimeout(trigger, 120);
+    }
+
     requestMobileFullscreen() {
-      const wantsFullscreen = this.settings?.mobileLike || this.settings?.mobileControls;
+      return this.requestAppFullscreen();
+    }
+
+    requestAppFullscreen() {
       const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-      if (!wantsFullscreen || fullscreenElement || this.fullscreenRequestPending) return false;
+      if (fullscreenElement || this.fullscreenRequestPending) return false;
 
       const target = document.documentElement;
       const requestFullscreen = target.requestFullscreen || target.webkitRequestFullscreen;
       if (!requestFullscreen) return false;
 
       const lockLandscape = () => {
+        if (!this.settings?.mobileLike && !this.settings?.mobileControls) return;
         const orientation = global.screen?.orientation;
         if (!orientation?.lock) return;
         orientation.lock("landscape").catch(() => {});
@@ -205,7 +221,9 @@
 
       try {
         this.fullscreenRequestPending = true;
-        const result = requestFullscreen.call(target);
+        const result = target.requestFullscreen
+          ? target.requestFullscreen({ navigationUI: "hide" })
+          : requestFullscreen.call(target);
         if (result && typeof result.then === "function") {
           result
             .then(() => {
