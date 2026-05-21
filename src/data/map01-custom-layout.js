@@ -435,7 +435,7 @@
       roadProp("d-road-bench-1", "bench", 5270, 3705, 112, 36, 0.46, 32, "wood"),
       roadProp("d-road-billboard-1", "billboard", 6500, 3195, 168, 74, -0.24, 50, "checkpoint"),
 
-      { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 7240, y: 760, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: -0.1 },
+      { id: "red-gate-sandbags-1", type: "sandbag", shape: "rect", x: 6990, y: 1160, w: 190, h: 34, hp: 90, maxHp: 90, destructible: true, stopsProjectiles: true, angle: 0.28 },
       { id: "red-gate-sandbags-2", type: "sandbag", shape: "rect", x: 6600, y: 1100, w: 160, h: 32, hp: 82, maxHp: 82, destructible: true, stopsProjectiles: true, angle: 0.35 },
       { id: "red-fence-1", type: "wood-fence", shape: "rect", x: 6270, y: 1450, w: 190, h: 24, hp: 52, maxHp: 52, destructible: true, stopsProjectiles: true, angle: -0.42 },
       brush("red-brush-1", 6380, 1680, 148, "brush", 42),

@@ -316,7 +316,7 @@
       const roadStyle = world.roadStyle || {};
       const roadBody = roadStyle.body || "#343a3d";
       const roadEdge = roadStyle.edge || "#202528";
-      const laneColor = roadStyle.lane || "rgba(245, 198, 70, 0.9)";
+      const laneColor = roadStyle.lane || "rgba(226, 205, 126, 0.38)";
 
       ctx.save();
       ctx.lineCap = "round";
@@ -334,7 +334,7 @@
 
       for (const road of roads) {
         const width = road.width || roadWidth;
-        this.strokeRoadPath(road, laneColor, Math.max(5, width * 0.055), [34, 34]);
+        this.strokeRoadPath(road, laneColor, Math.max(3.5, width * 0.04), [34, 34]);
       }
 
       for (const junction of junctions) {
