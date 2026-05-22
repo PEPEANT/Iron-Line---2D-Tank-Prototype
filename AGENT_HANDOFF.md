@@ -66,11 +66,21 @@ The BotCommander skeleton report-based narrow correction pass is ON TRACK.
 
 The BotCommander skeleton completion report is PASS.
 
-The next target is: **backup commit / push checkpoint before AI V2 tactical map and cover-node work**.
+The AI V2 entry checkpoint commit / push is complete.
 
-The immediate goal is to checkpoint the completed human-command/FPS/BotCommander-skeleton foundation before starting AI V2. Empty `bot` slots can issue basic role commands through `CommandBus`, `human` slots keep priority, `empty` slots do nothing, and the verified human FPS + command path plus anti-vehicle balance pass remain unchanged.
+The AI V2 tactical map / cover-node first pass is PASS.
 
-Do not start AI V2, UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, broad online redesign work, or full BotCommander behavior from this handoff.
+The AI V2 tactical map / cover-node interim verification report is ON TRACK.
+
+The AI V2 tactical map / cover-node interim report-based narrow correction pass is PASS.
+
+The AI V2 tactical map / cover-node completion report is PASS.
+
+The next target is: **AI count expansion preparation stage**.
+
+The immediate goal is to prepare AI count scaling safely using the completed tactical-map data layer. Do not jump straight to 50vs50. Use debug visibility, performance checks, and tactical-map-aware staging before increasing AI count.
+
+Do not start UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
 The command-role design being verified is:
 
@@ -126,72 +136,42 @@ AI should not become "smarter" in this pass. It should become easier to command:
 16. Empty-slot `BotCommander` skeleton interim verification report. ON TRACK on 2026-05-22.
 17. Empty-slot `BotCommander` skeleton report-based narrow correction pass. ON TRACK on 2026-05-22.
 18. Empty-slot `BotCommander` skeleton completion report. PASS on 2026-05-22.
-19. Backup commit / push checkpoint before AI V2. Current next target.
-20. AI V2 tactical map / cover nodes / vehicle traffic.
+19. Backup commit / push checkpoint before AI V2. PASS on 2026-05-22.
+20. AI V2 tactical map / cover nodes / vehicle traffic first pass. PASS on 2026-05-22.
+21. AI V2 tactical map / cover-node interim verification. ON TRACK on 2026-05-22.
+22. AI V2 tactical map / cover-node interim report-based narrow correction pass. PASS on 2026-05-22.
+23. AI V2 tactical map / cover-node completion report. PASS on 2026-05-22.
+24. AI count expansion preparation stage. Current next target.
 
 ## Current Work Target
 
-Next work item: **backup commit / push checkpoint before AI V2 tactical map and cover-node work**.
+Next work item: **AI count expansion preparation stage**.
 
-Prerequisite status: online commander-order stability gate passed on 2026-05-22. See `docs/online-commander-order-stability-gate-report-2026-05-22.md`.
+AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
-FPS loop status: human FPS combat loop first pass passed on 2026-05-22. See `docs/human-fps-combat-loop-first-pass-report-2026-05-22.md`.
+AI V2 interim checkpoint: `docs/ai-v2-tactical-map-interim-verification-report-2026-05-22.md` records the ON TRACK decision for live tactical map generation, cover-node fields, staging / rally points, vehicle hints, debug / observer visibility, and narrow follow-up candidates.
 
-FPS loop interim checkpoint: `docs/human-fps-combat-loop-interim-verification-report-2026-05-22.md` records the ON TRACK evidence for movement, aiming, shooting/ammo flow, hit/damage/death feedback, respawn, kill log, and the remaining command UI pacing risk.
+AI V2 correction checkpoint: `docs/ai-v2-tactical-map-correction-pass-2026-05-22.md` records the PASS correction for dedicated vehicle-behind staging points, scenario-ready tactical-map rebuilds, vehicle-stage debug visibility, and updated smoke coverage.
 
-FPS loop fix checkpoint: `docs/fps-combat-loop-fix-balance-pass-2026-05-22.md` records the suicide-drone terminal approach speed split, infantry anti-drone fire tuning, difficulty-based firing profile, infantry reload HUD duplicate cleanup, and latest smoke evidence.
+AI V2 tactical-map completion checkpoint: `docs/ai-v2-tactical-map-completion-report-2026-05-22.md` records the PASS decision for map metadata, optional tactical tags, cover nodes, staging / rally points, vehicle hints, debug / observer visibility, minimal AI references, and regression checks.
 
-FPS fix interim checkpoint: `docs/fps-fix-balance-interim-verification-report-2026-05-22.md` records the ON TRACK intermediate check for suicide-drone pacing, infantry anti-drone fire, difficulty tuning, reload HUD duplicate cleanup, and death / damage cause preservation.
-
-FPS fix correction checkpoint: `docs/fps-fix-balance-correction-pass-2026-05-22.md` records that no extra gameplay code fix was required from the interim report, and lists the live visual / play-feel checks that must close in the FPS completion report.
-
-FPS rear awareness checkpoint: `docs/fps-ai-rear-awareness-correction-pass-2026-05-22.md` records the tank turret/hull facing awareness fix, humvee gun/hull facing awareness fix, and the slower infantry rear reaction delay.
-
-FPS completion checkpoint: `docs/fps-combat-loop-completion-report-2026-05-22.md` records the PASS decision for the FPS loop, including damage causes, vehicle-contact balance, suicide-drone pacing, anti-drone fire, reload HUD cleanup, and rear-awareness suspicion / hit-reaction evidence.
-
-FPS + command integration interim checkpoint: `docs/fps-command-integration-interim-verification-report-2026-05-22.md` records the ON TRACK mid-stage check for live FPS movement/fire/death plus role-command coexistence.
-
-FPS + command integration fix-pass checkpoint: `docs/fps-command-integration-fix-pass-report-2026-05-22.md` records the report-based correction gate. The interim report found no direct integration blocker, so no gameplay code fix was required.
-
-FPS + command integration completion checkpoint: `docs/fps-command-integration-qa-report-2026-05-22.md` records the PASS decision for live FPS fire/movement/death plus role-command coexistence. It also adds `tools/check-fps-command-integration.cjs` as the narrow local QA helper.
-
-Empty-slot BotCommander skeleton checkpoint: `docs/bot-commander-skeleton-first-pass-report-2026-05-22.md` records the PASS decision for `human / bot / empty` slot guards, bot-sourced command packets, squad-leader delivery, command lock visibility, and observer/admin role-slot visibility. It also adds `tools/check-bot-commander-skeleton.cjs` as the narrow local QA helper.
-
-BotCommander skeleton interim checkpoint: `docs/bot-commander-skeleton-interim-verification-report-2026-05-22.md` records the ON TRACK all-role verification for bot command packets, controller guards, human priority, squad/asset-leader delivery, command locks, and observer visibility. The QA helper now verifies infantry, engineer, recon, and armor bot commands.
-
-BotCommander skeleton correction checkpoint: `docs/bot-commander-skeleton-correction-pass-2026-05-22.md` records that the interim report found no gameplay BotCommander blocker. The only correction was QA-side: armor vehicle metadata is read from the commander assignment order before `vehicle.manualOrder`, so `commandSource`, `commandReason`, and `commanderSlotId` remain visible for armor bot commands.
-
-BotCommander skeleton completion checkpoint: `docs/bot-commander-skeleton-completion-report-2026-05-22.md` records the PASS decision for empty-slot bot controller guards, bot command packet metadata, squad/asset-leader delivery, human priority, and regression coverage. This is the branch boundary before AI V2 tactical map / cover-node work.
-
-Anti-vehicle balance interim checkpoint: `docs/anti-vehicle-balance-interim-verification-report-2026-05-22.md` records the ON TRACK decision for RPG range / firing opportunity, suicide-drone damage, tank crew/player bailout, and anti-tank regression checks. It also adds `tools/check-anti-vehicle-balance.cjs` as the narrow local QA helper.
-
-Anti-vehicle balance correction checkpoint: `docs/anti-vehicle-balance-correction-pass-2026-05-22.md` records that the interim report found no direct anti-vehicle blocker, so no extra gameplay code tuning was required before the completion report.
-
-Anti-vehicle balance completion checkpoint: `docs/anti-vehicle-balance-completion-report-2026-05-22.md` records the PASS decision for RPG firing opportunity, suicide-drone armored-vehicle damage, tank crew/player bailout, and related regressions before returning to BotCommander skeleton stability.
-
-Interim checkpoint: `docs/online-command-sync-interim-verification-report-2026-05-22.md` records the packet / permission / broadcast smoke evidence that led into the online commander-order stability gate.
-
-Fix pass checkpoint: `docs/online-command-sync-fix-pass-report-2026-05-22.md` records the narrow fixes for wrong-team target rejection and online `cancel` command state. No blocker remains from that fix pass.
-
-Gate checkpoint: `docs/online-commander-order-stability-gate-report-2026-05-22.md` records the two-client online PASS decision and the trusted remote command target-id fix.
-
-Goal: verify the minimum empty-slot bot-commander skeleton after the verified human FPS + command path and anti-vehicle balance pass. The skeleton exposes `controllerType: bot / empty` handoff points and safe basic bot orders, but must not start full AI commander behavior, AI V2, 50vs50, UGC, city/open-world, or server-authority combat work.
+Goal: prepare AI count scaling without jumping straight into 50vs50. Use tactical-map data, staging, vehicle hints, and observability to keep scaling measurable.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
-Required empty-slot BotCommander skeleton stability checks:
+Required AI count expansion preparation checks:
 
-- Existing human-owned role slots keep priority and behavior unchanged.
-- Empty slots may be marked as `bot` or `empty` without stealing human command ownership.
-- Bot skeleton may issue only basic role commands through `CommandBus`: infantry `move/defend/rally`, engineer `repair/defend/rally`, recon `scan/defend/rally`, armor `fire_support/defend/rally`.
-- Existing `CommandBus`, `CommandRadio`, `roleSlots`, online command sync, FPS + command integration, and anti-vehicle balance tests must keep passing.
-- Leave smoke/manual notes before moving to any AI V2 or real bot decision pass.
+- Start with small increments, not 50vs50.
+- Preserve human role / command priority.
+- Keep `TacticalMap.summary()`, debug overlay, `AIObservatory`, and `ObserverBridge` visible while scaling.
+- Track performance, stuck/wait states, command locks, and traffic/vehicle staging behavior.
+- Existing command, FPS, BotCommander skeleton, and anti-vehicle balance smoke tests must keep passing.
 
 ## Current Sequence After Online Sync
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **backup commit / push checkpoint before AI V2 tactical map and cover-node work**. Do not move into AI V2 or full bot commander behavior before this checkpoint is made.
+The next stage is **AI count expansion preparation stage**. Do not move into 50vs50 event mode before small-count scaling and performance / behavior gates pass.
 
 Current sequence:
 
@@ -213,10 +193,14 @@ Current sequence:
 16. Empty-slot `BotCommander` skeleton interim verification report. ON TRACK.
 17. Empty-slot `BotCommander` skeleton report-based narrow correction pass. ON TRACK.
 18. Empty-slot `BotCommander` skeleton completion report. PASS.
-19. Backup commit / push checkpoint before AI V2. Current next target.
-20. AI V2 tactical map / cover nodes / vehicle traffic.
-21. AI count scaling.
-22. 50vs50 event mode.
+19. Backup commit / push checkpoint before AI V2. PASS.
+20. AI V2 tactical map / cover nodes / vehicle traffic first pass. PASS.
+21. AI V2 tactical map / cover-node interim verification. ON TRACK.
+22. AI V2 tactical map / cover-node interim report-based narrow correction pass. PASS.
+23. AI V2 tactical map / cover-node completion report. PASS.
+24. AI count expansion preparation stage. Current next target.
+25. AI count scaling.
+26. 50vs50 event mode.
 
 ## Offline Command Stability Gate
 

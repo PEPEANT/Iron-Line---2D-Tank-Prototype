@@ -145,6 +145,7 @@
           issueCounts,
           decisionCounts
         },
+        tacticalMap: this.game.tacticalMap?.summary?.() || null,
         units,
         events: this.events.slice(-100)
       };
@@ -273,6 +274,8 @@
         trafficHoldTimer: debug.trafficHoldTimer || 0,
         trafficHoldTarget: debug.trafficHoldTarget || "",
         trafficHoldAge: debug.trafficHoldAge || 0,
+        tacticalTrafficHint: debug.tacticalTrafficHint || "",
+        tacticalTrafficReason: debug.tacticalTrafficReason || "",
         passengers: debug.passengers || vehicle.passengerCount?.() || 0,
         visible: debug.visible,
         unsafeLine: Boolean(debug.unsafeLine),

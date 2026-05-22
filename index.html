@@ -42,6 +42,11 @@
           <small>N</small>
         </label>
         <label class="settings-toggle">
+          <input type="checkbox" data-debug-option="tacticalMap">
+          <span>Tactical Map</span>
+          <small>AI</small>
+        </label>
+        <label class="settings-toggle">
           <input type="checkbox" data-debug-option="performance">
           <span>성능 계측 표시</span>
           <small>P</small>
@@ -340,6 +345,7 @@
     <script src="src/systems/awareness-signals.js"></script>
     <script src="src/systems/wreck-cover.js"></script>
     <script src="src/systems/cover-slots.js"></script>
+    <script src="src/systems/tactical-map.js"></script>
     <script src="src/systems/command-bus.js"></script>
     <script src="src/systems/bot-commander.js"></script>
     <script src="src/systems/ai-observatory.js"></script>
@@ -362,6 +368,7 @@
     <script src="src/ai/combat-controller.js"></script>
     <script src="src/ai/infantry-combat-balance.js"></script>
     <script src="src/ai/infantry-ai.js"></script>
+    <script src="src/ai/infantry-tactical-map.js"></script>
     <script src="src/ai/infantry-command-priority.js"></script>
     <script src="src/ai/infantry-base-egress.js"></script>
     <script src="src/ai/infantry-tank-assault.js"></script>
@@ -391,6 +398,7 @@
     <script src="src/systems/hud-admin-map-tools.js"></script>
     <script src="src/systems/hud-admin-test-hub.js"></script>
     <script src="src/systems/hud-admin-ui.js"></script>
+    <script src="src/systems/hud-admin-layout.js"></script>
     <script src="src/systems/hud-spectator-panel.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/renderer.js"></script>

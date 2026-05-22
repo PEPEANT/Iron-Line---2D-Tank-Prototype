@@ -101,11 +101,13 @@
       this.scenarioDirty = false;
       this.hud = new IronLine.Hud();
       this.navGraph = new IronLine.NavGraph(this.world.navGraph, this.world);
+      this.tacticalMap = IronLine.TacticalMap ? new IronLine.TacticalMap(this) : null;
       this.commanders = {};
       this.createCommanders();
       this.debug = {
         ai: false,
         navGraph: false,
+        tacticalMap: false,
         performance: false
       };
 
@@ -158,6 +160,7 @@
 
       this.resetWorldSceneryState();
       this.setupScenario();
+      this.tacticalMap?.rebuild?.("scenario-ready");
       this.syncOnlineSlotAssets();
       if (this.testLab) this.activateTestLab(this.testLab);
       if (this.adminObserverMode) this.enterAdminObserverMode();
@@ -177,6 +180,7 @@
       if (!world || this.world === world) return;
       this.world = world;
       this.navGraph = new IronLine.NavGraph(this.world.navGraph, this.world);
+      this.tacticalMap = IronLine.TacticalMap ? new IronLine.TacticalMap(this) : null;
     }
 
     useLiveWorld() {
@@ -995,6 +999,9 @@
       }
 
       this.matchTime += dt;
+      perf?.begin("ai.tacticalMap");
+      this.tacticalMap?.update?.(dt);
+      perf?.end("ai.tacticalMap");
       this.updateDroneDesignation(dt);
       this.updateConquestRespawns(dt);
       perf?.begin("crews");

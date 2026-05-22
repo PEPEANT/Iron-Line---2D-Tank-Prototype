@@ -78,6 +78,7 @@
         world: {
           width: game.world.width,
           height: game.world.height,
+          tacticalMap: game.tacticalMap?.summary?.() || null,
           safeZones: (game.world.safeZones || []).map((zone) => ({
             team: zone.team,
             x: zone.x,

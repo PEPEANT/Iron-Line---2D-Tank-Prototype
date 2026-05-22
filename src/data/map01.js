@@ -4,6 +4,8 @@
   const IronLine = global.IronLine || (global.IronLine = {});
 
   const world = {
+    id: "map01",
+    mapVersion: "2026-05-22",
     width: 3400,
     height: 2200,
     captureRate: 0.16,
@@ -80,6 +82,12 @@
       { x: 1550, y: 1900, r: 290, color: "rgba(79, 126, 91, 0.22)" },
       { x: 2570, y: 1940, r: 320, color: "rgba(67, 105, 80, 0.24)" }
     ],
+    tacticalTags: {
+      coverNodes: [],
+      stagingPoints: [],
+      trafficHints: [],
+      dangerZones: []
+    },
     safeZones: [
       { name: "BLUE BASE", team: "blue", x: 610, y: 1740, radius: 285 }
     ],

@@ -679,6 +679,10 @@
       this.debug.trafficHoldTarget = this.trafficHoldTarget;
       this.debug.trafficHoldAge = this.trafficHoldAge;
       this.debug.trafficBypassTimer = this.trafficBypassTimer;
+      const trafficHint = this.game.tacticalMap?.vehicleHintNear?.(moveTarget || navDebug.moveTarget || this.tank, { maxDistance: 420 });
+      this.debug.tacticalTrafficHint = trafficHint?.id || "";
+      this.debug.tacticalTrafficReason = trafficHint?.reason || "";
+      this.debug.tacticalVehicleStage = this.game.tacticalMap?.vehicleStagingPoints?.find?.((point) => point.vehicleId === this.tank.callSign)?.id || "";
     }
   }
 

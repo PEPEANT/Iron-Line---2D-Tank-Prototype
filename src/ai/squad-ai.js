@@ -770,6 +770,19 @@
       const point = leader && center && distXY(leader.x, leader.y, center.x, center.y) <= 220
         ? { x: (leader.x + center.x) / 2, y: (leader.y + center.y) / 2 }
         : center || leader;
+      const tacticalRally = this.game.tacticalMap?.rallyPointFor?.(this.team, point, {
+        objectiveName: this.order?.objectiveName || this.order?.point?.name || "",
+        maxDistance: 360
+      });
+      if (tacticalRally) {
+        return {
+          name: `${this.order.objectiveName}-regroup`,
+          x: tacticalRally.x,
+          y: tacticalRally.y,
+          radius: tacticalRally.radius || 76,
+          tacticalMapId: tacticalRally.id
+        };
+      }
       return this.safeTacticalPoint(point.x, point.y, `${this.order.objectiveName}-regroup`, 76, 72);
     }
 
@@ -806,6 +819,20 @@
 
     preAssaultPoint(status) {
       const point = this.order.point;
+      const tacticalStage = this.game.tacticalMap?.stagingPointForObjective?.(this.team, point, {
+        from: status.center,
+        kind: "objective-approach",
+        maxDistance: 560
+      });
+      if (tacticalStage) {
+        return {
+          name: `${this.order.objectiveName}-pre-assault`,
+          x: tacticalStage.x,
+          y: tacticalStage.y,
+          radius: tacticalStage.radius || 90,
+          tacticalMapId: tacticalStage.id
+        };
+      }
       const angle = angleTo(point.x, point.y, status.center.x, status.center.y);
       return this.safeTacticalPoint(
         point.x + Math.cos(angle) * ((point.radius || 150) + 130),

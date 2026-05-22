@@ -17,6 +17,7 @@
       ctx.lineJoin = "round";
 
       if (game.debug.navGraph) this.drawNavGraph(game);
+      if (game.debug.tacticalMap) this.drawTacticalMapDebug(game);
 
       for (const tank of game.tanks) {
         if (!tank.ai || !tank.alive || !tank.isOperational()) continue;
@@ -220,6 +221,102 @@
       ctx.restore();
     },
 
+    drawTacticalMapDebug(game) {
+      const map = game.tacticalMap;
+      if (!map) return;
+      const ctx = this.ctx;
+      const snapshot = map.debugSnapshot?.(120) || {};
+
+      ctx.save();
+      for (const zone of snapshot.dangerZones || []) {
+        ctx.globalAlpha = 0.08 + (zone.risk || 0.4) * 0.08;
+        ctx.fillStyle = "rgba(255, 91, 91, 0.7)";
+        ctx.beginPath();
+        ctx.arc(zone.x, zone.y, zone.radius || 160, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const lane of snapshot.fireLanes || []) {
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = "rgba(255, 210, 102, 0.78)";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([16, 10]);
+        ctx.beginPath();
+        ctx.moveTo(lane.x1, lane.y1);
+        ctx.lineTo(lane.x2, lane.y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      for (const node of snapshot.coverNodes || []) {
+        ctx.globalAlpha = 0.82;
+        ctx.fillStyle = node.sourceKind === "vehicle-wreck" ? "rgba(255, 201, 118, 0.88)" : "rgba(126, 226, 166, 0.88)";
+        ctx.strokeStyle = "rgba(4, 14, 10, 0.88)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.capacity >= 4 ? 5.5 : 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.56;
+        ctx.strokeStyle = "rgba(126, 226, 166, 0.78)";
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(node.x + Math.cos(node.defenseAngle || 0) * 28, node.y + Math.sin(node.defenseAngle || 0) * 28);
+        ctx.stroke();
+      }
+
+      for (const point of snapshot.stagingPoints || []) {
+        ctx.globalAlpha = 0.86;
+        ctx.fillStyle = point.kind === "base-exit" ? "rgba(111, 199, 255, 0.92)" : "rgba(177, 146, 255, 0.86)";
+        ctx.strokeStyle = "rgba(7, 12, 20, 0.9)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.rect(point.x - 5, point.y - 5, 10, 10);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      for (const point of snapshot.vehicleStagingPoints || []) {
+        ctx.globalAlpha = 0.88;
+        ctx.fillStyle = "rgba(88, 238, 211, 0.9)";
+        ctx.strokeStyle = "rgba(7, 12, 20, 0.9)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.rect(point.x - 6, point.y - 4, 12, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      for (const hint of snapshot.trafficHints || []) {
+        ctx.globalAlpha = 0.78;
+        ctx.fillStyle = hint.kind === "bottleneck" ? "rgba(255, 145, 91, 0.9)" : "rgba(90, 220, 224, 0.82)";
+        ctx.strokeStyle = "rgba(7, 12, 20, 0.9)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(hint.x, hint.y - 7);
+        ctx.lineTo(hint.x + 7, hint.y);
+        ctx.lineTo(hint.x, hint.y + 7);
+        ctx.lineTo(hint.x - 7, hint.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      const summary = map.summary?.() || {};
+      const text = `Tactical ${summary.coverNodes || 0}C ${summary.stagingPoints || 0}S ${summary.vehicleStagingPoints || 0}V ${summary.trafficHints || 0}T`;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(7, 12, 10, 0.78)";
+      roundRect(ctx, game.camera.x + 18, game.camera.y + 18, 186, 22, 5);
+      ctx.fill();
+      ctx.fillStyle = "#d7ffe3";
+      ctx.font = "800 11px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, game.camera.x + 28, game.camera.y + 29);
+      ctx.restore();
+    },
+
     drawAiTankDebug(game, tank) {
       const ctx = this.ctx;
       const ai = tank.ai;
@@ -310,7 +407,8 @@
       const paired = ai.currentOrder?.pairedSquadId ? `+${ai.currentOrder.pairedSquadId}` : "";
       const requestText = debug.supportRequest ? ` !${debug.supportRequest}` : "";
       const passengerText = tank.vehicleType === "humvee" && debug.passengers > 0 ? ` P${debug.passengers}` : "";
-      const label = `${tank.callSign}${paired} ${stateText}${goalText}${pathText}${recovery}${unsafeLine}${requestText}${passengerText}`;
+      const trafficHintText = debug.tacticalTrafficHint ? " T" : "";
+      const label = `${tank.callSign}${paired} ${stateText}${goalText}${pathText}${recovery}${unsafeLine}${requestText}${passengerText}${trafficHintText}`;
       const labelWidth = Math.max(86, label.length * 7.4);
       const labelX = tank.x - labelWidth / 2;
       const labelY = tank.y - (tank.vehicleType === "humvee" ? 68 : 76);
