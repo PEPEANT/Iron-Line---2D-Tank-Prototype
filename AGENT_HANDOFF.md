@@ -104,9 +104,21 @@ The UI / readability / battlefield information cleanup first pass is ON TRACK.
 
 The UI / readability integrated QA and completion report is PASS.
 
-The next target is: **AI V2 behavior connection first pass**.
+The AI V2 design review / scope lock report is APPROVED.
 
-The immediate goal is to connect the existing tactical map / cover-node / staging / vehicle-hint data into a few selected AI behavior decisions without starting a full AI rewrite. Keep the scope to behavior connection, verification, and narrow regressions.
+The AI V2 behavior connection first pass is ON TRACK.
+
+The AI V2 behavior connection interim verification report is ON TRACK.
+
+The AI V2 first implementation slice is ON TRACK.
+
+The AI V2 first-pass interim verification report is ON TRACK.
+
+The AI V2 first-pass integrated correction and completion report is PASS.
+
+The next target is: **AI V2 first-pass checkpoint commit / push before choosing the next roadmap branch**.
+
+The immediate goal is to back up the PASS state before starting BotCommander doctrine, server-authority review, or player-facing assault approval UI work.
 
 Do not start UGC, city/open-world expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
@@ -182,11 +194,17 @@ AI should not become "smarter" in this pass. It should become easier to command:
 34. Online combat stabilization completion report. PASS on 2026-05-22.
 35. UI / readability / battlefield information cleanup first pass. ON TRACK on 2026-05-22.
 36. UI / readability integrated QA and completion report. PASS on 2026-05-22.
-37. AI V2 behavior connection first pass. Current next target.
+37. AI V2 design review / scope lock report. APPROVED on 2026-05-22.
+38. AI V2 behavior connection first pass. ON TRACK on 2026-05-22.
+39. AI V2 behavior connection interim verification report. ON TRACK on 2026-05-22.
+40. AI V2 first implementation slice. ON TRACK on 2026-05-22.
+41. AI V2 first-pass interim verification report. ON TRACK on 2026-05-22.
+42. AI V2 first-pass integrated correction and completion report. PASS on 2026-05-22.
+43. AI V2 first-pass checkpoint commit / push. Current next target.
 
 ## Current Work Target
 
-Next work item: **AI V2 behavior connection first pass**.
+Next work item: **AI V2 first-pass checkpoint commit / push**.
 
 AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
@@ -226,7 +244,15 @@ UI readability first-pass checkpoint: `docs/ui-readability-first-pass-report-202
 
 UI readability integrated QA checkpoint: `docs/ui-readability-integrated-qa-completion-report-2026-05-22.md` records the PASS decision for combat HUD, command HUD, log priority, minimap marker density, 25vs25 readability smoke, small-screen rules, and 50vs50 event-only constraints.
 
-Goal: start AI V2 behavior connection first pass. Connect the existing AI V2 tactical-map data to limited behavior choices such as cover selection, rally / staging, wait-for-clear, vehicle waiting, and objective approach. Do not start full server-authority combat, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
+AI V2 design review / scope lock checkpoint: `docs/ai-v2-design-lock-first-scope-2026-05-22.md` defines AI V2 as Tactical Map + SquadLeader decision + radio feedback + player approval. The current tactical behavior connection work is only the first slice; do not mistake it for the full V2 identity.
+
+AI V2 behavior connection interim checkpoint: `docs/ai-v2-behavior-connection-interim-report-2026-05-22.md` records the ON TRACK decision for Tactical Map cover-node selection, objective staging, vehicle-behind staging, traffic-hint wait-for-clear, danger-zone risk influence, command-lock preservation, and smoke performance.
+
+AI V2 first-pass interim checkpoint: `docs/ai-v2-first-pass-interim-verification-report-2026-05-22.md` records the ON TRACK decision for the first approved V2 implementation slice: SquadLeader radio / state reports, failure reasons, assault approval request, minimal morale / fatigue, observability, and command-priority regression checks.
+
+AI V2 first-pass completion checkpoint: `docs/ai-v2-first-pass-integrated-completion-report-2026-05-22.md` records the PASS decision for direct reason coverage, Tactical Map behavior evidence, assault approval state, morale / fatigue, and regression checks.
+
+Goal: create a checkpoint commit / push before choosing the next roadmap branch. Do not start full server-authority combat, UGC, city work, 50vs50 default mode, BotCommander doctrine expansion, or broad AI behavior expansion before this backup.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
@@ -242,7 +268,7 @@ Required AI count expansion preparation checks:
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **AI V2 behavior connection first pass**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
+The next stage is **AI V2 behavior connection interim report-based narrow correction / validation pass**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
 
 Current sequence:
 
@@ -282,7 +308,13 @@ Current sequence:
 34. Online combat stabilization completion report. PASS.
 35. UI / readability / battlefield information cleanup first pass. ON TRACK.
 36. UI / readability integrated QA and completion report. PASS.
-37. AI V2 behavior connection first pass. Current next target.
+37. AI V2 design review / scope lock report. APPROVED.
+38. AI V2 behavior connection first pass. ON TRACK.
+39. AI V2 behavior connection interim verification report. ON TRACK.
+40. AI V2 first implementation slice. ON TRACK.
+41. AI V2 first-pass interim verification report. ON TRACK.
+42. AI V2 first-pass integrated correction and completion report. PASS.
+43. AI V2 first-pass checkpoint commit / push. Current next target.
 
 ## Offline Command Stability Gate
 

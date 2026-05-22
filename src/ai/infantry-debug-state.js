@@ -40,6 +40,9 @@
       this.debug.transportVehicleId = transportDebug.vehicleId;
       if (this.unit.classId !== "scout") this.debug.scoutReports = 0;
       this.debug.coverQuality = this.coverTarget?.coverQuality || 0;
+      this.debug.tacticalCoverNode = this.coverTarget?.tacticalMapId || this.coverTarget?.coverNodeId || "";
+      this.debug.tacticalMapKind = this.coverTarget?.tacticalMapKind || "";
+      this.debug.tacticalRisk = this.coverTarget?.tacticalRisk || 0;
       this.debug.suppression = this.unit.suppression;
       this.debug.morale = this.unit.morale;
       this.debug.thought = this.thoughtText;
@@ -56,6 +59,10 @@
       this.debug.lastCommandChangedAt = this.order?.lastCommandChangedAt || this.unit.squad?.lastCommandChangedAt || 0;
       this.debug.squadLeaderId = this.order?.squadLeaderId || this.unit.squad?.squadLeaderId || "";
       this.debug.commanderSlotId = this.order?.commanderSlotId || this.unit.squad?.commanderSlotId || this.unit.squad?.ownerSlotId || "";
+      this.debug.v2FailureReasons = (this.order?.v2FailureReasons || this.unit.squad?.v2FailureReasons || []).slice(0, 6);
+      this.debug.v2RadioKind = this.order?.v2RadioReport?.kind || this.unit.squad?.v2?.radioReport?.kind || "";
+      this.debug.v2AssaultApproval = this.order?.v2AssaultApproval?.status || this.unit.squad?.v2AssaultApprovalSummary?.()?.status || "";
+      this.debug.v2Morale = this.order?.v2Morale || this.unit.squad?.v2Morale || null;
     },
 
     activeTransportDebug() {

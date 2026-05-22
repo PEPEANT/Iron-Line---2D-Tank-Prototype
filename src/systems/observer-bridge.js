@@ -232,6 +232,10 @@
         commandLockRemaining: squad.commandLockRemaining?.() || 0,
         squadLeaderId: squad.squadLeaderId || squad.leaderUnit?.()?.callSign || "",
         commanderSlotId: squad.commanderSlotId || squad.ownerSlotId || "",
+        v2Morale: squad.status?.v2Morale || squad.v2Morale || null,
+        v2FailureReasons: (squad.status?.v2FailureReasons || squad.v2FailureReasons || []).slice(0, 6),
+        v2RadioReport: squad.v2?.radioReport || squad.v2RadioReport || null,
+        v2AssaultApproval: squad.v2AssaultApprovalSummary?.() || null,
         objective: squad.order?.objectiveName || squad.order?.point?.name || "",
         target: squad.status?.lastThreat?.callSign || squad.status?.armorThreat?.vehicle?.callSign || "",
         order: squad.manualOrder

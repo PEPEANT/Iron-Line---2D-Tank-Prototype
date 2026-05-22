@@ -12,9 +12,15 @@
       objectiveName: this.order?.objectiveName || this.order?.point?.name || ""
     });
     if (tacticalCover) {
+      const taggedCover = {
+        ...tacticalCover,
+        tacticalMapId: tacticalCover.coverNodeId || tacticalCover.id || "",
+        tacticalMapKind: "cover-node",
+        tacticalRisk: Number(tacticalCover.coverMetrics?.exposure ?? tacticalCover.exposureRisk ?? 0)
+      };
       return this.game.coverSlots
-        ? this.game.coverSlots.reserve(this.unit, tacticalCover, 1.4) || tacticalCover
-        : tacticalCover;
+        ? this.game.coverSlots.reserve(this.unit, taggedCover, 1.4) || taggedCover
+        : taggedCover;
     }
     return originalFindCoverPoint.call(this, threat);
   };
