@@ -130,11 +130,11 @@ The online combat server-authority first-pass interim verification report is ON 
 
 The online combat server-authority first-pass integrated fix and completion report is PASS.
 
-The first alpha P0 stabilization loop is now PASS for a controlled 4-player retest.
+The first alpha P0 stabilization loop is now superseded by a deeper P0 root-cause review.
 
-The next target is: **controlled 4-player alpha retest**.
+The next target is: **P0 team identity and server same-team damage scope lock**.
 
-The immediate goal is to retest the reported alpha P0s under controlled conditions: player stutter / frame drops, deleted room persistence, admin observer game progress visibility, and capture-point grenade / AI abnormal behavior. Use AI `8vs8` first, optionally `15vs15`; compare admin / observer OFF versus ON. Do not enable 50vs50.
+The immediate goal is not another 4-player test yet. Code review found older offline assumptions that can invalidate online team play: AI still has `game.player` blue/local assumptions, server shot confirm needs explicit same-team damage rejection, real-time combat is still too tied to room/event updates, and admin state mixes server truth with local observer snapshots. The controlled 4-player alpha retest is HOLD until the narrow P0 scope is locked and the first two items are fixed or explicitly accepted as known-risk.
 
 Do not start UGC, city/open-world expansion, full server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
@@ -224,12 +224,13 @@ AI should not become "smarter" in this pass. It should become easier to command:
 48. Online combat server-authority first-pass integrated fix and completion report. PASS on 2026-05-22.
 49. 1st alpha P0 stabilization interim diagnosis report. ON TRACK on 2026-05-22.
 50. 1st alpha P0 stabilization interim-report-based narrow correction pass. PASS for narrow retest on 2026-05-22.
-51. 1st alpha P0 stabilization completion / retest decision report. PASS for controlled 4-player retest on 2026-05-22.
-52. Controlled 4-player alpha retest. Current next target.
+51. 1st alpha P0 stabilization completion / retest decision report. Superseded on 2026-05-22.
+52. 1st alpha P0 root-cause / narrow redesign scope. RETEST HOLD on 2026-05-22.
+53. P0 team identity and server same-team damage scope lock. Current next target.
 
 ## Current Work Target
 
-Next work item: **controlled 4-player alpha retest**.
+Next work item: **P0 team identity and server same-team damage scope lock**.
 
 Alpha P0 stabilization diagnosis: `docs/alpha-p0-stabilization-interim-diagnosis-2026-05-22.md` records the ON TRACK diagnosis for player stutter / frame drops, deleted-room persistence, admin observer progress state, capture-point grenade / AI abnormal behavior, and the QA readability strip that appeared in normal play.
 
@@ -237,7 +238,9 @@ Alpha P0 stabilization correction pass: `docs/alpha-p0-stabilization-correction-
 
 Alpha P0 stabilization completion / retest decision: `docs/alpha-p0-stabilization-completion-retest-decision-2026-05-22.md` records the PASS decision allowing a controlled 4-player alpha retest. This is not a full alpha stability PASS; it only means no automated P0 blocker remains and the next step is a controlled live retest.
 
-Controlled retest rules:
+P0 root-cause / narrow redesign scope: `docs/alpha-p0-root-cause-redesign-scope-2026-05-22.md` supersedes the controlled retest decision. It records RETEST HOLD because `game.player` is still treated as the blue/local player in several AI target/safety paths, server shot confirm needs explicit same-team damage rejection, room/event updates are still carrying real-time combat pressure, and admin state still mixes server truth with local observer snapshots.
+
+Controlled retest rules after HOLD is cleared:
 
 - Start with `8vs8` AI.
 - Optional escalation to `15vs15` only if `8vs8` is stable.
