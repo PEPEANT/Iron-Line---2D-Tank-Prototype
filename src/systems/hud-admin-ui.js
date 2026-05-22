@@ -733,16 +733,15 @@
       const room = snapshot.room || {};
       const match = snapshot.match || {};
       const ai = snapshot.ai?.summary || {};
-      const playerCount = this.adminRoomPlayerCount(room);
-      const spectatorCount = server.spectatorCount ?? this.adminRoomSpectatorCount(room);
-      const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+      const playerCount = this.adminRoomPlayerCount(room), spectatorCount = server.spectatorCount ?? this.adminRoomSpectatorCount(room), spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+      const matchActive = Boolean(match.started || room.phase === "playing" || match.phase === "playing" || match.phase === "live"), lobbyLike = room.phase === "lobby" || room.phase === "waiting" || match.phase === "lobby" || match.phase === "waiting";
       const values = [
         { label: "연결", value: `${server.clientCount || 0}명` },
         { label: "관리자", value: `${server.adminCount || 0}명` },
         { label: "방", value: `${server.roomCount || 0}개` },
         { label: "플레이어", value: `${playerCount || 0}/${(room.roleSlots || []).length || room.capacity || 0}` },
         { label: "관전", value: `${spectatorCount || 0}/${spectatorCapacity}` },
-        { label: "경기", value: match.started ? "진행 중" : room.phase === "lobby" ? "로비" : "대기" },
+        { label: "경기", value: matchActive ? "진행 중" : lobbyLike ? "로비" : "대기" },
         { label: "모드", value: match.mode === "conquest" ? "점령전" : "섬멸전" },
         { label: "난이도", value: this.adminDifficultyLabel(room.difficulty || match.difficulty) },
         { label: "전차", value: `${room.blueAiTanks ?? "-"} / ${room.redTanks ?? "-"}` },
@@ -953,13 +952,14 @@
         ? (snapshot.commands || []).filter((entry) => entry.accepted).length
         : (game.commandBus?.log || []).filter((entry) => entry.accepted).length;
       const match = snapshot?.match || {};
+      const selectedPhase = IronLine.roomRegistry?.selectedRoom?.()?.phase || "";
+      const observerActive = Boolean(snapshot ? (match.started || match.phase === "playing" || match.phase === "live") : (game.matchStarted || selectedPhase === "playing"));
+      const observerLobby = Boolean(snapshot ? (match.lobbyOpen || match.phase === "lobby" || match.phase === "waiting") : (game.lobbyOpen || selectedPhase === "waiting" || selectedPhase === "lobby"));
       const localScore = ["conquest", "annihilation"].includes(game.matchConfig?.mode) ? game.conquest?.score : game.annihilation?.score;
-      const localTime = game.matchConfig?.mode === "conquest"
-        ? game.conquest?.remaining ?? 0
-        : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0;
+      const localTime = game.matchConfig?.mode === "conquest" ? game.conquest?.remaining ?? 0 : game.annihilation?.state === "intermission" ? game.annihilation?.intermissionRemaining || 0 : game.matchTime || 0;
       const values = [
         { label: "연결", value: snapshot ? "플레이어 화면" : "로컬 관전" },
-        { label: "상태", value: snapshot ? match.started ? "전투 중" : match.lobbyOpen ? "로비" : "배치" : game.matchStarted ? "전투 중" : game.lobbyOpen ? "로비" : "배치" },
+        { label: "상태", value: observerActive ? "전투 중" : observerLobby ? "로비" : "배치" },
         { label: "시간", value: this.formatTime(snapshot ? match.remaining ?? 0 : localTime) },
         { label: "청팀", value: `${blue.alive}/${blue.total}` },
         { label: "홍팀", value: `${red.alive}/${red.total}` },

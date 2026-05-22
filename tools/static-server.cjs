@@ -4,6 +4,13 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const {
+  cleanupStaleServerParticipants,
+  createRoomDeleteTombstones,
+  removeParticipantFromRoom,
+  updateRoomSlotsFromPlayers,
+  upsertParticipantToServer
+} = require("../server/static-room-admin");
 
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
@@ -31,6 +38,8 @@ const mimeTypes = new Map([
 ]);
 
 let onlineRegistry = null;
+const ROOM_DELETE_TOMBSTONE_MS = 2 * 60 * 1000;
+const roomDeleteTombstones = createRoomDeleteTombstones(ROOM_DELETE_TOMBSTONE_MS);
 const DEFAULT_SPECTATOR_CAPACITY = 12;
 const MAX_SPECTATOR_CAPACITY = 12;
 const MAX_ROOM_HUMANS = 8;
@@ -342,45 +351,6 @@ function importParticipants(room, participants = [], fallbackType = "player", op
   }
 }
 
-function removeParticipantFromRoom(room, playerId = "") {
-  const id = String(playerId || "");
-  if (!room || !id) return false;
-  let changed = false;
-  for (const map of [room.players, room.spectators, room.participants, room.admins]) {
-    if (map?.delete?.(id)) changed = true;
-  }
-  for (const slot of room.slots || []) {
-    if (slot.playerId !== id) continue;
-    slot.playerId = null;
-    slot.nickname = "";
-    slot.ready = false;
-    slot.aiControlled = true;
-    changed = true;
-  }
-  if (changed) room.updatedAt = new Date().toISOString();
-  return changed;
-}
-
-function cleanupStaleServerParticipants(maxAgeMs = 45000) {
-  if (!onlineRegistry) return false;
-  const now = Date.now();
-  let changed = false;
-  for (const room of onlineRegistry.rooms?.values?.() || []) {
-    const ids = [
-      ...Array.from(room.players?.values?.() || []),
-      ...Array.from(room.spectators?.values?.() || []),
-      ...Array.from(room.admins?.values?.() || [])
-    ]
-      .filter((participant) => now - toClientTimestamp(participant.updatedAt || participant.lastSeenAt || 0) > maxAgeMs)
-      .map((participant) => participant.playerId || participant.id)
-      .filter(Boolean);
-    for (const id of ids) {
-      if (removeParticipantFromRoom(room, id)) changed = true;
-    }
-  }
-  return changed;
-}
-
 function roomRecordTime(record = {}) {
   const numeric = Number(record.createdAt || record.updatedAt || 0);
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
@@ -436,6 +406,7 @@ function applyClientRoomToServer(body = {}) {
   if (!onlineRegistry) return null;
   const roomId = String(body.id || body.roomId || "").trim().slice(0, 48);
   if (!roomId) return null;
+  if (roomDeleteTombstones.has(roomId)) return null;
   let room = onlineRegistry.rooms?.get(roomId) || null;
   if (!room) {
     room = onlineRegistry.createRoom({
@@ -492,13 +463,7 @@ function applyClientRoomToServer(body = {}) {
   importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
   enforceUniquePlayerSlots(room);
 
-  for (const slot of room.slots || []) {
-    const player = Array.from(room.players.values()).find((item) => item.slotId === slot.id);
-    slot.playerId = player?.playerId || null;
-    slot.nickname = player?.nickname || "";
-    slot.ready = Boolean(player?.ready);
-    slot.aiControlled = !player;
-  }
+  updateRoomSlotsFromPlayers(room);
 
   room.chat = Array.isArray(body.chat) ? mergeRoomRecords(room.chat, body.chat, 120) : room.chat;
   room.events = Array.isArray(body.events) ? mergeRoomRecords(room.events, body.events, 80) : room.events;
@@ -564,7 +529,8 @@ async function handleRoomsApi(req, res) {
   const combatEndpoint = pathParts[3] === "combat";
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
-    if (cleanupStaleServerParticipants()) persistRooms();
+    roomDeleteTombstones.cleanup();
+    if (cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp)) persistRooms();
     sendJson(res, 200, {
       ok: true,
       rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room))
@@ -578,6 +544,11 @@ async function handleRoomsApi(req, res) {
       sendJson(res, 400, { ok: false, reason: "invalid_json" });
       return;
     }
+    const requestedRoomId = String(body.id || body.roomId || "").trim().slice(0, 48);
+    if (roomDeleteTombstones.has(requestedRoomId)) {
+      sendJson(res, 409, { ok: false, reason: "room_deleted_recently", roomId: requestedRoomId });
+      return;
+    }
     const room = applyClientRoomToServer(body);
     if (!room) {
       sendJson(res, 400, { ok: false, reason: "room_id_required" });
@@ -588,7 +559,29 @@ async function handleRoomsApi(req, res) {
     return;
   }
 
+  if (req.method === "POST" && roomId && pathParts[3] === "participants" && !participantId) {
+    if (roomDeleteTombstones.has(roomId)) {
+      sendJson(res, 410, { ok: false, reason: "room_deleted_recently", roomId });
+      return;
+    }
+    const body = await readJsonBody(req);
+    if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
+    const room = upsertParticipantToServer(onlineRegistry, roomId, body, {
+      normalizeParticipant,
+      importParticipants,
+      enforceUniquePlayerSlots,
+      isRoomDeletedRecently: roomDeleteTombstones.has
+    });
+    if (!room) return sendJson(res, 404, { ok: false, reason: "room_not_found" });
+    persistRooms();
+    return sendJson(res, 200, { ok: true, participantId: body.playerId || body.id || "", room: exportClientRoom(room) });
+  }
+
   if (req.method === "POST" && roomId && commandEndpoint) {
+    if (roomDeleteTombstones.has(roomId)) {
+      sendJson(res, 410, { ok: false, reason: "room_deleted_recently", roomId });
+      return;
+    }
     const body = await readJsonBody(req);
     if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
     const result = onlineRegistry.pushCommand(roomId, body);
@@ -599,6 +592,10 @@ async function handleRoomsApi(req, res) {
   }
 
   if (req.method === "POST" && roomId && combatEndpoint) {
+    if (roomDeleteTombstones.has(roomId)) {
+      sendJson(res, 410, { ok: false, reason: "room_deleted_recently", roomId });
+      return;
+    }
     const body = await readJsonBody(req);
     if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
     const result = onlineRegistry.pushCombatRequest(roomId, body);
@@ -618,6 +615,7 @@ async function handleRoomsApi(req, res) {
 
   if (req.method === "DELETE" && roomId) {
     onlineRegistry.rooms.delete(roomId);
+    roomDeleteTombstones.mark(roomId);
     persistRooms();
     sendJson(res, 200, { ok: true, roomId });
     return;

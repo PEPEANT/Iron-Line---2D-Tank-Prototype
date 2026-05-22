@@ -13,7 +13,7 @@
       this.onlineLobby = IronLine.OnlineLobby ? new IronLine.OnlineLobby(this) : null;
       this.lastPublishAt = 0;
       this.lastCleanupAt = 0;
-      this.publishIntervalMs = 330;
+      this.publishIntervalMs = 180;
       window.addEventListener("pagehide", () => this.handlePageHide());
     }
 

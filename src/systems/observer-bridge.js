@@ -16,6 +16,8 @@
       this.readTimer = 0;
       this.remoteSnapshot = null;
       this.remoteLastSeen = 0;
+      this.publishInterval = 0.75;
+      this.readInterval = 0.5;
 
       this.channel?.addEventListener("message", (event) => {
         const message = event.data || {};
@@ -31,13 +33,13 @@
       if (this.game.adminObserverMode) {
         this.readTimer -= dt;
         if (this.readTimer > 0) return;
-        this.readTimer = 0.25;
+        this.readTimer = this.readInterval;
         this.readStoredSnapshot();
         return;
       }
       this.publishTimer -= dt;
       if (this.publishTimer > 0) return;
-      this.publishTimer = 0.25;
+      this.publishTimer = this.publishInterval;
       const snapshot = this.createSnapshot();
       this.channel?.postMessage({
         type: "observer-snapshot",
@@ -71,6 +73,7 @@
 
     createSnapshot() {
       const game = this.game;
+      const aiSnapshot = game.aiObservatory?.latest?.() || null;
       return {
         version: 1,
         sentAt: Date.now(),
@@ -151,9 +154,10 @@
           lastRespawnStateSeq: Number(game.onlineLastRespawnStateSeq || 0),
           trace: (game.onlineCombatTrace || []).slice(-24)
         },
-        squads: (game.squads || []).map((squad) => this.squadSnapshot(squad)).filter(Boolean),
+        squads: (game.squads || []).map((squad) => this.squadSnapshot(squad)).filter(Boolean).slice(0, 24),
         vehicles: [...(game.tanks || []), ...(game.humvees || [])]
           .filter((vehicle) => vehicle.alive)
+          .slice(0, 36)
           .map((vehicle) => {
             const commandOrder = game.commanders?.[vehicle.team]?.assignments?.get(vehicle) || vehicle.ai?.currentOrder || null;
             const commandLockUntil = commandOrder?.commandLockUntil || vehicle.manualOrder?.commandLockUntil || 0;
@@ -176,8 +180,8 @@
               passengers: vehicle.passengerCount?.() || 0
             };
           }),
-        ai: game.aiObservatory?.latest?.() || null,
-        commands: (game.commandBus?.log || []).slice(-12).map((entry) => ({
+        ai: this.liteAiSnapshot(aiSnapshot),
+        commands: (game.commandBus?.log || []).slice(-8).map((entry) => ({
           accepted: Boolean(entry.accepted),
           reason: entry.reason || "",
           summary: entry.summary || "",
@@ -185,6 +189,23 @@
           slotId: entry.packet?.slotId || "",
           objectiveName: entry.packet?.objectiveName || ""
         }))
+      };
+    }
+
+    liteAiSnapshot(snapshot) {
+      if (!snapshot) return null;
+      return {
+        version: snapshot.version || 1,
+        updatedAt: snapshot.updatedAt || 0,
+        roomId: snapshot.roomId || this.game.onlineSession?.roomId || "local",
+        phase: snapshot.phase || this.game.matchPhase || "",
+        paused: Boolean(snapshot.paused),
+        summary: snapshot.summary || {},
+        tacticalMap: snapshot.tacticalMap || null,
+        aiScaleReadiness: snapshot.aiScaleReadiness || null,
+        units: [],
+        eventCount: Array.isArray(snapshot.events) ? snapshot.events.length : 0,
+        events: Array.isArray(snapshot.events) ? snapshot.events.slice(-10) : []
       };
     }
 

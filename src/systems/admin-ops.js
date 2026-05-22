@@ -29,7 +29,7 @@
     createSnapshot(options = {}) {
       const game = this.game;
       const remote = this.remoteObserverSnapshot();
-      const match = remote?.match || this.matchSnapshot(game);
+      let match = remote?.match || this.matchSnapshot(game);
       const roleSlots = remote?.roleSlots || this.roleSlotsSnapshot(game);
       const players = this.playersSnapshot(game, roleSlots, remote);
       const ai = remote?.ai || game.aiObservatory?.latest?.() || null;
@@ -38,6 +38,17 @@
       const registryRooms = IronLine.roomRegistry?.listRooms?.() || [];
       const selectedRoomId = IronLine.roomRegistry?.selectedRoomId?.() || "";
       const selectedRegistryRoom = registryRooms.find((item) => item.id === selectedRoomId) || registryRooms[0] || null;
+      if (selectedRegistryRoom) {
+        const roomPhase = selectedRegistryRoom.phase || "";
+        match = {
+          ...match,
+          mode: selectedRegistryRoom.mode || match.mode,
+          phase: roomPhase || match.phase,
+          started: Boolean(match.started || roomPhase === "playing"),
+          lobbyOpen: Boolean(match.lobbyOpen || roomPhase === "waiting" || roomPhase === "lobby"),
+          deploymentOpen: Boolean(match.deploymentOpen && roomPhase !== "playing")
+        };
+      }
       const eventSources = [
         ...(selectedRegistryRoom?.events?.slice?.(-80) || []),
         ...(remote?.events || []),

@@ -9,7 +9,7 @@
   const PRODUCTION_ROOMS_API_BASE = "https://iron-line-2d-tank-prototype.onrender.com";
   const DEFAULT_SPECTATOR_CAPACITY = 12;
   const MAX_SPECTATOR_CAPACITY = 12;
-  const REMOTE_REFRESH_INTERVAL_MS = 650;
+  const REMOTE_REFRESH_INTERVAL_MS = 320;
   const MAX_COMBAT_EVENTS = 140;
   const MAX_WORLD_UNITS = 96;
   const ROOM_SETTING_LIMITS = Object.freeze({
@@ -257,6 +257,7 @@
 
     publishRoom(room) {
       if (!this.canUseRemoteApi() || !room?.id) return Promise.resolve(null);
+      if (this.deletedRemoteRoomIds.has(room.id)) return Promise.resolve(null);
       const optimisticRoom = this.normalizeRoom(room);
       if (optimisticRoom) {
         this.pendingRemoteRoomIds.add(optimisticRoom.id);
@@ -294,6 +295,7 @@
 
     schedulePublishRoom(room, delayMs = 160) {
       if (!this.canUseRemoteApi() || !room?.id) return;
+      if (this.deletedRemoteRoomIds.has(room.id)) return;
       const normalized = this.normalizeRoom(room);
       if (!normalized) return;
       this.pendingRemoteRoomIds.add(normalized.id);
@@ -333,6 +335,10 @@
     deleteRemoteRoom(id) {
       if (!this.canUseRemoteApi() || !id) return Promise.resolve(false);
       this.pendingRemoteRoomIds.delete(id);
+      this.pendingPublishRooms.delete(id);
+      const timer = this.pendingPublishTimers.get(id);
+      if (timer) window.clearTimeout(timer);
+      this.pendingPublishTimers.delete(id);
       this.deletedRemoteRoomIds.add(id);
       this.remoteRooms = (this.remoteRooms || []).filter((room) => room.id !== id);
       this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
@@ -408,7 +414,7 @@
       return room;
     }
 
-    updateRoom(id, patch = {}) {
+    updateRoom(id, patch = {}, options = {}) {
       const rooms = this.readLocalRooms();
       const index = rooms.findIndex((room) => room.id === id);
       const base = index >= 0 ? rooms[index] : this.getRoom(id);
@@ -421,7 +427,7 @@
       if (index >= 0) rooms[index] = next;
       else rooms.push(next);
       this.saveRooms(rooms);
-      this.publishRoom(next);
+      if (!options.skipPublish) this.publishRoom(next);
       return next;
     }
 
@@ -555,11 +561,18 @@
         spectators.push(nextPlayer);
       }
       const event = this.playerEvent(previous, nextPlayer);
+      const structuralChange = Boolean(event);
       const updated = this.updateRoom(roomId, {
         players,
         spectators,
         events: event ? this.nextEvents(room, event) : room.events
+      }, {
+        skipPublish: true
       });
+      if (updated) {
+        if (structuralChange) this.schedulePublishRoom(updated, 120);
+        else this.publishParticipant(roomId, nextPlayer);
+      }
       return updated;
     }
 
@@ -794,6 +807,10 @@
       return `${this.roomsApiUrl(roomId)}/commands`;
     }
 
+    participantApiUrl(roomId = "") {
+      return `${this.roomsApiUrl(roomId)}/participants`;
+    }
+
     combatApiUrl(roomId = "") {
       return `${this.roomsApiUrl(roomId)}/combat`;
     }
@@ -801,6 +818,7 @@
     pushCommand(roomId, command = {}) {
       const room = this.getRoom(roomId);
       if (!room) return null;
+      if (this.deletedRemoteRoomIds.has(room.id)) return null;
       const packet = this.normalizeCommand({
         ...command,
         roomId: room.id
@@ -834,6 +852,7 @@
 
     publishCombatEvent(roomId, combatEvent = {}, fallbackRoom = null) {
       if (!this.canUseRemoteApi() || !roomId || !combatEvent?.id) return Promise.resolve(null);
+      if (this.deletedRemoteRoomIds.has(roomId)) return Promise.resolve(null);
       return fetch(this.combatApiUrl(roomId), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -854,6 +873,33 @@
         })
         .catch(() => {
           if (fallbackRoom) this.schedulePublishRoom(fallbackRoom, 180);
+          this.remoteOnline = false;
+          return null;
+        });
+    }
+
+    publishParticipant(roomId, participant = {}) {
+      if (!this.canUseRemoteApi() || !roomId || !participant?.id) return Promise.resolve(null);
+      if (this.deletedRemoteRoomIds.has(roomId)) return Promise.resolve(null);
+      return fetch(this.participantApiUrl(roomId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...participant,
+          playerId: participant.id
+        })
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
+          if (remoteRoom) {
+            this.upsertRemoteRoom(remoteRoom);
+            this.remoteOnline = true;
+            this.emit();
+          }
+          return remoteRoom;
+        })
+        .catch(() => {
           this.remoteOnline = false;
           return null;
         });

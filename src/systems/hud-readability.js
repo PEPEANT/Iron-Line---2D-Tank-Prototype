@@ -40,6 +40,11 @@
       },
 
       updateReadabilityStrip(game) {
+        if (!this.readabilityStripEnabled?.(game)) {
+          this.nodes.readabilityStrip?.classList.add("hidden");
+          return;
+        }
+
         this.ensureReadabilityStrip();
         const strip = this.nodes.readabilityStrip;
         if (!strip) return;
@@ -62,6 +67,17 @@
         if (this.nodes.readabilityFeed) this.nodes.readabilityFeed.textContent = this.readabilityFeedText(game);
         strip.dataset.commandState = this.readabilityPrimaryCommand(game)?.state || "idle";
         strip.dataset.playerState = game.playerDeathActive || game.playerDowned || game.player?.hp <= 0 ? "dead" : "alive";
+      },
+
+      readabilityStripEnabled(game) {
+        if (game?.debugReadabilityHud) return true;
+        try {
+          const params = new URLSearchParams(global.location?.search || "");
+          if (params.has("readabilityHud") || params.has("debugReadabilityHud")) return true;
+          return global.localStorage?.getItem?.("ironLine.showReadabilityHud") === "1";
+        } catch (_error) {
+          return false;
+        }
       },
 
       readabilityRoleText(game) {

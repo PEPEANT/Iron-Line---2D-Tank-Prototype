@@ -146,7 +146,8 @@
         for (const target of softTargets) {
           const visible = hasLineOfSight(this.game, this.unit, target, { padding: 3 });
           const report = visible ? null : this.game.getReportedContact?.(this.unit.team, target);
-          const aimPoint = visible || contact === target
+          if (!visible && !this.canUseReportedGrenadeTarget(report, weapon)) continue;
+          const aimPoint = visible
             ? target
             : report
               ? this.reportPoint(report)
@@ -180,6 +181,7 @@
           if (armored && weapon.id !== "grenadeLauncher") continue;
           const visible = hasLineOfSight(this.game, this.unit, vehicle, { padding: 4 });
           const report = visible ? null : this.game.getReportedContact?.(this.unit.team, vehicle);
+          if (!visible && !this.canUseReportedGrenadeTarget(report, weapon)) continue;
           const aimPoint = visible ? vehicle : report ? this.reportPoint(report) : null;
           if (!aimPoint) continue;
           addCandidate(weapon, aimPoint, vehicle, visible ? (armored ? 2.85 : 2.45) : (armored ? 2.45 : 2.22), armored ? "armor-track" : "light-vehicle");
@@ -191,6 +193,27 @@
         return null;
       }
       return best;
+    },
+    canUseReportedGrenadeTarget(report, weapon = INFANTRY_WEAPONS.grenade) {
+      if (!report || !report.target) return false;
+      if (report.sourceType === "objective") return false;
+      if (!this.isAliveEnemy(report.target)) return false;
+
+      const age = Math.max(0, (this.game.matchTime || 0) - Number(report.lastSeenAt || 0));
+      const confidence = Number(report.confidence || 0);
+      const source = report.sourceType || "";
+      const confirmed = report.certainty === "confirmed" || source === "scout" || source === "recon_drone";
+      const launcher = weapon?.id === "grenadeLauncher";
+
+      if (launcher) return age <= 1.45 && confidence >= 0.78 && (confirmed || source === "attack_drone");
+      return age <= 0.95 && confidence >= 0.88 && confirmed;
+    },
+    isGrenadeTargetStillValid(target, weapon = INFANTRY_WEAPONS.grenade) {
+      const subject = target?.target || null;
+      if (!target || !subject || !this.isAliveEnemy(subject)) return false;
+      if (!this.isGrenadePointSafe(target, weapon)) return false;
+      if (hasLineOfSight(this.game, this.unit, subject, { padding: this.isVehicleTarget(subject) ? 4 : 3 })) return true;
+      return this.canUseReportedGrenadeTarget(this.game.getReportedContact?.(this.unit.team, subject), weapon);
     },
     grenadeClusterAt(target, targets) {
       const members = targets.filter((item) => (
@@ -269,6 +292,10 @@
       const distance = distXY(this.unit.x, this.unit.y, target.x, target.y);
       if (distance < INFANTRY_CONFIG.grenadeMinRange || distance > weapon.range) {
         this.resetGrenadeAim("range");
+        return false;
+      }
+      if (!this.isGrenadeTargetStillValid(target, weapon)) {
+        this.resetGrenadeAim("stale-report");
         return false;
       }
       if (!this.updateGrenadeAim(target, dt)) return false;

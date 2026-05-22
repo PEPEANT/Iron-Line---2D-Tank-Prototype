@@ -130,9 +130,11 @@ The online combat server-authority first-pass interim verification report is ON 
 
 The online combat server-authority first-pass integrated fix and completion report is PASS.
 
-The next target is: **online live-play QA first pass**.
+The first alpha P0 stabilization loop is now PASS for a controlled 4-player retest.
 
-The immediate goal is to validate live two-client behavior, confirm-vs-prediction reconciliation, latency feel, hit rejection clarity, death / respawn ordering, kill-log agreement, and round-state agreement. Do not expand into full server authority.
+The next target is: **controlled 4-player alpha retest**.
+
+The immediate goal is to retest the reported alpha P0s under controlled conditions: player stutter / frame drops, deleted room persistence, admin observer game progress visibility, and capture-point grenade / AI abnormal behavior. Use AI `8vs8` first, optionally `15vs15`; compare admin / observer OFF versus ON. Do not enable 50vs50.
 
 Do not start UGC, city/open-world expansion, full server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
@@ -220,11 +222,28 @@ AI should not become "smarter" in this pass. It should become easier to command:
 46. Online combat server-authority first-pass implementation. ON TRACK on 2026-05-22.
 47. Online combat server-authority first-pass interim verification report. ON TRACK on 2026-05-22.
 48. Online combat server-authority first-pass integrated fix and completion report. PASS on 2026-05-22.
-49. Online live-play QA first pass. Current next target.
+49. 1st alpha P0 stabilization interim diagnosis report. ON TRACK on 2026-05-22.
+50. 1st alpha P0 stabilization interim-report-based narrow correction pass. PASS for narrow retest on 2026-05-22.
+51. 1st alpha P0 stabilization completion / retest decision report. PASS for controlled 4-player retest on 2026-05-22.
+52. Controlled 4-player alpha retest. Current next target.
 
 ## Current Work Target
 
-Next work item: **online live-play QA first pass**.
+Next work item: **controlled 4-player alpha retest**.
+
+Alpha P0 stabilization diagnosis: `docs/alpha-p0-stabilization-interim-diagnosis-2026-05-22.md` records the ON TRACK diagnosis for player stutter / frame drops, deleted-room persistence, admin observer progress state, capture-point grenade / AI abnormal behavior, and the QA readability strip that appeared in normal play.
+
+Alpha P0 stabilization correction pass: `docs/alpha-p0-stabilization-correction-pass-2026-05-22.md` records the PASS-for-narrow-retest correction pass. The code now uses lightweight participant updates, deleted-room tombstones, admin observer phase fallback, hidden-by-default readability debug strip, and a conservative reported-contact grenade guard.
+
+Alpha P0 stabilization completion / retest decision: `docs/alpha-p0-stabilization-completion-retest-decision-2026-05-22.md` records the PASS decision allowing a controlled 4-player alpha retest. This is not a full alpha stability PASS; it only means no automated P0 blocker remains and the next step is a controlled live retest.
+
+Controlled retest rules:
+
+- Start with `8vs8` AI.
+- Optional escalation to `15vs15` only if `8vs8` is stable.
+- Compare admin / observer OFF versus ON.
+- Do not enable 50vs50.
+- Record room id, browser / device, AI count, admin ON/OFF, visible stutter, console errors, server logs, and whether capture-point grenade / AI abnormal behavior reproduces.
 
 Server-authority transition review: `docs/online-combat-server-authority-transition-review-2026-05-22.md` records the APPROVED decision to move only human combat outcomes toward partial server authority first. The first server-authority pass should cover shot request / hit claim / hit confirm / death confirm / respawn confirm / score state / round state. Do not move AI simulation, BotCommander, Tactical Map, or full world simulation to server authority in this pass.
 

@@ -8,7 +8,7 @@ const { WebSocket } = require("ws");
 const root = path.resolve(__dirname, "..");
 const appPort = Number(process.env.IRONLINE_UI_READABILITY_PORT || 4195);
 const cdpPort = Number(process.env.IRONLINE_UI_READABILITY_CDP_PORT || 9235);
-const appUrl = `http://127.0.0.1:${appPort}/index.html`;
+const appUrl = `http://127.0.0.1:${appPort}/index.html?readabilityHud=1`;
 const chromePath = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const userDataDir = path.join(root, ".tmp-chrome-ui-readability");
 const scaleProfileId = process.env.IRONLINE_UI_READABILITY_SCALE_PROFILE || "ai-25v25";
