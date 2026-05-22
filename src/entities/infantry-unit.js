@@ -55,7 +55,7 @@
       return true;
     }
 
-    update(game, dt) {
+    update(game, dt, options = {}) {
       if (!this.alive) return;
       this.transportCooldown = Math.max(0, (this.transportCooldown || 0) - dt);
       this.proneCooldown = Math.max(0, (this.proneCooldown || 0) - dt);
@@ -74,7 +74,10 @@
         }
       }
       this.updateSuppression(dt);
-      if (this.ai && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
+      const aiDt = options.aiDt ?? dt;
+      if (!options.skipAi && aiDt > 0 && this.ai && game.matchStarted !== false && !game.testLabAiPaused) {
+        this.ai.update(aiDt);
+      }
     }
 
     updateSuppression(dt) {

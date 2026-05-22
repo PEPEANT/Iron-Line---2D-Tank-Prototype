@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="performance-monitor.css">
     <link rel="stylesheet" href="admin-observer.css">
   </head>
-  <body class="admin-standalone-page">
+  <body class="admin-standalone-page admin-ops-expanded">
     <canvas id="game" tabindex="0" aria-label="Iron Line 관리자 전장 관전 화면"></canvas>
 
     <section class="admin-panel hidden" id="adminPanel" aria-label="관리자 관전 패널">
@@ -18,6 +18,10 @@
         <div>
           <strong>Iron Line 운영센터</strong>
           <span id="adminStatus">관전 준비</span>
+        </div>
+        <div class="admin-head-actions" aria-label="운영센터 보기 전환">
+          <button type="button" class="active" data-admin-layout="ops" aria-pressed="true">운영 전체</button>
+          <button type="button" data-admin-layout="observer" aria-pressed="false">전장 보기</button>
         </div>
         <button type="button" id="adminClose" aria-label="관리자 패널 닫기">&times;</button>
       </div>
@@ -97,6 +101,7 @@
     <script src="src/systems/hud-admin-map-tools.js"></script>
     <script src="src/systems/hud-admin-test-hub.js"></script>
     <script src="src/systems/hud-admin-ui.js"></script>
+    <script src="src/systems/hud-admin-layout.js"></script>
     <script src="src/systems/hud-spectator-panel.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/renderer.js"></script>

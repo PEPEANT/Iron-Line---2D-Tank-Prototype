@@ -76,11 +76,27 @@ The AI V2 tactical map / cover-node interim report-based narrow correction pass 
 
 The AI V2 tactical map / cover-node completion report is PASS.
 
-The next target is: **AI count expansion preparation stage**.
+The AI count expansion preparation / performance criteria first pass is PASS.
 
-The immediate goal is to prepare AI count scaling safely using the completed tactical-map data layer. Do not jump straight to 50vs50. Use debug visibility, performance checks, and tactical-map-aware staging before increasing AI count.
+The AI scale performance interim report is ON TRACK.
 
-Do not start UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
+The AI scale performance interim report-based narrow validation / fix pass is PASS.
+
+The AI scale performance completion report is PASS.
+
+The 50vs50 event candidate integrated verification plan is READY.
+
+The 50vs50 event candidate integrated verification report is PASS EVENT-ONLY.
+
+The roadmap cleanup / next-season priority report is COMPLETE.
+
+Important roadmap conclusion: online command sync and local FPS combat are PASS, but the project is not online-combat complete yet. Human position, aim, shot, hit, death, respawn, round state, win state, packet delay/duplicates, host departure, and repeated 2+ client playtests still need a dedicated online combat stabilization first pass.
+
+The next target is: **online combat stabilization 1차**.
+
+The immediate goal is to make human combat trustworthy online: player position, aim, shot, hit, death, respawn, kill log, damage cause, and round state consistency. Do not begin a full server-authority rewrite unless the first pass proves it is necessary.
+
+Do not start UGC, city/open-world expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
 The command-role design being verified is:
 
@@ -141,11 +157,18 @@ AI should not become "smarter" in this pass. It should become easier to command:
 21. AI V2 tactical map / cover-node interim verification. ON TRACK on 2026-05-22.
 22. AI V2 tactical map / cover-node interim report-based narrow correction pass. PASS on 2026-05-22.
 23. AI V2 tactical map / cover-node completion report. PASS on 2026-05-22.
-24. AI count expansion preparation stage. Current next target.
+24. AI count expansion preparation / performance criteria first pass. PASS on 2026-05-22.
+25. AI scale performance interim report. ON TRACK on 2026-05-22.
+26. AI scale performance interim report-based narrow validation / fix pass. PASS on 2026-05-22.
+27. AI scale performance completion report. PASS on 2026-05-22.
+28. 50vs50 event candidate integrated verification plan. READY on 2026-05-22.
+29. 50vs50 event candidate integrated verification report. PASS EVENT-ONLY on 2026-05-22.
+30. Roadmap cleanup / next-season priority report. COMPLETE on 2026-05-22.
+31. Online combat stabilization 1차. Current next target.
 
 ## Current Work Target
 
-Next work item: **AI count expansion preparation stage**.
+Next work item: **online combat stabilization 1차**.
 
 AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
@@ -155,7 +178,25 @@ AI V2 correction checkpoint: `docs/ai-v2-tactical-map-correction-pass-2026-05-22
 
 AI V2 tactical-map completion checkpoint: `docs/ai-v2-tactical-map-completion-report-2026-05-22.md` records the PASS decision for map metadata, optional tactical tags, cover nodes, staging / rally points, vehicle hints, debug / observer visibility, minimal AI references, and regression checks.
 
-Goal: prepare AI count scaling without jumping straight into 50vs50. Use tactical-map data, staging, vehicle hints, and observability to keep scaling measurable.
+AI scale readiness first-pass checkpoint: `docs/ai-scale-readiness-first-pass-report-2026-05-22.md` records the PASS decision for staged AI count profiles, active-AI versus tactical-map structural performance budgets, LOD classification, online snapshot policy, and 8vs8 smoke coverage.
+
+AI scale performance interim checkpoint: `docs/ai-scale-performance-interim-report-2026-05-22.md` records the ON TRACK decision for 8vs8, 15vs15, and 25vs25 performance, LOD classification, command state preservation, traffic waits, snapshot size, and a caution that 25vs25 showed variance in one run.
+
+AI scale performance validation checkpoint: `docs/ai-scale-performance-validation-pass-2026-05-22.md` records the PASS decision for the interim report-based narrow validation / fix pass. The first repeated run reproduced one 25vs25 FPS failure, so off-screen ordered actors were moved from `detailed` to `normal` runtime LOD. The follow-up 8vs8 / 15vs15 / 25vs25 repeated run passed with visible LOD throttling and no stuck regression.
+
+AI scale performance completion checkpoint: `docs/ai-scale-performance-completion-report-2026-05-22.md` records the PASS decision for staged 8vs8 / 15vs15 / 25vs25 AI count expansion. It explicitly keeps 50vs50 as event-only pending a separate stress gate.
+
+50vs50 event integrated verification checkpoint: `docs/50v50-event-stress-test-design-2026-05-22.md` defines the manual activation rules, event-only budgets, required metrics, human-impact checks, and `PASS EVENT-ONLY` / `HOLD` / `REDUCE` / `BLOCKED` criteria for the combined 50vs50 event candidate report.
+
+50vs50 event integrated verification report: `docs/50v50-event-candidate-integrated-verification-report-2026-05-22.md` records the PASS EVENT-ONLY decision. The 50vs50 profile passed local repeated event budgets, but remains manually activated event / stress / spectator candidate only. It is not approved as default, ranked, normal online, or competitive mode.
+
+Goal: clean up the roadmap / next-season priority order after this milestone. Preserve the distinction between 25vs25 as the normal staged scale ceiling and 50vs50 as event-only.
+
+Roadmap / next-season priority checkpoint: `docs/roadmap-next-season-priority-report-2026-05-22.md` records the priority reset and explicitly distinguishes online command/FPS foundations from full online combat completion. Recommended next season order is: 1) online combat stabilization first pass, 2) UI / readability / battlefield information, 3) AI V2 behavior connection.
+
+Online combat stabilization plan: `docs/online-combat-stabilization-first-pass-plan-2026-05-22.md` defines the first-pass scope. Start with online combat path audit and trace visibility, then fix stale player state, duplicate shot / hit / death events, respawn ordering, and round-state consistency. This is not a full server-authority rewrite.
+
+Goal: start online combat stabilization first pass. Keep the scope to multiplayer combat reliability and evidence: position / aim / shot / hit / death / respawn / kill-log / damage-cause / round-state consistency, duplicate / stale combat events, repeated 2+ client playtests, and host / world-host departure observation. Do not start a full server-authority combat rewrite, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
@@ -164,14 +205,14 @@ Required AI count expansion preparation checks:
 - Start with small increments, not 50vs50.
 - Preserve human role / command priority.
 - Keep `TacticalMap.summary()`, debug overlay, `AIObservatory`, and `ObserverBridge` visible while scaling.
-- Track performance, stuck/wait states, command locks, and traffic/vehicle staging behavior.
+- Track FPS, frame time, active AI update time, tactical-map structural time, render cost, snapshot size, stuck/wait states, command locks, and traffic/vehicle staging behavior.
 - Existing command, FPS, BotCommander skeleton, and anti-vehicle balance smoke tests must keep passing.
 
 ## Current Sequence After Online Sync
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **AI count expansion preparation stage**. Do not move into 50vs50 event mode before small-count scaling and performance / behavior gates pass.
+The next stage is **online combat stabilization 1차**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
 
 Current sequence:
 
@@ -198,9 +239,14 @@ Current sequence:
 21. AI V2 tactical map / cover-node interim verification. ON TRACK.
 22. AI V2 tactical map / cover-node interim report-based narrow correction pass. PASS.
 23. AI V2 tactical map / cover-node completion report. PASS.
-24. AI count expansion preparation stage. Current next target.
-25. AI count scaling.
-26. 50vs50 event mode.
+24. AI count expansion preparation / performance criteria first pass. PASS.
+25. AI scale performance interim report. ON TRACK.
+26. AI scale performance interim report-based narrow validation / fix pass. PASS.
+27. AI scale performance completion report. PASS.
+28. 50vs50 event candidate integrated verification plan. READY.
+29. 50vs50 event candidate integrated verification report. PASS EVENT-ONLY.
+30. Roadmap cleanup / next-season priority report. COMPLETE.
+31. Online combat stabilization 1차. Current next target.
 
 ## Offline Command Stability Gate
 

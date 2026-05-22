@@ -169,8 +169,8 @@
 
       page.append(
         this.adminObserverBlock("운영 대시보드", stats),
+        this.adminObserverBlock("방 / 로비 현황", rooms),
         this.adminObserverBlock("방 제어", roomControls),
-        this.adminObserverBlock("방 / 접속", rooms),
         this.adminObserverBlock("전황 이벤트", events),
         this.adminObserverBlock("테스트 허브", testHub),
         this.adminObserverBlock("맵 도구", mapTools),

@@ -137,7 +137,7 @@
       return { moved, blocked };
     }
 
-    update(game, dt) {
+    update(game, dt, options = {}) {
       if (!this.alive) {
         this.wreckTimer += dt;
         if (!this.coverDestroyed && this.wreckTimer > 6) {
@@ -155,7 +155,10 @@
       if (this.repairHoldTimer <= 0) this.repairHoldSource = "";
       this.updatePassengers();
 
-      if (this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false && !game.testLabAiPaused) this.ai.update(dt);
+      const aiDt = options.aiDt ?? dt;
+      if (!options.skipAi && aiDt > 0 && this.ai && !this.playerControlled && this.isOperational() && game.matchStarted !== false && !game.testLabAiPaused) {
+        this.ai.update(aiDt);
+      }
     }
 
     requestRepairHold(engineer, options = {}) {

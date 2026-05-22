@@ -33,6 +33,7 @@
         adminStatus: document.getElementById("adminStatus"),
         adminTabs: Array.from(document.querySelectorAll("[data-admin-tab]")),
         adminPages: Array.from(document.querySelectorAll("[data-admin-page]")),
+        adminLayoutButtons: Array.from(document.querySelectorAll("[data-admin-layout]")),
         adminClassButtons: Array.from(document.querySelectorAll("[data-admin-class]")),
         adminWeaponSelect: document.getElementById("adminWeaponSelect"),
         adminActionButtons: Array.from(document.querySelectorAll("[data-admin-action]")),
@@ -262,6 +263,10 @@
 
       this.nodes.adminTabs.forEach((button) => {
         button.addEventListener("click", () => this.selectAdminTab(button.dataset.adminTab));
+      });
+
+      this.nodes.adminLayoutButtons.forEach((button) => {
+        button.addEventListener("click", () => this.setAdminStandaloneLayout?.(button.dataset.adminLayout));
       });
 
       this.nodes.adminClassButtons.forEach((button) => {
@@ -1540,6 +1545,7 @@
   IronLine.installHudAdminNotes?.(Hud);
   IronLine.installHudAdminLobby?.(Hud);
   IronLine.installHudAdminUi?.(Hud);
+  IronLine.installHudAdminLayout?.(Hud);
   IronLine.installHudSpectatorPanel?.(Hud);
 
   IronLine.Hud = Hud;

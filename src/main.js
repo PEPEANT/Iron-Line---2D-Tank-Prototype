@@ -77,6 +77,9 @@
       this.chat = !this.adminObserverMode && IronLine.ChatSystem ? new IronLine.ChatSystem(this) : null;
       this.roleChange = !this.adminObserverMode && IronLine.RoleChangeSystem ? new IronLine.RoleChangeSystem(this) : null;
       this.perfMonitor = IronLine.PerformanceMonitor ? new IronLine.PerformanceMonitor() : null;
+      this.aiScaleReadiness = IronLine.AIScaleReadiness ? new IronLine.AIScaleReadiness(this) : null;
+      this.aiLodState = new WeakMap();
+      this.aiScaleLodEnabled = true;
       this.aiObservatoryTick = 0;
       this.observerSnapshot = null;
       this.conquest = this.defaultConquestState();
@@ -1025,15 +1028,24 @@
       this.updateDrones(dt);
       perf?.end("drones");
       perf?.begin("ai.infantry");
-      for (const unit of this.infantry) unit.update(this, dt);
+      for (const unit of this.infantry) {
+        const lodStep = this.aiLodStep(unit, dt);
+        unit.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
+      }
       perf?.end("ai.infantry");
       perf?.begin("reports");
       this.updateTeamReports(dt);
       perf?.end("reports");
 
       perf?.begin("vehicles");
-      for (const tank of this.tanks) tank.update(this, dt);
-      for (const humvee of this.humvees || []) humvee.update(this, dt);
+      for (const tank of this.tanks) {
+        const lodStep = this.aiLodStep(tank, dt);
+        tank.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
+      }
+      for (const humvee of this.humvees || []) {
+        const lodStep = this.aiLodStep(humvee, dt);
+        humvee.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
+      }
       perf?.end("vehicles");
 
       perf?.begin("combat.projectiles");
@@ -1057,6 +1069,46 @@
       perf?.end("result");
       this.updateAiObservatoryBudgeted(dt);
       perf?.end("battlefield");
+    }
+
+    aiLodStep(actor, dt) {
+      if (!this.aiScaleLodEnabled || !IronLine.AIScaleReadiness?.classifyActor || !actor?.ai) {
+        return { skipAi: false, dt };
+      }
+      const info = IronLine.AIScaleReadiness.classifyActor(this, actor);
+      const interval = Math.max(0.05, Number(info.updateRateMs || 100) / 1000);
+      let state = this.aiLodState.get(actor);
+      if (!state) {
+        state = { accumulated: 0, updates: 0, skips: 0, lastLod: info.lod };
+        this.aiLodState.set(actor, state);
+      }
+      state.accumulated += dt;
+      state.lastLod = info.lod;
+      state.updateRateMs = info.updateRateMs;
+      actor.aiLod = {
+        lod: info.lod,
+        reason: info.reason,
+        updateRateMs: info.updateRateMs,
+        skipped: false,
+        accumulated: state.accumulated,
+        updates: state.updates,
+        skips: state.skips
+      };
+
+      if (info.lod === "detailed" || state.accumulated >= interval) {
+        const aiDt = Math.min(state.accumulated, interval * 2.5);
+        state.accumulated = 0;
+        state.updates += 1;
+        actor.aiLod.skipped = false;
+        actor.aiLod.accumulated = state.accumulated;
+        actor.aiLod.updates = state.updates;
+        return { skipAi: false, dt: aiDt };
+      }
+
+      state.skips += 1;
+      actor.aiLod.skipped = true;
+      actor.aiLod.skips = state.skips;
+      return { skipAi: true, dt: 0 };
     }
 
     updateAiObservatoryBudgeted(dt) {
@@ -2489,6 +2541,8 @@
       this.createCommanders();
       this.resetWorldSceneryState();
       this.setupScenario();
+      this.tacticalMap?.rebuild?.("scenario-reset");
+      this.aiLodState = new WeakMap();
       this.syncOnlineSlotAssets();
       this.commandBus?.resetMatch();
       this.botCommander?.reset?.();

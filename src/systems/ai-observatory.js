@@ -146,6 +146,7 @@
           decisionCounts
         },
         tacticalMap: this.game.tacticalMap?.summary?.() || null,
+        aiScaleReadiness: this.game.aiScaleReadiness?.snapshot?.({ includeNetwork: false }) || null,
         units,
         events: this.events.slice(-100)
       };
