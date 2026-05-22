@@ -100,9 +100,13 @@ The online combat stabilization mid-report-based narrow fix / live validation pa
 
 The online combat stabilization completion report is PASS.
 
-The next target is: **UI / readability / battlefield information cleanup first pass**.
+The UI / readability / battlefield information cleanup first pass is ON TRACK.
 
-The immediate goal is to make human combat trustworthy online: player position, aim, shot, hit, death, respawn, kill log, damage cause, and round state consistency. Do not begin a full server-authority rewrite unless the first pass proves it is necessary.
+The UI / readability integrated QA and completion report is PASS.
+
+The next target is: **AI V2 behavior connection first pass**.
+
+The immediate goal is to connect the existing tactical map / cover-node / staging / vehicle-hint data into a few selected AI behavior decisions without starting a full AI rewrite. Keep the scope to behavior connection, verification, and narrow regressions.
 
 Do not start UGC, city/open-world expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
@@ -176,11 +180,13 @@ AI should not become "smarter" in this pass. It should become easier to command:
 32. Online combat stabilization mid verification report. ON TRACK on 2026-05-22.
 33. Online combat stabilization mid-report-based narrow fix / live validation pass. PASS on 2026-05-22.
 34. Online combat stabilization completion report. PASS on 2026-05-22.
-35. UI / readability / battlefield information cleanup first pass. Current next target.
+35. UI / readability / battlefield information cleanup first pass. ON TRACK on 2026-05-22.
+36. UI / readability integrated QA and completion report. PASS on 2026-05-22.
+37. AI V2 behavior connection first pass. Current next target.
 
 ## Current Work Target
 
-Next work item: **UI / readability / battlefield information cleanup first pass**.
+Next work item: **AI V2 behavior connection first pass**.
 
 AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
@@ -216,7 +222,11 @@ Online combat stabilization correction pass: `docs/online-combat-stabilization-c
 
 Online combat stabilization completion report: `docs/online-combat-stabilization-completion-report-2026-05-22.md` records the PASS decision for the first-pass online human combat stabilization track. It closes position / aim / shot / hit / death / respawn ordering and duplicate / stale protection, while explicitly leaving full server authority and competitive round / victory sync as later work.
 
-Goal: start UI / readability / battlefield information cleanup first pass. Focus on making the now-stabilized command/FPS/online combat state readable: HUD priority, kill / death / radio log placement, minimap clarity, hit direction, AI command state visibility, crowded battlefield hierarchy, and 25vs25 / event-only 50vs50 readability constraints. Do not start full server-authority combat, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
+UI readability first-pass checkpoint: `docs/ui-readability-first-pass-report-2026-05-22.md` records the ON TRACK decision for the compact live combat + command strip, command log height limiting, remote dead-state scoreboard / minimap filtering, small-screen marker density, and `tools/check-ui-readability.cjs` smoke coverage.
+
+UI readability integrated QA checkpoint: `docs/ui-readability-integrated-qa-completion-report-2026-05-22.md` records the PASS decision for combat HUD, command HUD, log priority, minimap marker density, 25vs25 readability smoke, small-screen rules, and 50vs50 event-only constraints.
+
+Goal: start AI V2 behavior connection first pass. Connect the existing AI V2 tactical-map data to limited behavior choices such as cover selection, rally / staging, wait-for-clear, vehicle waiting, and objective approach. Do not start full server-authority combat, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
@@ -232,7 +242,7 @@ Required AI count expansion preparation checks:
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **UI / readability / battlefield information cleanup first pass**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
+The next stage is **AI V2 behavior connection first pass**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
 
 Current sequence:
 
@@ -270,7 +280,9 @@ Current sequence:
 32. Online combat stabilization mid verification report. ON TRACK.
 33. Online combat stabilization mid-report-based narrow fix / live validation pass. PASS.
 34. Online combat stabilization completion report. PASS.
-35. UI / readability / battlefield information cleanup first pass. Current next target.
+35. UI / readability / battlefield information cleanup first pass. ON TRACK.
+36. UI / readability integrated QA and completion report. PASS.
+37. AI V2 behavior connection first pass. Current next target.
 
 ## Offline Command Stability Gate
 

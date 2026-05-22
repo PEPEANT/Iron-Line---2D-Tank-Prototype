@@ -1,0 +1,96 @@
+.hud-readability-strip {
+  width: min(92vw, 620px);
+  margin-top: 7px;
+  display: grid;
+  grid-template-columns: minmax(86px, 0.82fr) minmax(118px, 1fr) minmax(136px, 1.1fr) minmax(160px, 1.35fr);
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(9, 15, 13, 0.68);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+}
+
+.hud-readability-strip.hidden {
+  display: none;
+}
+
+.hud-readability-item {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 5px 7px;
+  border: 1px solid rgba(237, 244, 239, 0.1);
+  border-radius: 6px;
+  background: rgba(237, 244, 239, 0.045);
+}
+
+.hud-readability-label {
+  color: rgba(237, 244, 239, 0.48);
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.hud-readability-item strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.92);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-readability-strip[data-command-state="assault"] .hud-readability-item:nth-child(2),
+.hud-readability-strip[data-command-state="cover"] .hud-readability-item:nth-child(2) {
+  border-color: rgba(255, 209, 102, 0.36);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.hud-readability-strip[data-player-state="dead"] .hud-readability-item:nth-child(3) {
+  border-color: rgba(255, 109, 102, 0.48);
+  background: rgba(255, 109, 102, 0.1);
+}
+
+.command-log {
+  max-height: 42px;
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .map-marker-name {
+    display: none;
+  }
+
+  .map-marker.player-human.local .map-marker-name {
+    display: block;
+  }
+}
+
+@media (max-width: 720px) {
+  .hud-readability-strip {
+    width: min(94vw, 520px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hud-readability-item.wide {
+    grid-column: 1 / -1;
+  }
+
+  .hud-readability-item strong {
+    font-size: 10px;
+  }
+}
+
+body.mobile-controls-active .hud-readability-strip {
+  width: min(94vw, 460px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: rgba(8, 14, 12, 0.74);
+}
+
+body.mobile-controls-active .hud-readability-item.wide {
+  grid-column: 1 / -1;
+}

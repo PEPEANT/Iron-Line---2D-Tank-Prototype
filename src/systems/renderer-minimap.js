@@ -262,7 +262,10 @@
           x,
           y,
           team: sessionPlayer.team,
-          alive: raw.alive !== false && sessionPlayer.alive !== false,
+          alive: raw.alive !== false &&
+            sessionPlayer.alive !== false &&
+            raw.deathState !== "dead" &&
+            sessionPlayer.deathState !== "dead",
           inVehicle: Boolean(raw.inVehicle || sessionPlayer.inVehicle),
           droneX: Number.isFinite(droneX) ? droneX : null,
           droneY: Number.isFinite(droneY) ? droneY : null,
@@ -282,7 +285,7 @@
         x: zone.x,
         y: zone.y,
         team,
-        alive: sessionPlayer.alive !== false,
+        alive: sessionPlayer.alive !== false && sessionPlayer.deathState !== "dead",
         inVehicle: false,
         alpha: 0.58
       };

@@ -167,6 +167,7 @@
       this.ensureAdminObserverPanel();
       this.ensureAdminAiLabPanel();
       this.ensureProneIndicator();
+      this.ensureReadabilityStrip?.();
       this.nodes.mobileWeaponButton = this.createMobileWeaponButton();
       this.nodes.mobileRoleButton = this.createMobileRoleButton();
       this.nodes.mobileChatButton = this.createMobileChatButton();
@@ -1152,13 +1153,24 @@
       const y = Number(raw.y);
       const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
       if (Number.isFinite(x) && Number.isFinite(y) && !nearOrigin) {
-        return { x, y, alive: raw.alive !== false && sessionPlayer.alive !== false };
+        return {
+          x,
+          y,
+          alive: raw.alive !== false &&
+            sessionPlayer.alive !== false &&
+            raw.deathState !== "dead" &&
+            sessionPlayer.deathState !== "dead"
+        };
       }
 
       const slot = game.sessionSlotById?.(sessionPlayer.slotId || "");
       const team = sessionPlayer.team || slot?.team || TEAM.BLUE;
       const zone = (game.world.safeZones || []).find((item) => item.team === team);
-      return zone ? { x: zone.x, y: zone.y, alive: sessionPlayer.alive !== false } : null;
+      return zone ? {
+        x: zone.x,
+        y: zone.y,
+        alive: sessionPlayer.alive !== false && sessionPlayer.deathState !== "dead"
+      } : null;
     }
 
     humanSnapshotPoint(player = {}) {
@@ -1169,7 +1181,7 @@
       return {
         x,
         y,
-        alive: raw.alive !== false && player.alive !== false
+        alive: raw.alive !== false && player.alive !== false && raw.deathState !== "dead" && player.deathState !== "dead"
       };
     }
 
@@ -1354,7 +1366,14 @@
       const stats = player.stats || game.scoreboardStats?.[player.id] || {};
       const local = player.id && player.id === game.onlineSession?.playerId;
       const participantType = player.participantType || "player";
-      const alive = local ? !game.playerDeathActive && !game.playerDowned && game.player?.hp > 0 : true;
+      const raw = player.position || player;
+      const remoteAlive = raw.alive !== false &&
+        player.alive !== false &&
+        raw.deathState !== "dead" &&
+        player.deathState !== "dead";
+      const alive = local ? !game.playerDeathActive && !game.playerDowned && game.player?.hp > 0 : remoteAlive;
+      const slot = game.sessionSlotById?.(player.slotId || raw.slotId || "");
+      const roleId = slot?.roleId || player.roleId || raw.roleId || player.role || player.currentClassId || player.classId || "";
       const status = participantType !== "player"
         ? this.participantLabel(participantType)
         : alive ? (player.ready ? "준비" : "생존") : "사망";
@@ -1362,7 +1381,7 @@
         name: `${player.name || player.nickname || "Player"}${local ? " (나)" : ""}`,
         team: participantType === "player" ? this.teamLabel(player.team) : "관전",
         teamClass: player.team === TEAM.RED ? "red" : player.team === TEAM.BLUE ? "blue" : "neutral",
-        role: participantType === "player" ? this.roleLabel(player.currentClassId || player.classId || player.roleId || player.role) : this.participantLabel(participantType),
+        role: participantType === "player" ? this.roleLabel(roleId) : this.participantLabel(participantType),
         kills: Math.max(0, Math.floor(Number(stats.kills) || 0)),
         deaths: Math.max(0, Math.floor(Number(stats.deaths) || 0)),
         status,
@@ -1384,6 +1403,8 @@
     }
 
     roleLabel(roleId = "") {
+      const readable = this.readabilityRoleLabel?.(roleId);
+      if (readable && readable !== roleId && readable !== "-") return readable;
       const labels = {
         infantry: "보병",
         engineer: "공병",
@@ -1547,6 +1568,7 @@
   IronLine.installHudAdminUi?.(Hud);
   IronLine.installHudAdminLayout?.(Hud);
   IronLine.installHudSpectatorPanel?.(Hud);
+  IronLine.installHudReadability?.(Hud);
 
   IronLine.Hud = Hud;
 })(window);
