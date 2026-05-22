@@ -146,7 +146,7 @@
 
       const controlDeck = document.createElement("div");
       controlDeck.className = "command-control-deck";
-      controlDeck.append(channels, assets, memory, buttons, log);
+      controlDeck.append(channels, assets, memory, buttons, specials, log);
 
       shell.append(brand, head, speaker, controlDeck);
       panel.append(antenna, shell);
@@ -239,6 +239,7 @@
         button.classList.toggle("active", !isClose && allowed && button.dataset.commandType === this.selectedType);
       });
 
+      this.updateSpecials(game, slot);
       this.updateAssets(game, slot);
       this.updateMemory(game, slot);
       const showMap = this.open && (this.selectedType === "attack" || this.selectedType === "defend");
@@ -268,7 +269,9 @@
 
     updateChannels(game, slot) {
       const canArmor = Boolean((slot?.vehicleIds || []).length);
+      const hasSquads = Boolean((slot?.squadIds || []).length);
       if (this.channel === "armor" && !canArmor) this.channel = "infantry";
+      if (this.channel === "infantry" && !hasSquads && canArmor) this.channel = "armor";
       this.nodes.commandChannelButtons?.forEach((button) => {
         const channel = button.dataset.commandChannel;
         const disabled = channel === "armor" && !canArmor;
@@ -284,6 +287,40 @@
           : this.roleAssetLabel?.(slot?.roleId || "infantry") || this.channelLabel?.("infantry") || "보병";
         label.textContent = `${channelLabel} 채널`;
       }
+    }
+
+    updateSpecials(game, slot) {
+      const specials = this.nodes.commandSpecials;
+      if (!specials) return;
+      const special = game.commandBus?.roleSpecialForSlot?.(slot);
+      const allowed = special ? game.commandBus?.isTypeAllowedForSlot?.(slot, special.type) !== false : false;
+      const signature = JSON.stringify({
+        slotId: slot?.id || "",
+        type: special?.type || "",
+        selectedType: this.selectedType,
+        allowed
+      });
+      if (specials.dataset.signature === signature) return;
+      specials.dataset.signature = signature;
+      specials.textContent = "";
+      if (!special) {
+        specials.classList.add("hidden");
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.commandType = special.type;
+      button.textContent = special.label || this.commandLabel(special.type);
+      button.title = special.hint || "";
+      button.disabled = !allowed;
+      button.classList.toggle("active", allowed && special.type === this.selectedType);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.selectType(special.type);
+      });
+      specials.append(button);
+      specials.classList.remove("hidden");
     }
 
     syncSelection(slot) {
@@ -383,7 +420,7 @@
         return;
       }
       this.selectedType = type;
-      if (["move", "rally", "cancel"].includes(type) && game) {
+      if (["move", "rally", "cancel", "assault", "repair", "scan", "fire_support"].includes(type) && game) {
         const point = this.immediateCommandPoint(game, type);
         const result = this.submitCurrentCommand(game, point, "", {
           followPlayer: type === "move"

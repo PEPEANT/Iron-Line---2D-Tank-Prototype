@@ -4,6 +4,7 @@
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, INFANTRY_WEAPONS } = IronLine.constants;
   const { clamp, distXY, normalizeAngle, circleRectCollision, expandedRect, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
+  const awarenessSignals = IronLine.awarenessSignals || {};
   const wreckCover = IronLine.wreckCover || {};
   const isVehicleWreck = wreckCover.isVehicleWreck || ((vehicle) => Boolean(vehicle && !vehicle.coverDestroyed && (!vehicle.alive || vehicle.hp <= 0)));
   const damageVehicleWreck = wreckCover.damageVehicleWreck || (() => false), shellWreckDamage = wreckCover.shellWreckDamage || (() => 0);
@@ -11,18 +12,15 @@
   function vehicleTargets(game) {
     return [...(game.tanks || []), ...(game.humvees || [])];
   }
-
   function pushLimited(list, item, max = 180) {
     if (!list) return;
     if (list.length >= max) list.shift();
     list.push(item);
   }
-
   function trimOldest(list, max) {
     if (!Array.isArray(list) || list.length <= max) return;
     list.splice(0, list.length - max);
   }
-
   function sceneryCenter(item) {
     if (!item) return { x: 0, y: 0, radius: 0 };
     if (item.shape === "rect" || Number.isFinite(item.w) || Number.isFinite(item.h)) {
@@ -44,7 +42,6 @@
   function activeDestructibleScenery(game) {
     return (game.world?.scenery || []).filter((item) => item?.destructible && !item.destroyed);
   }
-
   const vehicleBreakableObstacleKinds = new Set([
     "building", "base-wall", "concrete",
     "sandbag",
@@ -339,7 +336,7 @@
     }
 
     const attackDrone = target.droneRole === "attack";
-    const speed = Math.abs(target.speed || 0) * (target.boosting ? target.boostSpeedMultiplier || 1.6 : 1);
+    const speed = Number.isFinite(target.currentSpeed) ? Math.abs(target.currentSpeed) : Math.abs(target.speed || 0) * (target.boosting ? target.boostSpeedMultiplier || 1.6 : 1);
     const speedPenalty = clamp(speed / 1100, 0.06, attackDrone ? 0.18 : 0.15);
     const rangePenalty = clamp(distance / Math.max(range, 1), 0, 1) * (attackDrone ? 0.18 : 0.14);
     const controlPenalty = target.controlled ? 0.07 : 0.03;
@@ -553,6 +550,7 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
+    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !wreckBlock ? target : null });
     applyRifleSuppression(game, shooter, target, startX, startY, finalEndX, finalEndY, hit && !wreckBlock, weapon);
     if (target === game.player && shooter.team === TEAM.RED) {
       game.warnPlayerDanger?.(shooter, weapon.id === "sniper" ? "sniper" : weapon.id, {
@@ -577,8 +575,8 @@
       } else if (target.takeDamage) {
         if (target.vehicleType) target.takeDamage(game, damage);
         else target.takeDamage(damage);
-      }
-      else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
+      } else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
+      if (shooter === game.player) game.recordPlayerHitConfirm?.(target, damage, weapon.id || "rifle", { x: finalEndX, y: finalEndY, lethal: targetWasAlive && !targetScoreAlive(target) });
       recordKillIfDestroyed(game, shooter, target, targetWasAlive, weapon.id || "rifle");
     } else if (Math.random() < (options.impactChance ?? 0.16)) {
       emitSmallArmsImpact(game, finalEndX, finalEndY, impactAngle, weapon);
@@ -623,6 +621,7 @@
     else if (impact.blocked || Math.random() < (options.impactChance ?? 0.28)) {
       emitSmallArmsImpact(game, impact.x, impact.y, shotAngle, weapon, { hard: impact.blocked });
     }
+    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, impact.x, impact.y, weapon, { hitTarget: impact.tank && !impact.wreck ? impact.tank : null });
     applyLineSuppression(game, shooter, startX, startY, impact.x, impact.y, weapon, options.targetTeam);
     return true;
   }
@@ -676,6 +675,7 @@
       emitSmallArmsImpact(game, finalEndX, finalEndY, finalAngle, weapon);
     }
 
+    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !wreckBlock ? tank : null });
     return true;
   }
 
@@ -908,13 +908,13 @@
 
       const linePressure = nearLine ? weapon.lineSuppression * 0.58 * (1 - lineDistance / 58) : 0;
       const impactPressure = nearImpact ? weapon.impactSuppression * 0.72 * (1 - endDistance / 68) : 0;
-      unit.suppress(Math.max(linePressure, impactPressure), shooter);
+      unit.suppress(Math.max(linePressure, impactPressure), awarenessSignals.suppressionSourceForUnit?.(game, unit, shooter, false) || shooter);
     }
   }
 
   function applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon) {
     const targetTeam = target.team ?? null;
-    if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit : weapon.suppressionMiss, shooter);
+    if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit : weapon.suppressionMiss, awarenessSignals.suppressionSourceForUnit?.(game, target, shooter, hit) || shooter);
 
     for (const unit of game.infantry || []) {
       if (!unit.alive || unit.inVehicle || unit === target || unit.team === shooter.team) continue;
@@ -928,7 +928,7 @@
 
       const linePressure = nearLine ? weapon.lineSuppression * (1 - lineDistance / 62) : 0;
       const impactPressure = nearImpact ? weapon.impactSuppression * (1 - endDistance / 72) : 0;
-      unit.suppress(Math.max(linePressure, impactPressure), shooter);
+      unit.suppress(Math.max(linePressure, impactPressure), awarenessSignals.suppressionSourceForUnit?.(game, unit, shooter, false) || shooter);
     }
   }
 

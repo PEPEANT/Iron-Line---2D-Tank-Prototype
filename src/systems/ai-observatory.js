@@ -57,6 +57,7 @@
     target_invalid: "대상 없음",
     already_repaired: "이미 수리됨"
   });
+  ISSUE_LABELS.traffic_waiting = "traffic waiting";
 
   class AIObservatory {
     constructor(game) {
@@ -234,6 +235,9 @@
       const target = debug.target || ai?.target || ai?.targetTank || null;
       const stuck = Number(debug.stuckTimer || 0);
       const order = debug.goal || ai?.currentOrder?.objectiveName || vehicle.manualOrder?.type || "자동";
+      const commandOrder = this.game.commanders?.[vehicle.team]?.assignments?.get(vehicle) || ai?.currentOrder || null;
+      const commandLockUntil = commandOrder?.commandLockUntil || vehicle.manualOrder?.commandLockUntil || 0;
+      const commandLockRemaining = commandLockUntil > 0 ? Math.max(0, (commandLockUntil - performance.now()) / 1000) : 0;
       const decision = this.vehicleDecision(vehicle, type, debug, state, target, stuck);
       const issues = [];
       if (stuck > 1.4) issues.push(ISSUE_LABELS.stuck);
@@ -244,6 +248,7 @@
       if (decision.reason === "no_line_of_sight") issues.push(ISSUE_LABELS.no_line_of_sight);
       if (decision.reason === "friendly_in_line" || debug.unsafeLine) issues.push(ISSUE_LABELS.friendly_in_line);
       if (debug.supportRequest) issues.push(ISSUE_LABELS.support_request);
+      if ((debug.trafficHoldTimer || 0) > 0) issues.push(ISSUE_LABELS.traffic_waiting);
 
       return {
         key: `vehicle:${vehicle.callSign}`,
@@ -257,9 +262,17 @@
         hp: Math.round(vehicle.hp || 0),
         maxHp: Math.round(vehicle.maxHp || 1),
         state,
+        commandState: commandOrder?.commandState || vehicle.manualOrder?.commandState || "",
+        commandSource: commandOrder?.commandSource || "",
+        commandReason: commandOrder?.commandReason || vehicle.manualOrder?.type || "",
+        commandLockRemaining,
+        commanderSlotId: commandOrder?.commanderSlotId || vehicle.manualOrder?.slotId || "",
         order,
         target: this.targetId(target),
         stuck,
+        trafficHoldTimer: debug.trafficHoldTimer || 0,
+        trafficHoldTarget: debug.trafficHoldTarget || "",
+        trafficHoldAge: debug.trafficHoldAge || 0,
         passengers: debug.passengers || vehicle.passengerCount?.() || 0,
         visible: debug.visible,
         unsafeLine: Boolean(debug.unsafeLine),

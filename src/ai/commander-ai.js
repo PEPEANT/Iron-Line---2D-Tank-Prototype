@@ -306,7 +306,14 @@
 
     applyCombinedArmsOrders(squads) {
       const tanks = this.game.tanks
-        .filter((tank) => tank.alive && tank.ai && !tank.playerControlled && tank.team === this.team && tank.isOperational())
+        .filter((tank) => (
+          tank.alive &&
+          tank.ai &&
+          !tank.playerControlled &&
+          tank.team === this.team &&
+          tank.isOperational() &&
+          !this.isManualAsset(tank)
+        ))
         .sort((a, b) => a.callSign.localeCompare(b.callSign));
 
       if (tanks.length === 0 || squads.length === 0) return;
@@ -372,7 +379,7 @@
 
     pickOverwatchTank(tanks, usedTanks, point) {
       const scored = tanks
-        .filter((tank) => !usedTanks.has(tank))
+        .filter((tank) => !usedTanks.has(tank) && !this.isManualAsset(tank))
         .map((tank) => {
           const order = this.assignments.get(tank);
           let score = distXY(tank.x, tank.y, point.x, point.y);

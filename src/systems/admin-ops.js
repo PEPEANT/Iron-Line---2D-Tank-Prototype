@@ -434,6 +434,8 @@
         label: slot.label,
         playerId: slot.playerId || "",
         aiControlled: Boolean(slot.aiControlled),
+        controllerType: slot.controllerType || (slot.playerId ? "human" : "bot"),
+        botCommanderState: slot.botCommanderState || null,
         locked: Boolean(slot.locked),
         squadIds: (slot.squadIds || []).slice(),
         vehicleIds: (slot.vehicleIds || []).slice(),

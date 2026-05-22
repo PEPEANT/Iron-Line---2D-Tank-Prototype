@@ -56,6 +56,7 @@
         "room_ended",
         "match_started",
         "match_ended",
+        "score_kill",
         "objective_captured",
         "player_down",
         "vehicle_destroyed",

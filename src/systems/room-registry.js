@@ -162,6 +162,8 @@
           room.chat?.[room.chat.length - 1]?.id || "",
           room.events?.length || 0,
           room.events?.[room.events.length - 1]?.id || "",
+          room.commands?.length || 0,
+          room.commands?.[room.commands.length - 1]?.id || "",
           room.combatEvents?.length || 0,
           room.combatEvents?.[room.combatEvents.length - 1]?.id || "",
           room.worldState?.updatedAt || 0,
@@ -350,6 +352,7 @@
         commandAuthorityRequests: [],
         chat: [],
         events: [],
+        commands: [],
         combatEvents: [],
         worldState: null,
         createdAt: Date.now(),
@@ -739,6 +742,44 @@
       return (room?.chat || []).slice(-limit);
     }
 
+    commandApiUrl(roomId = "") {
+      return `${this.roomsApiUrl(roomId)}/commands`;
+    }
+
+    pushCommand(roomId, command = {}) {
+      const room = this.getRoom(roomId);
+      if (!room) return null;
+      const packet = this.normalizeCommand({
+        ...command,
+        roomId: room.id
+      });
+      if (!packet) return null;
+      const commands = this.mergeCommandRecords(room.commands || [], [packet], 120);
+      const next = this.updateRoom(room.id, { commands });
+      if (this.canUseRemoteApi()) {
+        fetch(this.commandApiUrl(room.id), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(packet)
+        })
+          .then((response) => response.ok ? response.json() : null)
+          .then((payload) => {
+            const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
+            if (remoteRoom) {
+              this.upsertRemoteRoom(remoteRoom);
+              this.emit();
+            }
+          })
+          .catch(() => {});
+      }
+      return packet;
+    }
+
+    recentCommands(roomId, limit = 40) {
+      const room = this.getRoom(roomId);
+      return (room?.commands || []).slice(-limit);
+    }
+
     pushCombatEvent(roomId, event = {}) {
       const room = this.getRoom(roomId);
       if (!room) return null;
@@ -1112,6 +1153,7 @@
         commandAuthorityRequests: this.normalizeCommandAuthorityRequests(room.commandAuthorityRequests),
         chat: Array.isArray(room.chat) ? room.chat.slice(-120) : [],
         events: Array.isArray(room.events) ? room.events.slice(-80) : [],
+        commands: this.normalizeCommands(room.commands),
         combatEvents: Array.isArray(room.combatEvents) ? room.combatEvents.slice(-MAX_COMBAT_EVENTS) : [],
         worldState: this.normalizeWorldState(room.worldState),
         createdAt: Number(room.createdAt) || Date.now(),
@@ -1208,6 +1250,79 @@
         }))
         .filter((item) => item.slotId && item.requesterId)
         .slice(-16);
+    }
+
+    normalizeCommand(input = {}) {
+      if (!input || typeof input !== "object") return null;
+      const commandType = String(input.commandType || input.type || "move").slice(0, 32);
+      const commandId = String(input.commandId || input.id || `${input.roomId || "local"}:cmd:${Date.now()}`).slice(0, 80);
+      const targetPosition = input.targetPosition || input.targetPoint || null;
+      const targetSquadIds = Array.isArray(input.targetSquadIds)
+        ? input.targetSquadIds.map((id) => String(id || "").slice(0, 48)).filter(Boolean).slice(0, 8)
+        : input.targetSquadId
+          ? [String(input.targetSquadId).slice(0, 48)]
+          : [];
+      const targetVehicleIds = Array.isArray(input.targetVehicleIds)
+        ? input.targetVehicleIds.map((id) => String(id || "").slice(0, 48)).filter(Boolean).slice(0, 8)
+        : input.targetAssetId || input.targetVehicleId
+          ? [String(input.targetAssetId || input.targetVehicleId).slice(0, 48)]
+          : [];
+      const issuedAt = Number(input.issuedAt) || Date.now();
+      return {
+        id: commandId,
+        commandId,
+        roomId: String(input.roomId || "").slice(0, 48),
+        playerId: String(input.playerId || input.issuerPlayerId || "").slice(0, 48),
+        issuerPlayerId: String(input.issuerPlayerId || input.playerId || "").slice(0, 48),
+        commanderSlotId: String(input.commanderSlotId || input.slotId || "").slice(0, 32),
+        slotId: String(input.slotId || input.commanderSlotId || "").slice(0, 32),
+        role: String(input.role || "").slice(0, 24),
+        controllerType: String(input.controllerType || "").slice(0, 16),
+        commandType,
+        type: commandType,
+        team: input.team === "red" ? "red" : "blue",
+        targetSquadId: String(input.targetSquadId || targetSquadIds[0] || "").slice(0, 48),
+        targetAssetId: String(input.targetAssetId || targetVehicleIds[0] || "").slice(0, 48),
+        targetSquadIds,
+        targetVehicleIds,
+        targetPosition: targetPosition ? { x: roundCoord(targetPosition.x), y: roundCoord(targetPosition.y) } : null,
+        targetPoint: targetPosition ? { x: roundCoord(targetPosition.x), y: roundCoord(targetPosition.y) } : null,
+        objectiveName: String(input.objectiveName || "").slice(0, 32),
+        commandState: String(input.commandState || this.commandStateForType(commandType)).slice(0, 24),
+        issuedAt,
+        lockUntil: Number(input.lockUntil) || 0,
+        reason: String(input.reason || commandType).slice(0, 48),
+        createdAt: Number(input.createdAt) || issuedAt
+      };
+    }
+
+    commandStateForType(type = "") {
+      if (type === "cancel") return "cancel";
+      if (type === "defend" || type === "rally") return "hold";
+      if (type === "assault" || type === "attack") return "assault";
+      if (type === "repair") return "repair";
+      if (type === "scan") return "scout";
+      if (type === "fire_support") return "cover";
+      if (type === "retreat") return "fallback";
+      return "advance";
+    }
+
+    normalizeCommands(input) {
+      if (!Array.isArray(input)) return [];
+      return input.map((item) => this.normalizeCommand(item)).filter(Boolean).slice(-120);
+    }
+
+    mergeCommandRecords(existing = [], incoming = [], limit = 120) {
+      const byId = new Map();
+      for (const command of [...existing, ...incoming]) {
+        const normalized = this.normalizeCommand(command);
+        if (!normalized) continue;
+        const previous = byId.get(normalized.commandId);
+        if (!previous || Number(normalized.issuedAt) >= Number(previous.issuedAt)) byId.set(normalized.commandId, normalized);
+      }
+      return Array.from(byId.values())
+        .sort((a, b) => Number(a.issuedAt) - Number(b.issuedAt))
+        .slice(-limit);
     }
   }
 

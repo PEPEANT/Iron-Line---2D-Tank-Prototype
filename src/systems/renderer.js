@@ -85,6 +85,7 @@
       this.drawBlastSparks(game);
       this.drawBlastRings(game);
       this.drawSmoke(game);
+      if (!game.adminObserverMode) this.drawPlayerHitConfirmations(game);
       this.drawDebugOverlay(game);
       this.drawChatBubbles(game);
 
@@ -1878,6 +1879,51 @@
         ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    drawPlayerHitConfirmations(game) {
+      const confirmations = game.playerHitConfirmations || [];
+      if (!confirmations.length) return;
+
+      const ctx = this.ctx;
+      const zoom = Math.max(0.35, this.camera.zoom || 1);
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineCap = "round";
+      for (const hit of confirmations.slice(-5)) {
+        const alpha = clamp(hit.ttl / Math.max(0.001, hit.maxTtl || 1), 0, 1);
+        if (alpha <= 0) continue;
+        const lethal = Boolean(hit.lethal);
+        const radius = (lethal ? 18 : 12) / zoom + (1 - alpha) * (lethal ? 10 : 6) / zoom;
+        const arm = (lethal ? 10 : 7) / zoom;
+        const gap = (lethal ? 5 : 4) / zoom;
+        const color = lethal
+          ? `rgba(255, 209, 102, ${0.34 + alpha * 0.56})`
+          : `rgba(237, 244, 239, ${0.28 + alpha * 0.54})`;
+
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = (lethal ? 2.5 : 1.8) / zoom;
+        ctx.beginPath();
+        ctx.moveTo(hit.x - radius - arm, hit.y - radius - arm);
+        ctx.lineTo(hit.x - gap, hit.y - gap);
+        ctx.moveTo(hit.x + radius + arm, hit.y - radius - arm);
+        ctx.lineTo(hit.x + gap, hit.y - gap);
+        ctx.moveTo(hit.x - radius - arm, hit.y + radius + arm);
+        ctx.lineTo(hit.x - gap, hit.y + gap);
+        ctx.moveTo(hit.x + radius + arm, hit.y + radius + arm);
+        ctx.lineTo(hit.x + gap, hit.y + gap);
+        ctx.stroke();
+
+        ctx.fillStyle = lethal
+          ? `rgba(255, 231, 158, ${0.42 + alpha * 0.52})`
+          : `rgba(237, 244, 239, ${0.32 + alpha * 0.5})`;
+        ctx.font = `900 ${Math.round((lethal ? 12 : 10) / zoom)}px Inter, sans-serif`;
+        const damage = hit.amount > 0 ? ` ${Math.round(hit.amount)}` : "";
+        ctx.fillText(`${hit.label || "HIT"}${damage}`, hit.x, hit.y - (radius + 18 / zoom));
+      }
+      ctx.restore();
     }
 
     drawCommandHighlights(game) {

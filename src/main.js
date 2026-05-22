@@ -64,10 +64,12 @@
       this.onlineSession = this.createLocalSession();
       this.scoreboardStats = {};
       this.onlineCombatSeenIds = new Set();
+      this.onlineCommandSeenIds = new Set();
       this.onlineWorldSyncTimer = 0;
       this.onlineWorldAppliedAt = 0;
       this.tacticalMapOpen = false;
       this.commandBus = new IronLine.CommandBus(this);
+      this.botCommander = IronLine.BotCommanderSkeleton ? new IronLine.BotCommanderSkeleton(this) : null;
       this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
       this.observerBridge = IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
       this.battlefieldEvents = IronLine.BattlefieldEvents ? new IronLine.BattlefieldEvents(this) : null;
@@ -890,6 +892,7 @@
       this.roleChange?.update?.(dt);
       this.battlefieldEvents?.update?.(dt);
       this.updateOnlineCombatEvents(dt);
+      this.updateOnlineCommands(dt);
       this.updateOnlineWorldSync(dt);
 
       if (this.adminObserverMode) {
@@ -955,7 +958,7 @@
 
       if (!this.matchStarted) {
         IronLine.combat.updateEffects(this, dt);
-        resolveInfantryTankSpacing(this);
+        resolveInfantryTankSpacing(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
@@ -1000,6 +1003,7 @@
       if (!this.testLabAiPaused) {
         perf?.begin("ai.commanders");
         for (const commander of Object.values(this.commanders)) commander.update(dt);
+        this.botCommander?.update?.(dt);
         perf?.end("ai.commanders");
       }
       this.refreshFollowPlayerOrders();
@@ -1039,7 +1043,7 @@
 
       perf?.begin("spacing");
       resolveTankSpacing(this, dt);
-      resolveInfantryTankSpacing(this);
+      resolveInfantryTankSpacing(this, dt);
       perf?.end("spacing");
       perf?.begin("result");
       this.updateResult(dt);
@@ -1437,7 +1441,7 @@
       if (!player) return { accepted: false, reason: "missing-player" };
       const slot = this.sessionSlotById(options.slotId || player.slotId);
       if (!slot) return { accepted: false, reason: "missing-slot" };
-      return this.commandBus.submit({
+      const result = this.commandBus.submit({
         ...options,
         type,
         issuerPlayerId: player.id,
@@ -1446,6 +1450,8 @@
         slotRole: slot.role,
         authority: slot.playerId === player.id ? "owned_squad" : "delegated_squad"
       });
+      if (result.accepted) this.publishOnlineCommand(result.packet);
+      return result;
     }
 
     beginDeploymentCountdown() {
@@ -1473,6 +1479,7 @@
       this.playerPendingDeathReason = "";
       this.playerDamageFlash = 0;
       this.lastPlayerDamage = null;
+      this.playerHitConfirmations = [];
       this.playerDamageIndicators = [];
       this.playerDangerWarnings = [];
       this.screenShake = 0;
@@ -1496,6 +1503,8 @@
       if (id === "rpg") return "RPG \uD3ED\uBC1C";
       if (id === "grenade") return "\uC218\uB958\uD0C4 \uD3ED\uBC1C";
       if (id === "kamikazeDrone") return "\uC790\uD3ED\uB4DC\uB860 \uD3ED\uBC1C";
+      if (id === "vehicle_collision") return "\uCC28\uB7C9 \uCD9C\uB3CC";
+      if (id === "tank_crush") return "\uC804\uCC28 \uC555\uC0AC";
       if (id === "vehicle") return "\uCC28\uB7C9 \uD30C\uAD34";
       if (id === "projectile" || id === "shell") return "\uD3EC\uD0C4 \uC9C1\uACA9";
       if (id === "explosion") return "\uD3ED\uBC1C";
@@ -1539,6 +1548,106 @@
     onlineCombatRoom() {
       if (this.sessionMode !== "online" || !this.onlineSession?.roomId) return null;
       return IronLine.roomRegistry?.getRoom?.(this.onlineSession.roomId) || null;
+    }
+
+    publishOnlineCommand(packet = null) {
+      if (!packet || this.sessionMode !== "online" || !this.onlineSession?.roomId) return null;
+      if (!this.matchStarted || this.isLocalSpectator?.()) return null;
+      const payload = this.onlineCommandPayload(packet);
+      this.onlineCommandSeenIds?.add?.(payload.commandId || payload.id);
+      return IronLine.roomRegistry?.pushCommand?.(this.onlineSession.roomId, payload) || null;
+    }
+
+    onlineCommandPayload(packet = {}) {
+      const slot = this.sessionSlotById?.(packet.commanderSlotId || packet.slotId);
+      const commandType = packet.commandType || packet.type || "move";
+      const commandId = packet.commandId || packet.id || `${this.onlineSession?.roomId || "local"}:cmd:${Date.now()}`;
+      const targetPosition = packet.targetPosition || packet.targetPoint || null;
+      const issuedAt = Number(packet.issuedAtEpoch) || Date.now();
+      const lockUntil = Number(packet.lockUntil) || (issuedAt + (this.commandBus?.commandLockSeconds?.(commandType) || 1.5) * 1000);
+      return {
+        id: commandId,
+        commandId,
+        roomId: this.onlineSession?.roomId || packet.roomId || "local",
+        playerId: packet.playerId || packet.issuerPlayerId || this.onlineSession?.playerId || "",
+        issuerPlayerId: packet.issuerPlayerId || packet.playerId || this.onlineSession?.playerId || "",
+        commanderSlotId: packet.commanderSlotId || packet.slotId || slot?.id || "",
+        slotId: packet.slotId || packet.commanderSlotId || slot?.id || "",
+        role: packet.role || slot?.roleId || "",
+        controllerType: packet.controllerType || slot?.controllerType || (slot?.playerId ? "human" : "bot"),
+        commandType,
+        type: commandType,
+        targetSquadId: packet.targetSquadId || packet.targetSquadIds?.[0] || "",
+        targetAssetId: packet.targetAssetId || packet.targetVehicleIds?.[0] || "",
+        targetSquadIds: Array.isArray(packet.targetSquadIds) ? packet.targetSquadIds.slice() : [],
+        targetVehicleIds: Array.isArray(packet.targetVehicleIds) ? packet.targetVehicleIds.slice() : [],
+        targetPosition: targetPosition ? { x: targetPosition.x, y: targetPosition.y } : null,
+        targetPoint: targetPosition ? { x: targetPosition.x, y: targetPosition.y } : null,
+        objectiveName: packet.objectiveName || "",
+        team: packet.team || slot?.team || TEAM.BLUE,
+        commandState: this.commandBus?.commandStateForType?.(commandType) || "",
+        issuedAt,
+        lockUntil,
+        reason: packet.reason || commandType
+      };
+    }
+
+    updateOnlineCommands(_dt) {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId || !this.matchStarted || this.result) return;
+      const room = this.onlineCombatRoom();
+      const commands = Array.isArray(room?.commands) ? room.commands : [];
+      if (!commands.length) return;
+      const localId = this.onlineSession?.playerId || "";
+      this.onlineCommandSeenIds = this.onlineCommandSeenIds || new Set();
+      for (const command of commands.slice(-48)) {
+        const commandId = command?.commandId || command?.id || "";
+        if (!commandId || this.onlineCommandSeenIds.has(commandId)) continue;
+        this.onlineCommandSeenIds.add(commandId);
+        const issuer = command.playerId || command.issuerPlayerId || "";
+        if (issuer && issuer === localId) continue;
+        this.applyOnlineCommand(command);
+      }
+      if (this.onlineCommandSeenIds.size > 420) {
+        const staleCount = this.onlineCommandSeenIds.size - 320;
+        let index = 0;
+        for (const id of this.onlineCommandSeenIds) {
+          this.onlineCommandSeenIds.delete(id);
+          index += 1;
+          if (index >= staleCount) break;
+        }
+      }
+    }
+
+    applyOnlineCommand(command = {}) {
+      const targetPoint = command.targetPosition || command.targetPoint || null;
+      return this.commandBus?.submit?.({
+        id: command.commandId || command.id,
+        commandId: command.commandId || command.id,
+        roomId: command.roomId || this.onlineSession?.roomId || "local",
+        issuerPlayerId: command.issuerPlayerId || command.playerId || "",
+        playerId: command.playerId || command.issuerPlayerId || "",
+        slotId: command.slotId || command.commanderSlotId || "",
+        commanderSlotId: command.commanderSlotId || command.slotId || "",
+        role: command.role || "",
+        controllerType: command.controllerType || "",
+        team: command.team || "",
+        type: command.commandType || command.type || "move",
+        commandType: command.commandType || command.type || "move",
+        targetSquadId: command.targetSquadId || "",
+        targetAssetId: command.targetAssetId || "",
+        targetSquadIds: Array.isArray(command.targetSquadIds) ? command.targetSquadIds.slice() : [],
+        targetVehicleIds: Array.isArray(command.targetVehicleIds) ? command.targetVehicleIds.slice() : [],
+        targetPoint: targetPoint ? { x: targetPoint.x, y: targetPoint.y } : null,
+        targetPosition: targetPoint ? { x: targetPoint.x, y: targetPoint.y } : null,
+        objectiveName: command.objectiveName || "",
+        issuedAt: performance.now(),
+        issuedAtEpoch: Number(command.issuedAt) || Date.now(),
+        lockUntil: Number(command.lockUntil) || 0,
+        reason: command.reason || command.commandType || command.type || "",
+        authority: "owned_squad",
+        skipCooldown: true,
+        trustedRemote: true
+      }) || { accepted: false, reason: "missing-command-bus" };
     }
 
     onlineCombatActiveForLocalPlayer() {
@@ -1670,6 +1779,13 @@
         ttl: weapon?.tracerLife || 0.1
       });
       if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      if (event?.id && hit) {
+        this.recordPlayerHitConfirm?.(hitTarget.player, damage, weapon?.id || "rifle", {
+          x: endX,
+          y: endY,
+          lethal: false
+        });
+      }
       return event;
     }
 
@@ -2154,11 +2270,13 @@
       const stats = this.ensureScoreboardStats(playerId);
       stats.kills += 1;
       this.syncScoreboardStatsToSession(playerId, { publish: true });
+      const victimLabel = victim?.callSign || victim?.id || victim?.name || "target";
+      const killerLabel = this.localSessionPlayer?.()?.name || this.localSessionPlayer?.()?.nickname || "Player";
       this.battlefieldEvents?.push?.({
         type: "score_kill",
         team: this.player?.team || TEAM.BLUE,
         title: "킬 기록",
-        detail: `${this.localSessionPlayer?.()?.name || "Player"} ${kind}`
+        detail: `${killerLabel} eliminated ${victimLabel} (${kind})`
       });
       return true;
     }
@@ -2168,6 +2286,29 @@
       const stats = this.ensureScoreboardStats(playerId);
       stats.deaths += 1;
       this.syncScoreboardStatsToSession(playerId, { publish: true });
+      return true;
+    }
+
+    recordPlayerHitConfirm(target = null, amount = 0, kind = "hit", options = {}) {
+      if (!target || target === this.player || this.playerDeathActive || this.playerDowned || this.result) return false;
+      const x = Number.isFinite(Number(options.x)) ? Number(options.x) : Number(target.x);
+      const y = Number.isFinite(Number(options.y)) ? Number(options.y) : Number(target.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const ttl = options.lethal ? 0.78 : 0.42;
+      const confirmation = {
+        id: `hit:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+        x,
+        y,
+        amount: Math.max(0, Number(amount) || 0),
+        kind,
+        lethal: Boolean(options.lethal),
+        label: options.lethal ? "DOWN" : "HIT",
+        ttl,
+        maxTtl: ttl
+      };
+      this.playerHitConfirmations = this.playerHitConfirmations || [];
+      this.playerHitConfirmations.push(confirmation);
+      if (this.playerHitConfirmations.length > 7) this.playerHitConfirmations.splice(0, this.playerHitConfirmations.length - 7);
       return true;
     }
 
@@ -2264,6 +2405,11 @@
         if (this.playerDamageIndicators[i].ttl <= 0) this.playerDamageIndicators.splice(i, 1);
       }
 
+      for (let i = (this.playerHitConfirmations || []).length - 1; i >= 0; i -= 1) {
+        this.playerHitConfirmations[i].ttl -= dt;
+        if (this.playerHitConfirmations[i].ttl <= 0) this.playerHitConfirmations.splice(i, 1);
+      }
+
       for (let i = this.playerDangerWarnings.length - 1; i >= 0; i -= 1) {
         this.playerDangerWarnings[i].ttl -= dt;
         if (this.playerDangerWarnings[i].ttl <= 0) this.playerDangerWarnings.splice(i, 1);
@@ -2338,6 +2484,7 @@
       this.setupScenario();
       this.syncOnlineSlotAssets();
       this.commandBus?.resetMatch();
+      this.botCommander?.reset?.();
       this.aiObservatory?.reset?.();
       if (this.testLab) this.activateTestLab(this.testLab);
       this.scenarioDirty = false;

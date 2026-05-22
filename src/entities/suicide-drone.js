@@ -43,6 +43,10 @@
       this.lockAimTolerance = weapon.lockAimTolerance || 48;
       this.boostSpeedMultiplier = weapon.boostSpeedMultiplier || 1.7;
       this.diveSpeedMultiplier = weapon.diveSpeedMultiplier || 2.1;
+      this.terminalApproachRange = weapon.terminalApproachRange || 240;
+      this.terminalDiveSpeedMultiplier = weapon.terminalDiveSpeedMultiplier || 1.36;
+      this.terminalBoostSpeedMultiplier = weapon.terminalBoostSpeedMultiplier || 1.12;
+      this.terminalDetectionBonus = weapon.terminalDetectionBonus || 90;
       this.diveTurnRate = weapon.diveTurnRate || 9.8;
       this.boostImpactWindow = weapon.boostImpactWindow || 0.36;
       this.boostImpactTimer = 0;
@@ -65,6 +69,8 @@
       this.lockFailureTimer = 0;
       this.diveActive = false;
       this.diveStartedAt = 0;
+      this.terminalApproachActive = false;
+      this.currentSpeed = this.speed;
       this.detectedTimer = 0;
       this.detectedBy = null;
       this.detectedWarningCooldown = 0;
@@ -90,10 +96,19 @@
 
       const originalSpeed = this.speed;
       const originalControlled = this.controlled;
+      this.currentSpeed = originalSpeed * (this.boosting ? this.boostSpeedMultiplier : 1);
+      this.terminalApproachActive = false;
       if (this.diveActive) {
         const lock = this.lockPosition();
         if (lock) this.setWaypoint(lock.x, lock.y);
-        this.speed = originalSpeed * this.diveSpeedMultiplier * (this.boosting ? this.boostSpeedMultiplier : 1);
+        const terminal = Boolean(lock && distXY(this.x, this.y, lock.x, lock.y) <= this.terminalApproachRange + this.radius);
+        this.terminalApproachActive = terminal;
+        const diveMultiplier = terminal ? this.terminalDiveSpeedMultiplier : this.diveSpeedMultiplier;
+        const boostMultiplier = this.boosting
+          ? terminal ? this.terminalBoostSpeedMultiplier : this.boostSpeedMultiplier
+          : 1;
+        this.currentSpeed = originalSpeed * diveMultiplier * boostMultiplier;
+        this.speed = this.currentSpeed;
         this.controlled = false;
       }
       super.update(game, dt);
@@ -131,7 +146,9 @@
       }
 
       if (this.diveActive) {
-        this.boosting = true;
+        const lock = this.lockPosition();
+        const distance = lock ? distXY(this.x, this.y, lock.x, lock.y) : Infinity;
+        this.boosting = distance > this.terminalApproachRange;
         return;
       }
 
@@ -324,6 +341,7 @@
       const quietRange = this.unarmedDetectionRange * 0.68;
       let range = quietRange + (this.armedDetectionRange - quietRange) * launchBlend;
       if (this.hasLock()) range += this.diveActive ? 160 : 52;
+      if (this.terminalApproachActive) range += this.terminalDetectionBonus;
       if (this.boosting) range += 72;
       if (this.controlled) range = Math.max(range, this.controlledDetectionRange);
       if (observer?.classId === "scout") range += this.diveActive ? 95 : 62;

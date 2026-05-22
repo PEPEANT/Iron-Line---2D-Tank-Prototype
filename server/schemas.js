@@ -8,6 +8,7 @@ const TEAMS = Object.freeze({
 const ROLES = Object.freeze(["infantry", "engineer", "recon", "armor"]);
 const PARTICIPANT_TYPES = Object.freeze(["player", "spectator", "caster", "admin"]);
 const CHAT_CHANNELS = Object.freeze(["all", "team", "spectator", "caster", "system"]);
+const COMMAND_TYPES = Object.freeze(["move", "attack", "defend", "retreat", "rally", "cancel", "assault", "repair", "scan", "fire_support"]);
 const DEFAULT_MAX_SPECTATORS = 12;
 const MAX_ROOM_HUMANS = 8;
 
@@ -145,21 +146,68 @@ function createSessionEvent(input = {}) {
 }
 
 function createCommandPacket(input = {}) {
+  const commandType = COMMAND_TYPES.includes(input.commandType || input.type) ? (input.commandType || input.type) : "move";
+  const commandId = String(input.commandId || input.id || `${input.roomId || "local"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`).slice(0, 80);
+  const targetPosition = input.targetPosition || input.targetPoint || null;
+  const targetSquadIds = Array.isArray(input.targetSquadIds)
+    ? input.targetSquadIds.map((id) => String(id || "").slice(0, 48)).filter(Boolean).slice(0, 8)
+    : input.targetSquadId
+      ? [String(input.targetSquadId).slice(0, 48)]
+      : [];
+  const targetVehicleIds = Array.isArray(input.targetVehicleIds)
+    ? input.targetVehicleIds.map((id) => String(id || "").slice(0, 48)).filter(Boolean).slice(0, 8)
+    : input.targetAssetId || input.targetVehicleId
+      ? [String(input.targetAssetId || input.targetVehicleId).slice(0, 48)]
+      : [];
+  const issuedAt = Number(input.issuedAt) || Date.now();
+  const lockUntil = Number(input.lockUntil) || (issuedAt + commandLockSeconds(commandType) * 1000);
   return {
-    id: input.id || `${input.roomId || "local"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    id: commandId,
+    commandId,
     roomId: input.roomId || "local",
     tick: Number.isFinite(input.tick) ? input.tick : 0,
-    issuerPlayerId: input.issuerPlayerId || "",
+    issuerPlayerId: input.issuerPlayerId || input.playerId || "",
+    playerId: input.playerId || input.issuerPlayerId || "",
     team: input.team === TEAMS.RED ? TEAMS.RED : TEAMS.BLUE,
-    slotId: input.slotId || "",
-    role: ROLES.includes(input.role) ? input.role : "infantry",
-    type: input.type || "move",
-    targetSquadIds: Array.isArray(input.targetSquadIds) ? [...input.targetSquadIds] : [],
-    targetVehicleIds: Array.isArray(input.targetVehicleIds) ? [...input.targetVehicleIds] : [],
-    targetPoint: input.targetPoint ? { x: Number(input.targetPoint.x) || 0, y: Number(input.targetPoint.y) || 0 } : null,
+    slotId: input.slotId || input.commanderSlotId || "",
+    commanderSlotId: input.commanderSlotId || input.slotId || "",
+    role: ROLES.includes(input.role) ? input.role : "",
+    controllerType: String(input.controllerType || "").slice(0, 16),
+    type: commandType,
+    commandType,
+    targetSquadId: String(input.targetSquadId || targetSquadIds[0] || "").slice(0, 48),
+    targetAssetId: String(input.targetAssetId || targetVehicleIds[0] || "").slice(0, 48),
+    targetSquadIds,
+    targetVehicleIds,
+    targetPoint: targetPosition ? { x: Number(targetPosition.x) || 0, y: Number(targetPosition.y) || 0 } : null,
+    targetPosition: targetPosition ? { x: Number(targetPosition.x) || 0, y: Number(targetPosition.y) || 0 } : null,
     objectiveName: input.objectiveName || "",
-    createdAt: input.createdAt || new Date().toISOString()
+    commandState: commandStateForType(commandType),
+    issuedAt,
+    lockUntil,
+    reason: String(input.reason || commandType).slice(0, 48),
+    createdAt: Number(input.createdAt) || issuedAt
   };
+}
+
+function commandStateForType(type) {
+  if (type === "cancel") return "cancel";
+  if (type === "defend" || type === "rally") return "hold";
+  if (type === "assault" || type === "attack") return "assault";
+  if (type === "repair") return "repair";
+  if (type === "scan") return "scout";
+  if (type === "fire_support") return "cover";
+  if (type === "retreat") return "fallback";
+  return "advance";
+}
+
+function commandLockSeconds(type) {
+  if (type === "assault") return 2.8;
+  if (type === "attack" || type === "defend") return 2.2;
+  if (type === "repair" || type === "scan") return 2.4;
+  if (type === "fire_support") return 2.0;
+  if (type === "rally" || type === "retreat") return 1.8;
+  return 1.5;
 }
 
 function createObserverSnapshot(input = {}) {
@@ -186,6 +234,7 @@ module.exports = {
   ROLES,
   PARTICIPANT_TYPES,
   CHAT_CHANNELS,
+  COMMAND_TYPES,
   createRoomConfig,
   createDefaultSlots,
   createPlayerSlot,

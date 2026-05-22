@@ -62,6 +62,20 @@ function postRoom(room) {
   return requestJson("/api/rooms", { method: "POST", body: room });
 }
 
+function postCommand(roomIdValue, command) {
+  return requestJson(`/api/rooms/${encodeURIComponent(roomIdValue)}/commands`, { method: "POST", body: command });
+}
+
+async function expectCommandReject(roomIdValue, command, expectedReason) {
+  try {
+    await postCommand(roomIdValue, command);
+  } catch (error) {
+    if (!String(error.message || "").includes(expectedReason)) throw error;
+    return true;
+  }
+  throw new Error(`Expected command rejection: ${expectedReason}`);
+}
+
 async function fetchRoom() {
   const payload = await requestJson("/api/rooms");
   return (payload.rooms || []).find((room) => room.id === roomId);
@@ -94,6 +108,92 @@ function wsSmoke() {
       }
     });
     ws.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+function wsCommandSmoke() {
+  return new Promise((resolve, reject) => {
+    const wsRoomId = `${roomId}-WS-CMD`;
+    const a = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const b = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const events = { a: [], b: [] };
+    const joined = new Set();
+    let slotRequested = false;
+    let commandSent = false;
+    let commandAck = false;
+    let broadcastSeen = false;
+    const commandId = `${wsRoomId}:cmd:1`;
+    const issuedAt = Date.now();
+    const timer = setTimeout(() => {
+      a.close();
+      b.close();
+      reject(new Error("WebSocket command smoke timed out."));
+    }, 6000);
+
+    const closeDone = () => {
+      clearTimeout(timer);
+      a.close();
+      b.close();
+      resolve({ events, commandAck, broadcastSeen });
+    };
+
+    const maybeAssign = () => {
+      if (slotRequested || joined.size < 2) return;
+      slotRequested = true;
+      a.send(JSON.stringify({ type: "assign_slot", slotId: "blue-infantry" }));
+    };
+
+    const handle = (name, ws) => (raw) => {
+      const message = JSON.parse(raw.toString());
+      events[name].push(message.type);
+      if (message.type === "hello") {
+        ws.send(JSON.stringify({
+          type: "join",
+          roomId: wsRoomId,
+          playerId: name === "a" ? "ws-blue" : "ws-observer",
+          nickname: name === "a" ? "Blue" : "Observer"
+        }));
+      }
+      if (message.type === "join_result") {
+        joined.add(name);
+        maybeAssign();
+      }
+      if (name === "a" && message.type === "slot_result" && message.payload?.ok && !commandSent) {
+        commandSent = true;
+        ws.send(JSON.stringify({
+          type: "command",
+          packet: {
+            commandId,
+            commandType: "assault",
+            commanderSlotId: "blue-infantry",
+            role: "infantry",
+            controllerType: "human",
+            targetSquadId: "B-SQD-3",
+            targetPosition: { x: 1280, y: 1420 },
+            issuedAt,
+            lockUntil: issuedAt + 2800,
+            reason: "assault"
+          }
+        }));
+      }
+      if (name === "a" && message.type === "command_ack" && message.payload?.ok) commandAck = true;
+      if (name === "b" && message.type === "command_broadcast" && message.payload?.packet?.commandId === commandId) {
+        broadcastSeen = true;
+        if (commandAck) closeDone();
+      }
+      if (message.type === "command_ack" && message.payload?.ok && broadcastSeen) closeDone();
+    };
+
+    a.on("message", handle("a", a));
+    b.on("message", handle("b", b));
+    a.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    b.on("error", (error) => {
       clearTimeout(timer);
       reject(error);
     });
@@ -144,7 +244,8 @@ async function runSmoke() {
       id: "p-red",
       name: "Red",
       team: "red",
-      slotId: "red-infantry",
+      slotId: "red-armor",
+      roleId: "armor",
       participantType: "player",
       ready: true,
       position: {
@@ -198,12 +299,114 @@ async function runSmoke() {
   }
   if (room.worldState?.hostId !== "p-blue") throw new Error("World state host was not preserved.");
 
+  const issuedAt = Date.now();
+  const infantryCommand = await postCommand(roomId, {
+    commandId: `${roomId}:cmd:infantry-assault`,
+    playerId: "p-blue",
+    commanderSlotId: "blue-infantry",
+    role: "infantry",
+    controllerType: "human",
+    commandType: "assault",
+    targetSquadId: "B-SQD-3",
+    targetPosition: { x: 1220, y: 1410 },
+    issuedAt,
+    lockUntil: issuedAt + 2800,
+    reason: "assault"
+  });
+  if (!infantryCommand.ok || infantryCommand.packet?.commandState !== "assault") {
+    throw new Error("Authorized infantry command was not accepted with command state.");
+  }
+  const armorIssuedAt = issuedAt + 20;
+  const armorCommand = await postCommand(roomId, {
+    commandId: `${roomId}:cmd:armor-cover`,
+    playerId: "p-red",
+    commanderSlotId: "red-armor",
+    role: "armor",
+    controllerType: "human",
+    commandType: "fire_support",
+    targetAssetId: "R-12",
+    targetPosition: { x: 1500, y: 1440 },
+    issuedAt: armorIssuedAt,
+    lockUntil: armorIssuedAt + 2000,
+    reason: "fire_support"
+  });
+  if (!armorCommand.ok || armorCommand.packet?.commandState !== "cover") {
+    throw new Error("Authorized armor command was not accepted with command state.");
+  }
+  await expectCommandReject(roomId, {
+    commandId: `${roomId}:cmd:bad-infantry-vehicle`,
+    playerId: "p-blue",
+    commanderSlotId: "blue-infantry",
+    role: "infantry",
+    commandType: "fire_support",
+    targetAssetId: "B-12",
+    issuedAt: issuedAt + 40,
+    lockUntil: issuedAt + 2040
+  }, "role-command-restricted");
+  await expectCommandReject(roomId, {
+    commandId: `${roomId}:cmd:wrong-team-squad`,
+    playerId: "p-blue",
+    commanderSlotId: "blue-infantry",
+    role: "infantry",
+    commandType: "assault",
+    targetSquadId: "R-SQD-3",
+    targetPosition: { x: 1300, y: 1500 },
+    issuedAt: issuedAt + 50,
+    lockUntil: issuedAt + 2850
+  }, "target-team-mismatch");
+  await expectCommandReject(roomId, {
+    ...infantryCommand.packet,
+    issuedAt: issuedAt + 60
+  }, "duplicate-command");
+  await expectCommandReject(roomId, {
+    commandId: `${roomId}:cmd:stale`,
+    playerId: "p-blue",
+    commanderSlotId: "blue-infantry",
+    role: "infantry",
+    commandType: "move",
+    targetSquadId: "B-SQD-3",
+    targetPosition: { x: 1300, y: 1500 },
+    issuedAt: issuedAt - 5000,
+    lockUntil: issuedAt - 3500
+  }, "stale-command");
+  const cancelIssuedAt = issuedAt + 120;
+  const cancelCommand = await postCommand(roomId, {
+    commandId: `${roomId}:cmd:infantry-cancel`,
+    playerId: "p-blue",
+    commanderSlotId: "blue-infantry",
+    role: "infantry",
+    controllerType: "human",
+    commandType: "cancel",
+    targetSquadId: "B-SQD-3",
+    targetPosition: { x: 1220, y: 1410 },
+    issuedAt: cancelIssuedAt,
+    lockUntil: cancelIssuedAt,
+    reason: "cancel"
+  });
+  if (!cancelCommand.ok || cancelCommand.packet?.commandState !== "cancel") {
+    throw new Error("Online cancel command was not accepted with cancel state.");
+  }
+
+  const commandRoom = await fetchRoom();
+  if ((commandRoom.commands || []).length < 3) throw new Error("Accepted commands were not preserved in room state.");
+  if (!commandRoom.commands.some((command) => command.commandId === `${roomId}:cmd:infantry-assault` && command.commandState === "assault")) {
+    throw new Error("Infantry command state was not visible in room commands.");
+  }
+  if (!commandRoom.commands.some((command) => command.commandId === `${roomId}:cmd:armor-cover` && command.commandState === "cover")) {
+    throw new Error("Armor command state was not visible in room commands.");
+  }
+  if (!commandRoom.commands.some((command) => command.commandId === `${roomId}:cmd:infantry-cancel` && command.commandState === "cancel")) {
+    throw new Error("Cancel command state was not visible in room commands.");
+  }
+
   const ws = await wsSmoke();
   if (!ws.events.includes("hello") || !ws.events.includes("observer_snapshot")) {
     throw new Error(`Unexpected WebSocket events: ${ws.events.join(",")}`);
   }
+  const wsCommand = await wsCommandSmoke();
+  if (!wsCommand.commandAck || !wsCommand.broadcastSeen) throw new Error("WebSocket command ack/broadcast failed.");
 
-  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, ws=${ws.events.join("/")}`);
+  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast`);
 }
 
 const server = spawn(process.execPath, ["tools/static-server.cjs", String(port)], {

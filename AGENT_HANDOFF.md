@@ -32,11 +32,33 @@ Check:
 
 Current handoff date: 2026-05-22 KST.
 
-The next target is: **offline command stability gate**.
+The offline command stability gate is PASS.
 
-This is not a new-feature pass. The immediate goal is to prove locally/offline that the current `CommanderSlot -> SquadLeader -> Unit` structure works in live play, and to fix only directly related breakage before online command synchronization.
+The online command synchronization first pass is now PASS.
 
-Do not start AI V2, UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, or broad online redesign work from this handoff.
+The online commander-order stability gate is now PASS.
+
+The human FPS combat loop first pass is now PASS.
+
+The FPS combat loop report-based fix + small balance pass is now PASS.
+
+The FPS fix + small balance interim verification report is ON TRACK.
+
+The FPS fix + balance report-based correction pass is ON TRACK.
+
+The FPS AI rear awareness correction pass is PASS.
+
+The FPS combat loop completion report is PASS.
+
+The FPS + command integration QA is PASS.
+
+The empty-slot BotCommander skeleton first pass is PASS.
+
+The next target is: **empty-slot BotCommander skeleton stability gate**.
+
+The immediate goal is to verify the new skeleton stays narrow: empty `bot` slots can issue basic role commands through `CommandBus`, `human` slots keep priority, `empty` slots do nothing, and the verified human FPS + command path remains unchanged. Do not build full bot decision-making yet.
+
+Do not start AI V2, UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, broad online redesign work, or full BotCommander behavior from this handoff.
 
 The command-role design being verified is:
 
@@ -62,7 +84,7 @@ Guardrail for the current worker:
 - Commander orders go to squad leaders / asset leaders.
 - The squad leader owns `commandState` and handles local tactics.
 - Units only execute: follow, shoot, reload, nearby cover, survival, and return-to-squad.
-- `BotCommander` is not a feature target right now. Keep only the structure ready for future `human / bot / empty` `controllerType`.
+- Full `BotCommander` behavior is not a feature target right now. Keep the current work to the verified `human / bot / empty` skeleton and its stability checks.
 - Do not implement 50vs50, UGC, city/open-world work, medics, advanced AI commanders, or server-authority redesign in this pass.
 
 AI should not become "smarter" in this pass. It should become easier to command:
@@ -75,89 +97,89 @@ AI should not become "smarter" in this pass. It should become easier to command:
 
 0. Common Stage Gate and In-Progress Self Check are fixed in this file.
 1. Finish the current command-structure work.
-2. Offline command stability gate.
-3. Online command synchronization first pass.
-4. Online commander-order stability gate.
-5. Human FPS combat loop first pass.
-6. FPS + command integration QA.
+2. Offline command stability gate. PASS on 2026-05-22.
+3. Online command synchronization first pass. PASS on 2026-05-22.
+4. Online commander-order stability gate. PASS on 2026-05-22.
+5. Human FPS combat loop first pass. PASS on 2026-05-22.
+6. FPS combat loop fix + small balance pass. PASS on 2026-05-22.
+7. FPS fix + small balance interim verification report. ON TRACK on 2026-05-22.
+8. FPS fix + balance report-based correction pass. ON TRACK on 2026-05-22.
+9. FPS AI rear awareness correction pass. PASS on 2026-05-22.
+10. FPS combat loop completion report. PASS on 2026-05-22.
+11. FPS + command integration QA. PASS on 2026-05-22.
+12. Empty-slot `BotCommander` skeleton first pass. PASS on 2026-05-22.
+13. Empty-slot `BotCommander` skeleton stability gate. Current next target.
 
 ## Current Work Target
 
-Next work item: **offline command stability gate**.
+Next work item: **empty-slot BotCommander skeleton stability gate**.
 
-Goal: before online command synchronization, verify in local/offline play that role-specific commander orders are stable and that the current `CommanderSlot -> SquadLeader -> Unit` structure is respected. If a directly required role-command path is missing or broken, treat that as a bug in the current pass and fix it narrowly. Do not use this gate as a reason to add unrelated systems.
+Prerequisite status: online commander-order stability gate passed on 2026-05-22. See `docs/online-commander-order-stability-gate-report-2026-05-22.md`.
+
+FPS loop status: human FPS combat loop first pass passed on 2026-05-22. See `docs/human-fps-combat-loop-first-pass-report-2026-05-22.md`.
+
+FPS loop interim checkpoint: `docs/human-fps-combat-loop-interim-verification-report-2026-05-22.md` records the ON TRACK evidence for movement, aiming, shooting/ammo flow, hit/damage/death feedback, respawn, kill log, and the remaining command UI pacing risk.
+
+FPS loop fix checkpoint: `docs/fps-combat-loop-fix-balance-pass-2026-05-22.md` records the suicide-drone terminal approach speed split, infantry anti-drone fire tuning, difficulty-based firing profile, infantry reload HUD duplicate cleanup, and latest smoke evidence.
+
+FPS fix interim checkpoint: `docs/fps-fix-balance-interim-verification-report-2026-05-22.md` records the ON TRACK intermediate check for suicide-drone pacing, infantry anti-drone fire, difficulty tuning, reload HUD duplicate cleanup, and death / damage cause preservation.
+
+FPS fix correction checkpoint: `docs/fps-fix-balance-correction-pass-2026-05-22.md` records that no extra gameplay code fix was required from the interim report, and lists the live visual / play-feel checks that must close in the FPS completion report.
+
+FPS rear awareness checkpoint: `docs/fps-ai-rear-awareness-correction-pass-2026-05-22.md` records the tank turret/hull facing awareness fix, humvee gun/hull facing awareness fix, and the slower infantry rear reaction delay.
+
+FPS completion checkpoint: `docs/fps-combat-loop-completion-report-2026-05-22.md` records the PASS decision for the FPS loop, including damage causes, vehicle-contact balance, suicide-drone pacing, anti-drone fire, reload HUD cleanup, and rear-awareness suspicion / hit-reaction evidence.
+
+FPS + command integration interim checkpoint: `docs/fps-command-integration-interim-verification-report-2026-05-22.md` records the ON TRACK mid-stage check for live FPS movement/fire/death plus role-command coexistence.
+
+FPS + command integration fix-pass checkpoint: `docs/fps-command-integration-fix-pass-report-2026-05-22.md` records the report-based correction gate. The interim report found no direct integration blocker, so no gameplay code fix was required.
+
+FPS + command integration completion checkpoint: `docs/fps-command-integration-qa-report-2026-05-22.md` records the PASS decision for live FPS fire/movement/death plus role-command coexistence. It also adds `tools/check-fps-command-integration.cjs` as the narrow local QA helper.
+
+Empty-slot BotCommander skeleton checkpoint: `docs/bot-commander-skeleton-first-pass-report-2026-05-22.md` records the PASS decision for `human / bot / empty` slot guards, bot-sourced command packets, squad-leader delivery, command lock visibility, and observer/admin role-slot visibility. It also adds `tools/check-bot-commander-skeleton.cjs` as the narrow local QA helper.
+
+Interim checkpoint: `docs/online-command-sync-interim-verification-report-2026-05-22.md` records the packet / permission / broadcast smoke evidence that led into the online commander-order stability gate.
+
+Fix pass checkpoint: `docs/online-command-sync-fix-pass-report-2026-05-22.md` records the narrow fixes for wrong-team target rejection and online `cancel` command state. No blocker remains from that fix pass.
+
+Gate checkpoint: `docs/online-commander-order-stability-gate-report-2026-05-22.md` records the two-client online PASS decision and the trusted remote command target-id fix.
+
+Goal: verify the minimum empty-slot bot-commander skeleton after the verified human FPS + command path. The skeleton exposes `controllerType: bot / empty` handoff points and safe basic bot orders, but must not start full AI commander behavior, AI V2, 50vs50, UGC, city/open-world, or server-authority combat work.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
-Verify role asset ownership:
+Required empty-slot BotCommander skeleton checks:
 
-- Infantry commands infantry squads only.
-- Engineer commands engineer / RPG / repair / defensive assets.
-- Recon commands scout / drone / marking assets.
-- Armor commands tanks / humvees / vehicles.
+- Existing human-owned role slots keep priority and behavior unchanged.
+- Empty slots may be marked as `bot` or `empty` without stealing human command ownership.
+- Bot skeleton may issue only basic role commands through `CommandBus`: infantry `move/defend/rally`, engineer `repair/defend/rally`, recon `scan/defend/rally`, armor `fire_support/defend/rally`.
+- Existing `CommandBus`, `CommandRadio`, `roleSlots`, and online command sync tests must keep passing.
+- Leave smoke/manual notes before moving to any AI V2 or real bot decision pass.
 
-Verify role command behavior:
+## Current Sequence After Online Sync
 
-- Infantry scenes: advance / take cover / assault.
-- Engineer scenes: repair / anti-armor standby / build defense.
-- Recon scenes: drone recon / mark enemy / check flank route.
-- Armor scenes: breakthrough / cover infantry / rear hold.
+The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-For each command that exists or is required by the first pass, verify:
-
-- The order reaches the correct squad leader or asset leader.
-- Individual units do not immediately overwrite it with default AI judgment.
-- `commandState`, `commandSource`, `commandReason`, `commandLockUntil`, `squadLeaderId`, and `commanderSlotId` are visible in debug, observatory, admin, or equivalent logs.
-- The command intent holds for roughly 1-3 seconds unless emergency survival overrides it.
-- Targets do not churn every frame during the command lock.
-
-Verify stopped-state clarity:
-
-- Waiting / hold.
-- Regrouping.
-- Covering.
-- Repairing.
-- Scouting.
-- Blocked / waiting for clear.
-
-Verify directly related vehicle issues:
-
-- Vehicle overlap.
-- Spawn overlap.
-- Friendly front-vehicle collision.
-- Narrow-passage clogging.
-- Stuck state.
-- Vehicles pushing infantry.
-- Squad scattering after command.
-- Permanent stopped state after command.
-
-Record test scenes:
-
-- At least one infantry command scene.
-- At least one engineer command scene.
-- At least one recon command scene.
-- At least one armor command scene.
-
-If a required local/offline command check is broken, do not start online command synchronization.
-
-## Next Sequence After Offline Gate
-
-After this offline gate passes, the next stage is **online command synchronization, first pass**.
-
-Do not move to online command sync if role ownership, command state, command lock, debug/observatory visibility, or basic local vehicle/spawn behavior is still broken.
+The next stage is **empty-slot `BotCommander` skeleton stability gate**. Do not move from here into AI V2 or full bot commander behavior.
 
 Current sequence:
 
-1. Current command-structure work completion.
-2. Offline command stability gate.
-3. Online command synchronization.
-4. Online commander-order stability gate.
-5. Human FPS combat loop first pass.
-6. FPS + command integration QA.
-7. Empty-slot `BotCommander` skeleton only, not full bot commander behavior.
-8. AI V2 tactical map / cover nodes / vehicle traffic.
-9. AI count scaling.
-10. 50vs50 event mode.
+1. Current command-structure work completion. PASS.
+2. Offline command stability gate. PASS.
+3. Online command synchronization. PASS.
+4. Online commander-order stability gate. PASS.
+5. Human FPS combat loop first pass. PASS.
+6. FPS combat loop fix + small balance pass. PASS.
+7. FPS fix + small balance interim verification report. ON TRACK.
+8. FPS fix + balance report-based correction pass. ON TRACK.
+9. FPS AI rear awareness correction pass. PASS.
+10. FPS combat loop completion report. PASS.
+11. FPS + command integration QA. PASS.
+12. Empty-slot `BotCommander` skeleton first pass. PASS.
+13. Empty-slot `BotCommander` skeleton stability gate. Current next target.
+14. AI V2 tactical map / cover nodes / vehicle traffic.
+15. AI count scaling.
+16. 50vs50 event mode.
 
 ## Offline Command Stability Gate
 
@@ -214,6 +236,8 @@ Not allowed in this gate:
 Apply the Common Stage Gate and In-Progress Self Check. Leave manual notes, smoke output, screenshots, or debug snapshots that show what passed and what remains blocked.
 
 ## Online Command Sync 1st Pass
+
+Status: PASS on 2026-05-22. See `docs/online-command-sync-first-pass-report-2026-05-22.md`.
 
 Next big stage after the offline command stability gate: **online command synchronization, first pass**.
 
@@ -274,7 +298,9 @@ One-line target: an online room should make a human commander order visible, per
 
 ## Online Commander-Order Stability Gate
 
-Next gate after online command synchronization first pass: **online commander-order stability gate**.
+Status: PASS on 2026-05-22. See `docs/online-commander-order-stability-gate-report-2026-05-22.md`.
+
+This section is kept as the completed gate definition.
 
 Goal: after online command sync exists, verify that role-specific commander orders are stable in multiplayer before starting the human FPS combat loop pass.
 
@@ -323,9 +349,11 @@ Not allowed in this gate:
 - City/open-world work.
 - Full server-authority combat redesign.
 
-Apply the Common Stage Gate and In-Progress Self Check. Do not start the human FPS combat loop pass until online human commander orders are verified as permission-checked, broadcast, deduplicated, and visible in all clients. Empty-slot `BotCommander` skeleton remains blocked until after the human FPS combat loop and FPS + command integration QA.
+Apply the Common Stage Gate and In-Progress Self Check. This gate is now complete; empty-slot `BotCommander` skeleton remains blocked until after the human FPS combat loop and FPS + command integration QA.
 
 ## Human FPS Combat Loop 1st Pass
+
+Status: PASS on 2026-05-22. See `docs/human-fps-combat-loop-first-pass-report-2026-05-22.md`.
 
 After online commander-order stability, the next big axis is **human FPS combat loop first pass**. Do this before empty-slot `BotCommander` work.
 
@@ -362,7 +390,38 @@ Implementation / verification targets:
   - Stabilize position / shooting / hit event flow first.
   - Do not start a full server-authority combat rewrite in this pass.
 
-Apply the Common Stage Gate and In-Progress Self Check. Leave manual notes or smoke output proving the player can fight, receive feedback, die/respawn or exit the round correctly, and issue at least one quick command without the command UI breaking FPS controls.
+Apply the Common Stage Gate and In-Progress Self Check. This pass is now complete; empty-slot `BotCommander` skeleton remains blocked until after FPS + command integration QA.
+
+## FPS + Command Integration QA
+
+Status: PASS on 2026-05-22. See `docs/fps-command-integration-qa-report-2026-05-22.md`.
+
+Goal: verify that direct FPS combat and role-command input work together in the same live-play scenarios.
+
+Stage evidence order:
+
+1. Interim verification report: `docs/fps-command-integration-interim-verification-report-2026-05-22.md` -> ON TRACK.
+2. Report-based narrow fix pass: `docs/fps-command-integration-fix-pass-report-2026-05-22.md` -> PASS, no gameplay code fix required.
+3. Completion report: `docs/fps-command-integration-qa-report-2026-05-22.md` -> PASS.
+
+Required checks:
+
+- Player movement, aim, fire, ammo/cooldown flow, hit confirmation, damage feedback, death, and respawn/round-exit still work while role command tools are available.
+- At least one quick role command can be issued during active combat without trapping mouse aim, fire, movement, weapon switching, or chat input.
+- The player can read both combat feedback and command feedback at the same time: HIT/DOWN marker, damage direction, health/ammo, kill log, radio log, command marker, and `commandState`.
+- Role/loadout separation remains intact: commander role selection does not silently rewrite weapon/loadout state.
+- Online checks can stay narrow: verify position/aim/shoot/hit event flow plus command broadcast, but do not start full server-authority combat.
+
+This QA is now complete. The next stage may start only the empty-slot `BotCommander` skeleton.
+
+Not allowed:
+
+- Full `BotCommander` behavior.
+- AI V2.
+- 50vs50 expansion.
+- UGC.
+- City/open-world work.
+- Full server-authority combat redesign.
 
 The next stabilization direction after QA remains useful, but only after the current command structure is proven:
 
@@ -394,7 +453,9 @@ Implementation direction:
 
 ## Current Advancement Status
 
-**Do not advance yet.** The role-command work has implementation and smoke coverage, but the stage remains open until live/manual play proves that role commands reach the correct squad/asset leaders, command state is observable in logs/debug output, directly related bugs are fixed or recorded as blockers, and minimum test notes are left.
+**Current next stage: empty-slot `BotCommander` skeleton.** The FPS + command integration QA report is PASS, so the skeleton pass may begin.
+
+Do not advance beyond the skeleton into real bot commander behavior until the skeleton pass has implementation, directly related bug verification, and minimum test notes.
 
 ## Repository
 
@@ -448,11 +509,95 @@ Additional verification already run:
 - 2026-05-22 command metadata smoke: `CommandBus` player-issued `attack` order produced `commandState: assault`, `commandSource: player`, `commandReason: attack`, `commandLockSeconds: 2.2`, `commanderSlotId: blue-infantry`, and one command log entry.
 - 2026-05-22 browser battle smoke: offline battle reached the field, command radio button/panel rendered, command buttons were present, and browser console errors were empty. Screenshot: `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\iron-line-command-radio-smoke-20260522.png`.
 - 2026-05-22 pre-checkpoint verification: `npm run check` passed; `npm run check:online` passed with `Online smoke passed: SMOKE-1779424968014, players=2, combat=1, ws=hello/join_result/observer_snapshot`.
+- 2026-05-22 offline commander-order QA pass 1: local Playwright/Chrome entered live play for each blue role, selected the role before deployment, opened the command radio, and verified the role special button was present and enabled.
+- 2026-05-22 offline commander-order QA pass 1 results:
+  - Infantry `blue-infantry -> B-SQD-3`: `assault` accepted; squad and observatory showed `commandState: assault`, `commandSource: player`, `commandReason: assault`, `commanderSlotId: blue-infantry`; lock remained about 1.36s at the 1.4s sample.
+  - Engineer `blue-engineer -> B-SQD-1`: `repair` accepted; squad and observatory showed `commandState: repair`, `commandSource: player`, `commandReason: repair`, `commanderSlotId: blue-engineer`; lock remained about 0.98s at the 1.4s sample.
+  - Recon `blue-recon -> B-SQD-6`: `scan` accepted; squad and observatory showed `commandState: scout`, `commandSource: player`, `commandReason: scan`, `commanderSlotId: blue-recon`; lock remained about 1.0s at the 1.4s sample.
+  - Armor `blue-armor -> B-12`: `fire_support` accepted; vehicle manual order, commander assignment, and observatory showed `commandState: cover`, `commandSource: player`, `commandReason: fire_support`, `commanderSlotId: blue-armor`; lock remained about 0.58s at the 1.4s sample.
+- 2026-05-22 command radio UI click smoke: clicked live role-special buttons for all four roles.
+  - `blue-infantry` `assault`: command log accepted; `B-SQD-3` showed `commandState: assault`, `commandSource: player`, `commandReason: assault`, `commanderSlotId: blue-infantry`, with about 2.22s lock remaining after the click.
+  - `blue-engineer` `repair`: command log accepted; `B-SQD-1` showed `commandState: repair`, `commandSource: player`, `commandReason: repair`, `commanderSlotId: blue-engineer`, with about 0.93s lock remaining after the 1.4s sample.
+  - `blue-recon` `scan`: command log accepted; `B-SQD-6` showed `commandState: scout`, `commandSource: player`, `commandReason: scan`, `commanderSlotId: blue-recon`, with about 0.91s lock remaining after the 1.4s sample.
+  - `blue-armor` `fire_support`: after a direct channel-selection fix, the radio panel selected armor channel / `B-12`; command log accepted, and assignment + observatory showed `commandState: cover`, `commandSource: player`, `commandReason: fire_support`, `commanderSlotId: blue-armor`, with about 0.50s lock remaining after the 1.4s sample.
+- 2026-05-22 offline commander-order QA pass/fail evidence:
+  - Full interim report: `docs/commander-order-qa-interim-report-2026-05-22.md`
+  - Role-level completion report: `docs/commander-order-qa-completion-report-2026-05-22.md`
+  - Completion decision: PASS to move into the offline command stability gate. This does not permit online command synchronization yet.
 
-Open before advancing to the next stage:
+| Role | Command | Target | State Visible | Lock Works | Result |
+| --- | --- | --- | --- | --- | --- |
+| Infantry | `assault` | `B-SQD-3` from `blue-infantry` | yes: squad + observatory showed `assault`, `player`, `assault`, `blue-infantry` | yes: UI click sample had about 2.22s remaining after click | pass |
+| Engineer | `repair` | `B-SQD-1` from `blue-engineer` | yes: squad + observatory showed `repair`, `player`, `repair`, `blue-engineer` | yes: UI click retest had about 0.93s remaining after 1.4s | pass |
+| Recon | `scan` | `B-SQD-6` from `blue-recon` | yes: squad + observatory showed `scout`, `player`, `scan`, `blue-recon` | yes: UI click retest had about 0.91s remaining after 1.4s | pass |
+| Armor | `fire_support` | `B-12` from `blue-armor` | yes: vehicle assignment + observatory showed `cover`, `player`, `fire_support`, `blue-armor` | yes: UI click retest had about 0.50s remaining after 1.4s | pass |
 
-- Direct live-play verification that a selected squad receives a radio command in battle and exposes the same command state through debug/observatory output.
-- Do not treat command-flow stabilization as complete if command state is only visible in isolated metadata smoke but not observable during actual play.
+- 2026-05-22 offline command stability gate:
+  - Full report: `docs/offline-command-stability-gate-report-2026-05-22.md`
+  - Gate decision: PASS to begin online command synchronization, first pass.
+  - Role command coverage passed for infantry `move` / `defend` / `assault`, engineer `repair` / `defend` / `rally`, recon `scan` / `attack` / `move`, and armor `move` / `fire_support` / `defend`.
+  - Duplicate accepted command ids are now rejected with `duplicate-command`.
+  - `cancel` now immediately clears player command state to idle / bot / lock `0`.
+  - Basic vehicle diagnostics passed: no sampled blue vehicle overlap, forced traffic hold exposed `traffic waiting`, and forced stuck diagnostics surfaced stuck state.
+- 2026-05-22 offline commander-order QA pass 1 screenshots:
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-infantry-assault-qa-2.png`
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-engineer-repair-qa-2.png`
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-recon-scan-qa-2.png`
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-armor-fire-support-qa-2.png`
+- 2026-05-22 command radio UI click screenshots:
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-engineer-repair-ui-click-qa.png`
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-recon-scan-ui-click-qa.png`
+  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-armor-fire-support-ui-click-qa-2.png`
+- 2026-05-22 direct fixes from offline QA:
+  - `CommanderAI.applyCombinedArmsOrders()` now excludes manually commanded tanks so player armor orders are not overwritten by automatic combined-arms support.
+  - Role specials are enabled through the existing `CommandBus` / `CommandRadio` path: infantry `assault`, engineer `repair`, recon `scan`, armor `fire_support`.
+  - Vehicle command orders now carry `commandLockUntil` / `lastCommandChangedAt`, and vehicle command state is exposed through AI observatory and observer bridge snapshots.
+  - Vehicle-only armor slots now auto-select the armor radio channel so `fire_support` uses selected vehicle assets instead of an empty infantry channel.
+- 2026-05-22 post-QA checks: `npm run check` passed; `npm run check:online` passed with `Online smoke passed: SMOKE-1779427420462, players=2, combat=1, ws=hello/join_result/observer_snapshot`. `git diff --check` reported only existing CRLF conversion warnings.
+- 2026-05-22 online command synchronization first pass:
+  - Interim verification report: `docs/online-command-sync-interim-verification-report-2026-05-22.md`
+  - Fix pass report: `docs/online-command-sync-fix-pass-report-2026-05-22.md`
+  - Full report: `docs/online-command-sync-first-pass-report-2026-05-22.md`
+  - Stage decision: PASS to enter the online commander-order stability gate.
+  - Online packets now preserve `roomId`, `playerId`, `commanderSlotId`, `role`, `controllerType`, `commandId`, `commandType`, target id/position, `issuedAt`, `lockUntil`, `reason`, and `commandState`.
+  - Server command handling now validates role/slot authority, rejects duplicate and stale command ids, stores accepted commands in room state, and broadcasts accepted WebSocket commands.
+  - Client room registry now stores room `commands`; local accepted online commands publish to the room; remote room commands are applied back through `CommandBus` without local cooldown drift.
+  - Report-based fix pass tightened server target validation so a blue commander cannot target an `R-` squad/vehicle id, and made online `cancel` publish/export `commandState: cancel`.
+  - Latest online smoke after the fix pass passed with `Online smoke passed: SMOKE-1779430192063, players=2, combat=1, commands=3, ws=hello/join_result/observer_snapshot, wsCommand=ack/broadcast`.
+- 2026-05-22 online commander-order stability gate:
+  - Full report: `docs/online-commander-order-stability-gate-report-2026-05-22.md`
+  - Gate decision: PASS to start the human FPS combat loop first pass.
+  - Two browser clients used the same room `GATE-1779430845418`: `gate-blue` as `blue-infantry`, `gate-red` as `red-armor`.
+  - Browser runtime verified authorized infantry `assault` and armor `fire_support`, unauthorized infantry vehicle command rejection, and unauthorized cross-slot command rejection.
+  - Remote clients saw room commands, command pings, `CommandBus` log entries, and AI command state: `B-SQD-3` reached `assault`; `R-05` held `cover`.
+  - Direct bug fixed: remote accepted commands now use `trustedRemote` target-id resolution so a server/room-accepted command does not fail on the receiving client with `no-assets` when local slot asset lists differ.
+  - Post-gate checks passed: `npm run check`; `npm run check:online` with `Online smoke passed: SMOKE-1779431010018, players=2, combat=1, commands=3, ws=hello/join_result/observer_snapshot, wsCommand=ack/broadcast`.
+- 2026-05-22 human FPS combat loop first pass:
+  - Interim verification report: `docs/human-fps-combat-loop-interim-verification-report-2026-05-22.md`
+  - Full report: `docs/human-fps-combat-loop-first-pass-report-2026-05-22.md`
+  - Stage decision: PASS to start FPS + command integration QA.
+  - Runtime evidence covered movement, aiming, firing/ammo flow, HIT/DOWN confirmation, kill log, damage indicator, death, conquest respawn, command-while-fighting, and role/loadout separation.
+  - Follow-up in the same FPS first-pass scope added conservative vehicle-contact death causes: `vehicle_collision` / `tank_crush` labels, enemy vehicle impact and sustained tank contact damage, same-team push-only contact, and anti-tank assault protection from low-speed touch death.
+  - Post-pass checks passed: `npm run check`; `npm run check:online` with `Online smoke passed: SMOKE-1779432251707, players=2, combat=1, commands=3, ws=hello/join_result/observer_snapshot, wsCommand=ack/broadcast`.
+- 2026-05-22 FPS + command integration QA:
+  - Interim report: `docs/fps-command-integration-interim-verification-report-2026-05-22.md`
+  - Fix pass report: `docs/fps-command-integration-fix-pass-report-2026-05-22.md`
+  - Full report: `docs/fps-command-integration-qa-report-2026-05-22.md`
+  - Stage decision: PASS to start empty-slot `BotCommander` skeleton only.
+  - Added narrow QA helper: `tools/check-fps-command-integration.cjs`.
+  - Runtime smoke verified role/loadout separation, fire before command, movement while radio is open, infantry `assault` reaching `B-SQD-3` with `commandState: assault`, fire after command, infantry reload HUD staying compact, and death while radio is open hiding the command panel.
+  - Post-pass checks passed: `npm run check`; `npm run check:online` with `Online smoke passed: SMOKE-1779437299400, players=2, combat=1, commands=3, ws=hello/join_result/observer_snapshot, wsCommand=ack/broadcast`.
+- 2026-05-22 empty-slot BotCommander skeleton first pass:
+  - Full report: `docs/bot-commander-skeleton-first-pass-report-2026-05-22.md`
+  - Stage decision: PASS to start an empty-slot BotCommander skeleton stability gate.
+  - Added narrow QA helper: `tools/check-bot-commander-skeleton.cjs`.
+  - Runtime smoke verified `blue-infantry` human slot priority, `blue-engineer` empty bot slot detection, `repair` command accepted through `CommandBus`, `B-SQD-1` reaching `commandState: repair`, `commandSource: bot`, `commandReason: repair`, `commanderSlotId: blue-engineer`, active lock around 2.4s, and `controllerType: empty` rejection.
+
+Open before advancing beyond the next stage:
+
+- Empty-slot `BotCommander` skeleton stability gate is now the next target. It must remain a verification / direct-bug-fix gate, not full bot commander decision-making.
+- Carry forward a non-blocking follow-up for deeper natural vehicle/infantry pushing QA. The offline gate checked sampled overlap plus forced traffic/stuck diagnostics; it did not exhaustively validate all future traffic physics edge cases.
+- Do not start AI V2, 50vs50, UGC, city/open-world, server-authority combat work, or real bot commander behavior during the skeleton pass.
 
 ## First Checks
 

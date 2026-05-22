@@ -665,6 +665,11 @@
       this.nodes.bottomHud?.classList.toggle("infantry-simple-weapons", Boolean(compact));
     }
 
+    clearStandardInfantryReadout() {
+      if (this.nodes.weaponState) this.nodes.weaponState.textContent = "";
+      if (this.nodes.reloadBar) this.nodes.reloadBar.style.width = "0%";
+    }
+
     updateInfantryWeapons(player, game = null) {
       const ui = this.nodes;
       if (!ui.weaponState || !ui.reloadBar) return;
@@ -777,14 +782,11 @@
         : [];
       const reconDroneReady = weapon?.id === "sniper" && Boolean(game?.activeReconDroneForSniper?.());
       if (!weapon) {
-        ui.weaponState.textContent = "무기 없음";
-        ui.reloadBar.style.width = "0%";
+        this.clearStandardInfantryReadout();
       } else if (ammo !== null && ammo <= 0) {
-        ui.weaponState.textContent = `${weapon.name} 탄약 없음`;
-        ui.reloadBar.style.width = "0%";
+        this.clearStandardInfantryReadout();
       } else if (weapon.id === "pistol" && game?.isPlayerPistolAimMode?.()) {
-        ui.weaponState.textContent = `\uAD8C\uCD1D \uC870\uC900 ${this.weaponAmmoText(player, weapon)}`;
-        ui.reloadBar.style.width = `${readyPct * 100}%`;
+        this.clearStandardInfantryReadout();
       } else if (observedSniperTarget?.designated) {
         this.setInfantryWeaponReadoutCompact(false);
         const ttl = Math.max(0, Math.ceil(designatedTarget?.ttl || 0));
@@ -815,8 +817,7 @@
         ui.weaponState.textContent = `정찰드론 관측 대기 ${this.weaponAmmoText(player, weapon)}`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else {
-        ui.weaponState.textContent = `${weapon.name} ${this.weaponAmmoText(player, weapon)}`;
-        ui.reloadBar.style.width = `${readyPct * 100}%`;
+        this.clearStandardInfantryReadout();
       }
     }
 

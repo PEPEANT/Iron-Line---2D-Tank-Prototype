@@ -1,13 +1,22 @@
 "use strict";
 
 const {
+  COMMAND_TYPES,
   createChatMessage,
+  createCommandPacket,
   createDefaultSlots,
   createObserverSnapshot,
   createParticipant,
   createRoomConfig,
   createSessionEvent
 } = require("./schemas");
+
+const ROLE_SPECIALS = Object.freeze({
+  infantry: "assault",
+  engineer: "repair",
+  recon: "scan",
+  armor: "fire_support"
+});
 
 class RoomRegistry {
   constructor(options = {}) {
@@ -179,17 +188,79 @@ class RoomRegistry {
 
   pushCommand(roomId, packet) {
     const room = this.getOrCreateRoom(roomId);
-    room.commands.push(packet);
+    const normalized = createCommandPacket({
+      ...packet,
+      roomId: room.config.roomId
+    });
+    const validation = this.validateCommand(room, normalized);
+    if (!validation.ok) return validation;
+    room.commands.push(normalized);
     if (room.commands.length > 120) room.commands.splice(0, room.commands.length - 120);
     this.pushEvent(roomId, {
       type: "command",
       severity: "info",
       title: "명령",
-      detail: `${packet.slotId || packet.issuerPlayerId || "플레이어"}: ${packet.type || "command"}`,
-      actorId: packet.issuerPlayerId || ""
+      detail: `${normalized.commanderSlotId || normalized.issuerPlayerId || "player"}: ${normalized.commandType || "command"}`,
+      actorId: normalized.issuerPlayerId || normalized.playerId || ""
     });
     room.updatedAt = this.now();
-    return packet;
+    return { ok: true, packet: normalized };
+  }
+
+  validateCommand(room, packet = {}) {
+    const playerId = packet.playerId || packet.issuerPlayerId || "";
+    const slotId = packet.commanderSlotId || packet.slotId || "";
+    const participant = room.players.get(playerId) || room.participants.get(playerId) || null;
+    if (!participant) return { ok: false, reason: "missing-player" };
+    if (participant.participantType && participant.participantType !== "player") return { ok: false, reason: "spectator" };
+    const slot = room.slots.find((item) => item.id === slotId);
+    if (!slot) return { ok: false, reason: "missing-slot" };
+    if (slot.playerId !== playerId) return { ok: false, reason: "command-authority-required" };
+    const role = packet.role || slot.role || "";
+    if (role && role !== slot.role) return { ok: false, reason: "role-mismatch" };
+    if (!this.commandTypeAllowedForRole(slot.role, packet.commandType || packet.type)) return { ok: false, reason: "role-command-restricted" };
+    const targetSquadIds = Array.isArray(packet.targetSquadIds) ? packet.targetSquadIds : [];
+    const targetVehicleIds = Array.isArray(packet.targetVehicleIds) ? packet.targetVehicleIds : [];
+    if ((packet.targetAssetId || targetVehicleIds.length) && slot.role !== "armor") return { ok: false, reason: "vehicle-role-restricted" };
+    if ((packet.targetSquadId || targetSquadIds.length) && slot.role === "armor") return { ok: false, reason: "squad-role-restricted" };
+    const targetCheck = this.targetIdsLookValid(packet, slot);
+    if (!targetCheck.ok) return targetCheck;
+    if (room.commands.some((item) => (item.commandId || item.id) === packet.commandId)) return { ok: false, reason: "duplicate-command" };
+    const latest = this.latestCommandForSlot(room, slot.id);
+    if (latest && Number(packet.issuedAt) < Number(latest.issuedAt || latest.createdAt || 0)) return { ok: false, reason: "stale-command" };
+    return { ok: true };
+  }
+
+  commandTypeAllowedForRole(role = "", type = "") {
+    if (!COMMAND_TYPES.includes(type)) return false;
+    if (["move", "attack", "defend", "rally", "cancel"].includes(type)) return true;
+    return ROLE_SPECIALS[role] === type;
+  }
+
+  targetIdsLookValid(packet = {}, slot = null) {
+    const squadIds = [
+      packet.targetSquadId,
+      ...(Array.isArray(packet.targetSquadIds) ? packet.targetSquadIds : [])
+    ].filter(Boolean);
+    const vehicleIds = [
+      packet.targetAssetId,
+      ...(Array.isArray(packet.targetVehicleIds) ? packet.targetVehicleIds : [])
+    ].filter(Boolean);
+    const validSquad = (id) => /^[BR]-SQD-\d+$/i.test(String(id || ""));
+    const validVehicle = (id) => /^[BR]-\d+$/i.test(String(id || "")) || /^[A-Z][A-Z0-9_-]{1,24}$/.test(String(id || ""));
+    if (!squadIds.every(validSquad) || !vehicleIds.every(validVehicle)) return { ok: false, reason: "invalid-target" };
+    const expectedPrefix = slot?.team === "red" ? "R-" : "B-";
+    const teamBoundIds = [...squadIds, ...vehicleIds].filter((id) => /^[BR]-/i.test(String(id || "")));
+    if (teamBoundIds.some((id) => !String(id).toUpperCase().startsWith(expectedPrefix))) {
+      return { ok: false, reason: "target-team-mismatch" };
+    }
+    return { ok: true };
+  }
+
+  latestCommandForSlot(room, slotId = "") {
+    return (room.commands || [])
+      .filter((item) => (item.commanderSlotId || item.slotId) === slotId)
+      .sort((a, b) => Number(b.issuedAt || b.createdAt || 0) - Number(a.issuedAt || a.createdAt || 0))[0] || null;
   }
 
   pushChat(roomId, input = {}) {

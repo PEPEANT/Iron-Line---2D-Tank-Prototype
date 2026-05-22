@@ -279,6 +279,165 @@
     return (20 + speed * 0.86) * mass / hardness;
   }
 
+  function vehicleContactId(vehicle) {
+    return vehicle?.callSign || vehicle?.id || `${vehicle?.vehicleType || "vehicle"}:${vehicle?.team || ""}:${Math.round(vehicle?.x || 0)}:${Math.round(vehicle?.y || 0)}`;
+  }
+
+  function vehicleContactState(entity, vehicle, game, dt) {
+    const now = game?.matchTime || 0;
+    const key = vehicleContactId(vehicle);
+    const states = entity.vehicleContactState || (entity.vehicleContactState = {});
+    let state = states[key];
+    if (!state || now - (state.lastSeenAt || 0) > 0.38) {
+      state = {
+        startedAt: now,
+        duration: 0,
+        lastSeenAt: now,
+        lastDamageAt: -99
+      };
+      states[key] = state;
+    }
+    state.duration += Math.max(0, Number(dt) || 0);
+    state.lastSeenAt = now;
+    return state;
+  }
+
+  function entityTeam(entity, game) {
+    if (entity === game?.player) return game.player?.team || "";
+    return entity?.team || "";
+  }
+
+  function isAntiTankAssaultContact(entity, vehicle) {
+    const aiState = String(entity?.ai?.state || entity?.state || "");
+    return Boolean(
+      aiState.startsWith("tank-assault") ||
+      vehicle?.infantryAssault?.attacker === entity ||
+      entity?.antiTankAssault ||
+      entity?.closeAssault ||
+      entity?.closeAssaultActive
+    );
+  }
+
+  function vehicleContactThreat(entity, vehicle, context) {
+    const speed = Math.abs(vehicle?.speed || 0);
+    const kind = vehicle?.vehicleType === "humvee" ? "vehicle_collision" : "tank_crush";
+    const speedMin = vehicle?.vehicleType === "humvee" ? 24 : 16;
+    const impactMin = vehicle?.vehicleType === "humvee" ? 58 : 38;
+    const maxSpeed = vehicle?.vehicleType === "humvee" ? 230 : 150;
+    const contactDepthRatio = context.contactDepth / Math.max(1, entity?.radius || 10);
+    const direction = Math.sign(vehicle?.speed || 1);
+    const travelAngle = (vehicle?.angle || 0) + (direction < 0 ? Math.PI : 0);
+    const relX = entity.x - vehicle.x;
+    const relY = entity.y - vehicle.y;
+    const forwardDot = relX * Math.cos(travelAngle) + relY * Math.sin(travelAngle);
+    const lateral = Math.abs(-relX * Math.sin(travelAngle) + relY * Math.cos(travelAngle));
+    const inPath = forwardDot > -(entity?.radius || 10) && lateral < (vehicle?.radius || 34) + (entity?.radius || 10) * 0.45;
+    const turningCrush = vehicle?.vehicleType !== "humvee" &&
+      Math.abs(vehicle?.turnVelocity || 0) > 0.92 &&
+      context.contactState.duration > 0.34 &&
+      contactDepthRatio > 0.52;
+    const trackCrush = vehicle?.vehicleType !== "humvee" &&
+      speed > speedMin &&
+      context.contactState.duration > 0.42 &&
+      contactDepthRatio > 0.46 &&
+      inPath;
+    const impact = speed >= impactMin && contactDepthRatio > 0.22 && inPath;
+    const softBump = speed >= speedMin && contactDepthRatio > 0.38 && inPath;
+    if (!turningCrush && !trackCrush && !impact && !softBump) return null;
+    return {
+      kind: turningCrush || trackCrush ? "tank_crush" : kind,
+      speed,
+      speedMin,
+      impactMin,
+      maxSpeed,
+      contactDepthRatio,
+      lethalThreat: turningCrush || trackCrush || impact,
+      softBump
+    };
+  }
+
+  function vehicleContactDamageAmount(threat, vehicle, assaultContact) {
+    const speedFactor = clamp((threat.speed - threat.speedMin) / Math.max(1, threat.maxSpeed - threat.speedMin), 0, 1);
+    let damage = threat.kind === "tank_crush"
+      ? 7 + speedFactor * 27
+      : threat.softBump && !threat.lethalThreat
+        ? 2.5 + speedFactor * 4
+        : 8 + speedFactor * (vehicle?.vehicleType === "humvee" ? 36 : 44);
+    if (assaultContact) {
+      if (threat.speed < 82 && Math.abs(vehicle?.turnVelocity || 0) < 0.82) return 0;
+      damage *= 0.24;
+    }
+    return damage;
+  }
+
+  function vehicleContactSource(game, vehicle) {
+    if (vehicle && vehicle === game?.player?.inTank) {
+      const playerId = game?.onlineSession?.playerId || "local-player";
+      return {
+        x: vehicle.x,
+        y: vehicle.y,
+        team: vehicle.team,
+        callSign: vehicle.callSign || "vehicle",
+        playerId,
+        ownerPlayerId: playerId
+      };
+    }
+    return vehicle;
+  }
+
+  function applyVehicleContactDamage(game, entity, vehicle, context) {
+    if (!game?.matchStarted || !entity || !vehicle?.alive || entity.inVehicle) return false;
+    if (entityTeam(entity, game) && entityTeam(entity, game) === vehicle.team) return false;
+    const contactState = vehicleContactState(entity, vehicle, game, context.dt);
+    const threat = vehicleContactThreat(entity, vehicle, { ...context, contactState });
+    if (!threat) return false;
+
+    const now = game.matchTime || 0;
+    const cooldown = threat.lethalThreat ? 0.32 : 0.68;
+    if (now - (contactState.lastDamageAt || -99) < cooldown) return false;
+
+    const assaultContact = isAntiTankAssaultContact(entity, vehicle);
+    const damage = vehicleContactDamageAmount(threat, vehicle, assaultContact);
+    if (damage <= 0) return false;
+
+    contactState.lastDamageAt = now;
+    const source = vehicleContactSource(game, vehicle);
+    const label = threat.kind === "tank_crush" ? "전차 압사" : "차량 충돌";
+    const deathReason = `${label}로 전투 불능 상태가 되었습니다.`;
+
+    if (entity === game.player) {
+      return game.applyPlayerDamage?.(damage, source, threat.kind, {
+        label,
+        deathReason,
+        x: vehicle.x,
+        y: vehicle.y
+      }) || false;
+    }
+
+    const wasAlive = entity.alive !== false && (entity.hp === undefined || entity.hp > 0);
+    entity.suppress?.(threat.kind === "tank_crush" ? 42 : 28, source);
+    entity.takeDamage?.(damage);
+    entity.lastVehicleImpact = {
+      kind: threat.kind,
+      source: vehicleContactId(vehicle),
+      damage,
+      speed: threat.speed,
+      time: now,
+      assaultProtected: assaultContact
+    };
+    if (vehicle === game.player?.inTank) {
+      game.recordPlayerHitConfirm?.(entity, damage, threat.kind, {
+        x: entity.x,
+        y: entity.y,
+        lethal: wasAlive && (entity.alive === false || entity.hp <= 0)
+      });
+    }
+    if (wasAlive && (entity.alive === false || entity.hp <= 0)) {
+      game.recordCombatKill?.(source, entity, threat.kind);
+    }
+    return true;
+  }
+
   function vehicleWreckImpactDamage(entity, wreck, options) {
     if (!options.destroyObstaclesOnImpact || !options.vehicleKind || !isVehicleWreck(wreck)) return 0;
     const speed = vehicleImpactSpeed(entity, options);
@@ -433,7 +592,7 @@
     return { blocked: blockedX || blockedY, blockedX, blockedY };
   }
 
-  function resolveCircleAgainstTanks(game, entity, padding = 5) {
+  function resolveCircleAgainstTanks(game, entity, padding = 5, dt = 0) {
     if (!entity || entity.inTank || entity.alive === false || entity.hp <= 0) return;
 
     const radius = entity.radius || 10;
@@ -455,18 +614,24 @@
       }
 
       const push = minDistance - distance;
+      applyVehicleContactDamage(game, entity, tank, {
+        dt,
+        distance,
+        minDistance,
+        contactDepth: push
+      });
       entity.x = clamp(entity.x + nx * push, radius, game.world.width - radius);
       entity.y = clamp(entity.y + ny * push, radius, game.world.height - radius);
       if (entity.speed !== undefined) entity.speed *= 0.35;
     }
   }
 
-  function resolveInfantryTankSpacing(game) {
+  function resolveInfantryTankSpacing(game, dt = 0) {
     for (const unit of game.infantry || []) {
-      if (!unit.inVehicle) resolveCircleAgainstTanks(game, unit, 18);
+      if (!unit.inVehicle) resolveCircleAgainstTanks(game, unit, 18, dt);
     }
-    for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 18);
-    if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 12);
+    for (const crew of game.crews || []) resolveCircleAgainstTanks(game, crew, 18, dt);
+    if (!game.player?.inTank) resolveCircleAgainstTanks(game, game.player, 12, dt);
   }
 
   function resolveTankSpacing(game, dt) {

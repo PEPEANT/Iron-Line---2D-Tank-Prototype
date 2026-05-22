@@ -285,6 +285,7 @@ function exportClientRoom(room) {
     commandAuthorityRequests: Array.isArray(room?.commandAuthorityRequests) ? room.commandAuthorityRequests.slice(-16) : [],
     chat: Array.isArray(room?.chat) ? room.chat.slice(-120) : [],
     events: Array.isArray(room?.events) ? room.events.slice(-80) : [],
+    commands: Array.isArray(room?.commands) ? room.commands.slice(-120) : [],
     combatEvents: Array.isArray(room?.combatEvents) ? room.combatEvents.slice(-140) : [],
     worldState: room?.worldState || null,
     createdAt: toClientTimestamp(config.createdAt),
@@ -526,6 +527,7 @@ async function handleRoomsApi(req, res) {
   const pathParts = url.pathname.split("/").filter(Boolean);
   const roomId = pathParts[1] === "rooms" ? decodeURIComponent(pathParts[2] || "") : "";
   const participantId = pathParts[3] === "participants" ? decodeURIComponent(pathParts[4] || "") : "";
+  const commandEndpoint = pathParts[3] === "commands";
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
     if (cleanupStaleServerParticipants()) persistRooms();
@@ -549,6 +551,23 @@ async function handleRoomsApi(req, res) {
     }
     persistRooms();
     sendJson(res, 200, { ok: true, room: exportClientRoom(room) });
+    return;
+  }
+
+  if (req.method === "POST" && roomId && commandEndpoint) {
+    const body = await readJsonBody(req);
+    if (!body) {
+      sendJson(res, 400, { ok: false, reason: "invalid_json" });
+      return;
+    }
+    const result = onlineRegistry.pushCommand(roomId, body);
+    if (!result?.ok) {
+      sendJson(res, 403, { ok: false, reason: result?.reason || "command_rejected" });
+      return;
+    }
+    persistRooms();
+    const room = onlineRegistry.rooms.get(roomId);
+    sendJson(res, 200, { ok: true, packet: result.packet, room: exportClientRoom(room) });
     return;
   }
 

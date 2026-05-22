@@ -794,7 +794,14 @@
     commandAuthorityForSlot(slot, playerId = this.onlineSession?.playerId || "") {
       if (!slot) return { allowed: false, reason: "missing-slot" };
       if (this.canCommandSlot(slot, playerId)) return { allowed: true, reason: "" };
+      if (!slot.playerId && slot.controllerType === "bot" && playerId === this.botCommanderIdForSlot(slot)) {
+        return { allowed: true, reason: "" };
+      }
       return { allowed: false, reason: "command-authority-required" };
+    }
+
+    botCommanderIdForSlot(slot) {
+      return this.botCommander?.botIdForSlot?.(slot) || `bot:${slot?.id || "slot"}`;
     }
 
     commandRequestForLocal(slot) {

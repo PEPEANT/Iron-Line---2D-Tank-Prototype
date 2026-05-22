@@ -190,15 +190,27 @@
 
     canSeeOrUseReport(target) {
       if (!target) return false;
-      if (hasLineOfSight(this.game, this.tank, target, { padding: 2 })) return true;
-      if (!this.isReportedEnemy(target)) return false;
-
+      const reported = this.isReportedEnemy(target);
       const distance = distXY(this.tank.x, this.tank.y, target.x, target.y);
+      if (hasLineOfSight(this.game, this.tank, target, { padding: 2 }) && (reported || this.hasFacingAwareness(target, distance))) return true;
+      if (!reported) return false;
+
       return distance <= AI_CONFIG.lineOfFireRange + 260;
     }
 
     isReportedEnemy(target) {
       return this.game.isReportedEnemy?.(this.tank.team, target) || false;
+    }
+
+    hasFacingAwareness(target, distance = null) {
+      if (!target) return false;
+      const targetDistance = distance ?? distXY(this.tank.x, this.tank.y, target.x, target.y);
+      const targetAngle = angleTo(this.tank.x, this.tank.y, target.x, target.y);
+      const turretDiff = Math.abs(normalizeAngle(targetAngle - (this.tank.turretAngle ?? this.tank.angle)));
+      const hullDiff = Math.abs(normalizeAngle(targetAngle - this.tank.angle));
+      if (turretDiff <= 1.05) return true;
+      if (targetDistance <= 460 && hullDiff <= 1.35) return true;
+      return targetDistance <= 220 && turretDiff <= 1.65;
     }
 
     prepareWeapon(target) {

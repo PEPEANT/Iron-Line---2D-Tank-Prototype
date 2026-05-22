@@ -17,7 +17,12 @@
     "scan",
     "fire_support"
   ]);
-  const ROLE_TYPES = {};
+  const ROLE_TYPES = {
+    infantry: "assault",
+    engineer: "repair",
+    recon: "scan",
+    armor: "fire_support"
+  };
 
   class CommandBus {
     constructor(game) {
@@ -26,12 +31,16 @@
       this.log = [];
       this.maxLog = 120;
       this.cooldowns = new Map();
+      this.appliedCommandIds = new Set();
+      this.appliedCommandIdQueue = [];
     }
 
     resetMatch() {
       this.sequence = 0;
       this.log.length = 0;
       this.cooldowns.clear();
+      this.appliedCommandIds.clear();
+      this.appliedCommandIdQueue.length = 0;
     }
 
     submit(input = {}) {
@@ -42,33 +51,75 @@
     }
 
     createPacket(input) {
-      const issuerPlayerId = input.issuerPlayerId || this.game.onlineSession?.playerId || "local-player";
+      const issuerPlayerId = input.issuerPlayerId || input.playerId || this.game.onlineSession?.playerId || "local-player";
       const player = this.game.sessionPlayerById?.(issuerPlayerId) || this.game.onlineSession?.players?.[0] || {};
       const slot = input.slotId
         ? this.game.sessionSlotById?.(input.slotId)
-        : this.game.sessionSlotById?.(player.slotId);
-      const type = COMMAND_TYPES.has(input.type) ? input.type : "move";
+        : input.commanderSlotId
+          ? this.game.sessionSlotById?.(input.commanderSlotId)
+          : this.game.sessionSlotById?.(player.slotId);
+      const typeInput = input.type || input.commandType;
+      const type = COMMAND_TYPES.has(typeInput) ? typeInput : "move";
       const tick = Math.floor((this.game.matchTime || 0) * 60);
+      const issuedAt = Number.isFinite(input.issuedAt) && Number(input.issuedAt) < 1000000000
+        ? Number(input.issuedAt)
+        : performance.now();
+      const issuedAtEpoch = Number.isFinite(input.issuedAtEpoch)
+        ? Number(input.issuedAtEpoch)
+        : Number.isFinite(input.issuedAt) && Number(input.issuedAt) >= 1000000000
+          ? Number(input.issuedAt)
+          : Date.now();
+      const targetSquadIds = Array.isArray(input.targetSquadIds)
+        ? input.targetSquadIds.slice()
+        : input.targetSquadId
+          ? [input.targetSquadId]
+          : [];
+      const targetVehicleIds = Array.isArray(input.targetVehicleIds)
+        ? input.targetVehicleIds.slice()
+        : input.targetAssetId || input.targetVehicleId
+          ? [input.targetAssetId || input.targetVehicleId]
+          : [];
+      const targetPosition = input.targetPosition || input.targetPoint || null;
+      const lockUntil = Number.isFinite(input.lockUntil)
+        ? Number(input.lockUntil)
+        : issuedAtEpoch + this.commandLockSeconds(type) * 1000;
+      const commandId = input.id || input.commandId || `${this.game.onlineSession?.roomId || "local"}:${tick}:${++this.sequence}`;
 
       return {
-        id: input.id || `${this.game.onlineSession?.roomId || "local"}:${tick}:${++this.sequence}`,
-        roomId: this.game.onlineSession?.roomId || "local",
+        id: commandId,
+        roomId: input.roomId || this.game.onlineSession?.roomId || "local",
+        commandId,
         tick,
-        issuedAt: performance.now(),
+        issuedAt,
+        issuedAtEpoch,
+        lockUntil,
         issuerPlayerId,
+        playerId: issuerPlayerId,
         team: input.team || slot?.team || player.team || TEAM.BLUE,
-        slotId: input.slotId || slot?.id || player.slotId || "",
+        slotId: input.slotId || input.commanderSlotId || slot?.id || player.slotId || "",
+        commanderSlotId: input.commanderSlotId || input.slotId || slot?.id || player.slotId || "",
         slotRole: input.slotRole || slot?.role || player.role || "",
+        role: input.role || slot?.roleId || player.roleId || "",
+        controllerType: input.controllerType || slot?.controllerType || (slot?.playerId ? "human" : "bot"),
+        commandSource: input.commandSource || "",
+        commandReason: input.commandReason || input.reason || type,
         authority: input.authority || "owned_squad",
         type,
-        targetSquadIds: Array.isArray(input.targetSquadIds) ? input.targetSquadIds.slice() : [],
-        targetVehicleIds: Array.isArray(input.targetVehicleIds) ? input.targetVehicleIds.slice() : [],
-        targetPoint: input.targetPoint ? { x: input.targetPoint.x, y: input.targetPoint.y } : null,
+        commandType: type,
+        targetSquadId: targetSquadIds[0] || "",
+        targetAssetId: targetVehicleIds[0] || "",
+        targetSquadIds,
+        targetVehicleIds,
+        targetPoint: targetPosition ? { x: targetPosition.x, y: targetPosition.y } : null,
+        targetPosition: targetPosition ? { x: targetPosition.x, y: targetPosition.y } : null,
         followPlayer: Boolean(input.followPlayer),
         objectiveName: input.objectiveName || "",
+        reason: input.reason || type,
         stance: input.stance || this.defaultStance(type),
         priority: Number.isFinite(input.priority) ? input.priority : 0,
-        ttl: Number.isFinite(input.ttl) ? input.ttl : 60
+        ttl: Number.isFinite(input.ttl) ? input.ttl : 60,
+        skipCooldown: Boolean(input.skipCooldown),
+        trustedRemote: Boolean(input.trustedRemote)
       };
     }
 
@@ -87,6 +138,8 @@
 
     allowedTypesForRole(roleId = "") {
       const base = new Set(["move", "attack", "defend", "rally", "cancel"]);
+      const special = ROLE_TYPES[roleId];
+      if (special) base.add(special);
       return base;
     }
 
@@ -110,9 +163,15 @@
     }
 
     commandPermission(packet, slot) {
-      const authority = this.game.commandAuthorityForSlot?.(slot, packet.issuerPlayerId);
-      if (authority && !authority.allowed) {
-        return { allowed: false, reason: authority.reason || "command-authority-required" };
+      if (packet.controllerType === "bot" || packet.authority === "bot_squad") {
+        const expectedBotId = this.game.botCommanderIdForSlot?.(slot) || `bot:${slot?.id || ""}`;
+        const isSlotBot = Boolean(slot && !slot.playerId && slot.controllerType === "bot" && packet.issuerPlayerId === expectedBotId);
+        if (!isSlotBot) return { allowed: false, reason: "bot-slot-required" };
+      } else {
+        const authority = this.game.commandAuthorityForSlot?.(slot, packet.issuerPlayerId);
+        if (authority && !authority.allowed) {
+          return { allowed: false, reason: authority.reason || "command-authority-required" };
+        }
       }
       if (!this.isTypeAllowedForSlot(slot, packet.type)) {
         return { allowed: false, reason: "role-command-restricted" };
@@ -125,6 +184,7 @@
 
     apply(packet) {
       if (!packet || !COMMAND_TYPES.has(packet.type)) return this.reject(packet, "unknown-command");
+      if (this.appliedCommandIds.has(packet.id)) return this.reject(packet, "duplicate-command");
       const slot = this.game.sessionSlotById?.(packet.slotId);
       if (!slot && packet.authority === "owned_squad") return this.reject(packet, "missing-slot");
       if (slot && slot.team !== packet.team) return this.reject(packet, "team-mismatch");
@@ -138,6 +198,7 @@
       if (packet.type === "cancel") {
         squads.forEach((squad) => this.clearSquadOrder(squad));
         vehicles.forEach((vehicle) => this.clearVehicleOrder(vehicle));
+        this.markCommandApplied(packet);
         return {
           accepted: true,
           packet,
@@ -147,9 +208,11 @@
         };
       }
 
-      const cooldown = this.cooldownStatus(packet, slot);
-      if (cooldown.remaining > 0) {
-        return this.reject(packet, "cooldown", { cooldownRemaining: cooldown.remaining });
+      if (!packet.skipCooldown) {
+        const cooldown = this.cooldownStatus(packet, slot);
+        if (cooldown.remaining > 0) {
+          return this.reject(packet, "cooldown", { cooldownRemaining: cooldown.remaining });
+        }
       }
 
       const point = this.resolvePoint(packet);
@@ -158,8 +221,9 @@
 
       squads.forEach((squad, index) => this.applySquadOrder(packet, squad, commandPoint, index, squads.length));
       vehicles.forEach((vehicle, index) => this.applyVehicleOrder(packet, vehicle, commandPoint, index, vehicles.length));
-      this.setCooldown(packet, slot);
+      if (!packet.skipCooldown) this.setCooldown(packet, slot);
       this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
+      this.markCommandApplied(packet);
 
       return {
         accepted: true,
@@ -176,7 +240,7 @@
     resolveSquads(packet, slot) {
       const allowedIds = new Set(slot?.squadIds || []);
       const ids = packet.targetSquadIds.length
-        ? packet.targetSquadIds.filter((id) => allowedIds.has(id))
+        ? packet.targetSquadIds.filter((id) => allowedIds.has(id) || packet.trustedRemote)
         : slot?.squadIds || [];
       return ids
         .map((id) => this.game.squadById?.(id))
@@ -187,7 +251,7 @@
       if (!this.canCommandVehicles(slot)) return [];
       const allowedIds = new Set(slot?.vehicleIds || []);
       const ids = packet.targetVehicleIds.length
-        ? packet.targetVehicleIds.filter((id) => allowedIds.has(id))
+        ? packet.targetVehicleIds.filter((id) => allowedIds.has(id) || packet.trustedRemote)
         : slot?.vehicleIds || [];
       return ids
         .map((id) => this.game.vehicleById?.(id))
@@ -264,6 +328,7 @@
 
     applySquadOrder(packet, squad, point, index, count) {
       const repairTarget = packet.type === "repair" ? this.repairTargetFor(packet, point) : null;
+      const commandSource = packet.commandSource || (packet.controllerType === "bot" ? "bot" : "player");
       const order = {
         id: packet.id,
         point,
@@ -286,10 +351,10 @@
         issuerPlayerId: packet.issuerPlayerId,
         commanderSlotId: packet.slotId,
         commandState: this.commandStateForType(packet.type),
-        commandSource: "player",
-        commandReason: packet.type,
+        commandSource,
+        commandReason: packet.commandReason || packet.reason || packet.type,
         commandLockSeconds: this.commandLockSeconds(packet.type),
-        playerIssued: true
+        playerIssued: commandSource === "player"
       };
       squad.manualOrder = {
         packetId: packet.id,
@@ -306,6 +371,7 @@
     applyVehicleOrder(packet, vehicle, point, index, count) {
       const commander = this.game.commanders?.[packet.team];
       if (!commander) return;
+      const commandSource = packet.commandSource || (packet.controllerType === "bot" ? "bot" : "player");
       const order = {
         id: `${packet.id}:${vehicle.callSign}`,
         point,
@@ -331,10 +397,12 @@
         issuerPlayerId: packet.issuerPlayerId,
         commanderSlotId: packet.slotId,
         commandState: this.commandStateForType(packet.type),
-        commandSource: "player",
-        commandReason: packet.type,
+        commandSource,
+        commandReason: packet.commandReason || packet.reason || packet.type,
         commandLockSeconds: this.commandLockSeconds(packet.type),
-        playerIssued: true
+        commandLockUntil: packet.issuedAt + this.commandLockSeconds(packet.type) * 1000,
+        lastCommandChangedAt: packet.issuedAt,
+        playerIssued: commandSource === "player"
       };
       vehicle.manualOrder = {
         packetId: packet.id,
@@ -342,6 +410,7 @@
         slotId: packet.slotId,
         type: packet.type,
         commandState: order.commandState,
+        commandLockUntil: order.commandLockUntil,
         issuedAt: packet.issuedAt,
         expiresAt: Infinity
       };
@@ -349,6 +418,7 @@
     }
 
     commandStateForType(type) {
+      if (type === "cancel") return "cancel";
       if (type === "defend" || type === "rally") return "hold";
       if (type === "assault" || type === "attack") return "assault";
       if (type === "repair") return "repair";
@@ -413,7 +483,8 @@
     clearSquadOrder(squad) {
       if (!squad) return;
       squad.manualOrder = null;
-      if (squad.order?.playerIssued) squad.order = null;
+      if (squad.assignOrder) squad.assignOrder(null);
+      else if (squad.order?.playerIssued) squad.order = null;
     }
 
     clearVehicleOrder(vehicle) {
@@ -455,6 +526,16 @@
       const duration = this.cooldownDuration(packet.type);
       if (duration <= 0) return;
       this.cooldowns.set(this.cooldownKey(packet, slot), performance.now() + duration * 1000);
+    }
+
+    markCommandApplied(packet) {
+      if (!packet?.id || this.appliedCommandIds.has(packet.id)) return;
+      this.appliedCommandIds.add(packet.id);
+      this.appliedCommandIdQueue.push(packet.id);
+      while (this.appliedCommandIdQueue.length > 400) {
+        const oldest = this.appliedCommandIdQueue.shift();
+        if (oldest) this.appliedCommandIds.delete(oldest);
+      }
     }
 
     addRolePing(packet, point, assetCount) {

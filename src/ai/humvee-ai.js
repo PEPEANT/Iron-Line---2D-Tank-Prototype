@@ -52,6 +52,8 @@
       this.trafficHoldAge = 0;
       this.trafficBypassTimer = 0;
       this.trafficBypassTarget = "";
+      this.suspicionPoint = null;
+      this.suspicionTimer = 0;
       this.debug = {
         state: this.state,
         goal: "",
@@ -72,6 +74,8 @@
 
       this.strafeTimer -= dt;
       this.transportPickupCooldown = Math.max(0, this.transportPickupCooldown - dt);
+      this.suspicionTimer = Math.max(0, (this.suspicionTimer || 0) - dt);
+      if (this.suspicionTimer <= 0) this.suspicionPoint = null;
       if (this.strafeTimer <= 0) {
         this.strafeSide *= -1;
         this.strafeTimer = 1.4 + Math.random() * 2.2;
@@ -91,12 +95,23 @@
         this.target = target;
         this.aimAndFire(target, dt);
       } else {
+        const suspicion = this.activeSuspicionPoint();
         this.target = null;
-        this.vehicle.machineGunAngle = rotateTowards(
-          this.vehicle.machineGunAngle,
-          this.vehicle.angle,
-          this.vehicle.machineGunTurnRate * 0.45 * dt
-        );
+        if (suspicion) {
+          this.state = "search";
+          const angle = angleTo(this.vehicle.x, this.vehicle.y, suspicion.x, suspicion.y);
+          this.vehicle.machineGunAngle = rotateTowards(
+            this.vehicle.machineGunAngle,
+            angle,
+            this.vehicle.machineGunTurnRate * (suspicion.sourceType === "hit_reaction" ? 0.72 : 0.52) * dt
+          );
+        } else {
+          this.vehicle.machineGunAngle = rotateTowards(
+            this.vehicle.machineGunAngle,
+            this.vehicle.angle,
+            this.vehicle.machineGunTurnRate * 0.45 * dt
+          );
+        }
       }
 
       if ((this.vehicle.repairHoldTimer || 0) > 0) {
@@ -126,7 +141,7 @@
         moveTarget = target;
         this.orbitTarget(dt, target);
       } else {
-        if (!target) this.state = this.stateForOrder(order);
+        if (!target && !this.activeSuspicionPoint()) this.state = this.stateForOrder(order);
         moveTarget = this.navigation.update(dt, order);
         if (moveTarget) this.driveTo(dt, moveTarget.x, moveTarget.y, moveTarget.stopDistance ?? 86);
         else this.applyDrive(dt, 0, 0);
@@ -135,6 +150,24 @@
       const tryingToMove = moveTarget && distXY(this.vehicle.x, this.vehicle.y, moveTarget.x, moveTarget.y) > 90;
       this.navigation.recordMovement(dt, beforeX, beforeY, tryingToMove);
       this.updateDebug(moveTarget, order);
+    }
+
+    registerSuspicion(point, options = {}) {
+      if (!point || point.team === this.vehicle.team) return false;
+      const distance = distXY(this.vehicle.x, this.vehicle.y, point.x, point.y);
+      if (distance > (options.hit ? 1180 : 920)) return false;
+      this.suspicionPoint = {
+        x: point.x,
+        y: point.y,
+        target: point.target || point.owner || null,
+        sourceType: options.sourceType || point.sourceType || (options.hit ? "hit_reaction" : "gunfire_suspicion")
+      };
+      this.suspicionTimer = Math.max(this.suspicionTimer || 0, options.hit ? 2.1 : 1.35);
+      return true;
+    }
+
+    activeSuspicionPoint() {
+      return this.suspicionTimer > 0 ? this.suspicionPoint : null;
     }
 
     resolveOrder() {
@@ -225,6 +258,7 @@
         const distance = distXY(muzzle.x, muzzle.y, target.x, target.y);
         if (distance > weapon.range) return;
         if (!hasLineOfSight(this.game, muzzle, target, { padding: 4 })) return;
+        if (!this.isReportedEnemy(target) && !this.hasFacingAwareness(target, distance)) return;
         const threatBonus =
           target.classId === "engineer" || target.weaponId === "rpg" ? 210 :
           target.weaponId === "machinegun" || target.weaponId === "lmg" ? 120 :
@@ -250,6 +284,21 @@
       }
 
       return candidates.sort((a, b) => a.score - b.score)[0]?.target || null;
+    }
+
+    isReportedEnemy(target) {
+      return this.game.isReportedEnemy?.(this.vehicle.team, target) || false;
+    }
+
+    hasFacingAwareness(target, distance = null) {
+      if (!target) return false;
+      const targetDistance = distance ?? distXY(this.vehicle.x, this.vehicle.y, target.x, target.y);
+      const targetAngle = angleTo(this.vehicle.x, this.vehicle.y, target.x, target.y);
+      const gunDiff = Math.abs(normalizeAngle(targetAngle - (this.vehicle.machineGunAngle ?? this.vehicle.angle)));
+      const hullDiff = Math.abs(normalizeAngle(targetAngle - this.vehicle.angle));
+      if (gunDiff <= 1.18) return true;
+      if (targetDistance <= 380 && hullDiff <= 1.2) return true;
+      return targetDistance <= 170 && gunDiff <= 1.62;
     }
 
     handleTransportOrder(dt, order, target) {

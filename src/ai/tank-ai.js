@@ -52,6 +52,8 @@
       this.trafficHoldAge = 0;
       this.trafficBypassTimer = 0;
       this.trafficBypassTarget = "";
+      this.suspicionPoint = null;
+      this.suspicionTimer = 0;
       this.debug = {
         state: this.state,
         goal: "",
@@ -71,6 +73,8 @@
       const beforeY = this.tank.y;
 
       this.strafeTimer -= dt;
+      this.suspicionTimer = Math.max(0, (this.suspicionTimer || 0) - dt);
+      if (this.suspicionTimer <= 0) this.suspicionPoint = null;
       if (this.strafeTimer <= 0) {
         this.strafe *= -1;
         this.strafeTimer = 1.4 + Math.random() * 2.2;
@@ -103,8 +107,10 @@
         this.state = "engage";
         moveTarget = this.handleEngagement(dt, decision, order);
       } else {
-        this.state = order?.role === "support" ? "overwatch" : order?.role === "hold" ? "hold" : "capture";
+        const suspicion = this.activeSuspicionPoint();
+        this.state = suspicion ? "search" : order?.role === "support" ? "overwatch" : order?.role === "hold" ? "hold" : "capture";
         moveTarget = this.handleObjective(dt, order);
+        if (suspicion) this.aimTurretAtPoint(suspicion, dt, suspicion.sourceType === "hit_reaction" ? 0.62 : 0.44);
       }
 
       const stillHasMoveTarget = moveTarget && distXY(
@@ -116,6 +122,24 @@
       this.updateMachineGun(dt);
       this.navigation.recordMovement(dt, beforeX, beforeY, stillHasMoveTarget);
       this.updateDebugState(order, decision, moveTarget);
+    }
+
+    registerSuspicion(point, options = {}) {
+      if (!point || point.team === this.tank.team) return false;
+      const distance = distXY(this.tank.x, this.tank.y, point.x, point.y);
+      if (distance > (options.hit ? 1500 : 1120)) return false;
+      this.suspicionPoint = {
+        x: point.x,
+        y: point.y,
+        target: point.target || point.owner || null,
+        sourceType: options.sourceType || point.sourceType || (options.hit ? "hit_reaction" : "gunfire_suspicion")
+      };
+      this.suspicionTimer = Math.max(this.suspicionTimer || 0, options.hit ? 2.6 : 1.55);
+      return true;
+    }
+
+    activeSuspicionPoint() {
+      return this.suspicionTimer > 0 ? this.suspicionPoint : null;
     }
 
     handleInfantryAssaultThreat(dt, beforeX, beforeY) {

@@ -123,6 +123,8 @@
           label: slot.label,
           playerId: slot.playerId || "",
           aiControlled: Boolean(slot.aiControlled),
+          controllerType: slot.controllerType || (slot.playerId ? "human" : "bot"),
+          botCommanderState: slot.botCommanderState || null,
           squadIds: (slot.squadIds || []).slice(),
           vehicleIds: (slot.vehicleIds || []).slice()
         })),
@@ -142,18 +144,28 @@
         squads: (game.squads || []).map((squad) => this.squadSnapshot(squad)).filter(Boolean),
         vehicles: [...(game.tanks || []), ...(game.humvees || [])]
           .filter((vehicle) => vehicle.alive)
-          .map((vehicle) => ({
-            id: vehicle.callSign,
-            team: vehicle.team,
-            x: vehicle.x,
-            y: vehicle.y,
-            hp: vehicle.hp,
-            maxHp: vehicle.maxHp,
-            type: vehicle.vehicleType || "tank",
-            state: vehicle.ai?.debug?.state || vehicle.ai?.state || "",
-            target: vehicle.ai?.debug?.target?.callSign || vehicle.ai?.target?.callSign || vehicle.ai?.targetTank?.callSign || "",
-            passengers: vehicle.passengerCount?.() || 0
-          })),
+          .map((vehicle) => {
+            const commandOrder = game.commanders?.[vehicle.team]?.assignments?.get(vehicle) || vehicle.ai?.currentOrder || null;
+            const commandLockUntil = commandOrder?.commandLockUntil || vehicle.manualOrder?.commandLockUntil || 0;
+            const commandLockRemaining = commandLockUntil > 0 ? Math.max(0, (commandLockUntil - performance.now()) / 1000) : 0;
+            return {
+              id: vehicle.callSign,
+              team: vehicle.team,
+              x: vehicle.x,
+              y: vehicle.y,
+              hp: vehicle.hp,
+              maxHp: vehicle.maxHp,
+              type: vehicle.vehicleType || "tank",
+              state: vehicle.ai?.debug?.state || vehicle.ai?.state || "",
+              commandState: commandOrder?.commandState || vehicle.manualOrder?.commandState || "",
+              commandSource: commandOrder?.commandSource || "",
+              commandReason: commandOrder?.commandReason || vehicle.manualOrder?.type || "",
+              commandLockRemaining,
+              commanderSlotId: commandOrder?.commanderSlotId || vehicle.manualOrder?.slotId || "",
+              target: vehicle.ai?.debug?.target?.callSign || vehicle.ai?.target?.callSign || vehicle.ai?.targetTank?.callSign || "",
+              passengers: vehicle.passengerCount?.() || 0
+            };
+          }),
         ai: game.aiObservatory?.latest?.() || null,
         commands: (game.commandBus?.log || []).slice(-12).map((entry) => ({
           accepted: Boolean(entry.accepted),

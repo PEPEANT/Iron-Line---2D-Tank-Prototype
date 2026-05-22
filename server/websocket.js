@@ -84,8 +84,11 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
       roomId: client.roomId,
       issuerPlayerId: client.playerId
     });
-    registry.pushCommand(client.roomId, packet);
-    return send(ws, "command_ack", { ok: true, packet });
+    const result = registry.pushCommand(client.roomId, packet);
+    if (!result?.ok) return send(ws, "command_ack", { ok: false, reason: result?.reason || "command_rejected" });
+    send(ws, "command_ack", { ok: true, packet: result.packet });
+    broadcastRoom(clients, client.roomId, "command_broadcast", { packet: result.packet });
+    return;
   }
 
   if (message.type === "chat") {
