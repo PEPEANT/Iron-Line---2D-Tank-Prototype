@@ -1038,7 +1038,7 @@
             id: squad.callSign,
             team: squad.team,
             alive: `${active}/${total}`,
-            mode: squad.tacticalMode || "-",
+            mode: `${squad.tacticalMode || "-"}${squad.commandState ? `/${squad.commandState}` : ""}`,
             order
           };
         });

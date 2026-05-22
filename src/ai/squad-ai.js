@@ -27,10 +27,20 @@
       this.commandTransferReason = "";
       this.currentLeaderCallSign = "";
       this.reportedLeaderLosses = new Set();
+      this.commandState = "idle";
+      this.commandSource = "bot";
+      this.commandReason = "";
+      this.commandIntentKey = "";
+      this.commandLockUntil = 0;
+      this.commandLockStartedAt = 0;
+      this.lastCommandChangedAt = 0;
+      this.commanderSlotId = "";
+      this.squadLeaderId = "";
 
       for (const unit of options.units || []) this.addUnit(unit);
       this.rebuildRoles();
       this.currentLeaderCallSign = this.leaderUnit()?.callSign || "";
+      this.squadLeaderId = this.currentLeaderCallSign;
     }
 
     addUnit(unit) {
@@ -54,7 +64,8 @@
       this.updateTactics(false, dt);
       const alive = this.activeUnits().length;
       const request = this.supportRequest ? ` ${this.supportRequest.type}` : "";
-      this.summary = `${this.callSign}:${this.order?.objectiveName || "-"} ${this.tacticalMode} ${alive}/${this.units.length}${request}`;
+      const command = this.commandState && this.commandState !== "idle" ? ` ${this.commandState}` : "";
+      this.summary = `${this.callSign}:${this.order?.objectiveName || "-"} ${this.tacticalMode}${command} ${alive}/${this.units.length}${request}`;
     }
 
     trackLeaderLoss(previousLeader) {
@@ -83,8 +94,87 @@
         this.rallyWithTankCooldown = 0;
       }
       this.order = order;
+      this.applyCommandIntent(order);
       this.rebuildRoles();
       this.updateTactics(true);
+    }
+
+    applyCommandIntent(order) {
+      const now = performance.now();
+      const leader = this.leaderUnit();
+      this.squadLeaderId = leader?.callSign || "";
+      this.commanderSlotId = order?.commanderSlotId || order?.slotId || this.ownerSlotId || "";
+      if (!order?.point) {
+        this.commandState = "idle";
+        this.commandSource = "bot";
+        this.commandReason = "";
+        this.commandIntentKey = "";
+        this.commandLockUntil = 0;
+        return;
+      }
+
+      const state = this.commandStateForOrder(order);
+      const source = order.commandSource || (order.playerIssued ? "player" : "bot");
+      const reason = order.commandReason || order.commandType || order.role || "objective";
+      const key = this.commandIntentKeyFor(order, state);
+      if (key !== this.commandIntentKey || source !== this.commandSource) {
+        const lockSeconds = Number.isFinite(order.commandLockSeconds)
+          ? order.commandLockSeconds
+          : this.commandLockSecondsForOrder(order, source, state);
+        this.commandIntentKey = key;
+        this.commandState = state;
+        this.commandSource = source;
+        this.commandReason = reason;
+        this.commandLockStartedAt = now;
+        this.commandLockUntil = now + Math.max(0.8, Math.min(3.2, lockSeconds)) * 1000;
+        this.lastCommandChangedAt = now;
+      }
+
+      order.commandState = this.commandState;
+      order.commandSource = this.commandSource;
+      order.commandReason = this.commandReason;
+      order.commandLockUntil = this.commandLockUntil;
+      order.lastCommandChangedAt = this.lastCommandChangedAt;
+      order.squadLeaderId = this.squadLeaderId;
+      order.commanderSlotId = this.commanderSlotId;
+    }
+
+    commandIntentKeyFor(order, state) {
+      return [
+        order.id || "",
+        state || "",
+        order.commandType || order.role || "",
+        order.objectiveName || order.point?.name || "",
+        Math.round(order.point?.x || 0),
+        Math.round(order.point?.y || 0)
+      ].join(":");
+    }
+
+    commandStateForOrder(order) {
+      if (order.commandState) return order.commandState;
+      if (order.commandType === "repair" || order.role === "repair") return "repair";
+      if (order.commandType === "scan" || order.role === "recon") return "scout";
+      if (order.commandType === "fire_support" || order.role === "support") return "cover";
+      if (order.commandType === "assault" || order.commandType === "attack" || order.stance === "assault") return "assault";
+      if (order.commandType === "defend" || order.commandType === "rally" || order.role === "hold" || order.stance === "hold") return "hold";
+      if (order.commandType === "retreat" || order.stance === "fallback") return "fallback";
+      if (order.pairedTankId || order.pairedSquadId) return "escort";
+      return "advance";
+    }
+
+    commandLockSecondsForOrder(order, source, state = "") {
+      const base = source === "player" ? 2.1 : 1.35;
+      const stateBonus = state === "assault" ? 0.45 : state === "repair" || state === "scout" ? 0.25 : 0;
+      const jitter = (this.callSign.length % 5) * 0.12;
+      return base + stateBonus + jitter;
+    }
+
+    commandLockActive(now = performance.now()) {
+      return this.commandLockUntil > now;
+    }
+
+    commandLockRemaining(now = performance.now()) {
+      return Math.max(0, (this.commandLockUntil - now) / 1000);
     }
 
     getOrderFor(unit) {
@@ -112,6 +202,14 @@
         supportRequest: this.supportRequest,
         transport: this.transportForUnit(unit),
         squadStatus: this.status,
+        commandState: this.commandState,
+        commandSource: this.commandSource,
+        commandReason: this.commandReason,
+        commandLockUntil: this.commandLockUntil,
+        commandLockRemaining: this.commandLockRemaining(),
+        lastCommandChangedAt: this.lastCommandChangedAt,
+        squadLeaderId: this.squadLeaderId,
+        commanderSlotId: this.commanderSlotId || this.ownerSlotId || "",
         squadSlotIndex: this.order.slotIndex || 0,
         squadSlotCount: Math.max(1, this.order.slotCount || 1),
         squadUnitCount: active.length,
@@ -372,7 +470,8 @@
 
       const desired = this.chooseTacticalMode(this.status);
       const urgent = desired === "fallback" || this.tacticalMode === "fallback";
-      if (force || urgent || this.tacticalTimer <= 0) {
+      const commandLocked = this.commandLockActive() && !force && !urgent;
+      if (!commandLocked && (force || urgent || this.tacticalTimer <= 0)) {
         if (desired !== this.tacticalMode) {
           this.tacticalMode = desired;
           this.tacticalTimer = desired === "fallback"

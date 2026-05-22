@@ -284,6 +284,11 @@
         followPlayer: Boolean(packet.followPlayer),
         commandPacketId: packet.id,
         issuerPlayerId: packet.issuerPlayerId,
+        commanderSlotId: packet.slotId,
+        commandState: this.commandStateForType(packet.type),
+        commandSource: "player",
+        commandReason: packet.type,
+        commandLockSeconds: this.commandLockSeconds(packet.type),
         playerIssued: true
       };
       squad.manualOrder = {
@@ -291,6 +296,7 @@
         issuerPlayerId: packet.issuerPlayerId,
         slotId: packet.slotId,
         type: packet.type,
+        commandState: order.commandState,
         issuedAt: packet.issuedAt,
         expiresAt: Infinity
       };
@@ -323,6 +329,11 @@
         followPlayer: Boolean(packet.followPlayer),
         commandPacketId: packet.id,
         issuerPlayerId: packet.issuerPlayerId,
+        commanderSlotId: packet.slotId,
+        commandState: this.commandStateForType(packet.type),
+        commandSource: "player",
+        commandReason: packet.type,
+        commandLockSeconds: this.commandLockSeconds(packet.type),
         playerIssued: true
       };
       vehicle.manualOrder = {
@@ -330,10 +341,30 @@
         issuerPlayerId: packet.issuerPlayerId,
         slotId: packet.slotId,
         type: packet.type,
+        commandState: order.commandState,
         issuedAt: packet.issuedAt,
         expiresAt: Infinity
       };
       commander.assignments.set(vehicle, order);
+    }
+
+    commandStateForType(type) {
+      if (type === "defend" || type === "rally") return "hold";
+      if (type === "assault" || type === "attack") return "assault";
+      if (type === "repair") return "repair";
+      if (type === "scan") return "scout";
+      if (type === "fire_support") return "cover";
+      if (type === "retreat") return "fallback";
+      return "advance";
+    }
+
+    commandLockSeconds(type) {
+      if (type === "assault") return 2.8;
+      if (type === "attack" || type === "defend") return 2.2;
+      if (type === "repair" || type === "scan") return 2.4;
+      if (type === "fire_support") return 2.0;
+      if (type === "rally" || type === "retreat") return 1.8;
+      return 1.5;
     }
 
     squadOrderRole(type) {

@@ -326,6 +326,7 @@
             label: role.label,
             playerId: null,
             aiControlled: true,
+            controllerType: "bot",
             locked: false,
             squadIds: [],
             vehicleIds: [],
@@ -481,6 +482,7 @@
         if (slot.playerId === playerId) {
           slot.playerId = null;
           slot.aiControlled = true;
+          slot.controllerType = this.onlineSession.aiFillEmptySlots === false ? "empty" : "bot";
           slot.ready = false;
           this.clearSlotCommandAuthority(slot, playerId);
         }
@@ -488,6 +490,7 @@
 
       nextSlot.playerId = playerId;
       nextSlot.aiControlled = false;
+      nextSlot.controllerType = "human";
       nextSlot.ready = keepReady;
       player.slotId = nextSlot.id;
       player.roleId = nextSlot.roleId;
@@ -503,26 +506,22 @@
         this.player.factionId = factionId;
         this.player.skinId = factionId;
       }
-      const classId = this.sessionRoleClassId?.(nextSlot.roleId) || "infantry";
+      const currentClassId = playerId === this.onlineSession.playerId && this.player
+        ? (this.player.classId || player.currentClassId || player.classId || "infantry")
+        : (player.currentClassId || player.classId || "infantry");
       if (playerId === this.onlineSession.playerId && this.player) {
-        const changed = this.applyFullPlayerClassLoadout?.(classId, {
-          resetAmmo: true,
-          clearDrones: false
-        });
-        if (!changed) {
-          if (this.player.classId !== classId) this.player.setClass?.(classId);
-          this.applyPlayerLoadoutOverrides?.(this.player, { resetAmmo: false });
-          this.syncLocalCombatRoleState?.(this.player);
-        }
+        this.syncLocalCombatRoleState?.(this.player);
       } else {
-        const equipment = this.deploymentEquipmentForClass?.(classId) || [];
-        player.classId = classId;
-        player.currentClassId = classId;
-        player.combatRoleId = IronLine.playerLoadouts?.classRoleId?.(classId) || nextSlot.roleId || "infantry";
+        const equipment = Array.isArray(player.weaponInventory) && player.weaponInventory.length
+          ? player.weaponInventory.slice()
+          : (this.deploymentEquipmentForClass?.(currentClassId) || []);
+        player.classId = currentClassId;
+        player.currentClassId = currentClassId;
+        player.combatRoleId = player.combatRoleId || IronLine.playerLoadouts?.classRoleId?.(currentClassId) || "infantry";
         player.weaponInventory = equipment.slice();
-        player.weaponId = equipment[0] || player.weaponId || "machinegun";
-        player.equipmentAmmo = IronLine.playerLoadouts?.classAmmo?.(classId, equipment) || player.equipmentAmmo || {};
-        nextSlot.currentClassId = classId;
+        player.weaponId = player.weaponId || equipment[0] || "machinegun";
+        player.equipmentAmmo = player.equipmentAmmo || IronLine.playerLoadouts?.classAmmo?.(currentClassId, equipment) || {};
+        nextSlot.currentClassId = currentClassId;
         nextSlot.weaponId = player.weaponId;
         nextSlot.equipmentAmmo = { ...(player.equipmentAmmo || {}) };
       }
@@ -726,7 +725,14 @@
 
       assignTeam(TEAM.BLUE);
       assignTeam(TEAM.RED);
-      for (const slot of slots) slot.aiControlled = !slot.playerId;
+      for (const slot of slots) {
+        slot.aiControlled = !slot.playerId;
+        slot.controllerType = slot.playerId
+          ? "human"
+          : this.onlineSession?.aiFillEmptySlots === false
+            ? "empty"
+            : "bot";
+      }
       this.syncCommandAuthorityState();
     }
 

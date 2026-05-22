@@ -619,7 +619,10 @@
       const slot = game.sessionSlotById?.(localPlayer.slotId) ||
         session.roleSlots?.find((item) => item.id === localPlayer.slotId) ||
         null;
-      const classId = this.roleClassId(slot?.roleId || localPlayer.roleId || "infantry");
+      const classId = localPlayer.currentClassId ||
+        localPlayer.classId ||
+        game.player?.classId ||
+        this.roleClassId(slot?.roleId || localPlayer.roleId || "infantry");
       const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
       const equipment = game.deploymentEquipmentForClass?.(classId) ||
         (infantryClass?.equipment || []).slice();

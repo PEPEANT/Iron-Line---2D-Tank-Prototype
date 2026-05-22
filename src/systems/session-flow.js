@@ -506,6 +506,11 @@
         slot.nickname = player?.name || player?.nickname || "";
         slot.ready = Boolean(player?.ready);
         slot.aiControlled = !player;
+        slot.controllerType = player
+          ? "human"
+          : session.aiFillEmptySlots === false
+            ? "empty"
+            : "bot";
         if (player && !slot.commandAuthorityPlayerId) {
           game.setSlotCommandAuthority?.(slot, player.id, player.name || player.nickname || player.id, "owner");
         }

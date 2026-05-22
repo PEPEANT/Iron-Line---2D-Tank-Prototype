@@ -67,7 +67,7 @@
     fireFacingTolerance: 0.42,
     actionLockMin: 0.72,
     actionLockMax: 1.42,
-    squadOrderLockDuration: 1.45,
+    squadOrderLockDuration: 1.85,
     moveBurstMin: 1.25,
     moveBurstMax: 2.15,
     observePauseMin: 0.48,
@@ -328,20 +328,20 @@
 
       if (key !== this.squadOrderLockKey) {
         this.squadOrderLockKey = key;
-        this.squadOrderLockTimer = INFANTRY_CONFIG.squadOrderLockDuration + (this.seed % 4) * 0.08;
+        this.squadOrderLockTimer = Math.max(INFANTRY_CONFIG.squadOrderLockDuration + (this.seed % 4) * 0.08, Number(order.commandLockRemaining) || 0);
       }
 
-      if (contact || tankThreat || this.unit.suppression > 64) {
+      if (this.commandEmergencyOverride(contact, tankThreat)) {
         this.squadOrderLockTimer = Math.min(this.squadOrderLockTimer, 0.28);
       }
     }
 
     shouldPrioritizeSquadOrder(order, contact, tankThreat) {
       if (!order?.squadId || !order?.point) return false;
-      if (contact || tankThreat || this.unit.suppression >= 52) return false;
+      if (this.commandEmergencyOverride(contact, tankThreat)) return false;
       const mode = order.tacticalMode || order.role || "advance";
       const protectedMode = ["regroup", "fallback", "rally-with-tank", "pre-assault", "hold-wall", "support-fire"].includes(mode);
-      return protectedMode || this.squadOrderLockTimer > 0;
+      return protectedMode || this.squadOrderLockTimer > 0 || (Number(order.commandLockRemaining) || 0) > 0;
     }
 
     sightRange() {

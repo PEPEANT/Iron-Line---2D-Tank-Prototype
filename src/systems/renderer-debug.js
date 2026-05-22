@@ -148,6 +148,8 @@
       const tacticalTimer = debug.tacticalMode === "pre-assault" && debug.tacticalTimerRemaining > 0
         ? ` ${Math.ceil(debug.tacticalTimerRemaining)}s`
         : "";
+      const commandLock = debug.commandLockRemaining > 0 ? ` ${Math.ceil(debug.commandLockRemaining)}s` : "";
+      const command = debug.commandState ? ` #${debug.commandState}${commandLock}` : "";
       const prone = debug.isProne ? " 엎드림" : "";
       const request = debug.supportRequest ? ` !${debug.supportRequest}` : "";
       const transport = debug.transportVehicleId ? ` @${debug.transportVehicleId}` : "";
@@ -161,7 +163,7 @@
       const stateText = debug.grenadeWeaponId === "grenadeLauncher" && (debug.state === "grenade" || debug.state === "grenade-aim")
         ? (debug.state === "grenade" ? "유탄" : "유탄 조준")
         : stateLabels[debug.state] || debug.state || unit.ai.state;
-      const label = `${squad}${unit.callSign} ${weapon.shortName}${role}${tactical}${tacticalTimer}${prone} ${stateText}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${grenades}${grenadeLaunchers}${drones}${repairs}${request}${transport}`;
+      const label = `${squad}${unit.callSign} ${weapon.shortName}${role}${tactical}${tacticalTimer}${command}${prone} ${stateText}${debug.goal ? `>${debug.goal}` : ""}${pressure}${coverQuality}${reports}${grenades}${grenadeLaunchers}${drones}${repairs}${request}${transport}`;
       const labelWidth = Math.max(72, label.length * 7.2);
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(9, 15, 13, 0.78)";

@@ -49,6 +49,13 @@
       this.debug.actionLockTimer = this.actionLockTimer || 0;
       this.debug.squadOrderLockTimer = this.squadOrderLockTimer || 0;
       this.debug.movementTempoPaused = Boolean(this.movementTempoPaused);
+      this.debug.commandState = this.order?.commandState || this.unit.squad?.commandState || "";
+      this.debug.commandSource = this.order?.commandSource || this.unit.squad?.commandSource || "";
+      this.debug.commandReason = this.order?.commandReason || this.unit.squad?.commandReason || "";
+      this.debug.commandLockRemaining = this.order?.commandLockRemaining || this.unit.squad?.commandLockRemaining?.() || 0;
+      this.debug.lastCommandChangedAt = this.order?.lastCommandChangedAt || this.unit.squad?.lastCommandChangedAt || 0;
+      this.debug.squadLeaderId = this.order?.squadLeaderId || this.unit.squad?.squadLeaderId || "";
+      this.debug.commanderSlotId = this.order?.commanderSlotId || this.unit.squad?.commanderSlotId || this.unit.squad?.ownerSlotId || "";
     },
 
     activeTransportDebug() {

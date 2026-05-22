@@ -278,7 +278,12 @@
       });
       if (this.nodes.commandPanel) this.nodes.commandPanel.dataset.channel = this.channel;
       const label = this.nodes.commandPanel?.querySelector?.(".command-radio-brand b");
-      if (label) label.textContent = `${this.channel === "armor" ? "기갑" : "보병"} 채널`;
+      if (label) {
+        const channelLabel = this.channel === "armor"
+          ? this.channelLabel?.("armor") || "기갑"
+          : this.roleAssetLabel?.(slot?.roleId || "infantry") || this.channelLabel?.("infantry") || "보병";
+        label.textContent = `${channelLabel} 채널`;
+      }
     }
 
     syncSelection(slot) {

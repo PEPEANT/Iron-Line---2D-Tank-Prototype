@@ -205,6 +205,11 @@
         alive: activeUnits.length,
         total,
         mode: squad.tacticalMode || "",
+        commandState: squad.commandState || "",
+        commandSource: squad.commandSource || "",
+        commandLockRemaining: squad.commandLockRemaining?.() || 0,
+        squadLeaderId: squad.squadLeaderId || squad.leaderUnit?.()?.callSign || "",
+        commanderSlotId: squad.commanderSlotId || squad.ownerSlotId || "",
         objective: squad.order?.objectiveName || squad.order?.point?.name || "",
         target: squad.status?.lastThreat?.callSign || squad.status?.armorThreat?.vehicle?.callSign || "",
         order: squad.manualOrder
