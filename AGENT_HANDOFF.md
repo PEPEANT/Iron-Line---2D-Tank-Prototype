@@ -2,13 +2,39 @@
 
 Use this file for the next agent when the current thread is not available.
 
+## Common Stage Gate
+
+Before moving to the next stage, verify:
+
+- The core feature works in live/manual play.
+- State/logs explain why the behavior happens.
+- Directly related bugs were fixed or recorded as blockers.
+- The work did not drift into unrelated new features.
+- Manual test notes or smoke test results were recorded.
+
+If any item is broken, do not move to the next stage.
+
+Important: a stage is not complete just because code was written. A stage is complete only after implementation, directly related bug verification, and minimum test notes are done.
+
+## In-Progress Self Check
+
+During a task, if behavior is unclear or implementation is ambiguous, stop and verify before continuing.
+
+Check:
+
+- Is this change directly related to the current stage goal?
+- Is it preserving existing behavior?
+- Can the behavior be confirmed through logs, state, debug output, or observatory data?
+- Can it be checked through live play or a minimal smoke test?
+- If uncertainty remains, record it as a blocker or open question instead of silently moving on.
+
 ## Current Focus
 
 Current handoff date: 2026-05-22 KST.
 
-The next target is: **role command QA + play verification scenarios, first pass**.
+The next target is: **offline command stability gate**.
 
-This is not a new-feature pass. The immediate goal is to prove that the current `CommanderSlot -> SquadLeader -> Unit` structure works in live play, and to fix only directly related breakage.
+This is not a new-feature pass. The immediate goal is to prove locally/offline that the current `CommanderSlot -> SquadLeader -> Unit` structure works in live play, and to fix only directly related breakage before online command synchronization.
 
 Do not start AI V2, UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, or broad online redesign work from this handoff.
 
@@ -45,11 +71,23 @@ AI should not become "smarter" in this pass. It should become easier to command:
 - When AI is stopped, expose the state so it does not look bugged: waiting, regrouping, covering, vehicle waiting, scouting, repairing.
 - This pass is about humans owning and commanding AI assets, not advanced AI learning.
 
-## Current QA Target
+## Near-Term Development Order
 
-Next work item: **role command QA + play verification scenarios, first pass**.
+0. Common Stage Gate and In-Progress Self Check are fixed in this file.
+1. Finish the current command-structure work.
+2. Offline command stability gate.
+3. Online command synchronization first pass.
+4. Online commander-order stability gate.
+5. Human FPS combat loop first pass.
+6. FPS + command integration QA.
 
-Goal: verify in actual play that the current `CommanderSlot -> SquadLeader -> Unit` structure is respected. If a directly required role-command path is missing or broken, treat that as a bug in the current pass and fix it narrowly. Do not use QA as a reason to add unrelated systems.
+## Current Work Target
+
+Next work item: **offline command stability gate**.
+
+Goal: before online command synchronization, verify in local/offline play that role-specific commander orders are stable and that the current `CommanderSlot -> SquadLeader -> Unit` structure is respected. If a directly required role-command path is missing or broken, treat that as a bug in the current pass and fix it narrowly. Do not use this gate as a reason to add unrelated systems.
+
+Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
 Verify role asset ownership:
 
@@ -84,11 +122,14 @@ Verify stopped-state clarity:
 
 Verify directly related vehicle issues:
 
+- Vehicle overlap.
 - Spawn overlap.
 - Friendly front-vehicle collision.
 - Narrow-passage clogging.
 - Stuck state.
 - Vehicles pushing infantry.
+- Squad scattering after command.
+- Permanent stopped state after command.
 
 Record test scenes:
 
@@ -97,27 +138,26 @@ Record test scenes:
 - At least one recon command scene.
 - At least one armor command scene.
 
-This stage is complete only when the play verification notes say what passed, what failed, and which directly related bugs were fixed or left as blockers.
+If a required local/offline command check is broken, do not start online command synchronization.
 
-## Next Sequence After Role Commands
+## Next Sequence After Offline Gate
 
-After this QA pass, add one intermediate gate before online command synchronization: **offline command stability gate**.
+After this offline gate passes, the next stage is **online command synchronization, first pass**.
 
 Do not move to online command sync if role ownership, command state, command lock, debug/observatory visibility, or basic local vehicle/spawn behavior is still broken.
 
 Current sequence:
 
-1. Role-specific command system first pass.
-2. Role command QA + play verification scenarios.
-3. Offline command stability gate.
-4. Online command synchronization.
-5. Online commander-order stability gate.
-6. Human FPS combat loop first pass.
-7. FPS + command integration QA.
-8. Empty-slot `BotCommander` skeleton only, not full bot commander behavior.
-9. AI V2 tactical map / cover nodes / vehicle traffic.
-10. AI count scaling.
-11. 50vs50 event mode.
+1. Current command-structure work completion.
+2. Offline command stability gate.
+3. Online command synchronization.
+4. Online commander-order stability gate.
+5. Human FPS combat loop first pass.
+6. FPS + command integration QA.
+7. Empty-slot `BotCommander` skeleton only, not full bot commander behavior.
+8. AI V2 tactical map / cover nodes / vehicle traffic.
+9. AI count scaling.
+10. 50vs50 event mode.
 
 ## Offline Command Stability Gate
 
@@ -171,7 +211,7 @@ Not allowed in this gate:
 - City/open-world work.
 - Server-authority combat redesign.
 
-Gate exit: leave manual notes, smoke output, screenshots, or debug snapshots that show what passed and what remains blocked. If a local/offline command bug remains, do not start online command synchronization yet.
+Apply the Common Stage Gate and In-Progress Self Check. Leave manual notes, smoke output, screenshots, or debug snapshots that show what passed and what remains blocked.
 
 ## Online Command Sync 1st Pass
 
@@ -197,9 +237,10 @@ Implementation / verification targets:
   - `lockUntil`
   - `reason`
 - Verify role permissions:
+  - Each player can command only assets owned by their commander slot / role authority.
   - Infantry players cannot command armor vehicles.
   - Armor players cannot command infantry squads unless the existing role/authority model explicitly allows it.
-  - Each player can command only assets owned by their commander slot / role authority.
+  - Invalid `targetSquadId` / `targetAssetId` is rejected.
 - Broadcast accepted commands to the room:
   - Other clients see the same radio log.
   - AI/asset command status is represented consistently.
@@ -207,6 +248,7 @@ Implementation / verification targets:
 - Handle duplicate and delayed commands:
   - Do not apply the same `commandId` twice.
   - Ignore or supersede stale commands based on command age / latest command state.
+  - Cancel / expiry behavior works without stale commands reappearing.
 - Keep the world-host model:
   - AI simulation remains host/world-host based for now.
   - Do not redesign full server authority in this pass.
@@ -281,7 +323,7 @@ Not allowed in this gate:
 - City/open-world work.
 - Full server-authority combat redesign.
 
-Gate exit: do not start the human FPS combat loop pass until online human commander orders are verified as permission-checked, broadcast, deduplicated, and visible in all clients. Empty-slot `BotCommander` skeleton remains blocked until after the human FPS combat loop and FPS + command integration QA.
+Apply the Common Stage Gate and In-Progress Self Check. Do not start the human FPS combat loop pass until online human commander orders are verified as permission-checked, broadcast, deduplicated, and visible in all clients. Empty-slot `BotCommander` skeleton remains blocked until after the human FPS combat loop and FPS + command integration QA.
 
 ## Human FPS Combat Loop 1st Pass
 
@@ -320,7 +362,7 @@ Implementation / verification targets:
   - Stabilize position / shooting / hit event flow first.
   - Do not start a full server-authority combat rewrite in this pass.
 
-Gate exit: leave manual notes or smoke output proving the player can fight, receive feedback, die/respawn or exit the round correctly, and issue at least one quick command without the command UI breaking FPS controls.
+Apply the Common Stage Gate and In-Progress Self Check. Leave manual notes or smoke output proving the player can fight, receive feedback, die/respawn or exit the round correctly, and issue at least one quick command without the command UI breaking FPS controls.
 
 The next stabilization direction after QA remains useful, but only after the current command structure is proven:
 
@@ -350,19 +392,9 @@ Implementation direction:
 - Show AI stopped states in UI, debug labels, or radio logs: regrouping, covering, waiting behind vehicle, blocked/waiting, executing order, enemy spotted, retreating, repairing, scouting.
 - Bug fixes belong in this pass when directly related: vehicle overlap, base exit clogging, AI ignoring orders, squads scattering, vehicles pushing infantry, or stopped states becoming permanent.
 
-## Stage Exit Gate
+## Current Advancement Status
 
-Before moving to the next stage, verify all of these:
-
-- The core feature actually works in live/manual play, not only in code.
-- The current state/logs explain why AI is behaving that way.
-- Directly related bugs were fixed or explicitly recorded as remaining blockers.
-- The work did not drift into unrelated new features.
-- Manual test notes or smoke test results were recorded.
-
-Important: a stage is not complete when code is merely implemented. It is complete only after implementation, directly related bug verification, and minimum test notes are done. If something is broken, do not move to the next stage.
-
-Current advancement status: **do not advance yet**. The role-command work has implementation and smoke coverage, but the stage remains open until live/manual play proves that role commands reach the correct squad/asset leaders, command state is observable in logs/debug output, directly related bugs are fixed or recorded, and minimum test notes are left.
+**Do not advance yet.** The role-command work has implementation and smoke coverage, but the stage remains open until live/manual play proves that role commands reach the correct squad/asset leaders, command state is observable in logs/debug output, directly related bugs are fixed or recorded as blockers, and minimum test notes are left.
 
 ## Repository
 
@@ -528,7 +560,7 @@ Blocking reason:
 - Do not make lobby role selection change weapons/loadouts.
 - Do not revert unrelated changes.
 - Make small commits.
-- A local role-command fix is not complete until `npm run check`, `npm run check:online`, a lobby/browser role switch check, and role-command play verification notes pass.
+- For local role-command fixes, apply the Common Stage Gate. Minimum checks include `npm run check`, `npm run check:online`, a lobby/browser role switch check, and role-command play verification notes.
 
 ## Previous Deployment Stabilization Checklist
 
