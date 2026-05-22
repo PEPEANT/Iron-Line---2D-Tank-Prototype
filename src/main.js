@@ -3292,8 +3292,26 @@
       this.player.inSafeZone = this.isPlayerInSafeZone();
     }
 
-    isPlayerInSafeZone() {
-      return !this.player.inTank && this.isPointInSafeZone(this.player.x, this.player.y, TEAM.BLUE);
+    localPlayerTeam() {
+      return this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
+    }
+
+    isLocalPlayerAliveOnFoot() {
+      return Boolean(this.player && !this.player.inTank && this.player.hp > 0);
+    }
+
+    isLocalPlayerEnemyFor(team) {
+      return this.isLocalPlayerAliveOnFoot() &&
+        this.localPlayerTeam() !== team &&
+        !this.isPlayerInSafeZone();
+    }
+
+    isLocalPlayerFriendlyFor(team) {
+      return this.isLocalPlayerAliveOnFoot() && this.localPlayerTeam() === team;
+    }
+
+    isPlayerInSafeZone(team = this.localPlayerTeam()) {
+      return !this.player.inTank && this.isPointInSafeZone(this.player.x, this.player.y, team);
     }
 
     isPointInSafeZone(x, y, team = null) {
@@ -3306,14 +3324,16 @@
     playerRoleChangeZone() {
       if (!this.isConquestMode() || !this.matchStarted || !this.player || this.player.inTank) return null;
       const player = this.player;
-      if (this.isPointInSafeZone(player.x, player.y, TEAM.BLUE)) {
+      const team = this.localPlayerTeam();
+      const teamKey = team === TEAM.RED ? "red" : "blue";
+      if (this.isPointInSafeZone(player.x, player.y, team)) {
         return { reason: "base", label: "아군 본진" };
       }
 
       const spawnPoints = [
-        this.world.spawns?.player,
-        this.world.baseExitPoints?.blue,
-        ...(this.world.spawns?.blue || [])
+        team === TEAM.BLUE ? this.world.spawns?.player : null,
+        this.world.baseExitPoints?.[teamKey],
+        ...(this.world.spawns?.[teamKey] || [])
       ].filter(Boolean);
       for (const point of spawnPoints) {
         if (distXY(player.x, player.y, point.x, point.y) <= 220) {
@@ -3323,7 +3343,7 @@
 
       for (const point of this.capturePoints || []) {
         const commandPost = point.commandPost || point.roleChangeZone || point.isCommandPost;
-        if (commandPost && point.owner === TEAM.BLUE && distXY(player.x, player.y, point.x, point.y) <= 260) {
+        if (commandPost && point.owner === team && distXY(player.x, player.y, point.x, point.y) <= 260) {
           return { reason: "command", label: "아군 사령부 거점" };
         }
       }
@@ -3955,7 +3975,7 @@
       const tankAlive = this.tanks.some((tank) => tank.team === team && tank.alive);
       const humveeAlive = (this.humvees || []).some((humvee) => humvee.team === team && humvee.isOperational?.());
       const infantryAlive = (this.infantry || []).some((unit) => unit.team === team && unit.alive);
-      const playerAlive = team === TEAM.BLUE && !this.playerDeathActive && this.player.hp > 0;
+      const playerAlive = team === this.localPlayerTeam() && !this.playerDeathActive && this.player.hp > 0;
       return tankAlive || humveeAlive || infantryAlive || playerAlive;
     }
 

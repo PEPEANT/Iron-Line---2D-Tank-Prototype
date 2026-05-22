@@ -279,7 +279,7 @@
       }
       for (const humvee of this.game.humvees || []) add(humvee, -40);
 
-      if (this.vehicle.team === TEAM.RED && !this.game.player.inTank && this.game.player.hp > 0 && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.vehicle.team)) {
         add(this.game.player, 130);
       }
 

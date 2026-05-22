@@ -559,7 +559,7 @@
         if (!crew.inTank) addTarget(crew, 70);
       }
 
-      if (this.tank.team === TEAM.RED && !this.game.player.inTank && this.game.player.hp > 0 && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.tank.team)) {
         addTarget(this.game.player, 150);
       }
 

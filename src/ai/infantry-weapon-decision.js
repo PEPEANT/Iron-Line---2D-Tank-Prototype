@@ -79,7 +79,7 @@
         targets.push(crew);
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.RED && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.unit.team)) {
         targets.push(this.game.player);
       }
 
@@ -274,7 +274,7 @@
         if (distXY(point.x, point.y, crew.x, crew.y) <= safety) return false;
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.BLUE) {
+      if (this.game.isLocalPlayerFriendlyFor?.(this.unit.team)) {
         if (distXY(point.x, point.y, this.game.player.x, this.game.player.y) <= safety) return false;
       }
 
@@ -365,7 +365,7 @@
         if (!crew.alive || crew.inTank || crew.team !== this.unit.team) continue;
         if (distXY(target.x, target.y, crew.x, crew.y) <= safety) return false;
       }
-      if (this.game.player?.team === this.unit.team && this.game.player.hp > 0 && !this.game.player.inTank) {
+      if (this.game.isLocalPlayerFriendlyFor?.(this.unit.team)) {
         if (distXY(target.x, target.y, this.game.player.x, this.game.player.y) <= safety) return false;
       }
       return true;

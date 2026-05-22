@@ -147,7 +147,7 @@
         enemies.push(crew);
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.tank.team === TEAM.RED && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.tank.team)) {
         enemies.push(this.game.player);
       }
 
@@ -249,7 +249,7 @@
         if (distXY(crew.x, crew.y, target.x, target.y) <= dangerRadius + crew.radius) return false;
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.tank.team === TEAM.BLUE) {
+      if (this.game.isLocalPlayerFriendlyFor?.(this.tank.team)) {
         if (distXY(this.game.player.x, this.game.player.y, target.x, target.y) <= dangerRadius + this.game.player.radius) return false;
       }
 
@@ -281,7 +281,7 @@
         if (segmentDistanceToPoint(startX, startY, endX, endY, crew.x, crew.y) <= laneWidth + crew.radius) return false;
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.tank.team === TEAM.BLUE) {
+      if (this.game.isLocalPlayerFriendlyFor?.(this.tank.team)) {
         if (segmentDistanceToPoint(startX, startY, endX, endY, this.game.player.x, this.game.player.y) <= laneWidth + this.game.player.radius) {
           return false;
         }
@@ -310,7 +310,7 @@
         if (distXY(crew.x, crew.y, target.x, target.y) <= radius) count += 1;
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.tank.team === TEAM.RED && target !== this.game.player) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.tank.team) && target !== this.game.player) {
         if (distXY(this.game.player.x, this.game.player.y, target.x, target.y) <= radius) count += 1;
       }
 

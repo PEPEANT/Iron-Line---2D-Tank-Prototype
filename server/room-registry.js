@@ -431,12 +431,16 @@ class RoomRegistry {
     const target = this.combatPlayer(room, targetPlayerId);
     const targetState = this.combatPlayerState(target || {});
     const shooterState = this.combatPlayerState(shooter || {});
+    const shooterTeam = shooter?.team === "red" ? "red" : "blue";
+    const targetTeam = target?.team === "red" ? "red" : "blue";
     const claimedTargetSeq = Math.max(0, Math.floor(Number(input.targetStateSeq) || 0));
     const hitClaim = Boolean((input.hit || input.clientHitClaim || targetPlayerId) && targetPlayerId);
     let accepted = Boolean(hitClaim && shooter && target && shooterState.alive && targetState.alive);
     let reason = accepted ? "confirmed" : "miss";
     if (!shooter) reason = "missing-shooter";
     else if (!target && hitClaim) reason = "invalid-target";
+    else if (target && shooterId === targetPlayerId) reason = "self-hit";
+    else if (target && shooterTeam === targetTeam) reason = "same-team";
     else if (!shooterState.alive) reason = "shooter-dead";
     else if (target && !targetState.alive) reason = "target-dead";
     else if (target && claimedTargetSeq > 0 && targetState.stateSeq > 0 && claimedTargetSeq < targetState.stateSeq) reason = "stale-state";
@@ -468,7 +472,7 @@ class RoomRegistry {
       reason,
       shooterId,
       shooterName: input.shooterName || shooter?.nickname || shooter?.name || "Player",
-      shooterTeam: input.shooterTeam || shooter?.team || "blue",
+      shooterTeam,
       targetPlayerId,
       hit: accepted,
       lethal: accepted && targetHealthAfter <= 0,
@@ -559,8 +563,16 @@ class RoomRegistry {
     const existing = (room.combatEvents || []).filter((event) => event.deathId === deathId);
     if (existing.length) return { ok: true, duplicate: true, events: existing, room };
     const target = this.combatPlayer(room, targetPlayerId);
+    const killerId = String(input.killerId || input.shooterId || "").slice(0, 48);
+    const killer = this.combatPlayer(room, killerId);
     const targetState = this.combatPlayerState(target || {});
     const incomingSeq = Math.max(0, Math.floor(Number(input.targetStateSeq) || 0));
+    if (killerId && killerId === targetPlayerId) {
+      return { ok: false, reason: "self-death" };
+    }
+    if (killer && target && killer.team === target.team) {
+      return { ok: false, reason: "same-team" };
+    }
     if (target && targetState.alive && incomingSeq > 0 && targetState.stateSeq > incomingSeq) {
       return { ok: false, reason: "stale-death" };
     }
@@ -573,8 +585,14 @@ class RoomRegistry {
         stateSeq: Number(input.targetStateSeq) || targetState.stateSeq
       });
     }
-    this.applyCombatDeathStats(room, input.killerId || input.shooterId || "", targetPlayerId);
-    const death = this.createDeathConfirm(room, { ...input, deathId, targetPlayerId });
+    this.applyCombatDeathStats(room, killerId, targetPlayerId);
+    const death = this.createDeathConfirm(room, {
+      ...input,
+      deathId,
+      targetPlayerId,
+      killerId,
+      shooterTeam: killer?.team || input.shooterTeam
+    });
     return this.appendServerCombatEvents(room, [death]);
   }
 

@@ -137,6 +137,28 @@ async function runSmoke() {
           aimY: 1400,
           updatedAt: now
         }
+      }, {
+        id: "red-support",
+        name: "Red Support",
+        team: "red",
+        slotId: "red-engineer",
+        participantType: "player",
+        ready: true,
+        stats: { kills: 0, deaths: 0 },
+        updatedAt: now,
+        position: {
+          x: 1700,
+          y: 1460,
+          stateSeq: 6,
+          alive: true,
+          deathState: "alive",
+          hp: 100,
+          maxHp: 100,
+          weaponId: "rifle",
+          aimX: 1200,
+          aimY: 1400,
+          updatedAt: now
+        }
       }],
       combatEvents: [],
       updatedAt: now
@@ -189,6 +211,28 @@ async function runSmoke() {
   hitConfirms = events(room, "server_hit_confirm").filter((event) => event.hitId === `${roomId}:hit:red:1`);
   assert(hitConfirms.length === 1, `duplicate hit confirm was appended ${hitConfirms.length} times`);
   assert(player(room, "blue-human")?.position?.hp === 78, "duplicate hit changed target health");
+
+  const sameTeam = await postCombat({
+    type: "small_arms",
+    shotId: `${roomId}:shot:red:same-team`,
+    eventId: `${roomId}:shot:red:same-team`,
+    hitId: `${roomId}:hit:red:same-team`,
+    shooterId: "red-human",
+    shooterName: "Red",
+    shooterTeam: "blue",
+    targetPlayerId: "red-support",
+    weaponId: "machinegun",
+    damage: 55,
+    hit: true,
+    targetStateSeq: 6,
+    shooterStateSeq: 8,
+    createdAt: Date.now() + 2
+  });
+  room = sameTeam.room || await fetchRoom();
+  const sameTeamConfirm = events(room, "server_hit_confirm").find((event) => event.hitId === `${roomId}:hit:red:same-team`);
+  assert(sameTeamConfirm?.accepted === false && sameTeamConfirm.reason === "same-team", "same-team hit was not rejected by server");
+  assert(sameTeamConfirm.shooterTeam === "red", "same-team confirm trusted client shooterTeam");
+  assert(player(room, "red-support")?.position?.hp === 100, "same-team hit changed target health");
 
   const lethal = await postCombat({
     type: "small_arms",

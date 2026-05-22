@@ -942,7 +942,7 @@
         candidates.push(drone);
       }
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.RED && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerEnemyFor?.(this.unit.team)) {
         candidates.push(this.game.player);
       }
 
@@ -1816,7 +1816,7 @@
     hasSafeRpgImpact(tank, weapon) {
       const dangerRadius = (weapon.splash || 92) + 22;
 
-      if (!this.game.player.inTank && this.game.player.hp > 0 && this.unit.team === TEAM.RED && !this.game.isPlayerInSafeZone?.()) {
+      if (this.game.isLocalPlayerFriendlyFor?.(this.unit.team)) {
         if (distXY(this.game.player.x, this.game.player.y, tank.x, tank.y) <= dangerRadius) return false;
       }
 
