@@ -3,7 +3,7 @@
 (function registerTank(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { AMMO, INFANTRY_WEAPONS } = IronLine.constants;
-  const { clamp, approach, distXY, normalizeAngle, segmentDistanceToPoint } = IronLine.math;
+  const { clamp, approach, distXY, normalizeAngle, segmentDistanceToPoint, circleRectCollision } = IronLine.math;
   const { tryMoveCircle } = IronLine.physics;
 
   class Tank {
@@ -64,6 +64,8 @@
       this.destructionPending = false;
       this.destructionTimer = 0;
       this.destructionDelay = 0;
+      this.bailoutWindow = 0;
+      this.lastBailout = null;
       this.criticalEffectTimer = 0;
       this.infantryAssault = null;
       this.assaultMobilityTimer = 0;
@@ -454,13 +456,17 @@
       if (this.destructionTimer <= 0) this.finalizeDestruction(game);
     }
 
-    beginDestruction(game) {
+    beginDestruction(game, options = {}) {
       if (this.destructionPending || !this.alive) return;
 
       this.hp = 0;
       this.destructionPending = true;
-      this.destructionDelay = 0.85 + Math.random() * 0.65;
+      const catastrophic = Boolean(options.catastrophic);
+      this.destructionDelay = catastrophic
+        ? 0.95 + Math.random() * 0.55
+        : 1.65 + Math.random() * 0.85;
       this.destructionTimer = this.destructionDelay;
+      this.bailoutWindow = this.destructionDelay;
       this.criticalEffectTimer = 0;
       this.speed = 0;
       this.turnVelocity = 0;
@@ -469,7 +475,7 @@
       this.weaponMode = "cannon";
       this.fireOrder = null;
       this.impactShake = Math.max(this.impactShake, 0.42);
-      if (this.crew) this.crew.takeDamage(999);
+      this.tryEmergencyBailout(game, options);
 
       if (game?.effects) {
         game.effects.explosions.push({
@@ -483,6 +489,165 @@
           core: true
         });
       }
+    }
+
+    tryEmergencyBailout(game, options = {}) {
+      const catastrophic = Boolean(options.catastrophic);
+      const result = {
+        crew: false,
+        player: false,
+        catastrophic,
+        cause: options.cause || options.weaponId || "destruction",
+        window: this.bailoutWindow || this.destructionDelay || 0
+      };
+
+      if (this.crew?.alive) {
+        const crewChance = catastrophic
+          ? this.crew.dedicated || this.isPlayerTank ? 0.42 : 0.18
+          : this.crew.dedicated || this.isPlayerTank ? 1 : 0.62;
+        if (Math.random() <= crewChance) {
+          result.crew = this.bailoutCrewMember(game, this.crew, { catastrophic });
+        } else {
+          this.crew.takeDamage(999);
+        }
+      }
+
+      if (this.playerControlled && game?.player?.inTank === this) {
+        const playerChance = catastrophic ? 0.48 : 1;
+        if (Math.random() <= playerChance) {
+          result.player = this.bailoutPlayer(game, { catastrophic });
+        } else {
+          game.player.inTank = null;
+          this.playerControlled = false;
+          this.playerSeat = "";
+          game.applyPlayerDamage?.(999, this, "vehicle", {
+            deathReason: "전차 치명 폭발로 탈출하지 못했습니다."
+          });
+        }
+      }
+
+      if (result.crew || result.player) {
+        this.lastBailout = {
+          ...result,
+          time: game?.matchTime || 0
+        };
+        this.recordBailoutEvent(game, result);
+      } else {
+        this.lastBailout = {
+          ...result,
+          failed: true,
+          time: game?.matchTime || 0
+        };
+      }
+
+      return result;
+    }
+
+    bailoutPoint(game, occupant = null, options = {}) {
+      const world = game?.world || {};
+      const margin = Math.max(occupant?.radius || 10, 12);
+      const width = Number.isFinite(world.width) ? world.width : this.x + 500;
+      const height = Number.isFinite(world.height) ? world.height : this.y + 500;
+      const baseDistance = (this.radius || 38) + margin + (options.catastrophic ? 46 : 34);
+      const angles = [
+        this.angle + Math.PI,
+        this.angle + Math.PI / 2,
+        this.angle - Math.PI / 2,
+        this.angle + Math.PI * 0.72,
+        this.angle - Math.PI * 0.72,
+        this.angle
+      ];
+      const distances = [baseDistance, baseDistance + 28, baseDistance + 58];
+
+      for (const distance of distances) {
+        for (const angle of angles) {
+          const x = clamp(this.x + Math.cos(angle) * distance, margin, Math.max(margin, width - margin));
+          const y = clamp(this.y + Math.sin(angle) * distance, margin, Math.max(margin, height - margin));
+          const blocked = (world.obstacles || []).some((obstacle) => (
+            circleRectCollision(x, y, margin + 2, obstacle)
+          ));
+          if (!blocked) return { x, y, angle };
+        }
+      }
+
+      const fallbackAngle = this.angle + Math.PI;
+      return {
+        x: clamp(this.x + Math.cos(fallbackAngle) * baseDistance, margin, Math.max(margin, width - margin)),
+        y: clamp(this.y + Math.sin(fallbackAngle) * baseDistance, margin, Math.max(margin, height - margin)),
+        angle: fallbackAngle
+      };
+    }
+
+    bailoutCrewMember(game, crew, options = {}) {
+      if (!crew?.alive) return false;
+      const point = this.bailoutPoint(game, crew, options);
+      crew.dismount?.(game);
+      this.leaveCrew(crew);
+      crew.targetTank = null;
+      crew.inTank = null;
+      crew.x = point.x;
+      crew.y = point.y;
+      crew.angle = point.angle;
+      crew.speed = 0;
+      crew.state = options.catastrophic ? "bailout-shocked" : "bailout";
+      crew.mountTimer = 0;
+      crew.maxSpeed = Math.min(crew.maxSpeed || 108, 92);
+      const survivorHp = Math.round((crew.maxHp || 45) * (options.catastrophic ? 0.32 : 0.55));
+      crew.hp = clamp(Math.min(crew.hp || crew.maxHp || 45, survivorHp), 12, crew.maxHp || 45);
+      return true;
+    }
+
+    bailoutPlayer(game, options = {}) {
+      if (!game?.player || game.player.inTank !== this) return false;
+      const point = this.bailoutPoint(game, game.player, options);
+      game.player.inTank = null;
+      this.playerControlled = false;
+      this.playerSeat = "";
+      game.player.x = point.x;
+      game.player.y = point.y;
+      game.player.angle = point.angle;
+      game.player.speed = 0;
+      game.player.vehicleBailoutTimer = 1.25;
+      const maxHp = game.player.maxHp || 100;
+      const survivorHp = Math.round(maxHp * (options.catastrophic ? 0.28 : 0.42));
+      game.player.hp = clamp(Math.min(game.player.hp || maxHp, survivorHp), 18, maxHp);
+      game.lastPlayerDamage = {
+        x: this.x,
+        y: this.y,
+        angle: Math.atan2(this.y - game.player.y, this.x - game.player.x),
+        amount: 0,
+        kind: "vehicle_bailout",
+        label: "전차 탈출",
+        ttl: 1.45,
+        maxTtl: 1.45
+      };
+      return true;
+    }
+
+    recordBailoutEvent(game, result) {
+      const targetLabel = this.callSign || "tank";
+      game?.battlefieldEvents?.push?.({
+        type: "tank_crew_bailout",
+        severity: result.catastrophic ? "warning" : "info",
+        team: this.team,
+        title: "승무원 탈출",
+        detail: `${targetLabel} 치명 손상 후 ${result.player ? "플레이어 " : ""}${result.crew ? "승무원 " : ""}탈출`,
+        source: "vehicle",
+        chat: false
+      });
+      game?.aiObservatory?.recordEvent?.({
+        unitId: targetLabel,
+        aiType: "tank",
+        team: this.team,
+        decision: "crew_bailout",
+        reason: result.catastrophic ? "catastrophic_bailout" : "critical_bailout",
+        score: result.window,
+        scores: {
+          crew: result.crew ? 1 : 0,
+          player: result.player ? 1 : 0,
+          catastrophic: result.catastrophic ? 1 : 0
+        }
+      });
     }
 
     emitCriticalDamageEffects(game) {
@@ -878,7 +1043,7 @@
       return true;
     }
 
-    takeDamage(game, amount) {
+    takeDamage(game, amount, options = {}) {
       if (!this.alive) return;
       if (this.destructionPending) {
         this.impactShake = Math.max(this.impactShake, 0.22);
@@ -898,7 +1063,15 @@
       });
 
       if (this.hp <= 0) {
-        this.beginDestruction(game);
+        const overkill = Math.max(0, -this.hp);
+        this.beginDestruction(game, {
+          ...options,
+          amount,
+          overkill,
+          catastrophic: Boolean(options.catastrophic) ||
+            amount >= this.maxHp * 1.18 ||
+            overkill >= this.maxHp * 0.48
+        });
       }
     }
   }

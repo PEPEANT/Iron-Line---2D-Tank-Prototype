@@ -1138,7 +1138,7 @@
           : ammo.directDamage || ammo.damage;
         const damage = directTankDamage(game, hitTank, directBase, shell);
         const tankWasAlive = targetScoreAlive(hitTank);
-        hitTank.takeDamage(game, damage);
+        hitTank.takeDamage(game, damage, { weaponId: ammo.id, cause: `${ammo.id}_direct` });
         recordKillIfDestroyed(game, shell.owner || shell, hitTank, tankWasAlive, ammo.id);
       } else if (hitTank && friendlyVehicle) {
         emitFriendlyArmorBlock(game, hitTank, shell);
@@ -1160,7 +1160,7 @@
     } else if (hitTank) {
       const damage = directTankDamage(game, hitTank, ammo.damage, shell);
       const tankWasAlive = targetScoreAlive(hitTank);
-      hitTank.takeDamage(game, damage);
+      hitTank.takeDamage(game, damage, { weaponId: ammo.id, cause: `${ammo.id}_direct` });
       recordKillIfDestroyed(game, shell.owner || shell, hitTank, tankWasAlive, ammo.id);
     }
     if (hitInfantry) {
@@ -1379,7 +1379,7 @@
         ? ammo.lightVehicleDamageScale ?? ammo.tankDamageScale ?? 1
         : ammo.tankDamageScale ?? 1;
       const tankWasAlive = targetScoreAlive(tank);
-      tank.takeDamage(game, damage * vehicleScale * falloff * exposure);
+      tank.takeDamage(game, damage * vehicleScale * falloff * exposure, { weaponId: ammo.id || "blast", cause: ammo.id ? `${ammo.id}_blast` : "blast" });
       recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, tank, tankWasAlive, ammo.id || "blast");
     }
 

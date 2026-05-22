@@ -54,9 +54,21 @@ The FPS + command integration QA is PASS.
 
 The empty-slot BotCommander skeleton first pass is PASS.
 
-The next target is: **empty-slot BotCommander skeleton stability gate**.
+The anti-vehicle balance small pass interim verification is ON TRACK.
 
-The immediate goal is to verify the new skeleton stays narrow: empty `bot` slots can issue basic role commands through `CommandBus`, `human` slots keep priority, `empty` slots do nothing, and the verified human FPS + command path remains unchanged. Do not build full bot decision-making yet.
+The anti-vehicle balance report-based correction pass is ON TRACK.
+
+The anti-vehicle balance completion report is PASS.
+
+The BotCommander skeleton interim verification report is ON TRACK.
+
+The BotCommander skeleton report-based narrow correction pass is ON TRACK.
+
+The BotCommander skeleton completion report is PASS.
+
+The next target is: **backup commit / push checkpoint before AI V2 tactical map and cover-node work**.
+
+The immediate goal is to checkpoint the completed human-command/FPS/BotCommander-skeleton foundation before starting AI V2. Empty `bot` slots can issue basic role commands through `CommandBus`, `human` slots keep priority, `empty` slots do nothing, and the verified human FPS + command path plus anti-vehicle balance pass remain unchanged.
 
 Do not start AI V2, UGC, city/open-world expansion, 50vs50 expansion, server-authority rewrites, broad online redesign work, or full BotCommander behavior from this handoff.
 
@@ -108,11 +120,18 @@ AI should not become "smarter" in this pass. It should become easier to command:
 10. FPS combat loop completion report. PASS on 2026-05-22.
 11. FPS + command integration QA. PASS on 2026-05-22.
 12. Empty-slot `BotCommander` skeleton first pass. PASS on 2026-05-22.
-13. Empty-slot `BotCommander` skeleton stability gate. Current next target.
+13. Anti-vehicle balance small pass interim verification. ON TRACK on 2026-05-22.
+14. Anti-vehicle balance report-based correction pass. ON TRACK on 2026-05-22.
+15. Anti-vehicle balance completion report. PASS on 2026-05-22.
+16. Empty-slot `BotCommander` skeleton interim verification report. ON TRACK on 2026-05-22.
+17. Empty-slot `BotCommander` skeleton report-based narrow correction pass. ON TRACK on 2026-05-22.
+18. Empty-slot `BotCommander` skeleton completion report. PASS on 2026-05-22.
+19. Backup commit / push checkpoint before AI V2. Current next target.
+20. AI V2 tactical map / cover nodes / vehicle traffic.
 
 ## Current Work Target
 
-Next work item: **empty-slot BotCommander skeleton stability gate**.
+Next work item: **backup commit / push checkpoint before AI V2 tactical map and cover-node work**.
 
 Prerequisite status: online commander-order stability gate passed on 2026-05-22. See `docs/online-commander-order-stability-gate-report-2026-05-22.md`.
 
@@ -138,29 +157,41 @@ FPS + command integration completion checkpoint: `docs/fps-command-integration-q
 
 Empty-slot BotCommander skeleton checkpoint: `docs/bot-commander-skeleton-first-pass-report-2026-05-22.md` records the PASS decision for `human / bot / empty` slot guards, bot-sourced command packets, squad-leader delivery, command lock visibility, and observer/admin role-slot visibility. It also adds `tools/check-bot-commander-skeleton.cjs` as the narrow local QA helper.
 
+BotCommander skeleton interim checkpoint: `docs/bot-commander-skeleton-interim-verification-report-2026-05-22.md` records the ON TRACK all-role verification for bot command packets, controller guards, human priority, squad/asset-leader delivery, command locks, and observer visibility. The QA helper now verifies infantry, engineer, recon, and armor bot commands.
+
+BotCommander skeleton correction checkpoint: `docs/bot-commander-skeleton-correction-pass-2026-05-22.md` records that the interim report found no gameplay BotCommander blocker. The only correction was QA-side: armor vehicle metadata is read from the commander assignment order before `vehicle.manualOrder`, so `commandSource`, `commandReason`, and `commanderSlotId` remain visible for armor bot commands.
+
+BotCommander skeleton completion checkpoint: `docs/bot-commander-skeleton-completion-report-2026-05-22.md` records the PASS decision for empty-slot bot controller guards, bot command packet metadata, squad/asset-leader delivery, human priority, and regression coverage. This is the branch boundary before AI V2 tactical map / cover-node work.
+
+Anti-vehicle balance interim checkpoint: `docs/anti-vehicle-balance-interim-verification-report-2026-05-22.md` records the ON TRACK decision for RPG range / firing opportunity, suicide-drone damage, tank crew/player bailout, and anti-tank regression checks. It also adds `tools/check-anti-vehicle-balance.cjs` as the narrow local QA helper.
+
+Anti-vehicle balance correction checkpoint: `docs/anti-vehicle-balance-correction-pass-2026-05-22.md` records that the interim report found no direct anti-vehicle blocker, so no extra gameplay code tuning was required before the completion report.
+
+Anti-vehicle balance completion checkpoint: `docs/anti-vehicle-balance-completion-report-2026-05-22.md` records the PASS decision for RPG firing opportunity, suicide-drone armored-vehicle damage, tank crew/player bailout, and related regressions before returning to BotCommander skeleton stability.
+
 Interim checkpoint: `docs/online-command-sync-interim-verification-report-2026-05-22.md` records the packet / permission / broadcast smoke evidence that led into the online commander-order stability gate.
 
 Fix pass checkpoint: `docs/online-command-sync-fix-pass-report-2026-05-22.md` records the narrow fixes for wrong-team target rejection and online `cancel` command state. No blocker remains from that fix pass.
 
 Gate checkpoint: `docs/online-commander-order-stability-gate-report-2026-05-22.md` records the two-client online PASS decision and the trusted remote command target-id fix.
 
-Goal: verify the minimum empty-slot bot-commander skeleton after the verified human FPS + command path. The skeleton exposes `controllerType: bot / empty` handoff points and safe basic bot orders, but must not start full AI commander behavior, AI V2, 50vs50, UGC, city/open-world, or server-authority combat work.
+Goal: verify the minimum empty-slot bot-commander skeleton after the verified human FPS + command path and anti-vehicle balance pass. The skeleton exposes `controllerType: bot / empty` handoff points and safe basic bot orders, but must not start full AI commander behavior, AI V2, 50vs50, UGC, city/open-world, or server-authority combat work.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
-Required empty-slot BotCommander skeleton checks:
+Required empty-slot BotCommander skeleton stability checks:
 
 - Existing human-owned role slots keep priority and behavior unchanged.
 - Empty slots may be marked as `bot` or `empty` without stealing human command ownership.
 - Bot skeleton may issue only basic role commands through `CommandBus`: infantry `move/defend/rally`, engineer `repair/defend/rally`, recon `scan/defend/rally`, armor `fire_support/defend/rally`.
-- Existing `CommandBus`, `CommandRadio`, `roleSlots`, and online command sync tests must keep passing.
+- Existing `CommandBus`, `CommandRadio`, `roleSlots`, online command sync, FPS + command integration, and anti-vehicle balance tests must keep passing.
 - Leave smoke/manual notes before moving to any AI V2 or real bot decision pass.
 
 ## Current Sequence After Online Sync
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **empty-slot `BotCommander` skeleton stability gate**. Do not move from here into AI V2 or full bot commander behavior.
+The next stage is **backup commit / push checkpoint before AI V2 tactical map and cover-node work**. Do not move into AI V2 or full bot commander behavior before this checkpoint is made.
 
 Current sequence:
 
@@ -176,10 +207,16 @@ Current sequence:
 10. FPS combat loop completion report. PASS.
 11. FPS + command integration QA. PASS.
 12. Empty-slot `BotCommander` skeleton first pass. PASS.
-13. Empty-slot `BotCommander` skeleton stability gate. Current next target.
-14. AI V2 tactical map / cover nodes / vehicle traffic.
-15. AI count scaling.
-16. 50vs50 event mode.
+13. Anti-vehicle balance small pass interim verification. ON TRACK.
+14. Anti-vehicle balance report-based correction pass. ON TRACK.
+15. Anti-vehicle balance completion report. PASS.
+16. Empty-slot `BotCommander` skeleton interim verification report. ON TRACK.
+17. Empty-slot `BotCommander` skeleton report-based narrow correction pass. ON TRACK.
+18. Empty-slot `BotCommander` skeleton completion report. PASS.
+19. Backup commit / push checkpoint before AI V2. Current next target.
+20. AI V2 tactical map / cover nodes / vehicle traffic.
+21. AI count scaling.
+22. 50vs50 event mode.
 
 ## Offline Command Stability Gate
 
@@ -453,9 +490,9 @@ Implementation direction:
 
 ## Current Advancement Status
 
-**Current next stage: empty-slot `BotCommander` skeleton.** The FPS + command integration QA report is PASS, so the skeleton pass may begin.
+**Current next stage: backup commit / push checkpoint before AI V2 tactical map and cover-node work.** The empty-slot `BotCommander` skeleton completion report is PASS, so the skeleton stage is closed.
 
-Do not advance beyond the skeleton into real bot commander behavior until the skeleton pass has implementation, directly related bug verification, and minimum test notes.
+Do not advance into AI V2 or real bot commander behavior until the current worktree is backed up, committed, and pushed.
 
 ## Repository
 
@@ -592,12 +629,18 @@ Additional verification already run:
   - Stage decision: PASS to start an empty-slot BotCommander skeleton stability gate.
   - Added narrow QA helper: `tools/check-bot-commander-skeleton.cjs`.
   - Runtime smoke verified `blue-infantry` human slot priority, `blue-engineer` empty bot slot detection, `repair` command accepted through `CommandBus`, `B-SQD-1` reaching `commandState: repair`, `commandSource: bot`, `commandReason: repair`, `commanderSlotId: blue-engineer`, active lock around 2.4s, and `controllerType: empty` rejection.
+- 2026-05-22 empty-slot BotCommander skeleton stability / completion:
+  - Interim report: `docs/bot-commander-skeleton-interim-verification-report-2026-05-22.md`
+  - Correction pass: `docs/bot-commander-skeleton-correction-pass-2026-05-22.md`
+  - Completion report: `docs/bot-commander-skeleton-completion-report-2026-05-22.md`
+  - Stage decision: PASS. Back up, commit, and push before starting AI V2 tactical map / cover-node work.
+  - Runtime smoke verifies all-role bot commands, human / bot / empty guards, human priority, squad / asset-leader delivery, command metadata, observer visibility, FPS + command integration regression, anti-vehicle regression, and online command smoke.
 
 Open before advancing beyond the next stage:
 
-- Empty-slot `BotCommander` skeleton stability gate is now the next target. It must remain a verification / direct-bug-fix gate, not full bot commander decision-making.
+- Backup commit / push checkpoint is now the next target before AI V2. The BotCommander skeleton stability gate is closed.
 - Carry forward a non-blocking follow-up for deeper natural vehicle/infantry pushing QA. The offline gate checked sampled overlap plus forced traffic/stuck diagnostics; it did not exhaustively validate all future traffic physics edge cases.
-- Do not start AI V2, 50vs50, UGC, city/open-world, server-authority combat work, or real bot commander behavior during the skeleton pass.
+- Do not start AI V2, 50vs50, UGC, city/open-world, server-authority combat work, or real bot commander behavior until the backup commit / push checkpoint is complete.
 
 ## First Checks
 

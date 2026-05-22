@@ -299,6 +299,8 @@ async function main() {
     `--remote-debugging-port=${cdpPort}`,
     `--user-data-dir=${userDataDir}`,
     "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
     "--no-first-run",
     "--disable-extensions",
     appUrl

@@ -130,9 +130,22 @@ new Promise((resolve, reject) => {
         }
 
         const bot = game.botCommander;
-        const humanSlot = game.sessionSlotById("blue-infantry");
-        const engineerSlot = game.sessionSlotById("blue-engineer");
-        const emptySlotProbe = game.sessionSlotById("blue-recon");
+        const slots = game.onlineSession?.roleSlots || [];
+        const roleChecks = [
+          { roleId: "infantry", type: "move", expectedState: "advance" },
+          { roleId: "engineer", type: "repair", expectedState: "repair" },
+          { roleId: "recon", type: "scan", expectedState: "scout" },
+          { roleId: "armor", type: "fire_support", expectedState: "cover" }
+        ];
+        const slotForRole = (roleId) => slots.find((slot) => (
+          slot?.roleId === roleId &&
+          !slot.playerId &&
+          slot.controllerType === "bot" &&
+          bot?.slotHasAssets?.(slot)
+        ));
+        const humanSlot = game.sessionSlotById("blue-infantry") || slots.find((slot) => slot.playerId && slot.controllerType === "human");
+        const engineerSlot = slotForRole("engineer") || game.sessionSlotById("blue-engineer");
+        const emptySlotProbe = game.sessionSlotById("blue-recon") || slots.find((slot) => !slot.playerId && slot.controllerType === "bot");
         const beforeHuman = {
           slotId: humanSlot?.id || "",
           playerId: humanSlot?.playerId || "",
@@ -148,21 +161,95 @@ new Promise((resolve, reject) => {
           botSlot: bot?.isBotSlot?.(engineerSlot) || false
         };
         const humanReject = bot?.issueForSlot?.(humanSlot, { force: true, type: "move" }) || { accepted: false, reason: "missing-bot" };
-        const botResult = bot?.issueForSlot?.(engineerSlot, { force: true, type: "repair" }) || { accepted: false, reason: "missing-bot" };
-        const squadId = botResult.squadIds?.[0] || engineerSlot?.squadIds?.[0] || "";
-        const squad = game.squadById?.(squadId);
-        const commandLockRemaining = squad?.commandLockUntil
-          ? Math.max(0, (squad.commandLockUntil - performance.now()) / 1000)
-          : 0;
+        const roleResults = roleChecks.map((check) => {
+          const slot = slotForRole(check.roleId);
+          const result = slot && bot?.issueForSlot?.(slot, { force: true, type: check.type });
+          const targetSquadId = result?.squadIds?.[0] || slot?.squadIds?.[0] || "";
+          const targetAssetId = result?.vehicleIds?.[0] || slot?.vehicleIds?.[0] || "";
+          const squad = targetSquadId ? game.squadById?.(targetSquadId) : null;
+          const vehicle = targetAssetId ? game.vehicleById?.(targetAssetId) : null;
+          const assignmentOrder = vehicle ? game.commanders?.[slot?.team]?.assignments?.get?.(vehicle) || null : null;
+          const vehicleOrder = assignmentOrder || vehicle?.manualOrder || null;
+          const state = squad?.commandState || vehicleOrder?.commandState || "";
+          const source = squad?.commandSource || vehicleOrder?.commandSource || "";
+          const reason = squad?.commandReason || vehicleOrder?.commandReason || "";
+          const lockUntil = squad?.commandLockUntil || vehicleOrder?.commandLockUntil || 0;
+          const lockRemaining = lockUntil ? Math.max(0, (lockUntil - performance.now()) / 1000) : 0;
+          const commanderSlotId = squad?.commanderSlotId || vehicleOrder?.commanderSlotId || vehicle?.manualOrder?.slotId || "";
+          const squadLeaderId = squad?.squadLeaderId || "";
+          return {
+            roleId: check.roleId,
+            slotId: slot?.id || "",
+            type: check.type,
+            expectedState: check.expectedState,
+            accepted: Boolean(result?.accepted),
+            reasonRejected: result?.reason || "",
+            packetControllerType: result?.packet?.controllerType || "",
+            packetSource: result?.packet?.commandSource || "",
+            commandState: state,
+            commandSource: source,
+            commandReason: reason,
+            commandLockRemaining: lockRemaining,
+            commanderSlotId,
+            targetSquadId,
+            targetAssetId,
+            squadLeaderId,
+            hasDirectUnitControl: false,
+            slotState: slot?.botCommanderState || null,
+            pass: Boolean(
+              slot &&
+              result?.accepted &&
+              result.packet?.controllerType === "bot" &&
+              result.packet?.commandSource === "bot" &&
+              state === check.expectedState &&
+              source === "bot" &&
+              reason === check.type &&
+              lockRemaining > 0.5 &&
+              commanderSlotId === slot.id &&
+              (targetSquadId || targetAssetId)
+            )
+          };
+        });
+        const engineerResult = roleResults.find((item) => item.roleId === "engineer") || {};
+        const squadId = engineerResult.targetSquadId || engineerSlot?.squadIds?.[0] || "";
+        const commandLockRemaining = engineerResult.commandLockRemaining || 0;
 
         const originalProbeType = emptySlotProbe?.controllerType || "";
         if (emptySlotProbe) emptySlotProbe.controllerType = "empty";
         const emptyReject = bot?.issueForSlot?.(emptySlotProbe, { force: true, type: "scan" }) || { accepted: false, reason: "missing-bot" };
         if (emptySlotProbe) emptySlotProbe.controllerType = originalProbeType;
 
+        const player = game.localSessionPlayer?.();
+        const humanTakeoverSlot = engineerSlot;
+        let takeoverSimulated = false;
+        let takeoverSlotState = null;
+        let takeoverReject = { accepted: false, reason: "missing-slot" };
+        if (player && humanTakeoverSlot?.id) {
+          const savedTakeoverSlot = {
+            playerId: humanTakeoverSlot.playerId,
+            controllerType: humanTakeoverSlot.controllerType,
+            aiControlled: humanTakeoverSlot.aiControlled
+          };
+          humanTakeoverSlot.playerId = player.id;
+          humanTakeoverSlot.controllerType = "human";
+          humanTakeoverSlot.aiControlled = false;
+          takeoverSimulated = true;
+          takeoverSlotState = {
+            slotId: humanTakeoverSlot.id,
+            playerId: humanTakeoverSlot.playerId || "",
+            controllerType: humanTakeoverSlot.controllerType || "",
+            botSlot: bot?.isBotSlot?.(humanTakeoverSlot) || false
+          };
+          takeoverReject = bot?.issueForSlot?.(humanTakeoverSlot, { force: true, type: "repair" }) || takeoverReject;
+          humanTakeoverSlot.playerId = savedTakeoverSlot.playerId;
+          humanTakeoverSlot.controllerType = savedTakeoverSlot.controllerType;
+          humanTakeoverSlot.aiControlled = savedTakeoverSlot.aiControlled;
+        }
+
         const observer = game.observerBridge?.createSnapshot?.();
         const observedSlot = observer?.roleSlots?.find((slot) => slot.id === "blue-engineer") || null;
-        const latestLog = (game.commandBus?.log || []).slice(-4).map((entry) => ({
+        const observedBotSlots = roleResults.map((item) => observer?.roleSlots?.find((slot) => slot.id === item.slotId) || null);
+        const latestLog = (game.commandBus?.log || []).slice(-8).map((entry) => ({
           accepted: entry.accepted,
           reason: entry.reason,
           type: entry.packet?.type,
@@ -173,15 +260,15 @@ new Promise((resolve, reject) => {
         }));
 
         const botCommand = {
-          accepted: Boolean(botResult.accepted),
-          packetControllerType: botResult.packet?.controllerType || "",
-          packetSource: botResult.packet?.commandSource || "",
-          commandState: squad?.commandState || "",
-          commandSource: squad?.commandSource || "",
-          commandReason: squad?.commandReason || "",
+          accepted: Boolean(engineerResult.accepted),
+          packetControllerType: engineerResult.packetControllerType || "",
+          packetSource: engineerResult.packetSource || "",
+          commandState: engineerResult.commandState || "",
+          commandSource: engineerResult.commandSource || "",
+          commandReason: engineerResult.commandReason || "",
           commandLockRemaining,
-          commanderSlotId: squad?.commanderSlotId || "",
-          squadLeaderId: squad?.squadLeaderId || "",
+          commanderSlotId: engineerResult.commanderSlotId || "",
+          squadLeaderId: engineerResult.squadLeaderId || "",
           targetSquadId: squadId,
           slotState: engineerSlot?.botCommanderState || null
         };
@@ -195,20 +282,15 @@ new Promise((resolve, reject) => {
           humanReject.reason === "not-bot-slot" &&
           beforeBot.controllerType === "bot" &&
           beforeBot.botSlot === true &&
-          botCommand.accepted &&
-          botCommand.packetControllerType === "bot" &&
-          botCommand.packetSource === "bot" &&
-          botCommand.commandState === "repair" &&
-          botCommand.commandSource === "bot" &&
-          botCommand.commandReason === "repair" &&
-          botCommand.commandLockRemaining > 0.5 &&
-          botCommand.commanderSlotId === "blue-engineer" &&
-          botCommand.squadLeaderId &&
-          botCommand.targetSquadId &&
+          roleResults.every((item) => item.pass) &&
           emptyReject.accepted === false &&
           emptyReject.reason === "not-bot-slot" &&
-          observedSlot?.controllerType === "bot" &&
-          observedSlot?.botCommanderState?.lastCommandType === "repair"
+          takeoverSimulated === true &&
+          takeoverSlotState?.controllerType === "human" &&
+          takeoverSlotState?.botSlot === false &&
+          takeoverReject.accepted === false &&
+          takeoverReject.reason === "not-bot-slot" &&
+          observedBotSlots.every((slot, index) => slot?.controllerType === "bot" && slot?.botCommanderState?.lastCommandType === roleResults[index].type)
         );
 
         resolve({
@@ -218,8 +300,15 @@ new Promise((resolve, reject) => {
           beforeBot,
           humanReject: { accepted: humanReject.accepted, reason: humanReject.reason },
           emptyReject: { accepted: emptyReject.accepted, reason: emptyReject.reason },
+          humanTakeover: {
+            simulated: takeoverSimulated,
+            slotState: takeoverSlotState,
+            botReject: { accepted: takeoverReject.accepted, reason: takeoverReject.reason }
+          },
+          roleResults,
           botCommand,
           observedSlot,
+          observedBotSlots,
           latestLog
         });
       };
@@ -241,6 +330,8 @@ async function main() {
     `--remote-debugging-port=${cdpPort}`,
     `--user-data-dir=${userDataDir}`,
     "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
     "--no-first-run",
     "--disable-extensions",
     appUrl

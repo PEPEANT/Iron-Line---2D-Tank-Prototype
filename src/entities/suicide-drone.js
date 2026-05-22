@@ -23,9 +23,9 @@
       this.diveAutoDetonateRadius = weapon.diveAutoDetonateRadius || 44;
       this.splash = weapon.splash || 132;
       this.lockedSplash = weapon.lockedSplash || Math.max(this.splash, 188);
-      this.damage = weapon.damage || 86;
-      this.tankDamageScale = weapon.tankDamageScale ?? 0.58;
-      this.lightVehicleDamageScale = weapon.lightVehicleDamageScale ?? 1.08;
+      this.damage = weapon.damage || 94;
+      this.tankDamageScale = weapon.tankDamageScale ?? 0.62;
+      this.lightVehicleDamageScale = weapon.lightVehicleDamageScale ?? 1;
       this.infantryDamageScale = weapon.infantryDamageScale ?? 1.05;
       this.suppressionBase = weapon.suppressionBase ?? 42;
       this.suppressionMax = weapon.suppressionMax ?? 92;
@@ -52,12 +52,12 @@
       this.boostImpactTimer = 0;
       this.boostDirectImpactPadding = weapon.boostDirectImpactPadding || 10;
       this.frontDirectTankDamage = weapon.frontDirectTankDamage || 62;
-      this.sideDirectTankDamage = weapon.sideDirectTankDamage || 74;
-      this.rearDirectTankDamage = weapon.rearDirectTankDamage || 82;
-      this.boostFrontTankDamage = weapon.boostFrontTankDamage || 102;
-      this.boostSideTankDamage = weapon.boostSideTankDamage || 126;
-      this.boostRearTankDamage = weapon.boostRearTankDamage || weapon.boostDirectTankDamage || 146;
-      this.directHumveeDamage = weapon.directHumveeDamage || 92;
+      this.sideDirectTankDamage = weapon.sideDirectTankDamage || 78;
+      this.rearDirectTankDamage = weapon.rearDirectTankDamage || 92;
+      this.boostFrontTankDamage = weapon.boostFrontTankDamage || 98;
+      this.boostSideTankDamage = weapon.boostSideTankDamage || 122;
+      this.boostRearTankDamage = weapon.boostRearTankDamage || weapon.boostDirectTankDamage || 140;
+      this.directHumveeDamage = weapon.directHumveeDamage || 94;
       this.lockTarget = null;
       this.lockPoint = null;
       this.lockAttemptType = "";
@@ -425,7 +425,11 @@
 
       if (directProfile) {
         const directDamage = this.directImpactDamage(directTarget, directProfile);
-        directTarget.takeDamage?.(game, directDamage);
+        directTarget.takeDamage?.(game, directDamage, {
+          weaponId: "kamikazeDrone",
+          cause: "kamikaze_direct",
+          catastrophic: directDamage >= (directTarget.maxHp || 100) * 1.08
+        });
         this.recordDirectImpact(game, directTarget, directProfile, directDamage);
       }
 
