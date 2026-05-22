@@ -308,13 +308,24 @@
       const mouse = game?.input?.mouse || {};
       const aimX = Number.isFinite(Number(mouse.worldX)) ? Number(mouse.worldX) : point.x + Math.cos(pointAngle) * 180;
       const aimY = Number.isFinite(Number(mouse.worldY)) ? Number(mouse.worldY) : point.y + Math.sin(pointAngle) * 180;
+      game.onlinePlayerStateSeq = Math.max(0, Math.floor(Number(game.onlinePlayerStateSeq) || 0)) + 1;
+      const health = IronLine.OnlineCombatStabilizer?.playerHealthSnapshot?.(game) || { hp: entity.hp || 0, maxHp: entity.maxHp || 100 };
+      const currentWeapon = entity.getWeapon?.() || null;
+      const speed = Math.hypot(Number(entity.vx) || 0, Number(entity.vy) || 0);
       const controlledDrone = entity.controlledDrone?.alive ? entity.controlledDrone : null;
       const activeDrone = controlledDrone || game.activePlayerDrone?.() || null;
       const hasDrone = Boolean(activeDrone?.alive !== false && Number.isFinite(activeDrone?.x) && Number.isFinite(activeDrone?.y));
       const position = {
         x: Math.round(point.x),
         y: Math.round(point.y),
+        stateSeq: game.onlinePlayerStateSeq,
+        stateUpdatedAt: now,
         alive,
+        deathState: game.playerDeathActive ? "dead" : game.playerDowned ? "downed" : alive ? "alive" : "dead",
+        hp: health.hp,
+        maxHp: health.maxHp,
+        weaponId: currentWeapon?.id || entity.weaponId || sessionPlayer.weaponId || "",
+        movementState: mounted ? "vehicle" : speed > 6 ? "moving" : "idle",
         inVehicle: Boolean(mounted),
         vehicleId: mounted?.callSign || mounted?.id || "",
         vehicleType: mounted?.vehicleType || "",
@@ -337,6 +348,10 @@
       sessionPlayer.x = position.x;
       sessionPlayer.y = position.y;
       sessionPlayer.alive = alive;
+      sessionPlayer.hp = position.hp;
+      sessionPlayer.maxHp = position.maxHp;
+      sessionPlayer.stateSeq = position.stateSeq;
+      sessionPlayer.weaponId = position.weaponId;
       sessionPlayer.inVehicle = position.inVehicle;
       sessionPlayer.vehicleId = position.vehicleId;
       sessionPlayer.vehicleType = position.vehicleType;

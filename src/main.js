@@ -1310,6 +1310,8 @@
       IronLine.factionVisuals?.syncEntity?.(this, this.player);
       this.applyPlayerLoadoutOverrides();
       if (immediate) this.input.clear();
+      this.publishOnlinePlayerRespawn?.();
+      this.hud?.sessionFlow?.publishLocalPlayer?.(this, { force: true });
       return true;
     }
 
@@ -1752,6 +1754,18 @@
     }
 
     applyOnlineCombatEvent(event = {}) {
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...event,
+        stage: "receive",
+        result: "seen",
+        eventId: event.eventId || event.id
+      });
+      if (event.type === "player_death") {
+        return this.applyOnlinePlayerDeathEvent(event);
+      }
+      if (event.type === "player_respawn") {
+        return this.applyOnlinePlayerRespawnEvent(event);
+      }
       if (event.type === "projectile_launch") {
         this.emitOnlineProjectileLaunch(event);
         return true;
@@ -1766,6 +1780,25 @@
       if (!this.onlineCombatActiveForLocalPlayer()) return false;
       if (!event.hit || event.targetPlayerId !== localId) return false;
       if (this.isPlayerInSafeZone?.()) return false;
+      if (IronLine.OnlineCombatStabilizer?.isStaleForLocalPlayer?.(this, event)) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, {
+          ...event,
+          stage: "hit",
+          result: "ignored",
+          reason: "stale-after-respawn"
+        });
+        return false;
+      }
+      const hitKey = IronLine.OnlineCombatStabilizer?.hitKey?.(event);
+      if (hitKey && !IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatAppliedHitIds", hitKey)) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, {
+          ...event,
+          stage: "hit",
+          result: "ignored",
+          reason: "duplicate-hit"
+        });
+        return false;
+      }
 
       const source = {
         x: Number(event.x1) || Number(event.hitX) || this.player.x,
@@ -1773,12 +1806,184 @@
         team: event.shooterTeam === TEAM.RED ? TEAM.RED : TEAM.BLUE,
         ownerPlayerId: event.shooterId || ""
       };
-      return this.applyPlayerDamage(event.damage, source, event.weaponId || "rifle", {
+      const hpBefore = this.player?.hp || 0;
+      const applied = this.applyPlayerDamage(event.damage, source, event.weaponId || "rifle", {
         label: "\uc628\ub77c\uc778 \ud53c\uaca9",
         deathReason: `${event.shooterName || "Player"}\uc758 \uacf5\uaca9\uc73c\ub85c \uc804\ud22c \ubd88\ub2a5 \uc0c1\ud0dc\uac00 \ub418\uc5c8\uc2b5\ub2c8\ub2e4.`,
         x: source.x,
         y: source.y
       });
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...event,
+        stage: "hit",
+        result: applied ? "applied" : "no-damage",
+        hp: this.player?.hp,
+        damage: Math.max(0, hpBefore - (this.player?.hp || 0))
+      });
+      if (applied && hpBefore > 0 && this.player?.hp <= 0) {
+        this.publishOnlinePlayerDeath(source, event.weaponId || "rifle", {
+          triggerEventId: event.id || event.eventId || "",
+          hitId: hitKey || "",
+          shooterName: event.shooterName || "Player",
+          damageCause: event.damageCause || event.weaponId || "rifle",
+          targetHealthBefore: hpBefore
+        });
+      }
+      return applied;
+    }
+
+    applyOnlinePlayerDeathEvent(event = {}) {
+      const localId = this.onlineSession?.playerId || "";
+      const deathKey = IronLine.OnlineCombatStabilizer?.deathKey?.(event);
+      if (deathKey && !IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatAppliedDeathIds", deathKey)) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "death", result: "ignored", reason: "duplicate-death" });
+        return false;
+      }
+      const targetId = event.targetPlayerId || "";
+      if (targetId && targetId !== localId) {
+        const player = this.sessionPlayerById?.(targetId);
+        if (player) {
+          player.alive = false;
+          player.deathState = "dead";
+          if (player.position) {
+            player.position.alive = false;
+            player.position.deathState = "dead";
+            player.position.hp = 0;
+          }
+        }
+      }
+      if (event.killerId && event.killerId === localId && targetId !== localId) {
+        const stats = this.ensureScoreboardStats(localId);
+        const killKey = deathKey || `${event.killerId}:${targetId}:${event.createdAt || 0}`;
+        if (IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatAppliedKillIds", killKey)) {
+          stats.kills += 1;
+          this.syncScoreboardStatsToSession(localId, { publish: true });
+        }
+      }
+      this.battlefieldEvents?.push?.({
+        type: "online_death",
+        team: event.shooterTeam === TEAM.RED ? TEAM.RED : TEAM.BLUE,
+        title: "Online kill",
+        detail: `${event.shooterName || "Player"} -> ${targetId || "target"} (${event.damageCause || event.weaponId || "damage"})`
+      });
+      IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "death", result: "applied" });
+      return true;
+    }
+
+    applyOnlinePlayerRespawnEvent(event = {}) {
+      const respawnKey = IronLine.OnlineCombatStabilizer?.respawnKey?.(event);
+      if (respawnKey && !IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatAppliedRespawnIds", respawnKey)) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "respawn", result: "ignored", reason: "duplicate-respawn" });
+        return false;
+      }
+      const targetId = event.targetPlayerId || "";
+      const localId = this.onlineSession?.playerId || "";
+      if (targetId && targetId !== localId) {
+        const player = this.sessionPlayerById?.(targetId);
+        if (player) {
+          player.alive = true;
+          player.deathState = "alive";
+          player.x = Number(event.hitX ?? event.x2 ?? player.x);
+          player.y = Number(event.hitY ?? event.y2 ?? player.y);
+          if (player.position) {
+            player.position.alive = true;
+            player.position.deathState = "alive";
+            player.position.hp = Number(event.targetHealthAfter) || player.position.maxHp || 100;
+            player.position.x = player.x;
+            player.position.y = player.y;
+            player.position.stateSeq = Number(event.targetStateSeq) || player.position.stateSeq || 0;
+          }
+        }
+      }
+      IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "respawn", result: "applied" });
+      return true;
+    }
+
+    publishOnlinePlayerDeath(source = null, kind = "death", options = {}) {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId || !this.onlineSession?.playerId) return null;
+      const roomId = this.onlineSession.roomId;
+      const localPlayer = this.localSessionPlayer?.();
+      if (!localPlayer) return null;
+      const stateSeq = Math.max(0, Math.floor(Number(this.onlinePlayerStateSeq) || 0));
+      const deathId = `${roomId}:death:${this.onlineSession.playerId}:${stateSeq || Date.now()}`;
+      if (!IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatPublishedDeathIds", deathId)) return null;
+      const eventId = IronLine.OnlineCombatStabilizer?.makeEventId?.(this, "player_death", "death") || deathId;
+      const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        id: eventId,
+        eventId,
+        type: "player_death",
+        deathId,
+        hitId: options.hitId || "",
+        triggerEventId: options.triggerEventId || "",
+        shooterId: source?.ownerPlayerId || source?.playerId || "",
+        killerId: source?.ownerPlayerId || source?.playerId || "",
+        shooterName: options.shooterName || "Player",
+        shooterTeam: source?.team === TEAM.RED ? TEAM.RED : TEAM.BLUE,
+        targetPlayerId: this.onlineSession.playerId,
+        weaponId: kind || options.weaponId || "damage",
+        damageCause: options.damageCause || kind || "death",
+        lethal: true,
+        targetHealthBefore: options.targetHealthBefore ?? 0,
+        targetHealthAfter: 0,
+        targetStateSeq: stateSeq,
+        x1: source?.x ?? this.player.x,
+        y1: source?.y ?? this.player.y,
+        x2: this.player.x,
+        y2: this.player.y,
+        hitX: this.player.x,
+        hitY: this.player.y,
+        createdAt: Date.now()
+      });
+      if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...(event || {}),
+        stage: "death",
+        result: event ? "published" : "failed",
+        eventId
+      });
+      return event;
+    }
+
+    publishOnlinePlayerRespawn() {
+      if (this.sessionMode !== "online" || !this.onlineSession?.roomId || !this.onlineSession?.playerId || !this.player) return null;
+      const roomId = this.onlineSession.roomId;
+      this.onlineLastRespawnAt = Date.now();
+      this.onlinePlayerStateSeq = Math.max(0, Math.floor(Number(this.onlinePlayerStateSeq) || 0)) + 1;
+      this.onlineLastRespawnStateSeq = this.onlinePlayerStateSeq;
+      const health = IronLine.OnlineCombatStabilizer?.playerHealthSnapshot?.(this) || { hp: this.player.hp || 0, maxHp: this.player.maxHp || 100 };
+      const respawnId = `${roomId}:respawn:${this.onlineSession.playerId}:${this.onlinePlayerStateSeq}`;
+      if (!IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatPublishedRespawnIds", respawnId)) return null;
+      const eventId = IronLine.OnlineCombatStabilizer?.makeEventId?.(this, "player_respawn", "respawn") || respawnId;
+      const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        id: eventId,
+        eventId,
+        type: "player_respawn",
+        respawnId,
+        shooterId: this.onlineSession.playerId,
+        shooterName: this.localSessionPlayer?.()?.name || this.localSessionPlayer?.()?.nickname || "Player",
+        shooterTeam: this.player.team || TEAM.BLUE,
+        targetPlayerId: this.onlineSession.playerId,
+        weaponId: "respawn",
+        damageCause: "respawn",
+        targetHealthBefore: 0,
+        targetHealthAfter: health.hp,
+        targetStateSeq: this.onlinePlayerStateSeq,
+        x1: this.player.x,
+        y1: this.player.y,
+        x2: this.player.x,
+        y2: this.player.y,
+        hitX: this.player.x,
+        hitY: this.player.y,
+        createdAt: this.onlineLastRespawnAt
+      });
+      if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...(event || {}),
+        stage: "respawn",
+        result: event ? "published" : "failed",
+        eventId
+      });
+      return event;
     }
 
     emitOnlineCombatTracer(event = {}) {
@@ -1818,8 +2023,17 @@
       const damage = hit ? this.onlineGunDamage(weapon, hitTarget.distance, line.range) : 0;
       const endX = hit ? hitTarget.point.x : line.x2;
       const endY = hit ? hitTarget.point.y : line.y2;
+      const sequence = IronLine.OnlineCombatStabilizer?.nextSequence?.(this, "onlineShotSequence") || Date.now();
+      const eventId = IronLine.OnlineCombatStabilizer?.makeEventId?.(this, "shot", weapon?.id || "rifle") || `${roomId}:shot:${this.onlineSession.playerId}:${sequence}`;
+      const remoteHealth = hit ? IronLine.OnlineCombatStabilizer?.remoteHealth?.(hitTarget.player) || {} : {};
+      const targetHealthBefore = Number.isFinite(Number(remoteHealth.hp)) ? Number(remoteHealth.hp) : 0;
+      const targetHealthAfter = hit ? Math.max(0, Math.round((targetHealthBefore - damage) * 10) / 10) : 0;
+      const hitId = hit ? `${eventId}:hit:${hitTarget.player.id}` : "";
 
       const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
+        id: eventId,
+        eventId,
+        sequence,
         type: "small_arms",
         shooterId: this.onlineSession.playerId,
         shooterName: localPlayer.name || localPlayer.nickname || "Player",
@@ -1828,6 +2042,13 @@
         weaponId: weapon?.id || "rifle",
         damage,
         hit,
+        hitId,
+        lethal: hit && targetHealthBefore > 0 && targetHealthAfter <= 0,
+        targetHealthBefore,
+        targetHealthAfter,
+        targetStateSeq: remoteHealth.stateSeq || 0,
+        shooterStateSeq: this.onlinePlayerStateSeq || 0,
+        damageCause: weapon?.id || "rifle",
         x1: line.x1,
         y1: line.y1,
         x2: endX,
@@ -1838,6 +2059,13 @@
         ttl: weapon?.tracerLife || 0.1
       });
       if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...(event || {}),
+        stage: "shot",
+        result: event ? "published" : "failed",
+        eventId,
+        damage
+      });
       if (event?.id && hit) {
         this.recordPlayerHitConfirm?.(hitTarget.player, damage, weapon?.id || "rifle", {
           x: endX,
@@ -1875,12 +2103,16 @@
       if (!roomId) return null;
       const ammo = projectile.ammo || {};
       const shooterInfo = this.onlineShooterInfo(shooter);
-      const projectileId = `${roomId}:proj:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+      const sequence = IronLine.OnlineCombatStabilizer?.nextSequence?.(this, "onlineProjectileSequence") || Date.now();
+      const projectileId = `${roomId}:proj:${shooterInfo.id || "player"}:${sequence}`;
       projectile.onlineCombatId = projectileId;
       projectile.onlineShooterId = shooterInfo.id;
       const speed = Math.hypot(projectile.vx || 0, projectile.vy || 0);
+      const eventId = `${projectileId}:launch`;
       const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
-        id: `${projectileId}:launch`,
+        id: eventId,
+        eventId,
+        sequence,
         type: "projectile_launch",
         projectileId,
         shooterId: shooterInfo.id,
@@ -1888,6 +2120,8 @@
         shooterTeam: shooterInfo.team,
         targetVehicleId: shooterInfo.vehicleId,
         weaponId: options.weaponId || ammo.sourceWeaponId || ammo.id || "projectile",
+        damageCause: options.weaponId || ammo.sourceWeaponId || ammo.id || "projectile",
+        shooterStateSeq: this.onlinePlayerStateSeq || 0,
         damage: ammo.directDamage || ammo.damage || 0,
         radius: ammo.splash || ammo.directExplosionRadius || 0,
         x1: projectile.x,
@@ -1902,6 +2136,12 @@
         smoke: ammo.id === "smoke"
       });
       if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...(event || {}),
+        stage: "projectile-launch",
+        result: event ? "published" : "failed",
+        eventId
+      });
       return event;
     }
 
@@ -1912,8 +2152,11 @@
       const ammo = shell.ammo || {};
       const shooterInfo = this.onlineShooterInfo(shell.owner || null);
       const hitTank = options.hitTank || null;
+      const eventId = `${shell.onlineCombatId}:impact`;
       const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
-        id: `${shell.onlineCombatId}:impact`,
+        id: eventId,
+        eventId,
+        sequence: Number(String(shell.onlineCombatId).split(":").pop()) || 0,
         type: "projectile_impact",
         projectileId: shell.onlineCombatId,
         shooterId: shooterInfo.id,
@@ -1921,6 +2164,8 @@
         shooterTeam: shooterInfo.team || shell.team,
         targetVehicleId: hitTank?.callSign || hitTank?.id || "",
         weaponId: ammo.sourceWeaponId || ammo.id || "projectile",
+        damageCause: ammo.sourceWeaponId || ammo.id || "projectile",
+        shooterStateSeq: this.onlinePlayerStateSeq || 0,
         damage: ammo.directDamage || ammo.damage || 0,
         radius: ammo.splash || ammo.directExplosionRadius || (ammo.id === "ap" ? 52 : 0),
         splash: ammo.splash || 0,
@@ -1936,6 +2181,12 @@
         smoke: ammo.id === "smoke"
       });
       if (event?.id) this.onlineCombatSeenIds?.add?.(event.id);
+      IronLine.OnlineCombatStabilizer?.trace?.(this, {
+        ...(event || {}),
+        stage: "projectile-impact",
+        result: event ? "published" : "failed",
+        eventId
+      });
       return event;
     }
 
@@ -2040,20 +2291,39 @@
         const vehicleScale = mounted.vehicleType === "humvee" ? 0.72 : 0.42;
         mounted.takeDamage?.(this, baseDamage * falloff * vehicleScale);
         if (!mounted.alive) {
-          this.applyPlayerDamage(28, source, event.weaponId || "explosion", {
+          const hpBefore = this.player?.hp || 0;
+          const applied = this.applyPlayerDamage(28, source, event.weaponId || "explosion", {
             label: "\uc628\ub77c\uc778 \ucc28\ub7c9 \ud53c\uaca9",
             x,
             y
           });
+          if (applied && hpBefore > 0 && this.player?.hp <= 0) {
+            this.publishOnlinePlayerDeath(source, event.weaponId || "explosion", {
+              triggerEventId: event.id || event.eventId || "",
+              shooterName: event.shooterName || "Player",
+              damageCause: event.damageCause || event.weaponId || "explosion",
+              targetHealthBefore: hpBefore
+            });
+          }
         }
         return true;
       }
 
-      return this.applyPlayerDamage(baseDamage * falloff, source, event.weaponId || "explosion", {
+      const hpBefore = this.player?.hp || 0;
+      const applied = this.applyPlayerDamage(baseDamage * falloff, source, event.weaponId || "explosion", {
         label: event.weaponId === "rpg" ? "RPG \ud3ed\ubc1c" : "\uc628\ub77c\uc778 \ud3ed\ubc1c",
         x,
         y
       });
+      if (applied && hpBefore > 0 && this.player?.hp <= 0) {
+        this.publishOnlinePlayerDeath(source, event.weaponId || "explosion", {
+          triggerEventId: event.id || event.eventId || "",
+          shooterName: event.shooterName || "Player",
+          damageCause: event.damageCause || event.weaponId || "explosion",
+          targetHealthBefore: hpBefore
+        });
+      }
+      return applied;
     }
 
     onlineGunShotLine(weapon, targetX, targetY, options = {}) {

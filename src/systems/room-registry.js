@@ -45,6 +45,39 @@
     return Math.round(numeric);
   }
 
+  function mergeCombatDuplicate(previous = {}, next = {}, raw = {}) {
+    const merged = { ...previous, ...next };
+    const numericFields = [
+      "damage",
+      "targetHealthBefore",
+      "targetHealthAfter",
+      "targetStateSeq",
+      "shooterStateSeq",
+      "radius",
+      "splash",
+      "speed"
+    ];
+    for (const field of numericFields) {
+      if (raw[field] === undefined && previous[field] !== undefined) merged[field] = previous[field];
+    }
+    const textFields = [
+      "targetPlayerId",
+      "weaponId",
+      "damageCause",
+      "killerId",
+      "shooterId",
+      "shooterName",
+      "projectileId",
+      "targetVehicleId"
+    ];
+    for (const field of textFields) {
+      if (!raw[field] && previous[field]) merged[field] = previous[field];
+    }
+    if (raw.hit === undefined && previous.hit !== undefined) merged.hit = previous.hit;
+    if (raw.lethal === undefined && previous.lethal !== undefined) merged.lethal = previous.lethal;
+    return merged;
+  }
+
   class RoomRegistry {
     constructor() {
       this.storageKey = STORAGE_KEY;
@@ -484,6 +517,10 @@
         position,
         x: position?.x ?? null,
         y: position?.y ?? null,
+        hp: position?.hp ?? Math.max(0, Number(player.hp) || 0),
+        maxHp: position?.maxHp ?? Math.max(1, Number(player.maxHp) || 100),
+        stateSeq: position?.stateSeq ?? Math.max(0, Math.floor(Number(player.stateSeq) || 0)),
+        deathState: position?.deathState || player.deathState || "",
         alive: position?.alive ?? player.alive !== false,
         inVehicle: Boolean(position?.inVehicle || player.inVehicle),
         vehicleId: String(position?.vehicleId || player.vehicleId || "").slice(0, 36),
@@ -570,7 +607,14 @@
       return {
         x: Math.round(x),
         y: Math.round(y),
+        stateSeq: Math.max(0, Math.floor(Number(raw.stateSeq ?? player.stateSeq) || 0)),
+        stateUpdatedAt: Number(raw.stateUpdatedAt ?? player.stateUpdatedAt ?? raw.updatedAt ?? player.updatedAt ?? Date.now()) || Date.now(),
         alive: raw.alive !== false && player.alive !== false,
+        deathState: String(raw.deathState || player.deathState || (raw.alive === false || player.alive === false ? "dead" : "alive")).slice(0, 16),
+        hp: clampNumber(raw.hp ?? player.hp, 0, 999, raw.alive === false || player.alive === false ? 0 : 100),
+        maxHp: clampNumber(raw.maxHp ?? player.maxHp, 1, 999, 100),
+        weaponId: String(raw.weaponId || player.weaponId || "").slice(0, 32),
+        movementState: String(raw.movementState || player.movementState || "").slice(0, 24),
         inVehicle: Boolean(raw.inVehicle || player.inVehicle),
         vehicleId: String(raw.vehicleId || player.vehicleId || "").slice(0, 36),
         vehicleType: String(raw.vehicleType || player.vehicleType || "").slice(0, 18),
@@ -805,6 +849,18 @@
         angle: finiteNumber(event.angle, 0),
         ttl: clampNumber(event.ttl, 0.04, 0.35, 0.12)
       };
+      combatEvent.eventId = String(event.eventId || combatEvent.id).slice(0, 96);
+      combatEvent.sequence = Math.max(0, Math.floor(Number(event.sequence) || 0));
+      combatEvent.hitId = String(event.hitId || "").slice(0, 96);
+      combatEvent.deathId = String(event.deathId || "").slice(0, 96);
+      combatEvent.respawnId = String(event.respawnId || "").slice(0, 96);
+      combatEvent.killerId = String(event.killerId || (combatEvent.type === "player_death" || event.lethal ? event.shooterId : "") || "").slice(0, 48);
+      combatEvent.damageCause = String(event.damageCause || event.cause || event.weaponId || "").slice(0, 48);
+      combatEvent.lethal = Boolean(event.lethal);
+      combatEvent.targetHealthBefore = clampNumber(event.targetHealthBefore, 0, 999, 0);
+      combatEvent.targetHealthAfter = clampNumber(event.targetHealthAfter, 0, 999, 0);
+      combatEvent.targetStateSeq = Math.max(0, Math.floor(Number(event.targetStateSeq) || 0));
+      combatEvent.shooterStateSeq = Math.max(0, Math.floor(Number(event.shooterStateSeq) || 0));
       combatEvent.projectileId = String(event.projectileId || "").slice(0, 48);
       combatEvent.targetVehicleId = String(event.targetVehicleId || "").slice(0, 36);
       combatEvent.radius = clampNumber(event.radius, 0, 2200, 0);
@@ -817,7 +873,17 @@
       const index = rooms.findIndex((item) => item.id === room.id);
       const base = index >= 0 ? rooms[index] : room;
       const nextEvents = Array.isArray(base.combatEvents) ? base.combatEvents.slice(-(MAX_COMBAT_EVENTS - 1)) : [];
-      if (!nextEvents.some((item) => item?.id === combatEvent.id)) nextEvents.push(combatEvent);
+      const duplicateIndex = nextEvents.findIndex((item) => (
+        item?.id === combatEvent.id ||
+        (combatEvent.deathId && item?.deathId === combatEvent.deathId) ||
+        (combatEvent.respawnId && item?.respawnId === combatEvent.respawnId) ||
+        (!combatEvent.deathId && !combatEvent.respawnId && combatEvent.hitId && item?.hitId === combatEvent.hitId)
+      ));
+      if (duplicateIndex >= 0) {
+        nextEvents[duplicateIndex] = mergeCombatDuplicate(nextEvents[duplicateIndex], combatEvent, event);
+      } else {
+        nextEvents.push(combatEvent);
+      }
       const next = this.normalizeRoom({
         ...base,
         combatEvents: nextEvents,
@@ -828,7 +894,7 @@
       else rooms.push(next);
       this.saveRooms(rooms);
       this.schedulePublishRoom(next, combatEvent.type === "small_arms" ? 180 : 90);
-      return combatEvent;
+      return duplicateIndex >= 0 ? nextEvents[duplicateIndex] : combatEvent;
     }
 
     recentCombatEvents(roomId, limit = 80) {

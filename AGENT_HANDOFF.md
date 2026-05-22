@@ -92,7 +92,15 @@ The roadmap cleanup / next-season priority report is COMPLETE.
 
 Important roadmap conclusion: online command sync and local FPS combat are PASS, but the project is not online-combat complete yet. Human position, aim, shot, hit, death, respawn, round state, win state, packet delay/duplicates, host departure, and repeated 2+ client playtests still need a dedicated online combat stabilization first pass.
 
-The next target is: **online combat stabilization 1차**.
+The online combat stabilization first implementation pass is ON TRACK.
+
+The online combat stabilization mid verification report is ON TRACK.
+
+The online combat stabilization mid-report-based narrow fix / live validation pass is PASS.
+
+The online combat stabilization completion report is PASS.
+
+The next target is: **UI / readability / battlefield information cleanup first pass**.
 
 The immediate goal is to make human combat trustworthy online: player position, aim, shot, hit, death, respawn, kill log, damage cause, and round state consistency. Do not begin a full server-authority rewrite unless the first pass proves it is necessary.
 
@@ -164,11 +172,15 @@ AI should not become "smarter" in this pass. It should become easier to command:
 28. 50vs50 event candidate integrated verification plan. READY on 2026-05-22.
 29. 50vs50 event candidate integrated verification report. PASS EVENT-ONLY on 2026-05-22.
 30. Roadmap cleanup / next-season priority report. COMPLETE on 2026-05-22.
-31. Online combat stabilization 1차. Current next target.
+31. Online combat stabilization first implementation pass. ON TRACK on 2026-05-22.
+32. Online combat stabilization mid verification report. ON TRACK on 2026-05-22.
+33. Online combat stabilization mid-report-based narrow fix / live validation pass. PASS on 2026-05-22.
+34. Online combat stabilization completion report. PASS on 2026-05-22.
+35. UI / readability / battlefield information cleanup first pass. Current next target.
 
 ## Current Work Target
 
-Next work item: **online combat stabilization 1차**.
+Next work item: **UI / readability / battlefield information cleanup first pass**.
 
 AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
@@ -196,7 +208,15 @@ Roadmap / next-season priority checkpoint: `docs/roadmap-next-season-priority-re
 
 Online combat stabilization plan: `docs/online-combat-stabilization-first-pass-plan-2026-05-22.md` defines the first-pass scope. Start with online combat path audit and trace visibility, then fix stale player state, duplicate shot / hit / death events, respawn ordering, and round-state consistency. This is not a full server-authority rewrite.
 
-Goal: start online combat stabilization first pass. Keep the scope to multiplayer combat reliability and evidence: position / aim / shot / hit / death / respawn / kill-log / damage-cause / round-state consistency, duplicate / stale combat events, repeated 2+ client playtests, and host / world-host departure observation. Do not start a full server-authority combat rewrite, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
+Online combat stabilization interim report: `docs/online-combat-stabilization-interim-report-2026-05-22.md` records the ON TRACK first implementation pass. Player presence now carries state / health / weapon metadata, combat events carry identity and dedupe metadata, stale hits after respawn are ignored, death / respawn events are published, and observer snapshots expose recent online combat trace. The next narrow step is live two-client hit / death / respawn validation and report-based fixes.
+
+Online combat stabilization mid verification report: `docs/online-combat-stabilization-mid-verification-report-2026-05-22.md` records the ON TRACK checkpoint for two-player room state, aim / weapon / health metadata, stale state rejection, and hit / death / respawn duplicate protection. It also records that true two-browser shot / kill / respawn visual agreement remains the next live validation item.
+
+Online combat stabilization correction pass: `docs/online-combat-stabilization-correction-pass-2026-05-22.md` records the PASS report-based fix / validation pass for delayed valid hits, respawn-sequence stale-hit guards, duplicate metadata merge, clean `killerId` semantics, death health metadata, and browser client-flow hit / death / respawn verification.
+
+Online combat stabilization completion report: `docs/online-combat-stabilization-completion-report-2026-05-22.md` records the PASS decision for the first-pass online human combat stabilization track. It closes position / aim / shot / hit / death / respawn ordering and duplicate / stale protection, while explicitly leaving full server authority and competitive round / victory sync as later work.
+
+Goal: start UI / readability / battlefield information cleanup first pass. Focus on making the now-stabilized command/FPS/online combat state readable: HUD priority, kill / death / radio log placement, minimap clarity, hit direction, AI command state visibility, crowded battlefield hierarchy, and 25vs25 / event-only 50vs50 readability constraints. Do not start full server-authority combat, UGC, city work, 50vs50 default mode, or broad AI behavior expansion from this stage.
 
 Apply the Common Stage Gate and In-Progress Self Check before advancing.
 
@@ -212,7 +232,7 @@ Required AI count expansion preparation checks:
 
 The offline gate, online command synchronization first pass, online commander-order stability gate, human FPS combat loop first pass, FPS combat loop fix + small balance pass, FPS AI rear awareness correction pass, FPS combat loop completion report, and FPS + command integration QA have all passed. The FPS fix + small balance interim verification report and report-based correction pass are ON TRACK.
 
-The next stage is **online combat stabilization 1차**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
+The next stage is **UI / readability / battlefield information cleanup first pass**. Do not make 50vs50 a default mode; keep it behind event-only stress criteria.
 
 Current sequence:
 
@@ -246,7 +266,11 @@ Current sequence:
 28. 50vs50 event candidate integrated verification plan. READY.
 29. 50vs50 event candidate integrated verification report. PASS EVENT-ONLY.
 30. Roadmap cleanup / next-season priority report. COMPLETE.
-31. Online combat stabilization 1차. Current next target.
+31. Online combat stabilization first implementation pass. ON TRACK.
+32. Online combat stabilization mid verification report. ON TRACK.
+33. Online combat stabilization mid-report-based narrow fix / live validation pass. PASS.
+34. Online combat stabilization completion report. PASS.
+35. UI / readability / battlefield information cleanup first pass. Current next target.
 
 ## Offline Command Stability Gate
 

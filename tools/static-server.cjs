@@ -164,6 +164,20 @@ function normalizeParticipant(input = {}, fallbackType = "player") {
   };
 }
 
+function participantStateSeq(participant = {}) {
+  return Number(participant.position?.stateSeq ?? participant.stateSeq ?? 0) || 0;
+}
+
+function isStaleParticipantUpdate(previous = {}, incoming = {}) {
+  const previousSeq = participantStateSeq(previous);
+  const incomingSeq = participantStateSeq(incoming);
+  if (previousSeq > 0 && incomingSeq > 0 && incomingSeq < previousSeq) return true;
+  const previousTime = toClientTimestamp(previous.updatedAt || previous.lastSeenAt || previous.position?.updatedAt || 0);
+  const incomingTime = toClientTimestamp(incoming.updatedAt || incoming.lastSeenAt || incoming.position?.updatedAt || 0);
+  if (incomingSeq > 0 && previousSeq > 0 && incomingSeq === previousSeq && incomingTime <= previousTime) return true;
+  return previousTime > incomingTime;
+}
+
 function normalizeSlotId(slotId = "") {
   const text = String(slotId || "");
   return text.endsWith("-scout") ? text.replace("-scout", "-recon") : text;
@@ -228,7 +242,11 @@ function exportParticipant(input = {}, fallbackType = "player") {
     position: participant.position || null,
     x: Number.isFinite(participant.x) ? participant.x : null,
     y: Number.isFinite(participant.y) ? participant.y : null,
-    alive: participant.alive !== false,
+    hp: Number.isFinite(Number(participant.hp ?? participant.position?.hp)) ? Number(participant.hp ?? participant.position?.hp) : null,
+    maxHp: Number.isFinite(Number(participant.maxHp ?? participant.position?.maxHp)) ? Number(participant.maxHp ?? participant.position?.maxHp) : null,
+    stateSeq: participantStateSeq(participant),
+    deathState: String(participant.deathState || participant.position?.deathState || "").slice(0, 16),
+    alive: participant.alive !== false && participant.position?.alive !== false,
     inVehicle: Boolean(participant.inVehicle),
     vehicleId: String(participant.vehicleId || participant.position?.vehicleId || "").slice(0, 36),
     vehicleType: String(participant.vehicleType || participant.position?.vehicleType || "").slice(0, 18),
@@ -313,7 +331,7 @@ function importParticipants(room, participants = [], fallbackType = "player", op
       room.admins?.get?.(normalized.playerId) ||
       room.participants?.get?.(normalized.playerId) ||
       null;
-    if (previous && toClientTimestamp(previous.updatedAt || previous.lastSeenAt || 0) > toClientTimestamp(normalized.updatedAt || normalized.lastSeenAt || 0)) {
+    if (previous && isStaleParticipantUpdate(previous, normalized)) {
       continue;
     }
     if (fallbackType === "player") room.spectators.delete(normalized.playerId);
@@ -375,9 +393,20 @@ function mergeRoomRecords(existing = [], incoming = [], limit = 120) {
   for (const item of [...(existing || []), ...(incoming || [])]) {
     if (!item || typeof item !== "object") continue;
     const id = String(item.id || `${roomRecordTime(item)}:${item.senderId || item.playerId || item.type || "record"}:${fallbackIndex++}`);
+    const key = item.deathId
+      ? `death:${item.deathId}`
+      : item.respawnId
+        ? `respawn:${item.respawnId}`
+        : item.hitId
+          ? `hit:${item.hitId}`
+          : id;
     const next = { ...item, id };
-    const previous = records.get(id);
-    if (!previous || roomRecordTime(next) >= roomRecordTime(previous)) records.set(id, next);
+    const previous = records.get(key);
+    if (!previous) {
+      records.set(key, next);
+      continue;
+    }
+    if (roomRecordTime(next) >= roomRecordTime(previous)) records.set(key, { ...previous, ...next });
   }
   return Array.from(records.values())
     .sort((a, b) => roomRecordTime(a) - roomRecordTime(b))

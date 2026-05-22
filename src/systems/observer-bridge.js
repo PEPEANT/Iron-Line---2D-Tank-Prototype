@@ -143,6 +143,14 @@
           alive: player.alive !== false,
           inVehicle: Boolean(player.inVehicle || player.position?.inVehicle)
         })).filter((player) => player.participantType === "player"),
+        onlineCombat: {
+          playerStateSeq: Number(game.onlinePlayerStateSeq || 0),
+          shotSeq: Number(game.onlineShotSequence || 0),
+          eventSeq: Number(game.onlineCombatEventSequence || 0),
+          lastRespawnAt: Number(game.onlineLastRespawnAt || 0),
+          lastRespawnStateSeq: Number(game.onlineLastRespawnStateSeq || 0),
+          trace: (game.onlineCombatTrace || []).slice(-24)
+        },
         squads: (game.squads || []).map((squad) => this.squadSnapshot(squad)).filter(Boolean),
         vehicles: [...(game.tanks || []), ...(game.humvees || [])]
           .filter((vehicle) => vehicle.alive)

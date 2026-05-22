@@ -229,7 +229,14 @@ async function runSmoke() {
       position: {
         x: 1200,
         y: 1400,
+        stateSeq: 3,
+        stateUpdatedAt: Date.now(),
         alive: true,
+        hp: 100,
+        maxHp: 100,
+        weaponId: "rifle",
+        movementState: "moving",
+        deathState: "alive",
         angle: 0.2,
         aimX: 1500,
         aimY: 1400,
@@ -251,7 +258,14 @@ async function runSmoke() {
       position: {
         x: 1600,
         y: 1400,
+        stateSeq: 4,
+        stateUpdatedAt: Date.now(),
         alive: true,
+        hp: 100,
+        maxHp: 100,
+        weaponId: "machinegun",
+        movementState: "idle",
+        deathState: "alive",
         angle: 3.1,
         aimX: 1200,
         aimY: 1400,
@@ -269,6 +283,13 @@ async function runSmoke() {
       shooterId: "p-red",
       targetPlayerId: "p-blue",
       hit: true,
+      hitId: `${roomId}:hit:smoke-1`,
+      sequence: 1,
+      targetHealthBefore: 100,
+      targetHealthAfter: 88,
+      targetStateSeq: 3,
+      shooterStateSeq: 4,
+      damageCause: "rifle",
       damage: 12,
       x1: 1600,
       y1: 1400,
@@ -294,10 +315,71 @@ async function runSmoke() {
   if (!room.players.some((player) => player.id === "p-red" && player.position?.droneX === 1580)) {
     throw new Error("Remote drone position was not preserved.");
   }
+  const blueAfterMerge = room.players.find((player) => player.id === "p-blue");
+  if (blueAfterMerge?.position?.stateSeq !== 3 || blueAfterMerge?.position?.hp !== 100 || blueAfterMerge?.position?.weaponId !== "rifle") {
+    throw new Error("Online combat player state fields were not preserved.");
+  }
   if (!room.combatEvents?.some((event) => event.id === `${roomId}:shot-1`)) {
     throw new Error("Combat event was not preserved.");
   }
   if (room.worldState?.hostId !== "p-blue") throw new Error("World state host was not preserved.");
+
+  await postRoom({
+    id: roomId,
+    players: [{
+      id: "p-blue",
+      name: "Blue",
+      team: "blue",
+      slotId: "blue-infantry",
+      participantType: "player",
+      ready: true,
+      updatedAt: Date.now() - 5000,
+      position: {
+        x: 300,
+        y: 300,
+        stateSeq: 1,
+        stateUpdatedAt: Date.now() - 5000,
+        alive: true,
+        hp: 42,
+        maxHp: 100,
+        weaponId: "pistol",
+        updatedAt: Date.now() - 5000
+      }
+    }],
+    updatedAt: Date.now()
+  });
+  const staleRoom = await fetchRoom();
+  const staleBlue = staleRoom.players.find((player) => player.id === "p-blue");
+  if (staleBlue?.position?.x === 300 || staleBlue?.position?.stateSeq !== 3 || staleBlue?.position?.hp !== 100) {
+    throw new Error("Stale player position update overwrote newer combat state.");
+  }
+
+  await postRoom({
+    id: roomId,
+    combatEvents: [{
+      id: `${roomId}:shot-duplicate-a`,
+      hitId: `${roomId}:hit:dedupe`,
+      type: "small_arms",
+      shooterId: "p-red",
+      targetPlayerId: "p-blue",
+      hit: true,
+      damage: 10,
+      createdAt: Date.now()
+    }, {
+      id: `${roomId}:shot-duplicate-b`,
+      hitId: `${roomId}:hit:dedupe`,
+      type: "small_arms",
+      shooterId: "p-red",
+      targetPlayerId: "p-blue",
+      hit: true,
+      damage: 10,
+      createdAt: Date.now() + 1
+    }],
+    updatedAt: Date.now()
+  });
+  const dedupeRoom = await fetchRoom();
+  const dedupedHits = (dedupeRoom.combatEvents || []).filter((event) => event.hitId === `${roomId}:hit:dedupe`);
+  if (dedupedHits.length !== 1) throw new Error(`Duplicate hitId combat event was not collapsed, got ${dedupedHits.length}.`);
 
   const issuedAt = Date.now();
   const infantryCommand = await postCommand(roomId, {
