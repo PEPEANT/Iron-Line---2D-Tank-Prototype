@@ -116,11 +116,25 @@ The AI V2 first-pass interim verification report is ON TRACK.
 
 The AI V2 first-pass integrated correction and completion report is PASS.
 
-The next target is: **AI V2 first-pass checkpoint commit / push before choosing the next roadmap branch**.
+The AI V2 first-pass checkpoint commit / push is complete.
 
-The immediate goal is to back up the PASS state before starting BotCommander doctrine, server-authority review, or player-facing assault approval UI work.
+Checkpoint commit: `25e931d chore: checkpoint ai v2 first pass` pushed to `origin/main`.
 
-Do not start UGC, city/open-world expansion, server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
+The online combat server-authority transition review is APPROVED.
+
+The online combat server-authority first-pass scope lock report is APPROVED.
+
+The online combat server-authority first-pass implementation is ON TRACK.
+
+The online combat server-authority first-pass interim verification report is ON TRACK.
+
+The online combat server-authority first-pass integrated fix and completion report is PASS.
+
+The next target is: **online live-play QA first pass**.
+
+The immediate goal is to validate live two-client behavior, confirm-vs-prediction reconciliation, latency feel, hit rejection clarity, death / respawn ordering, kill-log agreement, and round-state agreement. Do not expand into full server authority.
+
+Do not start UGC, city/open-world expansion, full server-authority rewrites, broad online redesign work, full BotCommander behavior, or full AI behavior rewrites from this handoff.
 
 The command-role design being verified is:
 
@@ -200,11 +214,25 @@ AI should not become "smarter" in this pass. It should become easier to command:
 40. AI V2 first implementation slice. ON TRACK on 2026-05-22.
 41. AI V2 first-pass interim verification report. ON TRACK on 2026-05-22.
 42. AI V2 first-pass integrated correction and completion report. PASS on 2026-05-22.
-43. AI V2 first-pass checkpoint commit / push. Current next target.
+43. AI V2 first-pass checkpoint commit / push. PASS on 2026-05-22. Commit: `25e931d`.
+44. Online combat server-authority transition review. APPROVED on 2026-05-22.
+45. Online combat server-authority first-pass scope lock report. APPROVED on 2026-05-22.
+46. Online combat server-authority first-pass implementation. ON TRACK on 2026-05-22.
+47. Online combat server-authority first-pass interim verification report. ON TRACK on 2026-05-22.
+48. Online combat server-authority first-pass integrated fix and completion report. PASS on 2026-05-22.
+49. Online live-play QA first pass. Current next target.
 
 ## Current Work Target
 
-Next work item: **AI V2 first-pass checkpoint commit / push**.
+Next work item: **online live-play QA first pass**.
+
+Server-authority transition review: `docs/online-combat-server-authority-transition-review-2026-05-22.md` records the APPROVED decision to move only human combat outcomes toward partial server authority first. The first server-authority pass should cover shot request / hit claim / hit confirm / death confirm / respawn confirm / score state / round state. Do not move AI simulation, BotCommander, Tactical Map, or full world simulation to server authority in this pass.
+
+Server-authority scope lock: `docs/online-combat-server-authority-first-pass-scope-lock-2026-05-22.md` records the APPROVED implementation boundary. The next pass may implement `player_state`, `player_shot`, `server_hit_confirm`, `server_death_confirm`, `server_respawn_confirm`, and `server_round_confirm` for human combat only. Keep client input / prediction / effects responsive. Keep AI, BotCommander, Tactical Map, 50vs50 world simulation, full vehicle/drone AI judgment, rank, matchmaking, UGC, and city systems out of scope.
+
+Server-authority interim report: `docs/online-combat-server-authority-first-pass-interim-report-2026-05-22.md` records the ON TRACK implementation checkpoint. Server confirm events now cover hit, death, respawn, and round state in the static room API path. The smoke helper is `tools/check-online-combat-server-authority.cjs`. Next validation should stay narrow: live two-client behavior, prediction reconciliation, late confirm ordering, and remaining duplicate / stale packet edges.
+
+Server-authority completion report: `docs/online-combat-server-authority-first-pass-completion-report-2026-05-22.md` records the PASS decision for the locked first-pass human-combat server confirmation scope. The code now supports server hit / death / respawn / round confirm events in the room API path. It still does not implement full server-authoritative movement, raycast / obstacle validation, projectile / vehicle / drone authority, competitive lag compensation, ranking, anti-cheat, or full AI/world server authority.
 
 AI V2 first-pass checkpoint: `docs/ai-v2-tactical-map-first-pass-report-2026-05-22.md` records the PASS decision for the first tactical battlefield data layer. The browser smoke helper is `tools/check-tactical-map.cjs`.
 
@@ -314,7 +342,13 @@ Current sequence:
 40. AI V2 first implementation slice. ON TRACK.
 41. AI V2 first-pass interim verification report. ON TRACK.
 42. AI V2 first-pass integrated correction and completion report. PASS.
-43. AI V2 first-pass checkpoint commit / push. Current next target.
+43. AI V2 first-pass checkpoint commit / push. PASS. Commit: `25e931d`.
+44. Online combat server-authority transition review. APPROVED.
+45. Online combat server-authority first-pass scope lock report. APPROVED.
+46. Online combat server-authority first-pass implementation. ON TRACK.
+47. Online combat server-authority first-pass interim verification report. ON TRACK.
+48. Online combat server-authority first-pass integrated fix and completion report. PASS.
+49. Online live-play QA first pass. Current next target.
 
 ## Offline Command Stability Gate
 

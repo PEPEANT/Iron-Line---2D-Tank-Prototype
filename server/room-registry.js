@@ -39,6 +39,7 @@ class RoomRegistry {
       chat: [],
       events: [],
       combatEvents: [],
+      combatServerSeq: 0,
       worldState: null,
       createdAt: config.createdAt,
       updatedAt: this.now()
@@ -261,6 +262,402 @@ class RoomRegistry {
     return (room.commands || [])
       .filter((item) => (item.commanderSlotId || item.slotId) === slotId)
       .sort((a, b) => Number(b.issuedAt || b.createdAt || 0) - Number(a.issuedAt || a.createdAt || 0))[0] || null;
+  }
+
+  pushCombatRequest(roomId, input = {}) {
+    const room = this.getOrCreateRoom(roomId);
+    if (!input || typeof input !== "object") return { ok: false, reason: "invalid-combat-packet" };
+    const type = String(input.type || input.requestType || "player_shot").slice(0, 32);
+    if (type === "player_respawn" || type === "respawn_request" || type === "server_respawn_confirm") {
+      return this.confirmRespawn(room, input);
+    }
+    if (type === "player_death" || type === "death_request" || type === "server_death_confirm") {
+      return this.confirmDeath(room, input);
+    }
+    if (type === "round_state" || type === "round_confirm" || type === "server_round_confirm") {
+      return this.confirmRound(room, input);
+    }
+    if (type === "projectile_launch" || type === "projectile_impact") {
+      return this.appendServerCombatEvents(room, [this.normalizeServerCombatEvent(room, input)]);
+    }
+    return this.confirmShot(room, input);
+  }
+
+  nextCombatServerSeq(room) {
+    room.combatServerSeq = Math.max(0, Math.floor(Number(room.combatServerSeq) || 0)) + 1;
+    return room.combatServerSeq;
+  }
+
+  combatEventKey(event = {}) {
+    if (event.deathId) return `death:${event.deathId}`;
+    if (event.respawnId) return `respawn:${event.respawnId}`;
+    if (event.hitId) return `hit:${event.hitId}`;
+    if (event.shotId) return `shot:${event.shotId}`;
+    if (event.roundSeq) return `round:${event.roundSeq}`;
+    return `id:${event.id || event.eventId || Date.now()}`;
+  }
+
+  appendServerCombatEvents(room, events = []) {
+    const normalized = events.filter(Boolean);
+    if (!normalized.length) return { ok: true, events: [], room };
+    const nextEvents = Array.isArray(room.combatEvents) ? room.combatEvents.slice(-139) : [];
+    const applied = [];
+    for (const event of normalized) {
+      const key = this.combatEventKey(event);
+      const duplicateIndex = nextEvents.findIndex((item) => this.combatEventKey(item) === key || item?.id === event.id);
+      if (duplicateIndex >= 0) {
+        nextEvents[duplicateIndex] = { ...nextEvents[duplicateIndex], ...event };
+        applied.push(nextEvents[duplicateIndex]);
+      } else {
+        nextEvents.push(event);
+        applied.push(event);
+      }
+    }
+    if (nextEvents.length > 140) nextEvents.splice(0, nextEvents.length - 140);
+    room.combatEvents = nextEvents;
+    room.updatedAt = this.now();
+    return { ok: true, events: applied, room };
+  }
+
+  normalizeServerCombatEvent(room, input = {}) {
+    const serverSeq = this.nextCombatServerSeq(room);
+    const createdAt = Number(input.createdAt || input.confirmedAt) || Date.now();
+    const type = String(input.type || "combat_event").slice(0, 32);
+    const shotId = String(input.shotId || input.eventId || input.id || "").slice(0, 96);
+    const id = String(input.id || input.eventId || `${room.config.roomId}:server:${type}:${serverSeq}`).slice(0, 128);
+    return {
+      ...input,
+      id,
+      eventId: String(input.eventId || id).slice(0, 128),
+      roomId: room.config.roomId,
+      type,
+      serverAuthority: true,
+      serverSeq,
+      shotId,
+      createdAt,
+      confirmedAt: Number(input.confirmedAt) || createdAt,
+      shooterId: String(input.shooterId || input.playerId || "").slice(0, 48),
+      shooterName: String(input.shooterName || input.sender || "Player").slice(0, 24),
+      shooterTeam: input.shooterTeam === "red" ? "red" : "blue",
+      targetPlayerId: String(input.targetPlayerId || "").slice(0, 48),
+      weaponId: String(input.weaponId || "rifle").slice(0, 32),
+      damageCause: String(input.damageCause || input.cause || input.weaponId || "").slice(0, 48),
+      damage: this.clampCombatNumber(input.damage, 0, 999, 0),
+      targetHealthBefore: this.clampCombatNumber(input.targetHealthBefore, 0, 999, 0),
+      targetHealthAfter: this.clampCombatNumber(input.targetHealthAfter, 0, 999, 0),
+      targetStateSeq: Math.max(0, Math.floor(Number(input.targetStateSeq) || 0)),
+      shooterStateSeq: Math.max(0, Math.floor(Number(input.shooterStateSeq || input.stateSeq) || 0))
+    };
+  }
+
+  clampCombatNumber(value, min = 0, max = 1, fallback = min) {
+    const numeric = Number(value);
+    const safe = Number.isFinite(numeric) ? numeric : fallback;
+    return Math.max(min, Math.min(max, safe));
+  }
+
+  combatPlayer(room, playerId = "") {
+    const id = String(playerId || "");
+    if (!id) return null;
+    return room.players.get(id) || room.participants.get(id) || null;
+  }
+
+  combatPlayerState(player = {}) {
+    const position = player.position || {};
+    const hp = Number(position.hp ?? player.hp);
+    const maxHp = Number(position.maxHp ?? player.maxHp);
+    return {
+      hp: Number.isFinite(hp) ? hp : 100,
+      maxHp: Number.isFinite(maxHp) ? maxHp : 100,
+      alive: position.alive !== false && player.alive !== false,
+      stateSeq: Math.max(0, Math.floor(Number(position.stateSeq ?? player.stateSeq) || 0)),
+      x: Number(position.x ?? player.x) || 0,
+      y: Number(position.y ?? player.y) || 0
+    };
+  }
+
+  updateCombatPlayerState(player = {}, patch = {}) {
+    if (!player) return;
+    player.hp = patch.hp ?? player.hp;
+    player.maxHp = patch.maxHp ?? player.maxHp;
+    player.alive = patch.alive ?? player.alive;
+    player.deathState = patch.deathState || player.deathState;
+    player.stateSeq = patch.stateSeq ?? player.stateSeq;
+    player.x = patch.x ?? player.x;
+    player.y = patch.y ?? player.y;
+    player.position = {
+      ...(player.position || {}),
+      hp: patch.hp ?? player.position?.hp ?? player.hp,
+      maxHp: patch.maxHp ?? player.position?.maxHp ?? player.maxHp,
+      alive: patch.alive ?? player.position?.alive ?? player.alive,
+      deathState: patch.deathState || player.position?.deathState || player.deathState,
+      stateSeq: patch.stateSeq ?? player.position?.stateSeq ?? player.stateSeq,
+      x: patch.x ?? player.position?.x ?? player.x,
+      y: patch.y ?? player.position?.y ?? player.y,
+      updatedAt: Date.now()
+    };
+  }
+
+  serverWeaponDamage(input = {}) {
+    const weaponId = String(input.weaponId || "rifle");
+    const caps = {
+      pistol: 22,
+      rifle: 34,
+      carbine: 30,
+      machinegun: 28,
+      sniper: 90,
+      shotgun: 62,
+      grenade: 90,
+      grenadeLauncher: 96,
+      rpg: 120,
+      projectile: 120,
+      shell: 120
+    };
+    const raw = Number(input.damage ?? input.clientDamageClaim ?? 0);
+    const cap = caps[weaponId] || 42;
+    if (!Number.isFinite(raw) || raw <= 0) return Math.min(cap, 24);
+    return Math.max(0, Math.min(cap, Math.round(raw * 10) / 10));
+  }
+
+  confirmShot(room, input = {}) {
+    const shooterId = String(input.shooterId || input.playerId || "").slice(0, 48);
+    const targetPlayerId = String(input.targetPlayerId || "").slice(0, 48);
+    const shotId = String(input.shotId || input.eventId || input.id || `${room.config.roomId}:shot:${shooterId}:${Date.now()}`).slice(0, 96);
+    const hitId = String(input.hitId || `${shotId}:hit:${targetPlayerId || "none"}`).slice(0, 96);
+    const existing = (room.combatEvents || []).filter((event) => event.shotId === shotId || (hitId && event.hitId === hitId));
+    if (existing.length) return { ok: true, duplicate: true, events: existing, room };
+
+    const shooter = this.combatPlayer(room, shooterId);
+    const target = this.combatPlayer(room, targetPlayerId);
+    const targetState = this.combatPlayerState(target || {});
+    const shooterState = this.combatPlayerState(shooter || {});
+    const claimedTargetSeq = Math.max(0, Math.floor(Number(input.targetStateSeq) || 0));
+    const hitClaim = Boolean((input.hit || input.clientHitClaim || targetPlayerId) && targetPlayerId);
+    let accepted = Boolean(hitClaim && shooter && target && shooterState.alive && targetState.alive);
+    let reason = accepted ? "confirmed" : "miss";
+    if (!shooter) reason = "missing-shooter";
+    else if (!target && hitClaim) reason = "invalid-target";
+    else if (!shooterState.alive) reason = "shooter-dead";
+    else if (target && !targetState.alive) reason = "target-dead";
+    else if (target && claimedTargetSeq > 0 && targetState.stateSeq > 0 && claimedTargetSeq < targetState.stateSeq) reason = "stale-state";
+    else if (!hitClaim) reason = "miss";
+    if (reason !== "confirmed") accepted = false;
+
+    const damage = accepted ? this.serverWeaponDamage(input) : 0;
+    const targetHealthBefore = target ? Math.max(0, targetState.hp) : 0;
+    const targetHealthAfter = accepted ? Math.max(0, Math.round((targetHealthBefore - damage) * 10) / 10) : targetHealthBefore;
+    if (accepted && target) {
+      this.updateCombatPlayerState(target, {
+        hp: targetHealthAfter,
+        maxHp: targetState.maxHp,
+        alive: targetHealthAfter > 0,
+        deathState: targetHealthAfter > 0 ? "alive" : "dead",
+        stateSeq: targetState.stateSeq
+      });
+    }
+
+    const confirmedAt = Date.now();
+    const hitConfirm = this.normalizeServerCombatEvent(room, {
+      ...input,
+      id: `${room.config.roomId}:server_hit_confirm:${shotId}`,
+      eventId: `${room.config.roomId}:server_hit_confirm:${shotId}`,
+      type: "server_hit_confirm",
+      shotId,
+      hitId,
+      accepted,
+      reason,
+      shooterId,
+      shooterName: input.shooterName || shooter?.nickname || shooter?.name || "Player",
+      shooterTeam: input.shooterTeam || shooter?.team || "blue",
+      targetPlayerId,
+      hit: accepted,
+      lethal: accepted && targetHealthAfter <= 0,
+      damage,
+      targetHealthBefore,
+      targetHealthAfter,
+      targetStateSeq: targetState.stateSeq,
+      shooterStateSeq: Number(input.shooterStateSeq || input.stateSeq || shooterState.stateSeq) || 0,
+      confirmedAt
+    });
+    const events = [hitConfirm];
+    if (accepted && target && targetHealthAfter <= 0) {
+      this.applyCombatDeathStats(room, shooterId, targetPlayerId);
+      const death = this.createDeathConfirm(room, {
+        ...input,
+        deathId: input.deathId || `${room.config.roomId}:death:${targetPlayerId}:${targetState.stateSeq || confirmedAt}`,
+        hitId,
+        shotId,
+        killerId: shooterId,
+        shooterId,
+        shooterName: hitConfirm.shooterName,
+        shooterTeam: hitConfirm.shooterTeam,
+        targetPlayerId,
+        weaponId: hitConfirm.weaponId,
+        damageCause: hitConfirm.damageCause || hitConfirm.weaponId,
+        targetHealthBefore,
+        targetHealthAfter: 0,
+        targetStateSeq: targetState.stateSeq,
+        confirmedAt
+      });
+      events.push(death);
+    }
+    return this.appendServerCombatEvents(room, events);
+  }
+
+  applyCombatDeathStats(room, killerId = "", targetPlayerId = "") {
+    const killer = this.combatPlayer(room, killerId);
+    const target = this.combatPlayer(room, targetPlayerId);
+    if (killer && killerId && killerId !== targetPlayerId) {
+      killer.stats = killer.stats || {};
+      killer.stats.kills = Math.max(0, Math.floor(Number(killer.stats.kills) || 0)) + 1;
+    }
+    if (target) {
+      target.stats = target.stats || {};
+      target.stats.deaths = Math.max(0, Math.floor(Number(target.stats.deaths) || 0)) + 1;
+    }
+  }
+
+  createDeathConfirm(room, input = {}) {
+    const serverSeq = this.nextCombatServerSeq(room);
+    const confirmedAt = Number(input.confirmedAt) || Date.now();
+    const targetPlayerId = String(input.targetPlayerId || "").slice(0, 48);
+    const killerId = String(input.killerId || input.shooterId || "").slice(0, 48);
+    const deathId = String(input.deathId || `${room.config.roomId}:death:${targetPlayerId}:${input.targetStateSeq || confirmedAt}`).slice(0, 96);
+    return {
+      ...input,
+      id: `${room.config.roomId}:server_death_confirm:${deathId}`,
+      eventId: `${room.config.roomId}:server_death_confirm:${deathId}`,
+      roomId: room.config.roomId,
+      type: "server_death_confirm",
+      serverAuthority: true,
+      serverSeq,
+      deathId,
+      hitId: String(input.hitId || "").slice(0, 96),
+      shotId: String(input.shotId || "").slice(0, 96),
+      killerId,
+      shooterId: String(input.shooterId || killerId).slice(0, 48),
+      shooterName: String(input.shooterName || "Player").slice(0, 24),
+      shooterTeam: input.shooterTeam === "red" ? "red" : "blue",
+      targetPlayerId,
+      weaponId: String(input.weaponId || "damage").slice(0, 32),
+      damageCause: String(input.damageCause || input.weaponId || "damage").slice(0, 48),
+      lethal: true,
+      hit: true,
+      targetHealthBefore: this.clampCombatNumber(input.targetHealthBefore, 0, 999, 0),
+      targetHealthAfter: 0,
+      targetStateSeq: Math.max(0, Math.floor(Number(input.targetStateSeq) || 0)),
+      confirmedAt,
+      createdAt: confirmedAt,
+      killLogText: String(input.killLogText || `${killerId || "unknown"} -> ${targetPlayerId || "target"}`).slice(0, 96)
+    };
+  }
+
+  confirmDeath(room, input = {}) {
+    const targetPlayerId = String(input.targetPlayerId || "").slice(0, 48);
+    if (!targetPlayerId) return { ok: false, reason: "missing-target" };
+    const deathId = String(input.deathId || `${room.config.roomId}:death:${targetPlayerId}:${input.targetStateSeq || Date.now()}`).slice(0, 96);
+    const existing = (room.combatEvents || []).filter((event) => event.deathId === deathId);
+    if (existing.length) return { ok: true, duplicate: true, events: existing, room };
+    const target = this.combatPlayer(room, targetPlayerId);
+    const targetState = this.combatPlayerState(target || {});
+    const incomingSeq = Math.max(0, Math.floor(Number(input.targetStateSeq) || 0));
+    if (target && targetState.alive && incomingSeq > 0 && targetState.stateSeq > incomingSeq) {
+      return { ok: false, reason: "stale-death" };
+    }
+    if (target) {
+      this.updateCombatPlayerState(target, {
+        hp: 0,
+        maxHp: targetState.maxHp,
+        alive: false,
+        deathState: "dead",
+        stateSeq: Number(input.targetStateSeq) || targetState.stateSeq
+      });
+    }
+    this.applyCombatDeathStats(room, input.killerId || input.shooterId || "", targetPlayerId);
+    const death = this.createDeathConfirm(room, { ...input, deathId, targetPlayerId });
+    return this.appendServerCombatEvents(room, [death]);
+  }
+
+  confirmRespawn(room, input = {}) {
+    const playerId = String(input.targetPlayerId || input.playerId || input.shooterId || "").slice(0, 48);
+    if (!playerId) return { ok: false, reason: "missing-player" };
+    const player = this.combatPlayer(room, playerId);
+    if (!player) return { ok: false, reason: "missing-player" };
+    const state = this.combatPlayerState(player);
+    const stateSeq = Math.max(state.stateSeq + 1, Math.floor(Number(input.targetStateSeq || input.stateSeq) || 0));
+    const x = Number(input.hitX ?? input.x2 ?? input.x ?? state.x) || state.x;
+    const y = Number(input.hitY ?? input.y2 ?? input.y ?? state.y) || state.y;
+    const hp = this.clampCombatNumber(input.targetHealthAfter ?? input.hp, 1, state.maxHp || 100, state.maxHp || 100);
+    const respawnId = String(input.respawnId || `${room.config.roomId}:respawn:${playerId}:${stateSeq}`).slice(0, 96);
+    const existing = (room.combatEvents || []).filter((event) => event.respawnId === respawnId);
+    if (existing.length) return { ok: true, duplicate: true, events: existing, room };
+    this.updateCombatPlayerState(player, {
+      hp,
+      maxHp: state.maxHp || hp,
+      alive: true,
+      deathState: "alive",
+      stateSeq,
+      x,
+      y
+    });
+    const confirmedAt = Date.now();
+    const respawn = {
+      id: `${room.config.roomId}:server_respawn_confirm:${respawnId}`,
+      eventId: `${room.config.roomId}:server_respawn_confirm:${respawnId}`,
+      roomId: room.config.roomId,
+      type: "server_respawn_confirm",
+      serverAuthority: true,
+      serverSeq: this.nextCombatServerSeq(room),
+      respawnId,
+      playerId,
+      shooterId: playerId,
+      shooterName: player.nickname || player.name || "Player",
+      shooterTeam: player.team || "blue",
+      targetPlayerId: playerId,
+      weaponId: "respawn",
+      damageCause: "respawn",
+      targetHealthBefore: 0,
+      targetHealthAfter: hp,
+      hp,
+      maxHp: state.maxHp || hp,
+      targetStateSeq: stateSeq,
+      stateSeq,
+      x1: x,
+      y1: y,
+      x2: x,
+      y2: y,
+      hitX: x,
+      hitY: y,
+      alive: true,
+      deathState: "alive",
+      invulnerableUntil: Number(input.invulnerableUntil) || confirmedAt + 1200,
+      confirmedAt,
+      createdAt: confirmedAt
+    };
+    return this.appendServerCombatEvents(room, [respawn]);
+  }
+
+  confirmRound(room, input = {}) {
+    const confirmedAt = Date.now();
+    const event = {
+      id: `${room.config.roomId}:server_round_confirm:${input.roundSeq || confirmedAt}`,
+      eventId: `${room.config.roomId}:server_round_confirm:${input.roundSeq || confirmedAt}`,
+      roomId: room.config.roomId,
+      type: "server_round_confirm",
+      serverAuthority: true,
+      serverSeq: this.nextCombatServerSeq(room),
+      roundSeq: Math.max(0, Math.floor(Number(input.roundSeq) || 0)),
+      phase: String(input.phase || room.phase || "playing").slice(0, 18),
+      blueScore: Math.max(0, Math.floor(Number(input.blueScore) || 0)),
+      redScore: Math.max(0, Math.floor(Number(input.redScore) || 0)),
+      winner: ["blue", "red", "draw", ""].includes(input.winner) ? input.winner : "",
+      reason: String(input.reason || "").slice(0, 64),
+      startedAt: input.startedAt || room.config.startedAt || 0,
+      endedAt: input.endedAt || room.config.endedAt || 0,
+      confirmedAt,
+      createdAt: confirmedAt
+    };
+    return this.appendServerCombatEvents(room, [event]);
   }
 
   pushChat(roomId, input = {}) {

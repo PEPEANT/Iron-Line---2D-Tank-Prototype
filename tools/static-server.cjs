@@ -305,6 +305,7 @@ function exportClientRoom(room) {
     events: Array.isArray(room?.events) ? room.events.slice(-80) : [],
     commands: Array.isArray(room?.commands) ? room.commands.slice(-120) : [],
     combatEvents: Array.isArray(room?.combatEvents) ? room.combatEvents.slice(-140) : [],
+    combatServerSeq: Math.max(0, Math.floor(Number(room?.combatServerSeq) || 0)),
     worldState: room?.worldState || null,
     createdAt: toClientTimestamp(config.createdAt),
     updatedAt: toClientTimestamp(room?.updatedAt),
@@ -399,7 +400,9 @@ function mergeRoomRecords(existing = [], incoming = [], limit = 120) {
         ? `respawn:${item.respawnId}`
         : item.hitId
           ? `hit:${item.hitId}`
-          : id;
+          : item.shotId
+            ? `shot:${item.shotId}`
+            : id;
     const next = { ...item, id };
     const previous = records.get(key);
     if (!previous) {
@@ -500,6 +503,7 @@ function applyClientRoomToServer(body = {}) {
   room.chat = Array.isArray(body.chat) ? mergeRoomRecords(room.chat, body.chat, 120) : room.chat;
   room.events = Array.isArray(body.events) ? mergeRoomRecords(room.events, body.events, 80) : room.events;
   room.combatEvents = Array.isArray(body.combatEvents) ? mergeRoomRecords(room.combatEvents, body.combatEvents, 140) : (room.combatEvents || []);
+  room.combatServerSeq = Math.max(Math.floor(Number(room.combatServerSeq) || 0), Math.floor(Number(body.combatServerSeq) || 0));
   if (body.worldState && typeof body.worldState === "object") {
     const incomingTime = roomRecordTime(body.worldState);
     const currentTime = roomRecordTime(room.worldState || {});
@@ -557,6 +561,7 @@ async function handleRoomsApi(req, res) {
   const roomId = pathParts[1] === "rooms" ? decodeURIComponent(pathParts[2] || "") : "";
   const participantId = pathParts[3] === "participants" ? decodeURIComponent(pathParts[4] || "") : "";
   const commandEndpoint = pathParts[3] === "commands";
+  const combatEndpoint = pathParts[3] === "combat";
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
     if (cleanupStaleServerParticipants()) persistRooms();
@@ -585,19 +590,22 @@ async function handleRoomsApi(req, res) {
 
   if (req.method === "POST" && roomId && commandEndpoint) {
     const body = await readJsonBody(req);
-    if (!body) {
-      sendJson(res, 400, { ok: false, reason: "invalid_json" });
-      return;
-    }
+    if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
     const result = onlineRegistry.pushCommand(roomId, body);
-    if (!result?.ok) {
-      sendJson(res, 403, { ok: false, reason: result?.reason || "command_rejected" });
-      return;
-    }
+    if (!result?.ok) return sendJson(res, 403, { ok: false, reason: result?.reason || "command_rejected" });
     persistRooms();
     const room = onlineRegistry.rooms.get(roomId);
-    sendJson(res, 200, { ok: true, packet: result.packet, room: exportClientRoom(room) });
-    return;
+    return sendJson(res, 200, { ok: true, packet: result.packet, room: exportClientRoom(room) });
+  }
+
+  if (req.method === "POST" && roomId && combatEndpoint) {
+    const body = await readJsonBody(req);
+    if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
+    const result = onlineRegistry.pushCombatRequest(roomId, body);
+    if (!result?.ok) return sendJson(res, 403, { ok: false, reason: result?.reason || "combat_rejected" });
+    persistRooms();
+    const room = onlineRegistry.rooms.get(roomId);
+    return sendJson(res, 200, { ok: true, events: result.events || [], room: exportClientRoom(room) });
   }
 
   if (req.method === "DELETE" && roomId && participantId) {

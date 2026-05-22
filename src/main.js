@@ -1731,7 +1731,7 @@
         this.onlineCombatSeenIds.add(event.id);
         const createdAt = this.onlineCombatEventTime(event);
         if (createdAt && now - createdAt > 6500) continue;
-        if (event.shooterId === localId) continue;
+        if (event.shooterId === localId && event.type !== "server_death_confirm" && event.type !== "server_round_confirm") continue;
         this.applyOnlineCombatEvent(event);
       }
 
@@ -1760,11 +1760,14 @@
         result: "seen",
         eventId: event.eventId || event.id
       });
-      if (event.type === "player_death") {
+      if (event.type === "player_death" || event.type === "server_death_confirm") {
         return this.applyOnlinePlayerDeathEvent(event);
       }
-      if (event.type === "player_respawn") {
+      if (event.type === "player_respawn" || event.type === "server_respawn_confirm") {
         return this.applyOnlinePlayerRespawnEvent(event);
+      }
+      if (event.type === "server_round_confirm") {
+        return this.applyOnlineRoundConfirm(event);
       }
       if (event.type === "projectile_launch") {
         this.emitOnlineProjectileLaunch(event);
@@ -1775,10 +1778,21 @@
         return this.applyOnlineProjectileImpactDamage(event);
       }
 
+      const serverHitConfirm = event.type === "server_hit_confirm";
       this.emitOnlineCombatTracer(event);
+      if (serverHitConfirm && event.accepted === false) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, {
+          ...event,
+          stage: "hit",
+          result: "ignored",
+          reason: event.reason || "server-rejected"
+        });
+        return false;
+      }
       const localId = this.onlineSession?.playerId || "";
       if (!this.onlineCombatActiveForLocalPlayer()) return false;
-      if (!event.hit || event.targetPlayerId !== localId) return false;
+      const confirmedHit = serverHitConfirm ? event.accepted !== false : event.hit;
+      if (!confirmedHit || event.targetPlayerId !== localId) return false;
       if (this.isPlayerInSafeZone?.()) return false;
       if (IronLine.OnlineCombatStabilizer?.isStaleForLocalPlayer?.(this, event)) {
         IronLine.OnlineCombatStabilizer?.trace?.(this, {
@@ -1820,7 +1834,7 @@
         hp: this.player?.hp,
         damage: Math.max(0, hpBefore - (this.player?.hp || 0))
       });
-      if (applied && hpBefore > 0 && this.player?.hp <= 0) {
+      if (applied && hpBefore > 0 && this.player?.hp <= 0 && !serverHitConfirm) {
         this.publishOnlinePlayerDeath(source, event.weaponId || "rifle", {
           triggerEventId: event.id || event.eventId || "",
           hitId: hitKey || "",
@@ -1830,6 +1844,27 @@
         });
       }
       return applied;
+    }
+
+    applyOnlineRoundConfirm(event = {}) {
+      const roundKey = `${event.roomId || this.onlineSession?.roomId || "local"}:${event.roundSeq || event.serverSeq || event.id || event.eventId}`;
+      if (roundKey && !IronLine.OnlineCombatStabilizer?.rememberSet?.(this, "onlineCombatAppliedRoundIds", roundKey)) {
+        IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "round", result: "ignored", reason: "duplicate-round" });
+        return false;
+      }
+      this.onlineServerRoundState = {
+        roomId: event.roomId || this.onlineSession?.roomId || "",
+        roundSeq: Number(event.roundSeq) || 0,
+        phase: event.phase || "",
+        blueScore: Number(event.blueScore) || 0,
+        redScore: Number(event.redScore) || 0,
+        winner: event.winner || "",
+        reason: event.reason || "",
+        serverSeq: Number(event.serverSeq) || 0,
+        confirmedAt: Number(event.confirmedAt) || Date.now()
+      };
+      IronLine.OnlineCombatStabilizer?.trace?.(this, { ...event, stage: "round", result: "applied" });
+      return true;
     }
 
     applyOnlinePlayerDeathEvent(event = {}) {
@@ -2033,6 +2068,7 @@
       const event = IronLine.roomRegistry?.pushCombatEvent?.(roomId, {
         id: eventId,
         eventId,
+        shotId: eventId,
         sequence,
         type: "small_arms",
         shooterId: this.onlineSession.playerId,

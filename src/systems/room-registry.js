@@ -53,6 +53,7 @@
       "targetHealthAfter",
       "targetStateSeq",
       "shooterStateSeq",
+      "serverSeq",
       "radius",
       "splash",
       "speed"
@@ -62,6 +63,7 @@
     }
     const textFields = [
       "targetPlayerId",
+      "shotId",
       "weaponId",
       "damageCause",
       "killerId",
@@ -75,6 +77,8 @@
     }
     if (raw.hit === undefined && previous.hit !== undefined) merged.hit = previous.hit;
     if (raw.lethal === undefined && previous.lethal !== undefined) merged.lethal = previous.lethal;
+    if (raw.accepted === undefined && previous.accepted !== undefined) merged.accepted = previous.accepted;
+    if (raw.serverAuthority === undefined && previous.serverAuthority !== undefined) merged.serverAuthority = previous.serverAuthority;
     return merged;
   }
 
@@ -790,6 +794,10 @@
       return `${this.roomsApiUrl(roomId)}/commands`;
     }
 
+    combatApiUrl(roomId = "") {
+      return `${this.roomsApiUrl(roomId)}/combat`;
+    }
+
     pushCommand(roomId, command = {}) {
       const room = this.getRoom(roomId);
       if (!room) return null;
@@ -824,6 +832,33 @@
       return (room?.commands || []).slice(-limit);
     }
 
+    publishCombatEvent(roomId, combatEvent = {}, fallbackRoom = null) {
+      if (!this.canUseRemoteApi() || !roomId || !combatEvent?.id) return Promise.resolve(null);
+      return fetch(this.combatApiUrl(roomId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(combatEvent)
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
+          if (remoteRoom) {
+            this.pendingRemoteRoomIds.delete(remoteRoom.id);
+            this.upsertRemoteRoom(remoteRoom);
+            this.remoteOnline = true;
+            this.emit();
+            return payload;
+          }
+          if (fallbackRoom) this.schedulePublishRoom(fallbackRoom, 120);
+          return null;
+        })
+        .catch(() => {
+          if (fallbackRoom) this.schedulePublishRoom(fallbackRoom, 180);
+          this.remoteOnline = false;
+          return null;
+        });
+    }
+
     pushCombatEvent(roomId, event = {}) {
       const room = this.getRoom(roomId);
       if (!room) return null;
@@ -851,12 +886,18 @@
       };
       combatEvent.eventId = String(event.eventId || combatEvent.id).slice(0, 96);
       combatEvent.sequence = Math.max(0, Math.floor(Number(event.sequence) || 0));
+      combatEvent.serverSeq = Math.max(0, Math.floor(Number(event.serverSeq) || 0));
+      combatEvent.shotId = String(event.shotId || event.eventId || event.id || "").slice(0, 96);
       combatEvent.hitId = String(event.hitId || "").slice(0, 96);
       combatEvent.deathId = String(event.deathId || "").slice(0, 96);
       combatEvent.respawnId = String(event.respawnId || "").slice(0, 96);
       combatEvent.killerId = String(event.killerId || (combatEvent.type === "player_death" || event.lethal ? event.shooterId : "") || "").slice(0, 48);
       combatEvent.damageCause = String(event.damageCause || event.cause || event.weaponId || "").slice(0, 48);
       combatEvent.lethal = Boolean(event.lethal);
+      combatEvent.accepted = event.accepted !== undefined ? Boolean(event.accepted) : undefined;
+      combatEvent.reason = String(event.reason || "").slice(0, 64);
+      combatEvent.serverAuthority = Boolean(event.serverAuthority);
+      combatEvent.confirmedAt = Number(event.confirmedAt) || 0;
       combatEvent.targetHealthBefore = clampNumber(event.targetHealthBefore, 0, 999, 0);
       combatEvent.targetHealthAfter = clampNumber(event.targetHealthAfter, 0, 999, 0);
       combatEvent.targetStateSeq = Math.max(0, Math.floor(Number(event.targetStateSeq) || 0));
@@ -877,7 +918,8 @@
         item?.id === combatEvent.id ||
         (combatEvent.deathId && item?.deathId === combatEvent.deathId) ||
         (combatEvent.respawnId && item?.respawnId === combatEvent.respawnId) ||
-        (!combatEvent.deathId && !combatEvent.respawnId && combatEvent.hitId && item?.hitId === combatEvent.hitId)
+        (!combatEvent.deathId && !combatEvent.respawnId && combatEvent.hitId && item?.hitId === combatEvent.hitId) ||
+        (!combatEvent.deathId && !combatEvent.respawnId && !combatEvent.hitId && combatEvent.shotId && item?.shotId === combatEvent.shotId)
       ));
       if (duplicateIndex >= 0) {
         nextEvents[duplicateIndex] = mergeCombatDuplicate(nextEvents[duplicateIndex], combatEvent, event);
@@ -893,7 +935,11 @@
       if (index >= 0) rooms[index] = next;
       else rooms.push(next);
       this.saveRooms(rooms);
-      this.schedulePublishRoom(next, combatEvent.type === "small_arms" ? 180 : 90);
+      if (this.canUseRemoteApi()) {
+        this.publishCombatEvent(room.id, combatEvent, next);
+      } else {
+        this.schedulePublishRoom(next, combatEvent.type === "small_arms" ? 180 : 90);
+      }
       return duplicateIndex >= 0 ? nextEvents[duplicateIndex] : combatEvent;
     }
 
