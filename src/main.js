@@ -1705,6 +1705,7 @@
         this.onlineCommandSeenIds.add(commandId);
         const issuer = command.playerId || command.issuerPlayerId || "";
         if (issuer && issuer === localId) continue;
+        if (!this.shouldApplyRemoteOnlineCommand(command, room)) continue;
         this.applyOnlineCommand(command);
       }
       if (this.onlineCommandSeenIds.size > 420) {
@@ -1716,6 +1717,11 @@
           if (index >= staleCount) break;
         }
       }
+    }
+
+    shouldApplyRemoteOnlineCommand(_command = {}, room = this.onlineCombatRoom()) {
+      if (this.isLocalSpectator?.() || this.adminObserverMode) return false;
+      return this.isOnlineWorldHost?.(room) === true;
     }
 
     applyOnlineCommand(command = {}) {
@@ -1746,7 +1752,9 @@
         reason: command.reason || command.commandType || command.type || "",
         authority: "owned_squad",
         skipCooldown: true,
-        trustedRemote: true
+        trustedRemote: true,
+        remoteReplay: true,
+        suppressPing: true
       }) || { accepted: false, reason: "missing-command-bus" };
     }
 

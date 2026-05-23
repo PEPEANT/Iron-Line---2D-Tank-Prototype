@@ -119,7 +119,9 @@
         priority: Number.isFinite(input.priority) ? input.priority : 0,
         ttl: Number.isFinite(input.ttl) ? input.ttl : 60,
         skipCooldown: Boolean(input.skipCooldown),
-        trustedRemote: Boolean(input.trustedRemote)
+        trustedRemote: Boolean(input.trustedRemote),
+        remoteReplay: Boolean(input.remoteReplay),
+        suppressPing: Boolean(input.suppressPing)
       };
     }
 
@@ -222,7 +224,7 @@
       squads.forEach((squad, index) => this.applySquadOrder(packet, squad, commandPoint, index, squads.length));
       vehicles.forEach((vehicle, index) => this.applyVehicleOrder(packet, vehicle, commandPoint, index, vehicles.length));
       if (!packet.skipCooldown) this.setCooldown(packet, slot);
-      this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
+      if (!packet.suppressPing) this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
       this.markCommandApplied(packet);
 
       return {

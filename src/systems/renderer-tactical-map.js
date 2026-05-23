@@ -225,6 +225,7 @@
         if (!allowTeam(squad.team)) continue;
         const order = squad.order;
         if (!squad.manualOrder || !order?.playerIssued || !order.point) continue;
+        if (!this.commandVisibleToViewer(game, squad.manualOrder.issuerPlayerId, squad.team, viewerTeam)) continue;
         const asset = this.squadCenterPoint(squad);
         if (!asset) continue;
         const key = `squad:${squad.callSign}:${squad.manualOrder.packetId}`;
@@ -244,6 +245,7 @@
         if (!vehicle.alive || !vehicle.manualOrder || !allowTeam(vehicle.team)) continue;
         const order = game.commanders?.[vehicle.team]?.assignments?.get(vehicle);
         if (!order?.playerIssued || !order.point) continue;
+        if (!this.commandVisibleToViewer(game, vehicle.manualOrder.issuerPlayerId, vehicle.team, viewerTeam)) continue;
         const key = `vehicle:${vehicle.callSign}:${vehicle.manualOrder.packetId}`;
         seen.add(key);
         entries.push(this.commandEntryFromOrder({
@@ -261,6 +263,7 @@
       for (const item of (game.commandBus?.log || []).slice(-8)) {
         const packet = item.packet;
         if (!item.accepted || !packet || !allowTeam(packet.team)) continue;
+        if (!this.commandVisibleToViewer(game, packet.issuerPlayerId || packet.playerId, packet.team, viewerTeam)) continue;
         const target = this.commandPacketTarget(game, packet);
         if (!target) continue;
         const assets = this.commandPacketAssets(game, packet);
@@ -278,6 +281,14 @@
       }
 
       return entries.slice(-18);
+    },
+
+    commandVisibleToViewer(game, issuerPlayerId, team, viewerTeam) {
+      if (game.adminObserverMode) return true;
+      if (viewerTeam && team && team !== viewerTeam) return false;
+      if (game.sessionMode !== "online") return true;
+      const localId = game.onlineSession?.playerId || "";
+      return Boolean(localId && issuerPlayerId && issuerPlayerId === localId);
     },
 
     commandEntryFromOrder(input) {
