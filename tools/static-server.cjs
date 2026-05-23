@@ -4,14 +4,9 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const {
-  cleanupStaleServerParticipants,
-  createRoomDeleteTombstones,
-  removeParticipantFromRoom,
-  updateRoomSlotsFromPlayers,
-  upsertParticipantToServer
-} = require("../server/static-room-admin");
+const { cleanupStaleServerParticipants, createRoomDeleteTombstones, removeParticipantFromRoom, updateRoomSlotsFromPlayers, upsertParticipantToServer } = require("../server/static-room-admin");
 const { createRoomDetailExporters } = require("../server/room-detail-response");
+const { handleWorldStatePost } = require("../server/world-state-endpoint");
 
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
@@ -558,6 +553,11 @@ async function handleRoomsApi(req, res) {
     }
     persistRooms();
     sendJson(res, 200, { ok: true, room: exportClientRoom(room) });
+    return;
+  }
+
+  if (req.method === "POST" && roomId && pathParts[3] === "world-state") {
+    await handleWorldStatePost(req, res, { onlineRegistry, readJsonBody, roomDeleteTombstones, roomId, roomRecordTime, schedulePersist: scheduleCombatPersist, sendJson, toClientTimestamp });
     return;
   }
 

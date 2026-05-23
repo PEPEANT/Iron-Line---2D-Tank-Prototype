@@ -345,6 +345,24 @@
         });
     }
 
+    publishWorldState(roomId = "", worldState = null) {
+      if (!this.canUseRemoteApi() || !roomId || !worldState || this.deletedRemoteRoomIds.has(roomId)) return Promise.resolve(null);
+      return fetch(`${this.roomsApiUrl(roomId)}/world-state`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ worldState })
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          if (payload?.ok) this.remoteOnline = true;
+          return payload;
+        })
+        .catch(() => {
+          this.remoteOnline = false;
+          return null;
+        });
+    }
+
     schedulePublishRoom(room, delayMs = 160) {
       if (!this.canUseRemoteApi() || !room?.id) return;
       if (this.deletedRemoteRoomIds.has(room.id)) return;
@@ -1067,6 +1085,13 @@
         updatedAt: Date.now()
       });
       if (IronLine.WorldStatePublishGuard?.shouldPublish?.(this.normalizeWorldState(room.worldState), worldState) === false) return null;
+      if (this.canUseRemoteApi()) {
+        const next = this.normalizeRoom({ ...room, worldState, updatedAt: Date.now() });
+        if (!next) return null;
+        this.upsertRemoteRoom(next, { persist: false });
+        this.publishWorldState(room.id, worldState);
+        return next;
+      }
       return this.updateRoom(room.id, { worldState });
     }
     normalizeWorldState(state = {}) {
