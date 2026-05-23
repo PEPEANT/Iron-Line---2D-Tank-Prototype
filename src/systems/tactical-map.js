@@ -33,6 +33,8 @@
       this.vehicleZones = [];
       this.vehicleStageTimer = 0;
       this.nodeById = new Map();
+      this.coverNodeCache = new Map();
+      this.coverNodeCacheContext = "";
       this.rebuild("init");
     }
 
@@ -53,11 +55,12 @@
 
     rebuild(reason = "manual") {
       this.signature = this.buildSignature();
-      this.coverNodes = this.buildCoverNodes();
+      const blockers = this.blockers();
+      this.coverNodes = this.buildCoverNodes(blockers, this.coverCacheContext());
       this.stagingPoints = this.buildStagingPoints();
       this.vehicleStagingPoints = this.buildVehicleStagingPoints();
       this.rallyPoints = this.buildRallyPoints();
-      this.trafficHints = this.buildTrafficHints();
+      this.trafficHints = this.buildTrafficHints(blockers);
       this.bottlenecks = this.trafficHints.filter((hint) => hint.kind === "bottleneck");
       this.dangerZones = this.buildDangerZones();
       this.fireLanes = this.buildFireLanes();
@@ -99,12 +102,21 @@
       }) || this.game?.world?.obstacles || [];
     }
 
-    buildCoverNodes() {
+    buildCoverNodes(blockers = this.blockers(), cacheContext = this.coverCacheContext()) {
       const nodes = [];
-      const blockers = this.blockers();
+      if (this.coverNodeCacheContext !== cacheContext) {
+        this.coverNodeCache.clear();
+        this.coverNodeCacheContext = cacheContext;
+      }
       for (let blockerIndex = 0; blockerIndex < blockers.length; blockerIndex += 1) {
         const blocker = blockers[blockerIndex];
         if (!this.rectLike(blocker)) continue;
+        const cacheKey = this.coverNodeCacheKey(blocker, cacheContext);
+        if (cacheKey && this.coverNodeCache.has(cacheKey)) {
+          nodes.push(...this.coverNodeCache.get(cacheKey).map((node) => this.cloneCoverNode(node)));
+          continue;
+        }
+        const blockerNodes = [];
         const samples = this.coverSamplesForBlocker(blocker);
         const center = this.rectCenter(blocker);
         for (let index = 0; index < samples.length; index += 1) {
@@ -113,7 +125,8 @@
           if (!accessible) continue;
           const defenseAngle = angleTo(sample.x, sample.y, center.x, center.y);
           const fireDirections = this.openFireDirections(sample, 520);
-          nodes.push({
+          const nearestObjective = this.nearestObjectiveName(sample);
+          blockerNodes.push({
             id: `cover:${blocker.source?.id || blocker.source?.callSign || blocker.kind || "blocker"}:${blockerIndex}:${index}`,
             kind: "cover",
             x: sample.x,
@@ -127,10 +140,12 @@
             exposureRisk: this.exposureRisk(sample, blocker),
             accessible,
             fireDirections,
-            nearestObjective: this.nearestObjectiveName(sample),
-            tags: this.coverTags(blocker, sample)
+            nearestObjective,
+            tags: this.coverTags(blocker, sample, nearestObjective)
           });
         }
+        nodes.push(...blockerNodes);
+        if (cacheKey) this.coverNodeCache.set(cacheKey, blockerNodes.map((node) => this.cloneCoverNode(node)));
       }
       for (const tag of this.manualTags("coverNodes")) {
         const sourceRect = tag.sourceRect || { x: tag.x - 20, y: tag.y - 20, w: 40, h: 40 };
@@ -154,6 +169,41 @@
         });
       }
       return nodes;
+    }
+
+    coverCacheContext() {
+      const world = this.game?.world || {};
+      const metadata = this.mapMetadata();
+      const objectives = (this.game?.capturePoints || [])
+        .map((point) => `${point.name || ""}:${Math.round(point.x)}:${Math.round(point.y)}:${Math.round(point.radius || 0)}`)
+        .join("|");
+      const roads = (world.roads || [])
+        .map((road) => road.map((point) => `${Math.round(point.x)}:${Math.round(point.y)}`).join(","))
+        .join("|");
+      return [metadata.mapId, metadata.mapVersion, world.width, world.height, objectives, roads].join("::");
+    }
+
+    coverNodeCacheKey(blocker, cacheContext = this.coverNodeCacheContext) {
+      if (!blocker || blocker.kind === "vehicle-wreck") return "";
+      return [
+        cacheContext,
+        blocker.kind || "",
+        blocker.source?.id || blocker.source?.callSign || blocker.source?.kind || "",
+        Math.round(Number(blocker.x) || 0),
+        Math.round(Number(blocker.y) || 0),
+        Math.round(Number(blocker.w) || 0),
+        Math.round(Number(blocker.h) || 0),
+        blocker.source?.destroyed ? 1 : 0
+      ].join("::");
+    }
+
+    cloneCoverNode(node) {
+      return {
+        ...node,
+        sourceRect: node.sourceRect ? { ...node.sourceRect } : node.sourceRect,
+        fireDirections: [...(node.fireDirections || [])],
+        tags: [...(node.tags || [])]
+      };
     }
 
     coverSamplesForBlocker(blocker) {
@@ -184,10 +234,10 @@
       return 2;
     }
 
-    coverTags(blocker, point) {
+    coverTags(blocker, point, nearestObjective = this.nearestObjectiveName(point)) {
       const tags = [blocker.kind || "cover"];
       if (this.nearRoad(point, 120)) tags.push("roadside");
-      if (this.nearestObjectiveName(point)) tags.push("objective-cover");
+      if (nearestObjective) tags.push("objective-cover");
       if (blocker.kind === "vehicle-wreck") tags.push("dynamic");
       return tags;
     }
@@ -367,8 +417,9 @@
       return points;
     }
 
-    buildTrafficHints() {
+    buildTrafficHints(blockers = this.blockers()) {
       const hints = [];
+      const blockerList = Array.isArray(blockers) ? blockers : [];
       const graph = this.game?.navGraph;
       if (graph?.edges?.length) {
         for (const edge of graph.edges) {
@@ -376,9 +427,9 @@
           const to = graph.nodeById.get(edge[1]);
           if (!from || !to) continue;
           const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-          const nearbyBlockers = this.blockers().filter((blocker) => this.distanceToRect(mid, blocker) <= 180);
+          const nearbyBlockers = blockerList.filter((blocker) => this.distanceToRect(mid, blocker) <= 180);
           const length = distXY(from.x, from.y, to.x, to.y);
-          const clearance = this.estimatedClearance(mid);
+          const clearance = this.estimatedClearance(mid, blockerList);
           if (nearbyBlockers.length < 2 && clearance > 155 && length > 290) continue;
           hints.push({
             id: `traffic:${from.id}:${to.id}`,
@@ -730,10 +781,10 @@
       return distXY(point.x, point.y, x, y);
     }
 
-    estimatedClearance(point) {
-      const blockers = this.blockers();
+    estimatedClearance(point, blockers = this.blockers()) {
+      const blockerList = Array.isArray(blockers) ? blockers : [];
       let best = 280;
-      for (const blocker of blockers) {
+      for (const blocker of blockerList) {
         best = Math.min(best, this.distanceToRect(point, blocker));
       }
       return Math.round(best);
