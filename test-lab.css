@@ -389,6 +389,106 @@
   overflow-wrap: anywhere;
 }
 
+.test-lab-p0-online {
+  border-color: rgba(143, 222, 207, 0.18);
+}
+
+.test-lab-p0-note {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  color: rgba(232, 242, 232, 0.72);
+  background: rgba(143, 222, 207, 0.08);
+  border: 1px solid rgba(143, 222, 207, 0.18);
+  border-radius: 8px;
+}
+
+.test-lab-p0-note strong {
+  color: #ffffff;
+  font-size: 0.82rem;
+}
+
+.test-lab-p0-note span {
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.test-lab-p0-command-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.test-lab-p0-command-list code {
+  display: block;
+  padding: 8px 9px;
+  color: #eaf7ef;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.test-lab-p0-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.test-lab-p0-grid article,
+.test-lab-p0-branches article {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.052);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.test-lab-p0-grid strong,
+.test-lab-p0-branches strong {
+  display: block;
+  color: #ffffff;
+  font-size: 0.8rem;
+}
+
+.test-lab-p0-grid ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 17px;
+  color: rgba(232, 242, 232, 0.7);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.test-lab-p0-grid a,
+.test-lab-p0-branches span {
+  display: block;
+  margin-top: 6px;
+  color: rgba(232, 242, 232, 0.66);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.test-lab-p0-grid a {
+  color: #bdeede;
+  text-decoration: none;
+}
+
+.test-lab-p0-grid a:hover {
+  text-decoration: underline;
+}
+
+.test-lab-p0-branches {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .test-lab-stat-card {
   min-width: 0;
   min-height: 96px;
@@ -802,6 +902,7 @@
   .test-lab-actions,
   .test-lab-balance-grid,
   .test-lab-map-card,
+  .test-lab-p0-grid,
   .test-lab-object-grid,
   .test-lab-render-stage,
   .test-lab-audio-controls {
