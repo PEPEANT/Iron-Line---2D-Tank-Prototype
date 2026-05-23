@@ -2300,9 +2300,11 @@
 
     applyOnlineProjectileImpactDamage(event = {}) {
       if (!this.onlineCombatActiveForLocalPlayer()) return false;
+      if (event.accepted === false) return false;
       if (event.smoke) return false;
-      const localTeam = this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
-      if ((event.shooterTeam || TEAM.BLUE) === localTeam) return false;
+      const localTeam = this.localPlayerTeam?.() || this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
+      const shooterTeam = event.shooterTeam === TEAM.RED ? TEAM.RED : event.shooterTeam === TEAM.BLUE ? TEAM.BLUE : "";
+      if (shooterTeam && shooterTeam === localTeam) return false;
       const x = Number(event.hitX ?? event.x2);
       const y = Number(event.hitY ?? event.y2);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return false;

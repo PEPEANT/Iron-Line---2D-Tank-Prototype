@@ -490,7 +490,7 @@
   }
 
   function fireRifle(game, shooter, target, options = {}) {
-    if (shooter.alive === false || !target || target.alive === false || target.hp <= 0) return false;
+    if (shooter.alive === false || !target || target.alive === false || target.hp <= 0 || (shooter.team && target.team && shooter.team === target.team)) return false;
     if (shooter.inVehicle) return false;
     if (target.inVehicle) return false;
     if (target === game.player && game.isPlayerInSafeZone?.()) return false;
@@ -552,7 +552,7 @@
 
     awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !wreckBlock ? target : null });
     applyRifleSuppression(game, shooter, target, startX, startY, finalEndX, finalEndY, hit && !wreckBlock, weapon);
-    if (target === game.player && shooter.team === TEAM.RED) {
+    if (target === game.player && game.isLocalPlayerEnemyFor?.(shooter.team)) {
       game.warnPlayerDanger?.(shooter, weapon.id === "sniper" ? "sniper" : weapon.id, {
         ttl: weapon.id === "sniper" ? 1.25 : 0.76
       });
@@ -1001,7 +1001,7 @@
         continue;
       }
 
-      if (!game.player.inTank && game.player.hp > 0 && shell.team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
+      if (game.isLocalPlayerEnemyFor?.(shell.team)) {
         const playerDistance = distXY(shell.x, shell.y, game.player.x, game.player.y);
         const warningRange = shell.ammo.id === "rpg" ? 260 : shell.ammo.id === "grenade" ? 185 : 230;
         if (playerDistance <= warningRange) {
@@ -1068,7 +1068,7 @@
         }
       }
 
-      if (!hit && !game.player.inTank && game.player.hp > 0 && shell.team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
+      if (!hit && game.isLocalPlayerEnemyFor?.(shell.team)) {
         const shellDistance = segmentDistanceToPoint(
           shell.previousX,
           shell.previousY,
@@ -1447,7 +1447,7 @@
       damageObstacle(game, obstacle, damage * (ammo.obstacleDamageScale ?? 0.42) * falloff);
     }
 
-    if (!game.player.inTank && game.player.hp > 0 && team === TEAM.RED && !game.isPlayerInSafeZone?.()) {
+    if (game.isLocalPlayerEnemyFor?.(team)) {
       const d = distXY(x, y, game.player.x, game.player.y);
       if (d < radius + game.player.radius) {
         const falloff = clamp(1 - d / radius, 0.24, 1);

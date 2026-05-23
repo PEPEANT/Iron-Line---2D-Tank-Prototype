@@ -278,7 +278,7 @@ class RoomRegistry {
       return this.confirmRound(room, input);
     }
     if (type === "projectile_launch" || type === "projectile_impact") {
-      return this.appendServerCombatEvents(room, [this.normalizeServerCombatEvent(room, input)]);
+      return this.appendServerCombatEvents(room, [this.normalizeProjectileCombatEvent(room, input)]);
     }
     return this.confirmShot(room, input);
   }
@@ -347,6 +347,48 @@ class RoomRegistry {
       targetHealthAfter: this.clampCombatNumber(input.targetHealthAfter, 0, 999, 0),
       targetStateSeq: Math.max(0, Math.floor(Number(input.targetStateSeq) || 0)),
       shooterStateSeq: Math.max(0, Math.floor(Number(input.shooterStateSeq || input.stateSeq) || 0))
+    };
+  }
+
+  normalizeProjectileCombatEvent(room, input = {}) {
+    const event = this.normalizeServerCombatEvent(room, input);
+    const targetPlayerId = String(input.targetPlayerId || "").slice(0, 48);
+    const shooterId = String(input.shooterId || input.playerId || "").slice(0, 48);
+    const rawDamage = Number(input.damage ?? input.clientDamageClaim ?? 0);
+    const damageClaim = Number.isFinite(rawDamage) ? rawDamage : 0;
+    const hitClaim = Boolean(targetPlayerId && (input.hit || input.clientHitClaim || damageClaim > 0));
+    if (!hitClaim) return { ...event, targetPlayerId };
+
+    const shooter = this.combatPlayer(room, shooterId);
+    const target = this.combatPlayer(room, targetPlayerId);
+    const targetState = this.combatPlayerState(target || {});
+    const shooterState = this.combatPlayerState(shooter || {});
+    const shooterTeam = shooter?.team === "red" ? "red" : shooter?.team === "blue" ? "blue" : input.shooterTeam === "red" ? "red" : "blue";
+    const targetTeam = target?.team === "red" ? "red" : "blue";
+    let reason = "confirmed";
+    if (!shooter) reason = "missing-shooter";
+    else if (!target) reason = "invalid-target";
+    else if (shooterId === targetPlayerId) reason = "self-hit";
+    else if (shooterTeam === targetTeam) reason = "same-team";
+    else if (!shooterState.alive) reason = "shooter-dead";
+    else if (!targetState.alive) reason = "target-dead";
+
+    const accepted = reason === "confirmed";
+    const targetHealthBefore = target ? Math.max(0, targetState.hp) : 0;
+    return {
+      ...event,
+      shooterId,
+      shooterTeam,
+      targetPlayerId,
+      accepted,
+      reason,
+      hit: accepted,
+      damage: accepted ? event.damage : 0,
+      targetHealthBefore,
+      targetHealthAfter: targetHealthBefore,
+      targetStateSeq: targetState.stateSeq,
+      shooterStateSeq: Number(input.shooterStateSeq || input.stateSeq || shooterState.stateSeq) || 0,
+      confirmedAt: Number(event.confirmedAt) || Date.now()
     };
   }
 
