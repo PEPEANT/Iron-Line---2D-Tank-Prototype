@@ -68,6 +68,7 @@
       this.onlineCommandSeenIds = new Set();
       this.onlineWorldSyncTimer = 0;
       this.onlineWorldAppliedAt = 0;
+      this.onlineWorldInterpolationTarget = null;
       this.tacticalMapOpen = false;
       this.commandBus = new IronLine.CommandBus(this);
       this.botCommander = IronLine.BotCommanderSkeleton ? new IronLine.BotCommanderSkeleton(this) : null;
@@ -2505,7 +2506,7 @@
         }
         return;
       }
-      this.applyOnlineWorldState(room.worldState);
+      this.applyOnlineWorldState(room.worldState, dt);
     }
 
     onlineWorldHostPlayerId(room = this.onlineCombatRoom()) {
@@ -2600,13 +2601,22 @@
       };
     }
 
-    applyOnlineWorldState(state = null) {
+    applyOnlineWorldState(state = null, dt = 0) {
       if (!state || state.hostId === this.onlineSession?.playerId) return false;
       const updatedAt = Number(state.updatedAt) || 0;
-      if (!updatedAt || updatedAt <= (this.onlineWorldAppliedAt || 0)) return false;
+      if (!updatedAt) return false;
       if (Date.now() - updatedAt > 7000) return false;
-      this.onlineWorldAppliedAt = updatedAt;
+      if (updatedAt > (this.onlineWorldAppliedAt || 0)) {
+        this.onlineWorldAppliedAt = updatedAt;
+        this.onlineWorldInterpolationTarget = state;
+      }
+      return this.stepOnlineWorldInterpolation(this.onlineWorldInterpolationTarget || state, dt);
+    }
 
+    stepOnlineWorldInterpolation(state = null, dt = 0) {
+      if (!state) return false;
+      const unitBlend = this.onlineWorldInterpolationBlend(dt, 0.2);
+      const vehicleBlend = this.onlineWorldInterpolationBlend(dt, 0.18);
       const vehicleById = new Map(
         [...(this.tanks || []), ...(this.humvees || [])]
           .map((vehicle) => [vehicle.callSign || vehicle.id || "", vehicle])
@@ -2626,11 +2636,11 @@
         vehicle.alive = true;
         vehicle.destructionPending = false;
         vehicle.hp = Math.max(1, Math.min(vehicle.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
-        vehicle.x = lerp(vehicle.x, Number(snap.x) || vehicle.x, 0.72);
-        vehicle.y = lerp(vehicle.y, Number(snap.y) || vehicle.y, 0.72);
-        vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, 0.62));
-        if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(lerp(vehicle.turretAngle, Number(snap.turretAngle) || vehicle.turretAngle, 0.68));
-        if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(lerp(vehicle.machineGunAngle, Number(snap.machineGunAngle) || vehicle.machineGunAngle, 0.68));
+        vehicle.x = lerp(vehicle.x, Number(snap.x) || vehicle.x, vehicleBlend);
+        vehicle.y = lerp(vehicle.y, Number(snap.y) || vehicle.y, vehicleBlend);
+        vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, Math.min(0.45, vehicleBlend * 1.35)));
+        if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(lerp(vehicle.turretAngle, Number(snap.turretAngle) || vehicle.turretAngle, Math.min(0.48, vehicleBlend * 1.45)));
+        if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(lerp(vehicle.machineGunAngle, Number(snap.machineGunAngle) || vehicle.machineGunAngle, Math.min(0.48, vehicleBlend * 1.45)));
         vehicle.playerControlled = Boolean(snap.controllerId);
       }
 
@@ -2662,9 +2672,9 @@
         }
         unit.alive = true;
         unit.hp = Math.max(1, Math.min(unit.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
-        unit.x = lerp(unit.x, Number(snap.x) || unit.x, 0.7);
-        unit.y = lerp(unit.y, Number(snap.y) || unit.y, 0.7);
-        unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, 0.55));
+        unit.x = lerp(unit.x, Number(snap.x) || unit.x, unitBlend);
+        unit.y = lerp(unit.y, Number(snap.y) || unit.y, unitBlend);
+        unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, Math.min(0.42, unitBlend * 1.35)));
       }
 
       const pointById = new Map((this.capturePoints || []).map((point) => [point.name, point]));
@@ -2676,6 +2686,12 @@
         point.contested = Boolean(snap.contested);
       }
       return true;
+    }
+
+    onlineWorldInterpolationBlend(dt = 0, halfLifeSeconds = 0.2) {
+      const seconds = Math.max(1 / 120, Math.min(0.12, Number(dt) || 1 / 60));
+      const halfLife = Math.max(0.05, Number(halfLifeSeconds) || 0.2);
+      return Math.max(0.035, Math.min(0.28, 1 - Math.pow(0.5, seconds / halfLife)));
     }
 
     recordCombatKill(source = null, victim = null, kind = "kill") {
@@ -2883,6 +2899,8 @@
       this.playerDeathActive = false;
       this.playerDeathReason = "";
       this.resetPlayerFeedbackState();
+      this.onlineWorldAppliedAt = 0;
+      this.onlineWorldInterpolationTarget = null;
       this.matchTime = 0;
       this.startLoading = this.defaultStartLoadingState();
       this.conquest = this.defaultConquestState();
