@@ -1111,9 +1111,9 @@
         roomId: room.id,
         updatedAt: Date.now()
       });
+      if (IronLine.WorldStatePublishGuard?.shouldPublish?.(this.normalizeWorldState(room.worldState), worldState) === false) return null;
       return this.updateRoom(room.id, { worldState });
     }
-
     normalizeWorldState(state = {}) {
       if (!state || typeof state !== "object") return null;
       const vehicleSnapshot = (item) => ({

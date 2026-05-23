@@ -426,7 +426,9 @@ async function collectPage(page) {
   const matchSample = firstSample(probe.samples, (item) => item.matchStarted);
   const appliedWorldStates = (probe.worldApplies || []).filter((item) => item.applied);
   const worldApplyGaps = gaps(appliedWorldStates.map((item) => item.t));
-  const worldPublishGaps = gaps((probe.worldPublishes || []).map((item) => item.t));
+  const publishedWorldStates = (probe.worldPublishes || []).filter((item) => item.result);
+  const skippedWorldPublishes = (probe.worldPublishes || []).filter((item) => !item.result).length;
+  const worldPublishGaps = gaps(publishedWorldStates.map((item) => item.t));
   return {
     name: page.name,
     endpoints: {
@@ -451,7 +453,9 @@ async function collectPage(page) {
     worldPublishGapMs: stat(worldPublishGaps),
     worldApplyGapMs: stat(worldApplyGaps),
     worldCaptureBytes: stat((probe.worldCaptures || []).map((item) => Number(item.bytes) || 0)),
-    worldPublishBytes: stat((probe.worldPublishes || []).map((item) => Number(item.bytes) || 0)),
+    worldPublishBytes: stat(publishedWorldStates.map((item) => Number(item.bytes) || 0)),
+    worldPublishAttempts: (probe.worldPublishes || []).length,
+    worldPublishSkips: skippedWorldPublishes,
     worldApplyBytes: stat(appliedWorldStates.map((item) => Number(item.bytes) || 0)),
     unitTargetDelta: stat(appliedWorldStates.map((item) => Number(item.unit?.maxTargetDelta) || 0)),
     unitAppliedDelta: stat(appliedWorldStates.map((item) => Number(item.unit?.maxAppliedDelta) || 0)),
@@ -512,11 +516,11 @@ function markdownReport(report) {
     "",
     "## Summary",
     "",
-    "| Page | Publish gap max | Apply gap max | Unit target max | Unit apply max | Vehicle target max | Vehicle apply max | Snapshot bytes max | Storage writes | Errors |",
-    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    "| Page | Publish gap max | Apply gap max | Publish attempts/skips | Unit target max | Unit apply max | Vehicle target max | Vehicle apply max | Snapshot bytes max | Storage writes | Errors |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
   ];
   for (const page of report.pages) {
-    lines.push(`| ${page.name} | ${page.worldPublishGapMs.max} | ${page.worldApplyGapMs.max} | ${page.unitTargetDelta.max} | ${page.unitAppliedDelta.max} | ${page.vehicleTargetDelta.max} | ${page.vehicleAppliedDelta.max} | ${Math.max(page.worldCaptureBytes.max, page.worldPublishBytes.max, page.worldApplyBytes.max)} | ${page.storage.count} | ${page.errors.length} |`);
+    lines.push(`| ${page.name} | ${page.worldPublishGapMs.max} | ${page.worldApplyGapMs.max} | ${page.worldPublishAttempts}/${page.worldPublishSkips} | ${page.unitTargetDelta.max} | ${page.unitAppliedDelta.max} | ${page.vehicleTargetDelta.max} | ${page.vehicleAppliedDelta.max} | ${Math.max(page.worldCaptureBytes.max, page.worldPublishBytes.max, page.worldApplyBytes.max)} | ${page.storage.count} | ${page.errors.length} |`);
   }
   lines.push("", "## Notes", "");
   lines.push(`- Max worldState publish gap ms: ${report.maxWorldPublishGapMs}`);
@@ -526,6 +530,7 @@ function markdownReport(report) {
   lines.push(`- Unit threshold counts over 32/64/96px: ${report.unitOver32} / ${report.unitOver64} / ${report.unitOver96}`);
   lines.push(`- Vehicle threshold count over 32px: ${report.vehicleOver32}`);
   lines.push(`- Capture point changed count on apply: ${report.capturePointChanges}`);
+  lines.push(`- WorldState publish attempts/skips: ${report.totalWorldPublishAttempts} / ${report.totalWorldPublishSkips}`);
   lines.push(`- Max worldState JSON bytes: ${report.maxWorldStateBytes}`);
   lines.push("", "## Next", "", report.nextRecommendation, "");
   return lines.join("\n");
@@ -539,6 +544,8 @@ function print(report) {
     page: page.name,
     worldPublishGapMax: page.worldPublishGapMs.max,
     worldApplyGapMax: page.worldApplyGapMs.max,
+    publishAttempts: page.worldPublishAttempts,
+    publishSkips: page.worldPublishSkips,
     unitTargetMax: page.unitTargetDelta.max,
     unitApplyMax: page.unitAppliedDelta.max,
     vehicleTargetMax: page.vehicleTargetDelta.max,
@@ -591,6 +598,8 @@ async function main() {
       unitOver96: pagesResult.reduce((sum, page) => sum + (page.unitOver96 || 0), 0),
       vehicleOver32: pagesResult.reduce((sum, page) => sum + (page.vehicleOver32 || 0), 0),
       capturePointChanges: pagesResult.reduce((sum, page) => sum + (page.capturePointChanges || 0), 0),
+      totalWorldPublishAttempts: pagesResult.reduce((sum, page) => sum + (page.worldPublishAttempts || 0), 0),
+      totalWorldPublishSkips: pagesResult.reduce((sum, page) => sum + (page.worldPublishSkips || 0), 0),
       maxWorldStateBytes: Math.max(...pagesResult.map((page) => Math.max(page.worldCaptureBytes.max, page.worldPublishBytes.max, page.worldApplyBytes.max))),
       reportPath: path.join(reportDir, "report.md"),
       resultPath: path.join(reportDir, "result.json")
