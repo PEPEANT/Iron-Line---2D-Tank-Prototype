@@ -427,10 +427,10 @@
           const to = graph.nodeById.get(edge[1]);
           if (!from || !to) continue;
           const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-          const nearbyBlockers = blockerList.filter((blocker) => this.distanceToRect(mid, blocker) <= 180);
           const length = distXY(from.x, from.y, to.x, to.y);
-          const clearance = this.estimatedClearance(mid, blockerList);
-          if (nearbyBlockers.length < 2 && clearance > 155 && length > 290) continue;
+          const traffic = this.trafficMetricsForPoint(mid, blockerList);
+          const clearance = traffic.clearance;
+          if (traffic.nearbyBlockers < 2 && clearance > 155 && length > 290) continue;
           hints.push({
             id: `traffic:${from.id}:${to.id}`,
             kind: "bottleneck",
@@ -441,7 +441,7 @@
             widthHint: clearance,
             waitRadius: 130,
             priority: clearance < 120 ? 3 : 2,
-            reason: nearbyBlockers.length >= 2 ? "cover-constrained" : "narrow-clearance"
+            reason: traffic.nearbyBlockers >= 2 ? "cover-constrained" : "narrow-clearance"
           });
         }
       }
@@ -480,6 +480,21 @@
         });
       }
       return hints;
+    }
+
+    trafficMetricsForPoint(point, blockers = this.blockers()) {
+      const blockerList = Array.isArray(blockers) ? blockers : [];
+      let nearbyBlockers = 0;
+      let clearance = 280;
+      for (const blocker of blockerList) {
+        const distance = this.distanceToRect(point, blocker);
+        if (distance <= 180) nearbyBlockers += 1;
+        if (distance < clearance) clearance = distance;
+      }
+      return {
+        nearbyBlockers,
+        clearance: Math.round(clearance)
+      };
     }
 
     buildDangerZones() {

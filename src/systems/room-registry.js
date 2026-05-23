@@ -96,6 +96,8 @@
       this.pendingPublishTimers = new Map();
       this.deletedRemoteRoomIds = new Set();
       this.remoteDetailCursors = new Map();
+      this.lastRemoteSummaryRefreshAt = 0;
+      this.lastRemoteDetailRefreshAt = 0;
       this.apiBase = this.resolveRoomsApiBase();
       window.addEventListener("storage", (event) => {
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
@@ -302,57 +304,7 @@
     }
 
     async refreshRemoteRooms() {
-      if (!this.canUseRemoteApi() || this.remoteRefreshInFlight) return;
-      this.remoteRefreshInFlight = true;
-      try {
-        const response = await fetch(this.roomsApiUrl(), { cache: "no-store" });
-        if (!response.ok) throw new Error(`rooms_api_${response.status}`);
-        const payload = await response.json();
-        const summaries = Array.isArray(payload.rooms) ? payload.rooms : [];
-        const summaryRooms = summaries.map((room) => this.normalizeRoom(room)).filter(Boolean);
-        const localRooms = this.readLocalRooms();
-        const localById = new Map(localRooms.map((room) => [room.id, room]));
-        const selectedId = this.selectedRoomId();
-        const detailId = selectedId && summaryRooms.some((room) => room.id === selectedId) ? selectedId : summaryRooms[0]?.id || "";
-        const previousDetail = detailId ? localById.get(detailId) || null : null;
-        const detailRoom = detailId && !this.deletedRemoteRoomIds.has(detailId) ? await this.fetchRemoteRoomDetail(detailId, previousDetail) : null;
-        const detailById = new Map(detailRoom ? [[detailRoom.id, detailRoom]] : []);
-        const serverRooms = summaryRooms
-          .map((room) => detailById.get(room.id) || this.mergeRoomSummary(localById.get(room.id), room, room.id === detailId))
-          .filter(Boolean);
-        if (detailRoom && !serverRooms.some((room) => room.id === detailRoom.id)) serverRooms.push(detailRoom);
-        const serverIds = new Set(serverRooms.map((room) => room.id));
-        for (const id of Array.from(this.deletedRemoteRoomIds)) {
-          if (!serverIds.has(id)) this.deletedRemoteRoomIds.delete(id);
-        }
-        const roomsById = new Map();
-        for (const room of serverRooms) {
-          if (this.deletedRemoteRoomIds.has(room.id)) continue;
-          const localRoom = localById.get(room.id);
-          const pendingNewer = this.pendingRemoteRoomIds.has(room.id) &&
-            this.roomUpdatedAt(localRoom) > this.roomUpdatedAt(room);
-          roomsById.set(room.id, pendingNewer ? localRoom : room);
-        }
-        for (const localRoom of localRooms) {
-          if (!this.pendingRemoteRoomIds.has(localRoom.id) || this.deletedRemoteRoomIds.has(localRoom.id)) continue;
-          const previous = roomsById.get(localRoom.id);
-          if (!previous || this.roomUpdatedAt(localRoom) > this.roomUpdatedAt(previous)) roomsById.set(localRoom.id, localRoom);
-        }
-        const rooms = Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
-        const signature = this.remoteRoomSignature(rooms);
-        const changed = signature !== this.remoteSignature || !this.remoteOnline;
-        this.remoteRooms = rooms;
-        this.remoteSignature = signature;
-        this.remoteOnline = true;
-        this.writeLocalRooms(rooms);
-        if (changed) this.emit();
-      } catch (_error) {
-        const changed = this.remoteOnline;
-        this.remoteOnline = false;
-        if (changed) this.emit();
-      } finally {
-        this.remoteRefreshInFlight = false;
-      }
+      return IronLine.RoomRefreshCadence.refreshRemoteRooms(this);
     }
 
     publishRoom(room) {
@@ -413,7 +365,7 @@
       this.pendingPublishTimers.set(normalized.id, timer);
     }
 
-    upsertRemoteRoom(room) {
+    upsertRemoteRoom(room, options = {}) {
       if (!room?.id) return;
       const roomTime = this.roomUpdatedAt(room);
       const current = this.remoteRooms?.find?.((item) => item.id === room.id) || this.readLocalRooms().find((item) => item.id === room.id);
@@ -422,7 +374,7 @@
       nextRooms.push(room);
       this.remoteRooms = nextRooms.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
       this.remoteSignature = this.remoteRoomSignature(this.remoteRooms);
-      this.writeLocalRooms(this.remoteRooms);
+      if (options.persist !== false) this.writeLocalRooms(this.remoteRooms);
     }
 
     roomUpdatedAt(room = null) {
@@ -662,14 +614,17 @@
       }
       const event = this.playerEvent(previous, nextPlayer);
       const structuralChange = Boolean(event);
-      const updated = this.updateRoom(roomId, {
+      const patch = {
         players,
         spectators,
         events: event ? this.nextEvents(room, event) : room.events
-      }, {
-        skipPublish: true
-      });
+      };
+      const livePositionOnly = !structuralChange && participantType === "player" && room.phase === "playing";
+      const updated = livePositionOnly
+        ? this.normalizeRoom({ ...room, ...patch, updatedAt: Date.now() })
+        : this.updateRoom(roomId, patch, { skipPublish: true });
       if (updated) {
+        if (livePositionOnly) this.upsertRemoteRoom(updated, { persist: false });
         if (structuralChange) this.schedulePublishRoom(updated, 120);
         this.publishParticipant(roomId, nextPlayer);
       }
