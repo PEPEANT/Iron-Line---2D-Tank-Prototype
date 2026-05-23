@@ -92,6 +92,7 @@ class RoomRegistry {
   resolveParticipantType(room, client = {}) {
     const requested = client.participantType || client.type || "";
     if (requested === "admin" || requested === "caster" || requested === "spectator") return requested;
+    if (requested === "player" && client.playerId && room.players.has(client.playerId)) return "player";
     const occupiedSlots = room.slots.filter((slot) => slot.playerId).length;
     const locked = room.config.joinLocked || room.phase !== "lobby";
     if (locked || occupiedSlots >= room.config.maxHumans) return "spectator";

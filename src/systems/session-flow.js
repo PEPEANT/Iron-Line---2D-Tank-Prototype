@@ -12,8 +12,16 @@
       this.rooms = IronLine.RoomList ? new IronLine.RoomList(this) : null;
       this.onlineLobby = IronLine.OnlineLobby ? new IronLine.OnlineLobby(this) : null;
       this.lastPublishAt = 0;
+      this.lastPlayerStateAt = 0;
       this.lastCleanupAt = 0;
       this.publishIntervalMs = 180;
+      this.playerStateIntervalMs = 75;
+      this.playerStateSocket = null;
+      this.playerStateSocketRoomId = "";
+      this.playerStateSocketPlayerId = "";
+      this.playerStateSocketOpen = false;
+      this.playerStateSocketLastAttempt = 0;
+      this.remotePlayerStateBuffer = new Map();
       window.addEventListener("pagehide", () => this.handlePageHide());
     }
 
@@ -273,11 +281,18 @@
         return;
       }
       const now = Date.now();
-      if (!options.force && now - this.lastPublishAt < this.publishIntervalMs) return;
-      this.lastPublishAt = now;
       const player = game.localSessionPlayer?.();
       if (!player) return;
-      this.syncLocalPlayerPresence(game, player, now);
+      const shouldRelayState = options.force || now - this.lastPlayerStateAt >= this.playerStateIntervalMs;
+      const shouldPublishParticipant = options.force || now - this.lastPublishAt >= this.publishIntervalMs;
+      if (!shouldRelayState && !shouldPublishParticipant) return true;
+      const position = this.syncLocalPlayerPresence(game, player, now);
+      if (shouldRelayState && position) {
+        this.lastPlayerStateAt = now;
+        this.publishPlayerStateRelay(game, player, position, now);
+      }
+      if (!shouldPublishParticipant) return true;
+      this.lastPublishAt = now;
       const saved = this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
       if (!saved) {
         const latestRoom = this.registry.getRoom(game.onlineSession.roomId);
@@ -291,6 +306,191 @@
         }
       }
       return Boolean(saved);
+    }
+
+    playerStateSocketUrl() {
+      if (typeof WebSocket !== "function") return "";
+      const base = this.registry?.apiBase || global.location?.origin || "";
+      try {
+        const url = new URL(base || global.location.href);
+        const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+        return `${protocol}//${url.host}/ws`;
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    ensurePlayerStateSocket(game = this.game()) {
+      const session = game?.onlineSession || {};
+      const roomId = session.roomId || "";
+      const playerId = session.playerId || "";
+      if (!roomId || !playerId || typeof WebSocket !== "function") return false;
+      const sameSocket = this.playerStateSocket &&
+        this.playerStateSocketRoomId === roomId &&
+        this.playerStateSocketPlayerId === playerId;
+      if (sameSocket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(this.playerStateSocket.readyState)) return true;
+      const now = Date.now();
+      if (now - this.playerStateSocketLastAttempt < 1200) return false;
+      this.closePlayerStateSocket();
+      const url = this.playerStateSocketUrl();
+      if (!url) return false;
+      this.playerStateSocketLastAttempt = now;
+      this.playerStateSocketRoomId = roomId;
+      this.playerStateSocketPlayerId = playerId;
+      try {
+        const socket = new WebSocket(url);
+        this.playerStateSocket = socket;
+        socket.addEventListener("open", () => {
+          this.playerStateSocketOpen = true;
+          socket.send(JSON.stringify({
+            type: "join",
+            roomId,
+            playerId,
+            nickname: game.localSessionPlayer?.()?.name || game.localProfile?.nickname || playerId,
+            participantType: session.participantType || "player"
+          }));
+        });
+        socket.addEventListener("message", (event) => this.handlePlayerStateSocketMessage(event.data));
+        socket.addEventListener("close", () => { this.playerStateSocketOpen = false; });
+        socket.addEventListener("error", () => { this.playerStateSocketOpen = false; });
+        return true;
+      } catch (_error) {
+        this.closePlayerStateSocket();
+        return false;
+      }
+    }
+
+    closePlayerStateSocket() {
+      if (this.playerStateSocket) {
+        try { this.playerStateSocket.close(); } catch (_error) {}
+      }
+      this.playerStateSocket = null;
+      this.playerStateSocketOpen = false;
+      this.playerStateSocketRoomId = "";
+      this.playerStateSocketPlayerId = "";
+    }
+
+    publishPlayerStateRelay(game, player, position, now = Date.now()) {
+      if ((game?.onlineSession?.participantType || "player") !== "player") return false;
+      if (!this.ensurePlayerStateSocket(game)) return false;
+      const socket = this.playerStateSocket;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      try {
+        socket.send(JSON.stringify({
+          type: "player_state",
+          roomId: game.onlineSession.roomId,
+          playerId: game.onlineSession.playerId,
+          name: player.name || player.nickname || game.onlineSession.playerId,
+          team: player.team || game.player?.team || TEAM.BLUE,
+          slotId: player.slotId || "",
+          classId: player.classId || "",
+          currentClassId: player.currentClassId || player.classId || "",
+          weaponId: player.weaponId || position.weaponId || "",
+          factionId: player.factionId || player.skinId || "",
+          skinId: player.skinId || player.factionId || "",
+          state: position,
+          sentAt: now
+        }));
+        return true;
+      } catch (_error) {
+        this.playerStateSocketOpen = false;
+        return false;
+      }
+    }
+
+    handlePlayerStateSocketMessage(raw) {
+      let message = null;
+      try { message = JSON.parse(String(raw || "{}")); } catch (_error) { return; }
+      if (message?.type !== "player_state") return;
+      this.applyRemotePlayerState(message.payload || {});
+    }
+
+    applyRemotePlayerState(payload = {}, game = this.game()) {
+      const session = game?.onlineSession || {};
+      const playerId = String(payload.playerId || "");
+      if (!session.roomId || payload.roomId !== session.roomId || !playerId || playerId === session.playerId) return false;
+      const incoming = this.normalizeRemotePlayerState(payload.state || {});
+      if (!incoming) return false;
+      const players = Array.isArray(session.players) ? session.players.slice() : [];
+      const index = players.findIndex((item) => item.id === playerId);
+      const previous = index >= 0 ? players[index] : null;
+      if (previous?.position && this.isStaleRemotePlayerState(previous.position, incoming)) return false;
+      const team = previous?.team || (payload.team === TEAM.RED ? TEAM.RED : TEAM.BLUE);
+      const next = {
+        ...(previous || {}),
+        id: playerId,
+        playerId,
+        name: previous?.name || payload.name || playerId,
+        nickname: previous?.nickname || payload.name || playerId,
+        team,
+        slotId: previous?.slotId || payload.slotId || "",
+        classId: previous?.classId || payload.classId || payload.currentClassId || "",
+        currentClassId: previous?.currentClassId || payload.currentClassId || payload.classId || "",
+        weaponId: payload.weaponId || incoming.weaponId || previous?.weaponId || "",
+        participantType: "player",
+        factionId: previous?.factionId || payload.factionId || payload.skinId || "",
+        skinId: previous?.skinId || payload.skinId || payload.factionId || "",
+        position: { ...(previous?.position || {}), ...incoming },
+        x: incoming.x,
+        y: incoming.y,
+        hp: incoming.hp,
+        maxHp: incoming.maxHp,
+        stateSeq: incoming.stateSeq,
+        alive: incoming.alive,
+        deathState: incoming.deathState,
+        updatedAt: incoming.updatedAt,
+        stateRelayReceivedAt: Date.now()
+      };
+      if (index >= 0) players[index] = next;
+      else players.push(next);
+      session.players = players;
+      this.remotePlayerStateBuffer.set(playerId, next);
+      return true;
+    }
+
+    normalizeRemotePlayerState(state = {}) {
+      const x = Number(state.x);
+      const y = Number(state.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const now = Date.now();
+      const numberOrNull = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : null;
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        stateSeq: Math.max(0, Math.floor(Number(state.stateSeq) || 0)),
+        stateUpdatedAt: Number(state.stateUpdatedAt || state.updatedAt || now) || now,
+        updatedAt: Number(state.updatedAt || state.stateUpdatedAt || now) || now,
+        alive: state.alive !== false,
+        deathState: String(state.deathState || (state.alive === false ? "dead" : "alive")).slice(0, 16),
+        hp: Math.max(0, Math.min(999, Number(state.hp ?? 100) || 0)),
+        maxHp: Math.max(1, Math.min(999, Number(state.maxHp ?? 100) || 100)),
+        weaponId: String(state.weaponId || "").slice(0, 32),
+        movementState: String(state.movementState || "").slice(0, 24),
+        inVehicle: Boolean(state.inVehicle),
+        vehicleId: String(state.vehicleId || "").slice(0, 36),
+        vehicleType: String(state.vehicleType || "").slice(0, 18),
+        vehicleHp: Math.max(0, Math.min(999, Number(state.vehicleHp) || 0)),
+        vehicleMaxHp: Math.max(0, Math.min(999, Number(state.vehicleMaxHp) || 0)),
+        angle: Number.isFinite(Number(state.angle)) ? Number(state.angle) : 0,
+        turretAngle: Number.isFinite(Number(state.turretAngle)) ? Number(state.turretAngle) : 0,
+        machineGunAngle: Number.isFinite(Number(state.machineGunAngle)) ? Number(state.machineGunAngle) : 0,
+        aimX: numberOrNull(state.aimX),
+        aimY: numberOrNull(state.aimY),
+        droneId: String(state.droneId || "").slice(0, 36),
+        droneType: String(state.droneType || "").slice(0, 18),
+        droneX: numberOrNull(state.droneX),
+        droneY: numberOrNull(state.droneY),
+        droneAngle: Number.isFinite(Number(state.droneAngle)) ? Number(state.droneAngle) : 0,
+        droneControlled: Boolean(state.droneControlled)
+      };
+    }
+
+    isStaleRemotePlayerState(previous = {}, incoming = {}) {
+      const previousSeq = Math.max(0, Math.floor(Number(previous.stateSeq) || 0));
+      const incomingSeq = Math.max(0, Math.floor(Number(incoming.stateSeq) || 0));
+      if (incomingSeq && previousSeq && incomingSeq < previousSeq) return true;
+      if (incomingSeq > previousSeq) return false;
+      return Number(incoming.updatedAt || 0) < Number(previous.updatedAt || 0);
     }
 
     syncLocalPlayerPresence(game, sessionPlayer, now = Date.now()) {
@@ -395,6 +595,8 @@
       const roomId = game.onlineSession.roomId;
       const playerId = game.onlineSession.playerId;
       if (playerId) this.registry?.removeParticipant?.(roomId, playerId, reason);
+      this.closePlayerStateSocket();
+      this.remotePlayerStateBuffer.clear();
       game.onlineSession.roomId = "";
       game.onlineSession.localReady = false;
       game.onlineSession.participantType = "player";
@@ -411,6 +613,7 @@
       const game = this.game();
       if (game?.sessionMode !== "online") return;
       if (!game.onlineSession?.roomId || !game.onlineSession?.playerId) return;
+      this.closePlayerStateSocket();
       this.registry?.removeParticipant?.(game.onlineSession.roomId, game.onlineSession.playerId, "pagehide");
     }
 
@@ -504,6 +707,7 @@
       if (localId && previousLocal && !roomPlayers.some((player) => player.id === localId)) {
         roomPlayers.push(previousLocal);
       }
+      this.applyBufferedPlayerStates(game, roomPlayers);
       if (roomPlayers.length > 0) session.players = roomPlayers;
       session.spectators = Array.isArray(room.spectators) ? room.spectators.slice() : [];
       const localPlayer = localId ? roomPlayers.find((player) => player.id === localId) : null;
@@ -528,6 +732,35 @@
             : "bot";
         if (player && !slot.commandAuthorityPlayerId) {
           game.setSlotCommandAuthority?.(slot, player.id, player.name || player.nickname || player.id, "owner");
+        }
+      }
+    }
+
+    applyBufferedPlayerStates(game, roomPlayers = []) {
+      if (!this.remotePlayerStateBuffer.size) return;
+      const now = Date.now();
+      const localId = game?.onlineSession?.playerId || "";
+      for (const [playerId, buffered] of this.remotePlayerStateBuffer.entries()) {
+        if (!buffered || playerId === localId) continue;
+        if (now - (Number(buffered.stateRelayReceivedAt) || 0) > 1500) {
+          this.remotePlayerStateBuffer.delete(playerId);
+          continue;
+        }
+        const index = roomPlayers.findIndex((player) => player.id === playerId);
+        if (index < 0) {
+          roomPlayers.push(buffered);
+          continue;
+        }
+        const current = roomPlayers[index];
+        if (!this.isStaleRemotePlayerState(current.position || current, buffered.position || buffered)) {
+          roomPlayers[index] = {
+            ...current,
+            ...buffered,
+            team: current.team || buffered.team,
+            slotId: current.slotId || buffered.slotId,
+            ready: current.ready,
+            host: current.host
+          };
         }
       }
     }

@@ -26,7 +26,7 @@ function attachOnlineSocketServer({ server, registry, path = "/ws" }) {
 
   wss.on("connection", (ws, req) => {
     const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const client = { clientId, roomId: "local", playerId: "", nickname: "" };
+    const client = { clientId, roomId: "local", playerId: "", nickname: "", lastPlayerStateAt: 0 };
     clients.set(clientId, { ws, client });
 
     ws.on("message", (raw) => {
@@ -103,6 +103,18 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
     return send(ws, "chat_ack", { ok: true, id: chat.id });
   }
 
+  if (message.type === "player_state") {
+    if (!client.playerId) return send(ws, "error", { reason: "not_joined" });
+    if (client.participantType && client.participantType !== "player") return send(ws, "error", { reason: "not_player" });
+    const packet = normalizePlayerStatePacket(client, message);
+    if (!packet) return send(ws, "error", { reason: "invalid_player_state" });
+    const now = Date.now();
+    if (now - (client.lastPlayerStateAt || 0) < 35) return;
+    client.lastPlayerStateAt = now;
+    broadcastPlayerClientsExcept(clients, client.roomId, client.clientId, "player_state", packet);
+    return;
+  }
+
   if (message.type === "admin_snapshot") {
     return send(ws, "admin_snapshot", createAdminSnapshot(registry, { roomId: client.roomId }));
   }
@@ -123,9 +135,77 @@ function send(ws, type, payload = {}) {
   ws.send(JSON.stringify({ type, payload }));
 }
 
+function finiteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function clampNumber(value, min, max, fallback = min) {
+  const numeric = finiteNumber(value, fallback);
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function normalizePlayerStatePacket(client, message = {}) {
+  const source = message.state || message.position || {};
+  const x = Number(source.x);
+  const y = Number(source.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const now = Date.now();
+  const state = {
+    x: Math.round(x),
+    y: Math.round(y),
+    stateSeq: Math.max(0, Math.floor(Number(source.stateSeq || message.stateSeq) || 0)),
+    stateUpdatedAt: Math.max(0, Math.floor(Number(source.stateUpdatedAt || source.updatedAt || message.sentAt) || now)),
+    updatedAt: Math.max(0, Math.floor(Number(source.updatedAt || message.sentAt) || now)),
+    alive: source.alive !== false,
+    deathState: String(source.deathState || (source.alive === false ? "dead" : "alive")).slice(0, 16),
+    hp: clampNumber(source.hp, 0, 999, 100),
+    maxHp: clampNumber(source.maxHp, 1, 999, 100),
+    weaponId: String(source.weaponId || "").slice(0, 32),
+    movementState: String(source.movementState || "").slice(0, 24),
+    inVehicle: Boolean(source.inVehicle),
+    vehicleId: String(source.vehicleId || "").slice(0, 36),
+    vehicleType: String(source.vehicleType || "").slice(0, 18),
+    vehicleHp: clampNumber(source.vehicleHp, 0, 999, 0),
+    vehicleMaxHp: clampNumber(source.vehicleMaxHp, 0, 999, 0),
+    angle: finiteNumber(source.angle, 0),
+    turretAngle: finiteNumber(source.turretAngle, 0),
+    machineGunAngle: finiteNumber(source.machineGunAngle, 0),
+    aimX: Number.isFinite(Number(source.aimX)) ? Math.round(Number(source.aimX)) : null,
+    aimY: Number.isFinite(Number(source.aimY)) ? Math.round(Number(source.aimY)) : null,
+    droneId: String(source.droneId || "").slice(0, 36),
+    droneType: String(source.droneType || "").slice(0, 18),
+    droneX: Number.isFinite(Number(source.droneX)) ? Math.round(Number(source.droneX)) : null,
+    droneY: Number.isFinite(Number(source.droneY)) ? Math.round(Number(source.droneY)) : null,
+    droneAngle: finiteNumber(source.droneAngle, 0),
+    droneControlled: Boolean(source.droneControlled)
+  };
+  return {
+    roomId: client.roomId,
+    playerId: client.playerId,
+    name: String(message.name || client.nickname || client.playerId).slice(0, 24),
+    team: message.team === "red" || client.team === "red" ? "red" : "blue",
+    slotId: String(message.slotId || "").slice(0, 32),
+    classId: String(message.classId || message.currentClassId || "").slice(0, 32),
+    currentClassId: String(message.currentClassId || message.classId || "").slice(0, 32),
+    weaponId: String(message.weaponId || state.weaponId || "").slice(0, 32),
+    factionId: String(message.factionId || message.skinId || "").slice(0, 32),
+    skinId: String(message.skinId || message.factionId || "").slice(0, 32),
+    state,
+    sentAt: Math.max(0, Math.floor(Number(message.sentAt) || 0)),
+    serverAt: now
+  };
+}
+
 function broadcastRoom(clients, roomId, type, payload) {
   for (const { ws, client } of clients.values()) {
     if (client.roomId === roomId) send(ws, type, payload);
+  }
+}
+
+function broadcastPlayerClientsExcept(clients, roomId, excludedClientId, type, payload) {
+  for (const { ws, client } of clients.values()) {
+    if (client.clientId !== excludedClientId && client.roomId === roomId && client.participantType === "player") send(ws, type, payload);
   }
 }
 

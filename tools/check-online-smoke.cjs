@@ -200,6 +200,71 @@ function wsCommandSmoke() {
   });
 }
 
+function wsPlayerStateSmoke(wsRoomId = roomId) {
+  return new Promise((resolve, reject) => {
+    const a = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const b = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const events = { a: [], b: [] };
+    const joined = new Set();
+    const timer = setTimeout(() => {
+      a.close();
+      b.close();
+      reject(new Error("WebSocket player_state smoke timed out."));
+    }, 6000);
+    const closeDone = (payload) => {
+      clearTimeout(timer);
+      a.close();
+      b.close();
+      resolve({ events, payload });
+    };
+    const maybeSendState = () => {
+      if (joined.size < 2) return;
+      a.send(JSON.stringify({
+        type: "player_state",
+        roomId: wsRoomId,
+        playerId: "p-blue",
+        team: "blue",
+        slotId: "blue-infantry",
+        state: { x: 1200, y: 1400, stateSeq: 7, hp: 91, maxHp: 100, alive: true, updatedAt: Date.now() },
+        sentAt: Date.now()
+      }));
+    };
+    const handle = (name, ws) => (raw) => {
+      const message = JSON.parse(raw.toString());
+      events[name].push(message.type);
+      if (message.type === "hello") {
+        ws.send(JSON.stringify({
+          type: "join",
+          roomId: wsRoomId,
+          playerId: name === "a" ? "p-blue" : "p-red",
+          nickname: name === "a" ? "Blue" : "Red",
+          participantType: "player"
+        }));
+      }
+      if (message.type === "join_result") {
+        joined.add(name);
+        maybeSendState();
+      }
+      if (name === "b" && message.type === "player_state") {
+        const payload = message.payload || {};
+        if (payload.playerId === "p-blue" && payload.state?.stateSeq === 7 && payload.state?.x === 1200) {
+          closeDone(payload);
+        }
+      }
+    };
+    a.on("message", handle("a", a));
+    b.on("message", handle("b", b));
+    a.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    b.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
 async function runSmoke() {
   const baseRoom = {
     id: roomId,
@@ -487,8 +552,12 @@ async function runSmoke() {
   }
   const wsCommand = await wsCommandSmoke();
   if (!wsCommand.commandAck || !wsCommand.broadcastSeen) throw new Error("WebSocket command ack/broadcast failed.");
+  const wsPlayerState = await wsPlayerStateSmoke(roomId);
+  if (!wsPlayerState.payload?.state || wsPlayerState.payload.playerId !== "p-blue") {
+    throw new Error("WebSocket player_state relay failed.");
+  }
 
-  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast`);
+  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast, wsPlayerState=relay`);
 }
 
 const server = spawn(process.execPath, ["tools/static-server.cjs", String(port)], {
