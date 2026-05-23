@@ -1,6 +1,6 @@
 # P0 Active-Room Detail Cursor Design - 2026-05-23
 
-Conclusion: P0-6 should not be a WebSocket rewrite. The next smallest useful cut is a cursor-based `/api/rooms/:id` detail delta for normal players, with admin/observer detail left full until separately measured.
+Conclusion: P0-6A implemented the smallest useful cut: cursor-based `/api/rooms/:id` detail delta for normal players. It reduces combat-grown active-room detail payloads without a WebSocket rewrite, admin split, AI ownership change, or fetch cadence change.
 
 ## Current Evidence
 
@@ -31,11 +31,11 @@ flowchart LR
 | Fetch frequency | Detail fetch runs with the same 320 ms cadence as room-list refresh. | Payload cost repeats even when only a few fields changed. |
 | Admin/observer | Admin/observer currently uses the same room detail flow plus admin snapshots. | Needs more data than players; should not be optimized blindly with the player path. |
 
-## Proposed Design
+## Implemented Design
 
-Add a delta mode to the existing detail endpoint:
+P0-6A adds a delta mode to the existing detail endpoint:
 
-`GET /api/rooms/:id?delta=1&combatAfter=<serverSeq>&worldStateAfter=<updatedAt>&chatAfter=<updatedAt>&commandsAfter=<updatedAt>&view=player`
+`GET /api/rooms/:id?delta=1&combatAfter=<serverSeq>&worldStateAfter=<updatedAt>&view=player`
 
 Response shape:
 
@@ -74,8 +74,8 @@ Rules:
 - Subsequent normal-player detail fetches request `delta=1`.
 - `combatEvents` returns only events newer than `combatAfter`, with a safe fallback recent window if the cursor is missing or stale.
 - `worldState` returns `null` when `worldState.updatedAt <= worldStateAfter`; client keeps its previous state.
-- `chat`, `events`, and `commands` return only newer records in delta mode, with conservative recent windows.
-- Client merge must dedupe by `id`, `eventId`, `hitId`, `deathId`, and `respawnId`, preserving existing combat dedupe semantics.
+- `chat`, `events`, and `commands` remain full detail windows for this cut.
+- Client merge dedupes by `id`, `hitId`, `shotId`, `deathId`, and `respawnId`, preserving optimistic combat events and server confirms without duplicates.
 - Admin/observer should keep full detail for the first P0-6A cut, or pass `view=admin` to explicitly request fuller windows.
 
 ## Minimum Implementation Scope
@@ -96,6 +96,7 @@ P0-6A: normal-player active-room combat/world delta.
 
 - Detail fetch frequency changes. Keep 320 ms for P0-6A so byte reduction is isolated.
 - Admin/observer-specific detail split.
+- Chat/events/commands cursor fields.
 - WebSocket player/combat transport.
 - AI/worldState ownership changes.
 - Large command/chat window redesign.
@@ -110,8 +111,42 @@ P0-6A: normal-player active-room combat/world delta.
 | Tests assume full room detail. | Medium | Update only P0 measurement scripts and add delta-specific assertions. |
 | Payload shrinks but localStorage writes remain high. | Medium | Expected for P0-6A; localStorage write-count tuning is a later branch. |
 
+## P0-6A Result
+
+Implementation files:
+
+- `tools/static-server.cjs` routes detail requests through `server/room-detail-response.js`.
+- `server/room-detail-response.js` owns room summary/detail delta shaping.
+- `src/systems/room-registry.js` stores per-room cursors and merges delta detail into existing room state.
+- `tools/check-p0-http-combat-load.cjs` and `tools/p0-http-load-summary.cjs` report full-vs-delta detail bytes and fail on combat event sync mismatch.
+
+API replay result:
+
+| Scenario | Final full detail | Final unchanged delta | Event sync |
+| --- | ---: | ---: | --- |
+| participant only | 3,327 B | 3,253 B | PASS |
+| small arms | 75,738 B | 3,253 B | PASS |
+| projectile launch/impact | 23,347 B | 3,255 B | PASS |
+| admin snapshot observer | 42,798 B | 4,639 B | PASS |
+
+Headless browser result:
+
+| Scenario | Avg detail payload | Frame result | Errors |
+| --- | ---: | --- | ---: |
+| movement only | 3,470 B | avg 16.8 ms / max 33.4 ms | 0 |
+| small arms | 5,684 B | avg 16.7 ms / max 33.4 ms | 0 |
+| projectile | 4,038 B | avg 16.7 ms / max 16.8 ms | 0 |
+| small arms + admin/observer | 7,051 B | avg 16.7 ms / max 16.8 ms | 0 |
+
+Safety notes:
+
+- `worldState: null` in a delta response preserves the previous client `worldState`.
+- A missing or stale combat cursor returns a recent combat event fallback window.
+- Standalone `admin.html` keeps full selected-room detail; the headless admin probe uses the normal index path and still records admin snapshot POST size separately.
+- The P0 load probe now fails if client combat event counts diverge from the final server detail count.
+- Admin/observer still has a separate large full-room POST risk: the browser probe saw admin `POST /api/rooms` average about 41 KB and max about 79 KB.
+- Limited alpha remains HOLD.
+
 ## Recommendation
 
-Implement P0-6A next.
-
-Do not implement a broad summary/detail redesign yet. The safest first cut is combatEvents cursor plus unchanged-worldState suppression for normal active-room detail. It directly targets the measured 40 KB+ small-arms detail payload while preserving the current HTTP architecture.
+P0-6A can be closed after commit/push. The next automated P0 candidate is admin/observer full-room POST isolation, but only after this cursor change is saved cleanly.

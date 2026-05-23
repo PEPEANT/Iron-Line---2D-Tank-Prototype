@@ -11,20 +11,16 @@ const {
   updateRoomSlotsFromPlayers,
   upsertParticipantToServer
 } = require("../server/static-room-admin");
+const { createRoomDetailExporters } = require("../server/room-detail-response");
 
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
 const port = Number.isFinite(requestedPort) ? requestedPort : 4173;
 const host = process.env.HOST || "0.0.0.0";
 const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
-const dataDir = process.env.IRONLINE_DATA_DIR
-  ? path.resolve(process.env.IRONLINE_DATA_DIR)
-  : path.join(root, ".data");
-const roomsStorePath = process.env.IRONLINE_ROOMS_FILE
-  ? path.resolve(process.env.IRONLINE_ROOMS_FILE)
-  : path.join(dataDir, "online-rooms.json");
+const dataDir = process.env.IRONLINE_DATA_DIR ? path.resolve(process.env.IRONLINE_DATA_DIR) : path.join(root, ".data");
+const roomsStorePath = process.env.IRONLINE_ROOMS_FILE ? path.resolve(process.env.IRONLINE_ROOMS_FILE) : path.join(dataDir, "online-rooms.json");
 const serverStartedAt = new Date().toISOString();
-
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -320,11 +316,7 @@ function exportClientRoom(room) {
   };
 }
 
-function exportRoomSummary(room) {
-  const full = exportClientRoom(room), slim = (item) => item ? ({ id: item.id, name: item.name, team: item.team, slotId: item.slotId, participantType: item.participantType, ready: item.ready, host: item.host, updatedAt: item.updatedAt }) : null;
-  const { moderation, commandAuthorities, commandAuthorityRequests, chat, events, commands, combatEvents, worldState, ...summary } = full;
-  return { ...summary, summary: true, players: full.players.map(slim).filter(Boolean), spectators: full.spectators.map(slim).filter(Boolean), admins: full.admins.map(slim).filter(Boolean), playerCount: full.players.length, spectatorCount: full.spectators.length, adminCount: full.admins.length, chatCount: full.chat.length, eventCount: full.events.length, commandCount: full.commands.length, combatEventCount: full.combatEvents.length, worldStateUpdatedAt: full.worldState?.updatedAt || 0 };
-}
+const { exportClientRoomDetail, exportRoomSummary } = createRoomDetailExporters(exportClientRoom);
 function importParticipants(room, participants = [], fallbackType = "player", options = {}) {
   const targetMap = fallbackType === "admin"
     ? (room.admins || (room.admins = new Map()))
@@ -541,7 +533,16 @@ async function handleRoomsApi(req, res) {
     });
     return;
   }
-  if (req.method === "GET" && roomId && pathParts.length === 3) return onlineRegistry.rooms.has(roomId) ? sendJson(res, 200, { ok: true, room: exportClientRoom(onlineRegistry.rooms.get(roomId)) }) : sendJson(res, 404, { ok: false, reason: "room_not_found", roomId });
+  if (req.method === "GET" && roomId && pathParts.length === 3) {
+    if (!onlineRegistry.rooms.has(roomId)) return sendJson(res, 404, { ok: false, reason: "room_not_found", roomId });
+    const detail = exportClientRoomDetail(onlineRegistry.rooms.get(roomId), {
+      delta: url.searchParams.get("delta") === "1",
+      view: url.searchParams.get("view") || "",
+      combatAfter: url.searchParams.get("combatAfter"),
+      worldStateAfter: url.searchParams.get("worldStateAfter")
+    });
+    return sendJson(res, 200, { ok: true, room: detail.room, cursors: detail.cursors });
+  }
   if (req.method === "POST" && url.pathname === "/api/rooms") {
     const body = await readJsonBody(req);
     if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });

@@ -95,6 +95,7 @@
       this.pendingPublishRooms = new Map();
       this.pendingPublishTimers = new Map();
       this.deletedRemoteRoomIds = new Set();
+      this.remoteDetailCursors = new Map();
       this.apiBase = this.resolveRoomsApiBase();
       window.addEventListener("storage", (event) => {
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
@@ -179,13 +180,72 @@
       return `${this.apiBase || ""}${path}`;
     }
 
-    async fetchRemoteRoomDetail(id = "") {
+    combatEventCursor(event = {}) { return Math.max(0, Math.floor(Number(event.serverSeq || event.combatServerSeq || event.sequence) || 0)); }
+    roomDetailCursor(room = null) {
+      const events = Array.isArray(room?.combatEvents) ? room.combatEvents : [];
+      const combatServerSeq = events.reduce((max, event) => Math.max(max, this.combatEventCursor(event)), Math.max(0, Math.floor(Number(room?.combatServerSeq) || 0)));
+      return { combatServerSeq, worldStateUpdatedAt: Math.max(0, Math.floor(Number(room?.worldState?.updatedAt) || 0)) };
+    }
+    roomDetailApiUrl(id = "", cursor = null) {
+      const url = this.roomsApiUrl(id);
+      const adminDetail = /\/admin\.html$/i.test(global.location?.pathname || "") || global.document?.body?.classList?.contains("admin-standalone-page");
+      if (adminDetail || (!cursor?.combatServerSeq && !cursor?.worldStateUpdatedAt)) return url;
+      const query = new URLSearchParams({ delta: "1", view: "player", combatAfter: String(cursor.combatServerSeq || 0), worldStateAfter: String(cursor.worldStateUpdatedAt || 0) });
+      return `${url}?${query.toString()}`;
+    }
+    mergeRecordWindow(previous = [], incoming = [], max = 120, keyFn = null) {
+      const merged = Array.isArray(previous) ? previous.slice() : [];
+      const idFor = keyFn || ((item) => String(item?.id || item?.eventId || item?.commandId || item?.createdAt || ""));
+      for (const item of Array.isArray(incoming) ? incoming : []) {
+        const key = idFor(item);
+        const index = key ? merged.findIndex((entry) => idFor(entry) === key) : -1;
+        if (index >= 0) merged[index] = { ...merged[index], ...item };
+        else merged.push(item);
+      }
+      return merged.slice(-max);
+    }
+
+    isSameCombatEvent(a = {}, b = {}) {
+      if (a.id && b.id && a.id === b.id) return true;
+      if (a.deathId && b.deathId && a.deathId === b.deathId) return true;
+      if (a.respawnId && b.respawnId && a.respawnId === b.respawnId) return true;
+      return Boolean((a.hitId && b.hitId && a.hitId === b.hitId) || (a.shotId && b.shotId && a.shotId === b.shotId && !a.deathId && !b.deathId && !a.respawnId && !b.respawnId));
+    }
+
+    mergeCombatEventWindow(previous = [], incoming = []) {
+      const merged = Array.isArray(previous) ? previous.slice() : [];
+      for (const event of Array.isArray(incoming) ? incoming : []) {
+        const index = merged.findIndex((item) => this.isSameCombatEvent(item, event));
+        if (index >= 0) merged[index] = { ...merged[index], ...event };
+        else merged.push(event);
+      }
+      return merged.sort((a, b) => (this.combatEventCursor(a) - this.combatEventCursor(b)) || ((Number(a.createdAt) || 0) - (Number(b.createdAt) || 0))).slice(-MAX_COMBAT_EVENTS);
+    }
+
+    mergeRoomDetailDelta(previous = null, delta = null, cursors = null) {
+      if (!previous || !delta?.detailDelta) return this.normalizeRoom(delta);
+      const merged = this.normalizeRoom({ ...previous, ...delta,
+        chat: this.mergeRecordWindow(previous.chat, delta.chat, 120), events: this.mergeRecordWindow(previous.events, delta.events, 80),
+        commands: this.mergeCommandRecords(previous.commands || [], delta.commands || [], 120),
+        combatEvents: this.mergeCombatEventWindow(previous.combatEvents, delta.combatEvents), worldState: delta.worldState || previous.worldState,
+        combatServerSeq: Math.max(Number(previous.combatServerSeq) || 0, Number(delta.combatServerSeq) || 0, Number(cursors?.combatServerSeq) || 0) });
+      if (merged) this.remoteDetailCursors.set(merged.id, this.roomDetailCursor(merged));
+      return merged;
+    }
+
+    async fetchRemoteRoomDetail(id = "", previous = null) {
       if (!id) return null;
       try {
-        const response = await fetch(this.roomsApiUrl(id), { cache: "no-store" });
+        const cursor = this.remoteDetailCursors.get(id) || this.roomDetailCursor(previous);
+        const response = await fetch(this.roomDetailApiUrl(id, previous ? cursor : null), { cache: "no-store" });
         if (!response.ok) return null;
         const payload = await response.json();
-        return payload?.room ? this.normalizeRoom(payload.room) : null;
+        if (!payload?.room) return null;
+        const room = payload.room.detailDelta
+          ? this.mergeRoomDetailDelta(previous, payload.room, payload.cursors)
+          : this.normalizeRoom(payload.room);
+        if (room) this.remoteDetailCursors.set(room.id, this.roomDetailCursor(room));
+        return room;
       } catch (_error) {
         return null;
       }
@@ -254,7 +314,8 @@
         const localById = new Map(localRooms.map((room) => [room.id, room]));
         const selectedId = this.selectedRoomId();
         const detailId = selectedId && summaryRooms.some((room) => room.id === selectedId) ? selectedId : summaryRooms[0]?.id || "";
-        const detailRoom = detailId && !this.deletedRemoteRoomIds.has(detailId) ? await this.fetchRemoteRoomDetail(detailId) : null;
+        const previousDetail = detailId ? localById.get(detailId) || null : null;
+        const detailRoom = detailId && !this.deletedRemoteRoomIds.has(detailId) ? await this.fetchRemoteRoomDetail(detailId, previousDetail) : null;
         const detailById = new Map(detailRoom ? [[detailRoom.id, detailRoom]] : []);
         const serverRooms = summaryRooms
           .map((room) => detailById.get(room.id) || this.mergeRoomSummary(localById.get(room.id), room, room.id === detailId))

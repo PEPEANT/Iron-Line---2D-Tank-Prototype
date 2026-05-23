@@ -6,6 +6,7 @@ const path = require("path");
 const vm = require("vm");
 const { performance } = require("perf_hooks");
 const { WebSocket } = require("ws");
+const { assertEventSync, printSummary, summarizeScenario } = require("./p0-http-load-summary.cjs");
 
 const root = path.resolve(__dirname, "..");
 const port = Number(process.env.IRONLINE_P0_LOAD_PORT || 4217);
@@ -116,6 +117,10 @@ function createMetrics(name) {
     name,
     startedAt: Date.now(),
     http: new Map(),
+    detailFetch: {
+      full: { count: 0, bytesTotal: 0, bytesMax: 0 },
+      delta: { count: 0, bytesTotal: 0, bytesMax: 0 }
+    },
     fs: {
       writeFileSync: 0,
       renameSync: 0,
@@ -153,6 +158,12 @@ function recordHttp(metrics, entry) {
   current.msMax = Math.max(current.msMax, entry.ms);
   current.statuses[entry.status] = (current.statuses[entry.status] || 0) + 1;
   metrics.http.set(key, current);
+  if (key === "GET /api/rooms/:id") {
+    const bucket = String(entry.search || "").includes("delta=1") ? metrics.detailFetch.delta : metrics.detailFetch.full;
+    bucket.count += 1;
+    bucket.bytesTotal += entry.bytes;
+    bucket.bytesMax = Math.max(bucket.bytesMax, entry.bytes);
+  }
 }
 
 function recordRoomShape(metrics, key, payload) {
@@ -197,6 +208,7 @@ async function countedFetch(clientName, input, options = {}) {
       clientName,
       method,
       pathname: url.pathname,
+      search: url.search,
       status: response.status,
       bytes: raw.length,
       ms: performance.now() - started
@@ -208,6 +220,28 @@ async function countedFetch(clientName, input, options = {}) {
     status: response.status,
     json: async () => parsed || {},
     text: async () => text
+  };
+}
+
+async function responseBytes(pathname) {
+  const response = await fetch(`${baseUrl}${pathname}`);
+  const raw = Buffer.from(await response.arrayBuffer());
+  const text = raw.toString("utf8");
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch (_error) {
+    payload = {};
+  }
+  return { bytes: raw.length, payload, ok: response.ok, status: response.status };
+}
+
+function roomCursor(room = null) {
+  const events = Array.isArray(room?.combatEvents) ? room.combatEvents : [];
+  const combatServerSeq = events.reduce((max, event) => Math.max(max, Math.floor(Number(event.serverSeq || event.combatServerSeq || event.sequence) || 0)), Math.max(0, Math.floor(Number(room?.combatServerSeq) || 0)));
+  return {
+    combatServerSeq,
+    worldStateUpdatedAt: Math.max(0, Math.floor(Number(room?.worldState?.updatedAt) || 0))
   };
 }
 
@@ -587,78 +621,25 @@ async function runScenario(definition, index) {
   for (const probe of wsProbes) probe.close();
   activeMetrics = null;
 
-  const finalPayload = await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`);
-  const finalRoom = finalPayload.room || null;
+  const finalFull = await responseBytes(`/api/rooms/${encodeURIComponent(roomId)}`);
+  const finalRoom = finalFull.payload.room || null;
+  const cursor = roomCursor(finalRoom);
+  const finalDelta = await responseBytes(`/api/rooms/${encodeURIComponent(roomId)}?delta=1&view=player&combatAfter=${cursor.combatServerSeq}&worldStateAfter=${cursor.worldStateUpdatedAt}`);
+  const clientCombatEvents = clients.map((client) => ({
+    name: client.name,
+    combatEvents: client.registry.getRoom(roomId)?.combatEvents?.length || 0,
+    worldStatePreserved: Boolean(client.registry.getRoom(roomId)?.worldState)
+  }));
   await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`, { method: "DELETE" }).catch(() => null);
   for (const client of clients) client.destroy();
 
-  return summarizeScenario(metrics, finalRoom);
-}
-
-function endpointSummary(metrics, key) {
-  const item = metrics.http.get(key);
-  if (!item) {
-    return { count: 0, avgBytes: 0, maxBytes: 0, avgMs: 0, maxMs: 0, statuses: {} };
-  }
-  return {
-    count: item.count,
-    avgBytes: Math.round(item.bytesTotal / Math.max(1, item.count)),
-    maxBytes: item.bytesMax,
-    avgMs: Math.round((item.msTotal / Math.max(1, item.count)) * 10) / 10,
-    maxMs: Math.round(item.msMax * 10) / 10,
-    statuses: item.statuses
-  };
-}
-
-function summarizeScenario(metrics, finalRoom) {
-  const endpoints = {};
-  for (const key of ["GET /api/rooms", "GET /api/rooms/:id", "POST /participants", "POST /combat", "POST /api/rooms"]) {
-    endpoints[key] = endpointSummary(metrics, key);
-  }
-  return {
-    scenario: metrics.name,
-    durationSec: 10,
-    measurement: "API replay, not live gameplay",
-    endpoints,
-    fs: metrics.fs,
-    localStorage: metrics.localStorage,
-    ws: metrics.ws,
-    roomShapes: metrics.roomShapes,
-    finalRoom: finalRoom ? {
-      players: Array.isArray(finalRoom.players) ? finalRoom.players.length : 0,
-      combatEvents: Array.isArray(finalRoom.combatEvents) ? finalRoom.combatEvents.length : 0,
-      hasWorldState: Object.prototype.hasOwnProperty.call(finalRoom, "worldState"),
-      worldStateIncluded: finalRoom.worldState !== undefined
-    } : null,
-    errors: metrics.errors.slice(0, 8)
-  };
-}
-
-function printSummary(results) {
-  console.log("");
-  console.log("P0 HTTP participants/combat load probe");
-  console.log("Measurement type: API replay, not live gameplay");
-  console.log("");
-  const rows = results.map((result) => ({
-    scenario: result.scenario,
-    getRooms: result.endpoints["GET /api/rooms"].count,
-    getRoomDetail: result.endpoints["GET /api/rooms/:id"].count,
-    participantPost: result.endpoints["POST /participants"].count,
-    combatPost: result.endpoints["POST /combat"].count,
-    postRooms: result.endpoints["POST /api/rooms"].count,
-    participantAvgBytes: result.endpoints["POST /participants"].avgBytes,
-    participantMaxBytes: result.endpoints["POST /participants"].maxBytes,
-    roomDetailAvgBytes: result.endpoints["GET /api/rooms/:id"].avgBytes,
-    roomDetailMaxBytes: result.endpoints["GET /api/rooms/:id"].maxBytes,
-    combatAvgBytes: result.endpoints["POST /combat"].avgBytes,
-    combatMaxBytes: result.endpoints["POST /combat"].maxBytes,
-    persistWriteFileSync: result.fs.writeFileSync,
-    persistRenameSync: result.fs.renameSync,
-    localStorageSetItem: result.localStorage.setItem,
-    finalCombatEvents: result.finalRoom?.combatEvents ?? null
-  }));
-  console.table(rows);
-  console.log(JSON.stringify(results, null, 2));
+  return summarizeScenario(metrics, finalRoom, {
+    finalFullDetailBytes: finalFull.bytes,
+    finalDeltaDetailBytes: finalDelta.bytes,
+    finalDeltaCombatEvents: finalDelta.payload?.room?.combatEvents?.length ?? null,
+    finalDeltaWorldStateNull: finalDelta.payload?.room ? finalDelta.payload.room.worldState === null : null,
+    clientCombatEvents
+  });
 }
 
 async function main() {
@@ -674,6 +655,7 @@ async function main() {
     results.push(await runScenario(scenarios[index], index + 1));
   }
   printSummary(results);
+  assertEventSync(results);
 }
 
 main()
