@@ -417,6 +417,41 @@ async function runSmoke() {
   }
   if (room.worldState?.hostId !== "p-blue") throw new Error("World state host was not preserved.");
 
+  const smallRoomId = `${roomId}-CAP4`;
+  await postRoom({
+    ...baseRoom,
+    id: smallRoomId,
+    capacity: 4,
+    players: []
+  });
+  await postRoom({
+    id: smallRoomId,
+    capacity: 4,
+    players: [{
+      id: "cap4-red",
+      name: "Cap4 Red",
+      team: "red",
+      slotId: "red-infantry",
+      participantType: "player",
+      ready: true,
+      position: {
+        x: 1600,
+        y: 1400,
+        stateSeq: 1,
+        alive: true,
+        hp: 100,
+        maxHp: 100,
+        updatedAt: Date.now()
+      }
+    }],
+    updatedAt: Date.now()
+  });
+  const smallRoomPayload = await requestJson(`/api/rooms/${encodeURIComponent(smallRoomId)}`);
+  const smallRed = smallRoomPayload.room?.players?.find((player) => player.id === "cap4-red");
+  if (smallRed?.team !== "red" || smallRed?.slotId !== "red-infantry") {
+    throw new Error(`Capacity 4 room did not preserve requested red slot/team: ${smallRed?.team}/${smallRed?.slotId}`);
+  }
+
   await postRoom({
     id: roomId,
     players: [{

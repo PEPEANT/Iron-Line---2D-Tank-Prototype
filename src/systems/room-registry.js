@@ -677,7 +677,7 @@
     }
 
     resolvePlayerSlot(room, player = {}, existingPlayers = []) {
-      const slots = ROLE_SLOT_IDS.slice(0, room?.capacity || ROLE_SLOT_IDS.length);
+      const slots = ROLE_SLOT_IDS;
       const validSlots = new Set(slots);
       const occupied = new Set(
         existingPlayers
@@ -1443,7 +1443,7 @@
       for (const player of players) {
         if (!player || (player.participantType && player.participantType !== "player")) continue;
         const nextPlayer = { ...player, participantType: "player" };
-        const slotId = this.resolvePlayerSlot({ capacity }, nextPlayer, resolved);
+          const slotId = this.resolvePlayerSlot({ capacity }, nextPlayer, resolved);
         if (!slotId) continue;
         nextPlayer.slotId = slotId;
         nextPlayer.team = this.slotTeam(slotId) || nextPlayer.team || "blue";

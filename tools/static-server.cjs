@@ -203,7 +203,7 @@ function balancedSlotTeams(occupied = new Set()) {
 }
 
 function resolveParticipantSlot(participant, occupied = new Set(), capacity = MAX_ROOM_HUMANS) {
-  const slots = ROOM_SLOT_IDS.slice(0, Math.max(1, Math.min(MAX_ROOM_HUMANS, Math.round(Number(capacity) || MAX_ROOM_HUMANS))));
+  const slots = ROOM_SLOT_IDS;
   const validSlots = new Set(slots);
   const requested = normalizeSlotId(participant.slotId);
   if (requested && validSlots.has(requested) && !occupied.has(requested)) return requested;

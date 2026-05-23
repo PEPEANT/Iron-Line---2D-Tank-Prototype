@@ -2589,7 +2589,8 @@
           hp: unit.hp,
           maxHp: unit.maxHp,
           alive: unit.alive !== false && unit.hp > 0,
-          inVehicle: Boolean(unit.inVehicle || unit.inTank)
+          inVehicle: Boolean(unit.inVehicle || unit.inTank),
+          state: unit.state || ""
         }))
         .filter((item) => item.id)
         .slice(0, 96);
@@ -2658,7 +2659,7 @@
           .filter(([id]) => id)
       );
       for (const snap of state.units || []) {
-        const unit = unitById.get(snap.id);
+        const unit = unitById.get(snap.id) || this.ensureOnlineWorldCrewUnit(snap, vehicleById);
         if (!unit) continue;
         const alive = snap.alive !== false && Number(snap.hp) > 0;
         if (!alive) {
@@ -2683,6 +2684,7 @@
         unit.x = lerp(unit.x, Number(snap.x) || unit.x, unitBlend);
         unit.y = lerp(unit.y, Number(snap.y) || unit.y, unitBlend);
         unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, Math.min(0.42, unitBlend * 1.35)));
+        if (snap.state && !unit.inTank && !unit.inVehicle) unit.state = snap.state;
       }
 
       const pointById = new Map((this.capturePoints || []).map((point) => [point.name, point]));
@@ -2694,6 +2696,32 @@
         point.contested = Boolean(snap.contested);
       }
       return true;
+    }
+
+    ensureOnlineWorldCrewUnit(snap = {}, vehicleById = new Map()) {
+      const id = String(snap.id || "");
+      if (!id || !IronLine.CrewMember) return null;
+      const vehicleId = id.endsWith("-DRV")
+        ? id.slice(0, -4)
+        : id.endsWith("-CREW")
+          ? id.slice(0, -5)
+          : "";
+      if (!vehicleId) return null;
+      const vehicle = vehicleById.get(vehicleId);
+      if (!vehicle) return null;
+      const shouldBoard = Boolean(snap.inVehicle && vehicle.alive);
+      const crew = this.spawnCrewForTank(vehicle, {
+        callSign: id,
+        role: vehicle.vehicleType === "humvee" ? "driver" : "crew",
+        boardImmediately: shouldBoard
+      });
+      if (!shouldBoard) {
+        vehicle.leaveCrew?.(crew);
+        crew.targetTank = null;
+        crew.inTank = null;
+        crew.state = snap.state || "idle";
+      }
+      return crew;
     }
 
     onlineWorldInterpolationBlend(dt = 0, halfLifeSeconds = 0.2) {
