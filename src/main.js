@@ -1515,20 +1515,55 @@
       return result;
     }
 
-    beginDeploymentCountdown() {
+    beginDeploymentCountdown(options = {}) {
       if (this.matchStarted) return false;
       if (this.deploymentOpen) return this.enterLobby();
       if (!this.lobbyOpen) return false;
+      const startOptions = options && typeof options === "object" ? options : {};
+      const loading = this.defaultStartLoadingState();
+      const countdownDuration = 4;
+      const loadingDuration = Math.max(0, Number(loading?.duration) || 0);
+      const totalDuration = loadingDuration + countdownDuration;
+      const room = startOptions.room || {};
+      const startedAt = Math.max(0, Number(startOptions.startedAt || room.startedAt) || 0);
+      const explicitStartDeadline = Math.max(0, Number(startOptions.startDeadline || room.startDeadline) || 0);
+      const startDeadline = explicitStartDeadline || (startedAt > 0 ? startedAt + totalDuration * 1000 : 0);
+      const now = Date.now();
+      const sharedStartTimeline = startedAt > 0 || startDeadline > 0;
+      const deadlineRemaining = sharedStartTimeline ? Math.max(0, (startDeadline - now) / 1000) : totalDuration;
+      const elapsed = startedAt > 0
+        ? Math.max(0, (now - startedAt) / 1000)
+        : Math.max(0, totalDuration - deadlineRemaining);
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
       this.lobbyOpen = false;
-      this.matchPhase = "loading";
+      this.matchPhase = sharedStartTimeline && elapsed >= loadingDuration ? "countdown" : "loading";
       this.countdownStarted = true;
-      this.startCountdown = 4;
-      this.startLoading = this.defaultStartLoadingState();
-      this.startLoading.active = true;
-      this.startLoading.remaining = this.startLoading.duration;
-      this.startLoading.stepIndex = 0;
+      this.startCountdown = sharedStartTimeline
+        ? Math.min(countdownDuration, deadlineRemaining)
+        : countdownDuration;
+      this.startLoading = loading;
+      if (this.startLoading) {
+        const loadingRemaining = sharedStartTimeline
+          ? Math.max(0, loadingDuration - elapsed)
+          : loadingDuration;
+        const steps = this.startLoading.steps || [];
+        const progress = loadingDuration > 0
+          ? 1 - loadingRemaining / Math.max(0.1, loadingDuration)
+          : 1;
+        this.startLoading.active = loadingRemaining > 0;
+        this.startLoading.remaining = loadingRemaining;
+        this.startLoading.stepIndex = Math.min(
+          Math.max(0, steps.length - 1),
+          Math.max(0, Math.floor(progress * Math.max(1, steps.length)))
+        );
+      }
+      if (sharedStartTimeline && deadlineRemaining <= 0) {
+        this.matchPhase = "live";
+        this.matchStarted = true;
+        this.startCountdown = 0;
+        if (this.startLoading) this.startLoading.active = false;
+      }
       this.canvas.focus();
       return true;
     }

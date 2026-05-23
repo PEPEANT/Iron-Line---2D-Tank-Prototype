@@ -655,7 +655,7 @@
 
       if (room.phase === "playing" && game.lobbyOpen && !game.matchStarted && !game.countdownStarted) {
         if (game.isLocalSpectator?.()) game.enterSpectatorMode?.({ roomId: room.id, participantType: game.onlineSession?.participantType || "spectator" });
-        else game.beginDeploymentCountdown?.();
+        else game.beginDeploymentCountdown?.({ room, startedAt: room.startedAt });
       } else if (room.phase === "ended" && game.matchStarted) {
         game.matchStarted = false;
         game.countdownStarted = false;
