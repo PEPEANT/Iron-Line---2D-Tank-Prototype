@@ -206,6 +206,8 @@ function wsPlayerStateSmoke(wsRoomId = roomId) {
     const b = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     const events = { a: [], b: [] };
     const joined = new Set();
+    const payloads = {};
+    let stateSent = false;
     const timer = setTimeout(() => {
       a.close();
       b.close();
@@ -217,8 +219,15 @@ function wsPlayerStateSmoke(wsRoomId = roomId) {
       b.close();
       resolve({ events, payload });
     };
+    const fail = (error) => {
+      clearTimeout(timer);
+      a.close();
+      b.close();
+      reject(error);
+    };
     const maybeSendState = () => {
-      if (joined.size < 2) return;
+      if (stateSent || joined.size < 2) return;
+      stateSent = true;
       a.send(JSON.stringify({
         type: "player_state",
         roomId: wsRoomId,
@@ -226,6 +235,15 @@ function wsPlayerStateSmoke(wsRoomId = roomId) {
         team: "blue",
         slotId: "blue-infantry",
         state: { x: 1200, y: 1400, stateSeq: 7, hp: 91, maxHp: 100, alive: true, updatedAt: Date.now() },
+        sentAt: Date.now()
+      }));
+      b.send(JSON.stringify({
+        type: "player_state",
+        roomId: wsRoomId,
+        playerId: "p-red",
+        team: "blue",
+        slotId: "blue-infantry",
+        state: { x: 1600, y: 1400, stateSeq: 8, hp: 88, maxHp: 100, alive: true, updatedAt: Date.now() },
         sentAt: Date.now()
       }));
     };
@@ -245,10 +263,20 @@ function wsPlayerStateSmoke(wsRoomId = roomId) {
         joined.add(name);
         maybeSendState();
       }
-      if (name === "b" && message.type === "player_state") {
+      if (message.type === "player_state") {
         const payload = message.payload || {};
-        if (payload.playerId === "p-blue" && payload.state?.stateSeq === 7 && payload.state?.x === 1200) {
-          closeDone(payload);
+        if (name === "b" && payload.playerId === "p-blue") payloads.blue = payload;
+        if (name === "a" && payload.playerId === "p-red") payloads.red = payload;
+        if (payloads.blue && payloads.red) {
+          if (payloads.blue.state?.stateSeq !== 7 || payloads.blue.state?.x !== 1200) {
+            fail(new Error("WebSocket blue player_state relay had wrong state."));
+            return;
+          }
+          if (payloads.red.team !== "red" || payloads.red.slotId !== "red-armor") {
+            fail(new Error(`WebSocket player_state did not preserve authoritative red slot/team: ${payloads.red.team}/${payloads.red.slotId}`));
+            return;
+          }
+          closeDone(payloads);
         }
       }
     };
@@ -553,7 +581,7 @@ async function runSmoke() {
   const wsCommand = await wsCommandSmoke();
   if (!wsCommand.commandAck || !wsCommand.broadcastSeen) throw new Error("WebSocket command ack/broadcast failed.");
   const wsPlayerState = await wsPlayerStateSmoke(roomId);
-  if (!wsPlayerState.payload?.state || wsPlayerState.payload.playerId !== "p-blue") {
+  if (!wsPlayerState.payload?.blue?.state || wsPlayerState.payload.blue.playerId !== "p-blue") {
     throw new Error("WebSocket player_state relay failed.");
   }
 

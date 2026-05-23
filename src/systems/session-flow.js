@@ -415,7 +415,8 @@
       const index = players.findIndex((item) => item.id === playerId);
       const previous = index >= 0 ? players[index] : null;
       if (previous?.position && this.isStaleRemotePlayerState(previous.position, incoming)) return false;
-      const team = previous?.team || (payload.team === TEAM.RED ? TEAM.RED : TEAM.BLUE);
+      const payloadTeam = payload.team === TEAM.RED ? TEAM.RED : payload.team === TEAM.BLUE ? TEAM.BLUE : "";
+      const team = payloadTeam || previous?.team || TEAM.BLUE;
       const next = {
         ...(previous || {}),
         id: playerId,
@@ -423,7 +424,7 @@
         name: previous?.name || payload.name || playerId,
         nickname: previous?.nickname || payload.name || playerId,
         team,
-        slotId: previous?.slotId || payload.slotId || "",
+        slotId: payload.slotId || previous?.slotId || "",
         classId: previous?.classId || payload.classId || payload.currentClassId || "",
         currentClassId: previous?.currentClassId || payload.currentClassId || payload.classId || "",
         weaponId: payload.weaponId || incoming.weaponId || previous?.weaponId || "",
@@ -753,11 +754,12 @@
         }
         const current = roomPlayers[index];
         if (!this.isStaleRemotePlayerState(current.position || current, buffered.position || buffered)) {
+          const bufferedTeam = buffered.team === TEAM.RED ? TEAM.RED : buffered.team === TEAM.BLUE ? TEAM.BLUE : "";
           roomPlayers[index] = {
             ...current,
             ...buffered,
-            team: current.team || buffered.team,
-            slotId: current.slotId || buffered.slotId,
+            team: bufferedTeam || current.team,
+            slotId: buffered.slotId || current.slotId,
             ready: current.ready,
             host: current.host
           };

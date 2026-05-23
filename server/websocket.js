@@ -108,6 +108,7 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
     if (client.participantType && client.participantType !== "player") return send(ws, "error", { reason: "not_player" });
     const packet = normalizePlayerStatePacket(client, message);
     if (!packet) return send(ws, "error", { reason: "invalid_player_state" });
+    applyAuthoritativePlayerIdentity(registry, client, packet);
     const now = Date.now();
     if (now - (client.lastPlayerStateAt || 0) < 35) return;
     client.lastPlayerStateAt = now;
@@ -120,6 +121,21 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
   }
 
   return send(ws, "error", { reason: "unknown_message" });
+}
+
+function applyAuthoritativePlayerIdentity(registry, client, packet) {
+  const room = registry?.rooms?.get?.(client.roomId) || null;
+  const participant = room?.participants?.get?.(client.playerId) || room?.players?.get?.(client.playerId) || null;
+  const team = registry?.participantTeam?.(room, participant) || participant?.team || packet.team || "";
+  const slotId = participant?.slotId || packet.slotId || "";
+  if (team === "red" || team === "blue") {
+    packet.team = team;
+    client.team = team;
+  }
+  if (slotId) {
+    packet.slotId = String(slotId).slice(0, 32);
+    client.slotId = packet.slotId;
+  }
 }
 
 function parseMessage(raw) {

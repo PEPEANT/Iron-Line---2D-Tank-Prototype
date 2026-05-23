@@ -1288,13 +1288,15 @@
 
     respawnPlayerForConquest(immediate = false) {
       if (!this.isConquestMode()) return false;
-      const spawn = this.world.spawns.player || this.respawnPointForTeam(TEAM.BLUE);
+      const localTeam = this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
+      const spawn = this.respawnPointForTeam(localTeam) || this.world.spawns.player;
       const point = this.findOpenSpawnNear(spawn, 0, 0, this.player.radius || 10);
       if (this.player.inTank) {
         this.player.inTank.playerControlled = false;
         this.player.inTank = null;
       }
       this.exitPlayerDroneControl();
+      this.player.team = localTeam;
       this.player.x = point.x;
       this.player.y = point.y;
       this.player.angle = spawn.angle || this.player.angle || 0;
@@ -2032,7 +2034,7 @@
         respawnId,
         shooterId: this.onlineSession.playerId,
         shooterName: this.localSessionPlayer?.()?.name || this.localSessionPlayer?.()?.nickname || "Player",
-        shooterTeam: this.player.team || TEAM.BLUE,
+        shooterTeam: this.localSessionPlayer?.()?.team || this.player.team || TEAM.BLUE,
         targetPlayerId: this.onlineSession.playerId,
         weaponId: "respawn",
         damageCause: "respawn",
@@ -2646,7 +2648,18 @@
           unit.alive = false;
           continue;
         }
-        if (unit.inTank || unit.inVehicle) continue;
+        if (snap.inVehicle) continue;
+        if (unit.inTank) {
+          unit.inTank.leaveCrew?.(unit);
+          unit.inTank = null;
+          if (unit.state === "mounted" || unit.state === "vehicle") unit.state = "idle";
+        }
+        if (unit.inVehicle) {
+          unit.inVehicle.leavePassenger?.(unit);
+          unit.inVehicle = null;
+          unit.transportVehicle = null;
+          if (unit.state === "mounted-transport" || unit.state === "transport") unit.state = "idle";
+        }
         unit.alive = true;
         unit.hp = Math.max(1, Math.min(unit.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
         unit.x = lerp(unit.x, Number(snap.x) || unit.x, 0.7);

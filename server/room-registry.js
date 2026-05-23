@@ -68,9 +68,17 @@ class RoomRegistry {
     const previous = room.participants.get(playerId) || null;
     const participantType = this.resolveParticipantType(room, { ...client, playerId });
     const participant = createParticipant({
+      ...(previous || {}),
       ...client,
       playerId,
       participantType,
+      team: client.team || previous?.team || "",
+      slotId: client.slotId || previous?.slotId || "",
+      roleId: client.roleId || previous?.roleId || "",
+      classId: client.classId || previous?.classId || "",
+      currentClassId: client.currentClassId || previous?.currentClassId || "",
+      weaponId: client.weaponId || previous?.weaponId || "",
+      position: client.position || previous?.position || null,
       joinedAt: previous?.joinedAt || this.now(),
       lastSeenAt: this.now()
     });

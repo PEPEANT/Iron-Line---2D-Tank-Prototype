@@ -671,7 +671,7 @@
       });
       if (updated) {
         if (structuralChange) this.schedulePublishRoom(updated, 120);
-        else this.publishParticipant(roomId, nextPlayer);
+        this.publishParticipant(roomId, nextPlayer);
       }
       return updated;
     }
