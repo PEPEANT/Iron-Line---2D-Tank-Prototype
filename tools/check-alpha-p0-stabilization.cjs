@@ -79,7 +79,9 @@ async function run() {
       }
     });
     if (!result.response.ok) throw new Error(`participant update failed: ${JSON.stringify(result.payload)}`);
-    const player = result.payload.room?.players?.find((item) => item.id === "blue-alpha");
+    result = await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`);
+    const updatedRoom = result.payload.room || null;
+    const player = updatedRoom?.players?.find((item) => item.id === "blue-alpha");
     if (!player || player.hp !== 87 || player.stateSeq !== 4) throw new Error("participant state was not preserved");
 
     result = await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`, { method: "DELETE" });

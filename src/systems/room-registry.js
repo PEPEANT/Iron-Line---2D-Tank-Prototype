@@ -179,6 +179,38 @@
       return `${this.apiBase || ""}${path}`;
     }
 
+    async fetchRemoteRoomDetail(id = "") {
+      if (!id) return null;
+      try {
+        const response = await fetch(this.roomsApiUrl(id), { cache: "no-store" });
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return payload?.room ? this.normalizeRoom(payload.room) : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    mergeRoomSummary(previous = null, summary = null, preserveDetails = false) {
+      const normalized = this.normalizeRoom(summary);
+      if (!normalized || !summary?.summary || !preserveDetails || !previous) return normalized;
+      return this.normalizeRoom({
+        ...previous,
+        ...summary,
+        players: previous.players,
+        spectators: previous.spectators,
+        admins: previous.admins,
+        moderation: previous.moderation,
+        commandAuthorities: previous.commandAuthorities,
+        commandAuthorityRequests: previous.commandAuthorityRequests,
+        chat: previous.chat,
+        events: previous.events,
+        commands: previous.commands,
+        combatEvents: previous.combatEvents,
+        worldState: previous.worldState
+      });
+    }
+
     remoteRoomSignature(rooms = []) {
       return rooms
         .map((room) => [
@@ -216,12 +248,19 @@
         const response = await fetch(this.roomsApiUrl(), { cache: "no-store" });
         if (!response.ok) throw new Error(`rooms_api_${response.status}`);
         const payload = await response.json();
-        const serverRooms = Array.isArray(payload.rooms)
-          ? payload.rooms.map((room) => this.normalizeRoom(room)).filter(Boolean)
-          : [];
-        const serverIds = new Set(serverRooms.map((room) => room.id));
+        const summaries = Array.isArray(payload.rooms) ? payload.rooms : [];
+        const summaryRooms = summaries.map((room) => this.normalizeRoom(room)).filter(Boolean);
         const localRooms = this.readLocalRooms();
         const localById = new Map(localRooms.map((room) => [room.id, room]));
+        const selectedId = this.selectedRoomId();
+        const detailId = selectedId && summaryRooms.some((room) => room.id === selectedId) ? selectedId : summaryRooms[0]?.id || "";
+        const detailRoom = detailId && !this.deletedRemoteRoomIds.has(detailId) ? await this.fetchRemoteRoomDetail(detailId) : null;
+        const detailById = new Map(detailRoom ? [[detailRoom.id, detailRoom]] : []);
+        const serverRooms = summaryRooms
+          .map((room) => detailById.get(room.id) || this.mergeRoomSummary(localById.get(room.id), room, room.id === detailId))
+          .filter(Boolean);
+        if (detailRoom && !serverRooms.some((room) => room.id === detailRoom.id)) serverRooms.push(detailRoom);
+        const serverIds = new Set(serverRooms.map((room) => room.id));
         for (const id of Array.from(this.deletedRemoteRoomIds)) {
           if (!serverIds.has(id)) this.deletedRemoteRoomIds.delete(id);
         }
@@ -868,6 +907,11 @@
             this.emit();
             return payload;
           }
+          if (payload?.ok) {
+            this.pendingRemoteRoomIds.delete(payload.roomId || roomId);
+            this.remoteOnline = true;
+            return payload;
+          }
           if (fallbackRoom) this.schedulePublishRoom(fallbackRoom, 120);
           return null;
         })
@@ -896,6 +940,10 @@
             this.upsertRemoteRoom(remoteRoom);
             this.remoteOnline = true;
             this.emit();
+          }
+          if (payload?.ok) {
+            this.remoteOnline = true;
+            return payload;
           }
           return remoteRoom;
         })
@@ -1290,6 +1338,7 @@
       const matchSettings = this.normalizeRoomMatchSettings(room);
       return {
         id,
+        summary: Boolean(room.summary),
         name: String(room.name || id).slice(0, 32),
         mode,
         blueFactionId: this.normalizeFactionId(room.blueFactionId, "korea"),

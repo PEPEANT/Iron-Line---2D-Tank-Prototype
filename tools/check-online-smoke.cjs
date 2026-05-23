@@ -77,8 +77,8 @@ async function expectCommandReject(roomIdValue, command, expectedReason) {
 }
 
 async function fetchRoom() {
-  const payload = await requestJson("/api/rooms");
-  return (payload.rooms || []).find((room) => room.id === roomId);
+  const payload = await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`);
+  return payload.room || null;
 }
 
 function wsSmoke() {

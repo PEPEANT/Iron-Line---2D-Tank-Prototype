@@ -40,9 +40,8 @@ const mimeTypes = new Map([
 let onlineRegistry = null;
 const ROOM_DELETE_TOMBSTONE_MS = 2 * 60 * 1000;
 const roomDeleteTombstones = createRoomDeleteTombstones(ROOM_DELETE_TOMBSTONE_MS);
-const DEFAULT_SPECTATOR_CAPACITY = 12;
-const MAX_SPECTATOR_CAPACITY = 12;
-const MAX_ROOM_HUMANS = 8;
+let combatPersistTimer = null;
+const DEFAULT_SPECTATOR_CAPACITY = 12, MAX_SPECTATOR_CAPACITY = 12, MAX_ROOM_HUMANS = 8;
 const ROOM_SLOT_IDS = Object.freeze([
   "blue-infantry",
   "blue-engineer",
@@ -316,13 +315,16 @@ function exportClientRoom(room) {
     combatEvents: Array.isArray(room?.combatEvents) ? room.combatEvents.slice(-140) : [],
     combatServerSeq: Math.max(0, Math.floor(Number(room?.combatServerSeq) || 0)),
     worldState: room?.worldState || null,
-    createdAt: toClientTimestamp(config.createdAt),
-    updatedAt: toClientTimestamp(room?.updatedAt),
-    startedAt: toClientTimestamp(config.startedAt || 0) || 0,
-    endedAt: toClientTimestamp(config.endedAt || 0) || 0
+    createdAt: toClientTimestamp(config.createdAt), updatedAt: toClientTimestamp(room?.updatedAt),
+    startedAt: toClientTimestamp(config.startedAt || 0) || 0, endedAt: toClientTimestamp(config.endedAt || 0) || 0
   };
 }
 
+function exportRoomSummary(room) {
+  const full = exportClientRoom(room), slim = (item) => item ? ({ id: item.id, name: item.name, team: item.team, slotId: item.slotId, participantType: item.participantType, ready: item.ready, host: item.host, updatedAt: item.updatedAt }) : null;
+  const { moderation, commandAuthorities, commandAuthorityRequests, chat, events, commands, combatEvents, worldState, ...summary } = full;
+  return { ...summary, summary: true, players: full.players.map(slim).filter(Boolean), spectators: full.spectators.map(slim).filter(Boolean), admins: full.admins.map(slim).filter(Boolean), playerCount: full.players.length, spectatorCount: full.spectators.length, adminCount: full.admins.length, chatCount: full.chat.length, eventCount: full.events.length, commandCount: full.commands.length, combatEventCount: full.combatEvents.length, worldStateUpdatedAt: full.worldState?.updatedAt || 0 };
+}
 function importParticipants(room, participants = [], fallbackType = "player", options = {}) {
   const targetMap = fallbackType === "admin"
     ? (room.admins || (room.admins = new Map()))
@@ -485,17 +487,19 @@ function applyClientRoomToServer(body = {}) {
 
 function persistRooms() {
   if (!onlineRegistry) return false;
+  if (combatPersistTimer) { clearTimeout(combatPersistTimer); combatPersistTimer = null; }
   try {
     fs.mkdirSync(path.dirname(roomsStorePath), { recursive: true });
-    const rooms = Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room));
     const tempPath = `${roomsStorePath}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify({ version: 1, rooms }, null, 2), "utf8");
+    fs.writeFileSync(tempPath, JSON.stringify({ version: 1, rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room)) }, null, 2), "utf8");
     fs.renameSync(tempPath, roomsStorePath);
     return true;
-  } catch (error) {
-    console.warn(`Room persistence failed: ${error?.message || error}`);
-    return false;
-  }
+  } catch (error) { console.warn(`Room persistence failed: ${error?.message || error}`); return false; }
+}
+
+function scheduleCombatPersist() {
+  if (!combatPersistTimer) { combatPersistTimer = setTimeout(() => { combatPersistTimer = null; persistRooms(); }, 1200); combatPersistTimer.unref?.(); }
+  return true;
 }
 
 function loadPersistedRooms() {
@@ -533,17 +537,14 @@ async function handleRoomsApi(req, res) {
     if (cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp)) persistRooms();
     sendJson(res, 200, {
       ok: true,
-      rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportClientRoom(room))
+      rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportRoomSummary(room))
     });
     return;
   }
-
+  if (req.method === "GET" && roomId && pathParts.length === 3) return onlineRegistry.rooms.has(roomId) ? sendJson(res, 200, { ok: true, room: exportClientRoom(onlineRegistry.rooms.get(roomId)) }) : sendJson(res, 404, { ok: false, reason: "room_not_found", roomId });
   if (req.method === "POST" && url.pathname === "/api/rooms") {
     const body = await readJsonBody(req);
-    if (!body) {
-      sendJson(res, 400, { ok: false, reason: "invalid_json" });
-      return;
-    }
+    if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
     const requestedRoomId = String(body.id || body.roomId || "").trim().slice(0, 48);
     if (roomDeleteTombstones.has(requestedRoomId)) {
       sendJson(res, 409, { ok: false, reason: "room_deleted_recently", roomId: requestedRoomId });
@@ -574,7 +575,7 @@ async function handleRoomsApi(req, res) {
     });
     if (!room) return sendJson(res, 404, { ok: false, reason: "room_not_found" });
     persistRooms();
-    return sendJson(res, 200, { ok: true, participantId: body.playerId || body.id || "", room: exportClientRoom(room) });
+    return sendJson(res, 200, { ok: true, roomId, participantId: body.playerId || body.id || "", updatedAt: toClientTimestamp(room.updatedAt || Date.now()) });
   }
 
   if (req.method === "POST" && roomId && commandEndpoint) {
@@ -600,9 +601,9 @@ async function handleRoomsApi(req, res) {
     if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
     const result = onlineRegistry.pushCombatRequest(roomId, body);
     if (!result?.ok) return sendJson(res, 403, { ok: false, reason: result?.reason || "combat_rejected" });
-    persistRooms();
+    scheduleCombatPersist();
     const room = onlineRegistry.rooms.get(roomId);
-    return sendJson(res, 200, { ok: true, events: result.events || [], room: exportClientRoom(room) });
+    return sendJson(res, 200, { ok: true, events: result.events || [], roomId, combatServerSeq: Math.max(0, Math.floor(Number(room?.combatServerSeq) || 0)), updatedAt: toClientTimestamp(room?.updatedAt || Date.now()) });
   }
 
   if (req.method === "DELETE" && roomId && participantId) {
