@@ -574,7 +574,7 @@
       return true;
     }
 
-    addOrUpdatePlayer(roomId, player = {}) {
+    addOrUpdatePlayer(roomId, player = {}, options = {}) {
       const room = this.getRoom(roomId);
       if (!room || !player.id) return null;
       const participantType = this.normalizeParticipantType(player.participantType);
@@ -654,7 +654,7 @@
       if (updated) {
         if (livePositionOnly) this.upsertRemoteRoom(this.preserveFreshWorldState(updated), { persist: false });
         if (structuralChange) this.schedulePublishRoom(updated, 120);
-        this.publishParticipant(roomId, nextPlayer);
+        if (options.publish !== false) this.publishParticipant(roomId, nextPlayer);
       }
       return updated;
     }

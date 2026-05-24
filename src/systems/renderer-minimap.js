@@ -238,7 +238,7 @@
     humanMinimapPoint(game, sessionPlayer, localEntity = null) {
       if (localEntity) {
         const mounted = localEntity.inTank || localEntity.inVehicle || null;
-        const point = mounted?.alive !== false ? mounted : localEntity;
+        const point = mounted && mounted.alive !== false ? mounted : localEntity;
         if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
         return {
           x: point.x,

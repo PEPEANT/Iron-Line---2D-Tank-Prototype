@@ -78,7 +78,11 @@ function upsertParticipantToServer(onlineRegistry, roomId = "", input = {}, deps
   if (!onlineRegistry || !roomId || deps.isRoomDeletedRecently?.(roomId)) return null;
   const room = onlineRegistry.rooms.get(roomId);
   if (!room) return null;
-  const type = ["admin", "spectator", "caster"].includes(input.participantType) ? input.participantType : "player";
+  const requestedType = ["admin", "spectator", "caster"].includes(input.participantType) ? input.participantType : "player";
+  const roomFull = requestedType === "player" &&
+    !room.players?.has?.(input.playerId || input.id || "") &&
+    (room.players?.size || 0) >= (room.config?.maxHumans || 8);
+  const type = roomFull ? "spectator" : requestedType;
   const participant = deps.normalizeParticipant?.(input, type);
   if (!participant) return null;
   deps.importParticipants?.(room, [participant], type);

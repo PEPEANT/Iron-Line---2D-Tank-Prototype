@@ -277,7 +277,10 @@
       for (const crew of this.game.crews || []) {
         if (!crew.inTank) add(crew, 60);
       }
-      for (const humvee of this.game.humvees || []) add(humvee, -40);
+      for (const humvee of this.game.humvees || []) {
+        if (humvee !== this.vehicle) add(humvee, 55);
+      }
+      for (const tank of this.game.tanks || []) add(tank, 25);
 
       if (this.game.isLocalPlayerEnemyFor?.(this.vehicle.team)) {
         add(this.game.player, 130);

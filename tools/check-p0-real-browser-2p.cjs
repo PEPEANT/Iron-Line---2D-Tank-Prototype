@@ -231,11 +231,14 @@ async function startMovement(page, roomId, id, team, slotId, offset) {
   await page.eval(`(() => {
     let seq = 10;
     const id = setInterval(() => {
-      seq += 1; const now = Date.now();
-      window.IronLine.roomRegistry.addOrUpdatePlayer(${JSON.stringify(roomId)}, ${JSON.stringify(player(id, team, slotId, 10, Date.now(), offset))});
-      const room = window.IronLine.roomRegistry.getRoom(${JSON.stringify(roomId)});
-      const p = room?.players?.find((item) => item.id === ${JSON.stringify(id)});
-      if (p?.position) { p.position.stateSeq = seq; p.position.x += 2; p.position.updatedAt = now; p.updatedAt = now; window.IronLine.roomRegistry.addOrUpdatePlayer(${JSON.stringify(roomId)}, p); }
+      seq += 1;
+      const now = Date.now();
+      const next = ${JSON.stringify(player(id, team, slotId, 10, Date.now(), offset))};
+      next.updatedAt = now;
+      next.position.stateSeq = seq;
+      next.position.x += seq * 2;
+      next.position.updatedAt = now;
+      window.IronLine.roomRegistry.addOrUpdatePlayer(${JSON.stringify(roomId)}, next, { publish: false });
     }, 180);
     window.__p0Intervals.push(id);
   })()`);

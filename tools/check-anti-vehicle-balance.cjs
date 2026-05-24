@@ -263,6 +263,192 @@ new Promise((resolve, reject) => {
     tank.playerControlled = false;
     tank.playerSeat = "";
 
+    const originalCollections = {
+      tanks: [...(game.tanks || [])],
+      humvees: [...(game.humvees || [])],
+      infantry: [...(game.infantry || [])],
+      crews: [...(game.crews || [])]
+    };
+    const originalWeaponState = {
+      weaponId: game.player.weaponId,
+      activeSlot: game.player.activeSlot,
+      equipmentAmmo: { ...(game.player.equipmentAmmo || {}) },
+      rightDown: Boolean(game.input?.mouse?.rightDown)
+    };
+
+    const humvee = new IronLine.Humvee({
+      x: Math.min(game.world.width - 280, 1080),
+      y: Math.min(game.world.height - 280, 860),
+      team: TEAM.BLUE,
+      callSign: "QA-HUMVEE"
+    });
+    const humveeCrew = new IronLine.CrewMember({
+      x: humvee.x,
+      y: humvee.y,
+      team: TEAM.BLUE,
+      callSign: "QA-HUMVEE-CREW",
+      targetTank: humvee,
+      dedicated: true,
+      role: "crew"
+    });
+    humveeCrew.boardTargetTank();
+    const passenger = new IronLine.InfantryUnit({
+      x: humvee.x,
+      y: humvee.y,
+      team: TEAM.BLUE,
+      callSign: "QA-HUMVEE-PAX",
+      weaponId: "rifle"
+    });
+    humvee.boardPassenger(passenger);
+    game.player.inTank = humvee;
+    game.player.x = humvee.x;
+    game.player.y = humvee.y;
+    game.player.hp = game.player.maxHp || 100;
+    humvee.hp = 5;
+    humvee.takeDamage(game, 8, { weaponId: "qa", cause: "qa_humvee_destroy" });
+
+    const humveeBailoutCheck = {
+      alive: humvee.alive,
+      lastBailout: humvee.lastBailout,
+      crewAlive: humveeCrew.alive,
+      crewState: humveeCrew.state,
+      crewInVehicle: Boolean(humveeCrew.inTank),
+      playerInVehicle: Boolean(game.player.inTank),
+      playerHp: game.player.hp,
+      playerDistance: Math.hypot(game.player.x - humvee.x, game.player.y - humvee.y),
+      passengerAlive: passenger.alive,
+      passengerInVehicle: Boolean(passenger.inVehicle),
+      passengerDistance: Math.hypot(passenger.x - humvee.x, passenger.y - humvee.y),
+      eventRecorded: game.battlefieldEvents.some((event) => event.type === "humvee_crew_bailout" && event.team === TEAM.BLUE),
+      pass: Boolean(
+        !humvee.alive &&
+        humvee.lastBailout?.player === true &&
+        humvee.lastBailout?.crew === true &&
+        humvee.lastBailout?.passengers >= 1 &&
+        humveeCrew.alive &&
+        !humveeCrew.inTank &&
+        (humveeCrew.state === "bailout" || humveeCrew.state === "bailout-shocked") &&
+        !game.player.inTank &&
+        game.player.hp > 0 &&
+        Math.hypot(game.player.x - humvee.x, game.player.y - humvee.y) >= humvee.radius + game.player.radius + 8 &&
+        !passenger.inVehicle &&
+        Math.hypot(passenger.x - humvee.x, passenger.y - humvee.y) >= humvee.radius + passenger.radius + 6 &&
+        game.battlefieldEvents.some((event) => event.type === "humvee_crew_bailout" && event.team === TEAM.BLUE)
+      )
+    };
+
+    game.player.x = originalPlayer.x;
+    game.player.y = originalPlayer.y;
+    game.player.angle = originalPlayer.angle;
+    game.player.hp = originalPlayer.hp;
+    game.player.inTank = null;
+
+    const mgShooterHumvee = new IronLine.Humvee({
+      x: Math.min(game.world.width - 360, 1260),
+      y: Math.min(game.world.height - 360, 920),
+      team: TEAM.BLUE,
+      callSign: "QA-MG-HUMVEE"
+    });
+    mgShooterHumvee.playerControlled = true;
+    mgShooterHumvee.playerSeat = "driver";
+    const mgTargetHumvee = new IronLine.Humvee({
+      x: mgShooterHumvee.x + 180,
+      y: mgShooterHumvee.y + 18,
+      team: TEAM.RED,
+      callSign: "QA-MG-HUMVEE-TGT"
+    });
+    const mgShooterTank = new IronLine.Tank({
+      x: mgShooterHumvee.x,
+      y: mgShooterHumvee.y + 180,
+      team: TEAM.BLUE,
+      callSign: "QA-MG-TANK",
+      maxHp: 110
+    });
+    mgShooterTank.crew = { alive: true, team: TEAM.BLUE };
+    const mgTargetTank = new IronLine.Tank({
+      x: mgShooterTank.x + 210,
+      y: mgShooterTank.y,
+      team: TEAM.RED,
+      callSign: "QA-MG-TANK-TGT",
+      maxHp: 110
+    });
+    game.humvees = [...originalCollections.humvees, mgShooterHumvee, mgTargetHumvee];
+    game.tanks = [...originalCollections.tanks, mgShooterTank, mgTargetTank];
+    game.infantry = [...originalCollections.infantry];
+    game.crews = [...originalCollections.crews];
+
+    const humveeTarget = game.findTankMachineGunTarget(mgShooterHumvee, mgTargetHumvee.x, mgTargetHumvee.y);
+    const tankTarget = game.findTankMachineGunTarget(mgShooterTank, mgTargetTank.x, mgTargetTank.y);
+
+    game.player.x = mgShooterHumvee.x - 70;
+    game.player.y = mgShooterHumvee.y + 110;
+    game.player.angle = Math.atan2(mgTargetHumvee.y - game.player.y, mgTargetHumvee.x - game.player.x);
+    game.player.inTank = null;
+    game.player.setWeapon("machinegun");
+    game.player.equipmentAmmo.machinegun = Math.max(game.player.equipmentAmmo.machinegun || 0, 24);
+    if (game.input?.mouse) {
+      game.input.mouse.worldX = mgTargetHumvee.x;
+      game.input.mouse.worldY = mgTargetHumvee.y;
+      game.input.mouse.rightDown = true;
+    }
+    const playerVehicleTarget = game.findPlayerRifleTarget();
+
+    const originalRandom = Math.random;
+    Math.random = () => 0.01;
+    const humveeHpBefore = mgTargetHumvee.hp;
+    for (let i = 0; i < 12; i += 1) {
+      mgShooterHumvee.machineGunCooldown = 0;
+      mgShooterHumvee.fireMachineGun(game, mgTargetHumvee.x, mgTargetHumvee.y, { target: mgTargetHumvee });
+    }
+    const tankHpBefore = mgTargetTank.hp;
+    for (let i = 0; i < 12; i += 1) {
+      mgShooterTank.machineGunCooldown = 0;
+      mgShooterTank.fireMachineGun(game, mgTargetTank.x, mgTargetTank.y, { target: mgTargetTank });
+    }
+    const playerVehicleHpBefore = mgTargetHumvee.hp;
+    for (let i = 0; i < 6; i += 1) {
+      game.player.rifleCooldown = 0;
+      game.firePlayerGun(game.player.getWeapon(), mgTargetHumvee.x, mgTargetHumvee.y);
+    }
+    Math.random = originalRandom;
+
+    const machineGunCheck = {
+      humveeTargetAcquired: humveeTarget === mgTargetHumvee,
+      tankTargetAcquired: tankTarget === mgTargetTank,
+      playerVehicleTargetAcquired: playerVehicleTarget === mgTargetHumvee,
+      humveeDamage: humveeHpBefore - mgTargetHumvee.hp,
+      tankDamage: tankHpBefore - mgTargetTank.hp,
+      playerVehicleDamage: playerVehicleHpBefore - mgTargetHumvee.hp,
+      vehicleDamageValues: {
+        infantryMgVsTank: IronLine.combat.smallArmsTankDamage(INFANTRY_WEAPONS.machinegun, mgTargetTank),
+        infantryMgVsHumvee: IronLine.combat.smallArmsTankDamage(INFANTRY_WEAPONS.machinegun, mgTargetHumvee),
+        vehicleMgVsTank: IronLine.combat.smallArmsTankDamage(mgShooterTank.machineGunWeapon(), mgTargetTank),
+        vehicleMgVsHumvee: IronLine.combat.smallArmsTankDamage(mgShooterHumvee.machineGunWeapon(), mgTargetHumvee)
+      },
+      pass: Boolean(
+        humveeTarget === mgTargetHumvee &&
+        tankTarget === mgTargetTank &&
+        playerVehicleTarget === mgTargetHumvee &&
+        humveeHpBefore - mgTargetHumvee.hp >= 16 &&
+        tankHpBefore - mgTargetTank.hp >= 2.5 &&
+        playerVehicleHpBefore - mgTargetHumvee.hp >= 2.5
+      )
+    };
+
+    game.player.x = originalPlayer.x;
+    game.player.y = originalPlayer.y;
+    game.player.angle = originalPlayer.angle;
+    game.player.hp = originalPlayer.hp;
+    game.player.inTank = originalPlayer.inTank;
+    game.player.weaponId = originalWeaponState.weaponId;
+    game.player.activeSlot = originalWeaponState.activeSlot;
+    game.player.equipmentAmmo = { ...originalWeaponState.equipmentAmmo };
+    if (game.input?.mouse) game.input.mouse.rightDown = originalWeaponState.rightDown;
+    game.tanks = originalCollections.tanks;
+    game.humvees = originalCollections.humvees;
+    game.infantry = originalCollections.infantry;
+    game.crews = originalCollections.crews;
+
     const regressionCheck = {
       antiTankAssaultMethodsPresent: Boolean(
         typeof tank.reserveInfantryAssault === "function" &&
@@ -281,12 +467,21 @@ new Promise((resolve, reject) => {
       )
     };
 
-    const pass = Boolean(rpgCheck.pass && droneCheck.pass && bailoutCheck.pass && regressionCheck.pass);
+    const pass = Boolean(
+      rpgCheck.pass &&
+      droneCheck.pass &&
+      bailoutCheck.pass &&
+      humveeBailoutCheck.pass &&
+      machineGunCheck.pass &&
+      regressionCheck.pass
+    );
     resolve({
       pass,
       rpgCheck,
       droneCheck,
       bailoutCheck,
+      humveeBailoutCheck,
+      machineGunCheck,
       regressionCheck
     });
   }).catch(reject);

@@ -1139,7 +1139,7 @@
     humanMapPoint(game, sessionPlayer, localEntity = null) {
       if (localEntity) {
         const mounted = localEntity.inTank || localEntity.inVehicle || null;
-        const point = mounted?.alive !== false ? mounted : localEntity;
+        const point = mounted && mounted.alive !== false ? mounted : localEntity;
         if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
         return {
           x: point.x,
@@ -1222,10 +1222,9 @@
       const infantry = game.infantry.filter((unit) => unit.team === team);
       const vehicleTotal = tanks.length + humvees.length;
       const aliveTanks = tanks.filter((tank) => tank.alive).length + humvees.filter((humvee) => humvee.alive).length;
-      const playerTotal = team === TEAM.BLUE ? 1 : 0;
-      const playerAlive = team === TEAM.BLUE && !game.playerDeathActive && game.player.hp > 0 ? 1 : 0;
-      const aliveInfantry = infantry.filter((unit) => unit.alive).length + playerAlive;
-      const infantryTotal = infantry.length + playerTotal;
+      const humans = game.humanTeamPresenceStats?.(team, { includeLocal: !game.adminObserverMode }) || { total: 0, alive: 0 };
+      const aliveInfantry = infantry.filter((unit) => unit.alive).length + humans.alive;
+      const infantryTotal = infantry.length + humans.total;
       const total = vehicleTotal + infantryTotal;
       const alive = aliveTanks + aliveInfantry;
 

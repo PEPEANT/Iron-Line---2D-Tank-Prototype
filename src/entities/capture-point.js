@@ -41,8 +41,12 @@
         if (unit.team === TEAM.RED) redPower += infantryPower;
       }
 
-      if (!game.player.inTank && game.player.hp > 0 && distXY(game.player.x, game.player.y, this.x, this.y) <= this.radius) {
-        bluePower += 0.45;
+      for (const human of game.sessionHumanPlayers?.("", { includeLocal: !game.adminObserverMode }) || []) {
+        if (!game.sessionHumanAlive?.(human)) continue;
+        const point = game.sessionHumanPoint?.(human);
+        if (!point || point.inVehicle || distXY(point.x, point.y, this.x, this.y) > this.radius) continue;
+        if (point.team === TEAM.BLUE) bluePower += 0.45;
+        if (point.team === TEAM.RED) redPower += 0.45;
       }
 
       this.contested = bluePower > 0 && redPower > 0;

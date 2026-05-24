@@ -579,12 +579,11 @@
       const tanks = (game.tanks || []).filter((tank) => tank.team === team);
       const humvees = (game.humvees || []).filter((humvee) => humvee.team === team);
       const infantry = (game.infantry || []).filter((unit) => unit.team === team);
-      const playerTotal = !game.adminObserverMode && team === TEAM.BLUE ? 1 : 0;
-      const playerAlive = !game.adminObserverMode && team === TEAM.BLUE && !game.playerDeathActive && game.player?.hp > 0 ? 1 : 0;
+      const humans = game.humanTeamPresenceStats?.(team, { includeLocal: !game.adminObserverMode }) || { total: 0, alive: 0 };
       const vehicleTotal = tanks.length + humvees.length;
       const vehicleAlive = tanks.filter((tank) => tank.alive).length + humvees.filter((humvee) => humvee.alive).length;
-      const infantryTotal = infantry.length + playerTotal;
-      const infantryAlive = infantry.filter((unit) => unit.alive).length + playerAlive;
+      const infantryTotal = infantry.length + humans.total;
+      const infantryAlive = infantry.filter((unit) => unit.alive).length + humans.alive;
       return {
         alive: vehicleAlive + infantryAlive,
         total: vehicleTotal + infantryTotal,

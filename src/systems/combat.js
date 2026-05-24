@@ -858,20 +858,15 @@
   function applySmallArmsTankHit(game, shooter, tank, x, y, weapon, options = {}) {
     if (!tank?.alive) return false;
     const friendly = tank.team === shooter.team;
-    const chipDamage = friendly
-      ? 0
-      : options.damage ?? smallArmsTankDamage(weapon);
+    const chipDamage = friendly ? 0 : options.damage ?? smallArmsTankDamage(weapon, tank);
     const tankWasAlive = targetScoreAlive(tank);
-
     if (chipDamage > 0) {
       tank.hp = Math.max(0, tank.hp - chipDamage);
     }
-
     emitSmallArmsImpact(game, x, y, Math.atan2(y - shooter.y, x - shooter.x), weapon, {
       hard: true,
       tank: true
     });
-
     game.effects.explosions.push({
       x,
       y,
@@ -881,18 +876,20 @@
       maxLife: 0.13,
       color: friendly ? "rgba(210, 226, 232, 0.46)" : "rgba(255, 242, 168, 0.7)"
     });
-
     if (!friendly && tank.hp <= 0 && tank.alive) tank.takeDamage(game, 0.01);
     recordKillIfDestroyed(game, shooter, tank, tankWasAlive, weapon.id || "small-arms");
     return true;
   }
 
-  function smallArmsTankDamage(weapon) {
-    if (!weapon) return 0.05;
-    if (weapon.id === "lmg" || weapon.id === "machinegun") return 0.18;
-    if (weapon.id === "sniper") return 0.14;
-    if (weapon.id === "pistol") return 0.03;
-    return 0.07;
+  function smallArmsTankDamage(weapon, tank = null) {
+    const lightVehicle = tank?.vehicleType === "humvee";
+    if (!weapon) return lightVehicle ? 0.2 : 0.05;
+    if (lightVehicle && Number.isFinite(weapon.lightVehicleDamage)) return weapon.lightVehicleDamage;
+    if (!lightVehicle && Number.isFinite(weapon.tankDamage)) return weapon.tankDamage;
+    if (weapon.vehicleMounted) return lightVehicle ? 1.45 : 0.24;
+    if (weapon.id === "lmg" || weapon.id === "machinegun") return lightVehicle ? 0.65 : 0.14;
+    if (weapon.id === "sniper") return lightVehicle ? 0.42 : 0.1;
+    return weapon.id === "smg" || weapon.id === "pistol" ? (lightVehicle ? 0.12 : 0.03) : (lightVehicle ? 0.22 : 0.06);
   }
 
   function applyLineSuppression(game, shooter, startX, startY, endX, endY, weapon, targetTeam = null) {
@@ -1584,6 +1581,7 @@
     fireRifle,
     fireRifleAtPoint,
     fireRifleAtTank,
+    smallArmsTankDamage,
     smallArmsRange,
     throwGrenade,
     fireRpg,

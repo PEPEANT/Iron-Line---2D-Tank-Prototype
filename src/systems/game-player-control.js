@@ -156,11 +156,14 @@
       this.applyVirtualAim(humvee, this.input.mouse.rightDown ? 1050 : 760);
 
       if (!humvee.alive) {
-        this.player.inTank = null;
-        humvee.playerControlled = false;
-        this.applyPlayerDamage(28, humvee, "vehicle", {
-          deathReason: "\uD0D1\uC2B9 \uCC28\uB7C9 \uD30C\uAD34\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-        });
+        const bailedOut = humvee.bailoutPlayer?.(this, { catastrophic: true });
+        if (!bailedOut) {
+          this.player.inTank = null;
+          humvee.playerControlled = false;
+          this.applyPlayerDamage(28, humvee, "vehicle", {
+            deathReason: "\uD0D1\uC2B9 \uCC28\uB7C9 \uD30C\uAD34\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4."
+          });
+        }
         return;
       }
 
@@ -305,6 +308,16 @@
       }
       return fired;
     },
+    enemyVehicleTargets(team, excludeVehicle = null) {
+      return [...(this.tanks || []), ...(this.humvees || [])]
+        .filter((vehicle) => (
+          vehicle &&
+          vehicle !== excludeVehicle &&
+          vehicle.alive &&
+          !vehicle.destructionPending &&
+          vehicle.team !== team
+        ));
+    },
     findAutoTankMachineGunTarget(tank) {
       const weapon = tank.machineGunWeapon?.() || INFANTRY_WEAPONS.machinegun;
       const muzzle = tank.machineGunMuzzlePoint?.() || { x: tank.x, y: tank.y };
@@ -334,6 +347,17 @@
         if (crew.inTank) continue;
         addTarget(crew, 1);
       }
+      for (const vehicle of this.enemyVehicleTargets(tank.team, tank)) {
+        const distance = distXY(muzzle.x, muzzle.y, vehicle.x, vehicle.y);
+        if (distance > range) continue;
+        if (!hasLineOfSight(this, muzzle, vehicle, { padding: 6 })) continue;
+        const lightVehicleBonus = vehicle.vehicleType === "humvee" ? 240 : 110;
+        const occupiedBonus = vehicle.playerControlled ? 160 : vehicle.crew ? 90 : 0;
+        candidates.push({
+          target: vehicle,
+          score: distance - lightVehicleBonus - occupiedBonus
+        });
+      }
 
       if (tank.team === TEAM.RED && !this.player.inTank && this.player.hp > 0 && !this.isPlayerInSafeZone?.()) {
         addTarget(this.player, 2);
@@ -356,6 +380,7 @@
         if (!crew.alive || crew.inTank || crew.team === tank.team) continue;
         enemies.push(crew);
       }
+      enemies.push(...this.enemyVehicleTargets(tank.team, tank));
 
       if (!this.player.inTank && this.player.hp > 0 && tank.team === TEAM.RED && !this.isPlayerInSafeZone?.()) {
         enemies.push(this.player);
@@ -367,11 +392,17 @@
           if (rangeDistance > range) return null;
           const laneDistance = segmentDistanceToPoint(muzzle.x, muzzle.y, targetX, targetY, target.x, target.y);
           const cursorDistance = distXY(targetX, targetY, target.x, target.y);
-          if (laneDistance > 42 + target.radius || cursorDistance > 120) return null;
-          if (!hasLineOfSight(this, muzzle, target, { padding: 4 })) return null;
+          const laneTolerance = target.vehicleType ? target.radius + 18 : 42 + target.radius;
+          const cursorTolerance = target.vehicleType ? target.radius + 92 : 120;
+          if (laneDistance > laneTolerance || cursorDistance > cursorTolerance) return null;
+          if (!hasLineOfSight(this, muzzle, target, { padding: target.vehicleType ? 6 : 4 })) return null;
+          const vehicleBias = target.vehicleType === "humvee" ? -22 : target.vehicleType ? -8 : 0;
           return {
             target,
-            score: laneDistance * 1.25 + cursorDistance * 0.55 + rangeDistance * 0.02
+            score: laneDistance * (target.vehicleType ? 0.95 : 1.25) +
+              cursorDistance * (target.vehicleType ? 0.34 : 0.55) +
+              rangeDistance * 0.02 +
+              vehicleBias
           };
         })
         .filter(Boolean)

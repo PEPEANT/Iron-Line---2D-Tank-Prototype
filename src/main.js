@@ -3,7 +3,7 @@
 (function bootGame(global) {
   const IronLine = global.IronLine;
   const FULLSCREEN_DISABLED_KEY = "iron-line-fullscreen-disabled-v1";
-  const ONLINE_WORLD_SYNC_INTERVAL_SECONDS = 0.45;
+  const ONLINE_WORLD_SYNC_INTERVAL_SECONDS = 0.3;
   const { TEAM, AMMO, INFANTRY_WEAPONS, INFANTRY_CLASSES, PLAYER_CLASS_ORDER } = IronLine.constants;
   const {
     clamp,
@@ -993,8 +993,8 @@
 
     updateBattlefield(dt) {
       if (!this.matchStarted || this.result) return;
+      const remoteOnlineBattlefield = this.sessionMode === "online" && !this.isOnlineWorldHost?.(this.onlineCombatRoom?.());
       const perf = this.perfMonitor;
-      const remoteWorldFollower = this.isRemoteOnlineWorldFollower();
       perf?.begin("battlefield");
       if (this.updateAnnihilationIntermission?.(dt)) {
         perf?.begin("combat.effects");
@@ -1006,42 +1006,46 @@
       }
 
       this.matchTime += dt;
-      if (!remoteWorldFollower) {
+      if (!remoteOnlineBattlefield) {
         perf?.begin("ai.tacticalMap");
         this.tacticalMap?.update?.(dt);
         perf?.end("ai.tacticalMap");
-        this.updateDroneDesignation(dt);
-        this.updateConquestRespawns(dt);
       }
+      this.updateDroneDesignation(dt);
+      if (remoteOnlineBattlefield) this.updateLocalConquestRespawn(dt);
+      else this.updateConquestRespawns(dt);
       perf?.begin("crews");
       for (const crew of this.crews) {
-        if (!remoteWorldFollower || crew.inTank) crew.update(this, dt);
+        if (remoteOnlineBattlefield && !this.shouldLocallyUpdateRemoteCrew?.(crew)) continue;
+        crew.update(this, dt);
       }
       perf?.end("crews");
-      if (!this.testLabAiPaused && !remoteWorldFollower) {
+      if (!remoteOnlineBattlefield && !this.testLabAiPaused) {
         perf?.begin("ai.commanders");
         for (const commander of Object.values(this.commanders)) commander.update(dt);
         this.botCommander?.update?.(dt);
         perf?.end("ai.commanders");
       }
-      if (!remoteWorldFollower) {
+      if (!remoteOnlineBattlefield) {
         this.refreshFollowPlayerOrders();
         this.coverSlots.update(dt);
       }
-      if (!this.testLabAiPaused && !remoteWorldFollower) {
+      if (!remoteOnlineBattlefield && !this.testLabAiPaused) {
         perf?.begin("ai.squads");
         for (const squad of this.squads) squad.update(dt);
         perf?.end("ai.squads");
       }
 
-      if (!remoteWorldFollower) {
-        perf?.begin("drones");
-        this.updateDrones(dt);
-        perf?.end("drones");
-      }
+      perf?.begin("drones");
+      this.updateDrones(dt);
+      perf?.end("drones");
       perf?.begin("ai.infantry");
       for (const unit of this.infantry) {
-        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(unit, dt);
+        if (remoteOnlineBattlefield) {
+          unit.update(this, dt, { skipAi: true, aiDt: 0 });
+          continue;
+        }
+        const lodStep = this.aiLodStep(unit, dt);
         unit.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       perf?.end("ai.infantry");
@@ -1051,11 +1055,19 @@
 
       perf?.begin("vehicles");
       for (const tank of this.tanks) {
-        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(tank, dt);
+        if (remoteOnlineBattlefield) {
+          tank.update(this, dt, { skipAi: true, aiDt: 0 });
+          continue;
+        }
+        const lodStep = this.aiLodStep(tank, dt);
         tank.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       for (const humvee of this.humvees || []) {
-        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(humvee, dt);
+        if (remoteOnlineBattlefield) {
+          humvee.update(this, dt, { skipAi: true, aiDt: 0 });
+          continue;
+        }
+        const lodStep = this.aiLodStep(humvee, dt);
         humvee.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       perf?.end("vehicles");
@@ -1067,24 +1079,38 @@
       IronLine.combat.updateEffects(this, dt);
       perf?.end("combat.effects");
 
-      if (!remoteWorldFollower) {
-        perf?.begin("objectives");
+      perf?.begin("objectives");
+      if (!remoteOnlineBattlefield) {
         for (const point of this.capturePoints) point.update(this, dt);
-        this.updateConquestScoring(dt);
-        perf?.end("objectives");
       }
+      this.updateConquestScoring(dt);
+      perf?.end("objectives");
 
-      if (!remoteWorldFollower) {
+      if (!remoteOnlineBattlefield) {
         perf?.begin("spacing");
         resolveTankSpacing(this, dt);
         resolveInfantryTankSpacing(this, dt);
         perf?.end("spacing");
+        perf?.begin("result");
+        this.updateResult(dt);
+        perf?.end("result");
+        this.updateAiObservatoryBudgeted(dt);
       }
-      perf?.begin("result");
-      this.updateResult(dt);
-      perf?.end("result");
-      this.updateAiObservatoryBudgeted(dt);
       perf?.end("battlefield");
+    }
+
+    shouldLocallyUpdateRemoteCrew(crew = null) {
+      if (!crew?.alive) return false;
+      const vehicle = crew.inTank || crew.targetTank || null;
+      return Boolean(vehicle?.playerControlled);
+    }
+
+    updateLocalConquestRespawn(dt) {
+      if (!this.isConquestMode() || !this.matchStarted || this.result) return;
+      if (this.playerDeathActive || this.playerDowned) {
+        this.playerRespawnTimer = Math.max(0, (this.playerRespawnTimer || this.conquest.respawnDelay.player) - dt);
+        if (this.playerRespawnTimer <= 0 && this.playerDeathActive) this.respawnPlayerForConquest();
+      }
     }
 
     aiLodStep(actor, dt) {
@@ -1497,6 +1523,10 @@
 
     toggleLocalReady() {
       if (!this.lobbyOpen || this.matchStarted || this.countdownStarted) return false;
+      const nextReady = !this.onlineSession.localReady;
+      if (this.hud?.sessionFlow?.requestLobbyReadyState) {
+        return this.hud.sessionFlow.requestLobbyReadyState(this, nextReady);
+      }
       this.onlineSession.localReady = !this.onlineSession.localReady;
       const player = this.localSessionPlayer();
       if (player) player.ready = this.onlineSession.localReady;
@@ -1512,6 +1542,9 @@
       const currentSlot = this.sessionSlotById(player.slotId);
       const nextSide = player.team === TEAM.BLUE ? "red" : "blue";
       const roleId = currentSlot?.roleId || player.roleId || "infantry";
+      if (this.hud?.sessionFlow?.requestLobbySlotAssignment) {
+        return this.hud.sessionFlow.requestLobbySlotAssignment(this, `${nextSide}-${roleId}`);
+      }
       return this.assignPlayerToSlot(player.id, `${nextSide}-${roleId}`);
     }
 
@@ -2573,8 +2606,21 @@
 
     captureOnlineWorldState(room = this.onlineCombatRoom()) {
       const localId = this.onlineSession?.playerId || "";
-      const vehiclePresence = new Map();
+      const presenceByPlayerId = new Map();
       for (const player of room?.players || []) {
+        if (player?.id) presenceByPlayerId.set(player.id, player);
+      }
+      for (const player of this.onlineSession?.players || []) {
+        if (!player?.id) continue;
+        const previous = presenceByPlayerId.get(player.id) || {};
+        presenceByPlayerId.set(player.id, {
+          ...previous,
+          ...player,
+          position: player.position || previous.position || null
+        });
+      }
+      const vehiclePresence = new Map();
+      for (const player of presenceByPlayerId.values()) {
         const position = player?.position || player;
         const vehicleId = String(position?.vehicleId || player?.vehicleId || "");
         if (!vehicleId || !position?.inVehicle) continue;
@@ -3446,6 +3492,90 @@
       return this.localSessionPlayer?.()?.team || this.player?.team || TEAM.BLUE;
     }
 
+    sessionHumanPlayers(team = "", options = {}) {
+      const includeLocal = options.includeLocal !== false;
+      const session = this.onlineSession || {};
+      const localId = session.playerId || "";
+      const seen = new Set();
+      const players = [];
+      if (this.sessionMode === "online") {
+        for (const player of session.players || []) {
+          if ((player?.participantType || "player") !== "player") continue;
+          const id = String(player.id || player.playerId || "");
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          if (!includeLocal && id === localId) continue;
+          if (team && player.team !== team) continue;
+          players.push(player);
+        }
+        return players;
+      }
+      if (!includeLocal || !this.player) return [];
+      const localTeam = this.localPlayerTeam();
+      if (team && localTeam !== team) return [];
+      return [{
+        id: localId || "local-player",
+        playerId: localId || "local-player",
+        team: localTeam,
+        participantType: "player",
+        isLocalSessionHuman: true
+      }];
+    }
+
+    sessionHumanAlive(player = {}) {
+      const session = this.onlineSession || {};
+      const localId = session.playerId || "";
+      const playerId = String(player.id || player.playerId || "");
+      if (player.isLocalSessionHuman || (playerId && playerId === localId)) {
+        return Boolean(this.player && !this.playerDeathActive && !this.playerDowned && this.player.hp > 0);
+      }
+      const raw = player.position || player;
+      return raw.alive !== false &&
+        player.alive !== false &&
+        raw.deathState !== "dead" &&
+        player.deathState !== "dead" &&
+        Number(raw.hp ?? player.hp ?? 1) > 0;
+    }
+
+    sessionHumanPoint(player = {}) {
+      const session = this.onlineSession || {};
+      const localId = session.playerId || "";
+      const playerId = String(player.id || player.playerId || "");
+      if (player.isLocalSessionHuman || (playerId && playerId === localId)) {
+        const mounted = this.player?.inTank || this.player?.inVehicle || null;
+        const point = mounted && mounted.alive !== false ? mounted : this.player;
+        if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+        return {
+          x: point.x,
+          y: point.y,
+          team: this.localPlayerTeam(),
+          inVehicle: Boolean(mounted)
+        };
+      }
+      const raw = player.position || player;
+      const x = Number(raw.x);
+      const y = Number(raw.y);
+      const nearOrigin = Math.abs(x) < 4 && Math.abs(y) < 4;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || nearOrigin) return null;
+      return {
+        x,
+        y,
+        team: player.team || raw.team || "",
+        inVehicle: Boolean(raw.inVehicle || player.inVehicle)
+      };
+    }
+
+    humanTeamPresenceStats(team, options = {}) {
+      const humans = this.sessionHumanPlayers(team, options);
+      let total = 0;
+      let alive = 0;
+      for (const player of humans) {
+        total += 1;
+        if (this.sessionHumanAlive(player)) alive += 1;
+      }
+      return { total, alive };
+    }
+
     isLocalPlayerAliveOnFoot() {
       return Boolean(this.player && !this.player.inTank && this.player.hp > 0);
     }
@@ -3647,8 +3777,16 @@
       const observedTarget = !directTarget && scoped ? this.findObservedSniperTarget() : null;
       const target = directTarget || observedTarget?.target;
       const observedShot = Boolean(observedTarget && target === observedTarget.target);
-      const fired = target
-        ? IronLine.combat.fireRifle(this, this.player, target, observedShot ? {
+      const fired = target?.vehicleType
+        ? IronLine.combat.fireRifleAtTank(this, this.player, target, {
+          weapon,
+          range,
+          accuracyBonus: weapon.accuracyBonus + 0.04 + (scoped ? 0.08 : machineGunAim ? 0.12 : pistolAim ? 0.06 : 0.02) + proneAccuracyBonus,
+          impactChance: machineGunAim ? 0.48 : pistolAim ? 0.34 : scoped ? 0.24 : 0.28,
+          tracerColor: machineGunAim ? "rgba(143, 222, 207, 0.88)" : undefined
+        })
+        : target
+          ? IronLine.combat.fireRifle(this, this.player, target, observedShot ? {
           weapon,
           range: observedTarget.range,
           requireLineOfSight: false,
@@ -3671,7 +3809,7 @@
           spread: (machineGunAim ? weapon.spread * 0.58 : pistolAim ? weapon.spread * 0.66 : weapon.spread) * proneSpreadScale,
           impactChance: machineGunAim ? 0.45 : pistolAim ? 0.34 : 0.24
         })
-        : IronLine.combat.fireRifleAtPoint(this, this.player, targetX, targetY, {
+          : IronLine.combat.fireRifleAtPoint(this, this.player, targetX, targetY, {
           weapon,
           range,
           spread: (scoped ? weapon.spread * 0.35 : machineGunAim ? weapon.spread * 0.58 : pistolAim ? weapon.spread * 0.66 : weapon.spread) * proneSpreadScale,
@@ -3810,6 +3948,10 @@
         if (!drone.alive || drone.team === TEAM.BLUE) continue;
         candidates.push(drone);
       }
+      for (const vehicle of [...(this.tanks || []), ...(this.humvees || [])]) {
+        if (!vehicle?.alive || vehicle.destructionPending || vehicle.team === TEAM.BLUE) continue;
+        candidates.push(vehicle);
+      }
 
       return candidates
         .map((target) => {
@@ -3823,16 +3965,29 @@
             target.y
           );
           const cursorDistance = distXY(mouse.worldX, mouse.worldY, target.x, target.y);
-          return { target, rangeDistance, aimDistance, cursorDistance };
+          const vehicleTarget = Boolean(target.vehicleType);
+          return {
+            target,
+            rangeDistance,
+            aimDistance,
+            cursorDistance,
+            vehicleTarget,
+            aimTolerance: vehicleTarget
+              ? aimTolerance + target.radius * (machineGunAim ? 0.95 : scoped ? 0.45 : 0.62)
+              : aimTolerance,
+            cursorTolerance: vehicleTarget
+              ? cursorTolerance + target.radius * (machineGunAim ? 1.2 : scoped ? 0.7 : 0.92)
+              : cursorTolerance
+          };
         })
         .filter((item) => (
           item.rangeDistance <= range &&
-          (item.aimDistance <= aimTolerance || item.cursorDistance <= cursorTolerance) &&
-          hasLineOfSight(this, this.player, item.target, { padding: 3 })
+          (item.aimDistance <= item.aimTolerance || item.cursorDistance <= item.cursorTolerance) &&
+          hasLineOfSight(this, this.player, item.target, { padding: item.vehicleTarget ? 6 : 3 })
         ))
         .sort((a, b) => (
-          a.aimDistance + a.cursorDistance * 0.18 + a.rangeDistance * 0.03 -
-          (b.aimDistance + b.cursorDistance * 0.18 + b.rangeDistance * 0.03)
+          a.aimDistance + a.cursorDistance * 0.18 + a.rangeDistance * 0.03 + (a.vehicleTarget ? (a.target.vehicleType === "humvee" ? 8 : 16) : 0) -
+          (b.aimDistance + b.cursorDistance * 0.18 + b.rangeDistance * 0.03 + (b.vehicleTarget ? (b.target.vehicleType === "humvee" ? 8 : 16) : 0))
         ))[0]?.target || null;
     }
 
@@ -4125,7 +4280,7 @@
       const tankAlive = this.tanks.some((tank) => tank.team === team && tank.alive);
       const humveeAlive = (this.humvees || []).some((humvee) => humvee.team === team && humvee.isOperational?.());
       const infantryAlive = (this.infantry || []).some((unit) => unit.team === team && unit.alive);
-      const playerAlive = team === this.localPlayerTeam() && !this.playerDeathActive && this.player.hp > 0;
+      const playerAlive = (this.humanTeamPresenceStats?.(team, { includeLocal: !this.adminObserverMode })?.alive || 0) > 0;
       return tankAlive || humveeAlive || infantryAlive || playerAlive;
     }
 

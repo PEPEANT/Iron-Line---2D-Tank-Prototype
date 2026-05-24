@@ -558,6 +558,10 @@
       for (const crew of this.game.crews || []) {
         if (!crew.inTank) addTarget(crew, 70);
       }
+      for (const vehicle of [...(this.game.humvees || []), ...(this.game.tanks || [])]) {
+        if (vehicle === this.tank || !vehicle?.alive || vehicle.destructionPending) continue;
+        addTarget(vehicle, vehicle.vehicleType === "humvee" ? 110 : 50);
+      }
 
       if (this.game.isLocalPlayerEnemyFor?.(this.tank.team)) {
         addTarget(this.game.player, 150);

@@ -530,6 +530,7 @@
       if (occupied) return false;
       if (localSpectatorClaim && !this.convertLocalSpectatorToPlayer()) return false;
       const keepReady = Boolean(options.preserveReady && player.ready);
+      const skipPublish = options.skipPublish === true;
 
       for (const slot of this.onlineSession.roleSlots || []) {
         if (slot.playerId === playerId) {
@@ -583,7 +584,7 @@
       if (playerId === this.onlineSession.playerId) this.onlineSession.localReady = keepReady;
       IronLine.factionVisuals?.syncGame?.(this);
       this.syncOnlineSlotAssets();
-      if (playerId === this.onlineSession.playerId) {
+      if (playerId === this.onlineSession.playerId && !skipPublish) {
         this.hud?.sessionFlow?.publishLocalPlayer?.(this, { force: true });
       }
       this.hud?.update?.(this);

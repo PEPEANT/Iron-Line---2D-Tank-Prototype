@@ -16,12 +16,17 @@
       this.lastCleanupAt = 0;
       this.publishIntervalMs = 180;
       this.playerStateIntervalMs = 75;
+      this.matchParticipantPublishIntervalMs = 900;
       this.playerStateSocket = null;
       this.playerStateSocketRoomId = "";
       this.playerStateSocketPlayerId = "";
       this.playerStateSocketOpen = false;
       this.playerStateSocketLastAttempt = 0;
+      this.playerStateSocketQueue = [];
       this.remotePlayerStateBuffer = new Map();
+      this.pendingLobbySlotId = "";
+      this.pendingLobbyReady = null;
+      this.pendingLobbyAuthorityAt = 0;
       window.addEventListener("pagehide", () => this.handlePageHide());
     }
 
@@ -343,6 +348,37 @@
       return Boolean(player?.host || (game?.onlineSession?.hostId && game.onlineSession.hostId === game.onlineSession.playerId));
     }
 
+    participantPublishIntervalMs(game = this.game(), options = {}) {
+      if (options.force) return 0;
+      if (game?.matchStarted) {
+        return this.playerStateSocketOpen ? this.matchParticipantPublishIntervalMs : Math.max(420, this.publishIntervalMs * 2);
+      }
+      return this.publishIntervalMs;
+    }
+
+    clearPendingLobbyAuthority() {
+      this.pendingLobbySlotId = "";
+      this.pendingLobbyReady = null;
+      this.pendingLobbyAuthorityAt = 0;
+    }
+
+    expirePendingLobbyAuthority(now = Date.now()) {
+      if (!this.pendingLobbyAuthorityAt) return false;
+      if (now - this.pendingLobbyAuthorityAt < 2800) return false;
+      this.clearPendingLobbyAuthority();
+      return true;
+    }
+
+    shouldDeferParticipantPublish(game = this.game(), player = null, options = {}) {
+      if (options.allowWhilePending) return false;
+      this.expirePendingLobbyAuthority();
+      const localId = game?.onlineSession?.playerId || "";
+      if (!player || player.id !== localId) return false;
+      if (this.pendingLobbySlotId && String(player.slotId || "") !== this.pendingLobbySlotId) return true;
+      if (this.pendingLobbyReady !== null && Boolean(player.ready) !== this.pendingLobbyReady) return true;
+      return false;
+    }
+
     publishLocalPlayer(game = this.game(), options = {}) {
       if (!game?.onlineSession?.roomId || !this.registry) return;
       const room = this.registry.getRoom(game.onlineSession.roomId);
@@ -354,13 +390,15 @@
       const player = game.localSessionPlayer?.();
       if (!player) return;
       const shouldRelayState = options.force || now - this.lastPlayerStateAt >= this.playerStateIntervalMs;
-      const shouldPublishParticipant = options.force || now - this.lastPublishAt >= this.publishIntervalMs;
+      const participantInterval = this.participantPublishIntervalMs(game, options);
+      const shouldPublishParticipant = options.force || now - this.lastPublishAt >= participantInterval;
       if (!shouldRelayState && !shouldPublishParticipant) return true;
       const position = this.syncLocalPlayerPresence(game, player, now);
       if (shouldRelayState && position) {
         this.lastPlayerStateAt = now;
         this.publishPlayerStateRelay(game, player, position, now);
       }
+      if (shouldPublishParticipant && this.shouldDeferParticipantPublish(game, player, options)) return true;
       if (!shouldPublishParticipant) return true;
       this.lastPublishAt = now;
       const saved = this.registry.addOrUpdatePlayer(game.onlineSession.roomId, player);
@@ -419,6 +457,7 @@
             nickname: game.localSessionPlayer?.()?.name || game.localProfile?.nickname || playerId,
             participantType: session.participantType || "player"
           }));
+          this.flushPlayerStateSocketQueue();
         });
         socket.addEventListener("message", (event) => this.handlePlayerStateSocketMessage(event.data));
         socket.addEventListener("close", () => { this.playerStateSocketOpen = false; });
@@ -440,39 +479,232 @@
       this.playerStateSocketPlayerId = "";
     }
 
+    queuePlayerStateSocketMessage(message = {}) {
+      if (!message?.type) return false;
+      const replaceable = message.type === "assign_slot" || message.type === "ready";
+      if (replaceable) {
+        const index = this.playerStateSocketQueue.findIndex((item) => item?.type === message.type);
+        if (index >= 0) this.playerStateSocketQueue[index] = message;
+        else this.playerStateSocketQueue.push(message);
+        return true;
+      }
+      this.playerStateSocketQueue.push(message);
+      if (this.playerStateSocketQueue.length > 24) {
+        this.playerStateSocketQueue.splice(0, this.playerStateSocketQueue.length - 24);
+      }
+      return true;
+    }
+
+    flushPlayerStateSocketQueue() {
+      const socket = this.playerStateSocket;
+      if (!socket || socket.readyState !== WebSocket.OPEN || !this.playerStateSocketQueue.length) return false;
+      const queued = this.playerStateSocketQueue.slice();
+      this.playerStateSocketQueue = [];
+      for (let index = 0; index < queued.length; index += 1) {
+        try {
+          socket.send(JSON.stringify(queued[index]));
+        } catch (_error) {
+          this.playerStateSocketOpen = false;
+          this.playerStateSocketQueue = queued.slice(index);
+          return false;
+        }
+      }
+      return true;
+    }
+
+    sendPlayerStateSocketMessage(message = {}, options = {}) {
+      const game = options.game || this.game();
+      if (!message?.type || !game?.onlineSession?.roomId || !game?.onlineSession?.playerId) return false;
+      if (!this.ensurePlayerStateSocket(game)) {
+        if (options.queueIfNeeded !== false && typeof window !== "undefined") {
+          window.setTimeout(() => this.ensurePlayerStateSocket(game), 80);
+        }
+        return options.queueIfNeeded === false ? false : this.queuePlayerStateSocketMessage(message);
+      }
+      const socket = this.playerStateSocket;
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify(message));
+          return true;
+        } catch (_error) {
+          this.playerStateSocketOpen = false;
+        }
+      }
+      if (options.queueIfNeeded === false) return false;
+      return this.queuePlayerStateSocketMessage(message);
+    }
+
     publishPlayerStateRelay(game, player, position, now = Date.now()) {
       if ((game?.onlineSession?.participantType || "player") !== "player") return false;
-      if (!this.ensurePlayerStateSocket(game)) return false;
-      const socket = this.playerStateSocket;
-      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      try {
-        socket.send(JSON.stringify({
-          type: "player_state",
-          roomId: game.onlineSession.roomId,
-          playerId: game.onlineSession.playerId,
-          name: player.name || player.nickname || game.onlineSession.playerId,
-          team: player.team || game.player?.team || TEAM.BLUE,
-          slotId: player.slotId || "",
-          classId: player.classId || "",
-          currentClassId: player.currentClassId || player.classId || "",
-          weaponId: player.weaponId || position.weaponId || "",
-          factionId: player.factionId || player.skinId || "",
-          skinId: player.skinId || player.factionId || "",
-          state: position,
-          sentAt: now
-        }));
-        return true;
-      } catch (_error) {
-        this.playerStateSocketOpen = false;
-        return false;
-      }
+      return this.sendPlayerStateSocketMessage({
+        type: "player_state",
+        roomId: game.onlineSession.roomId,
+        playerId: game.onlineSession.playerId,
+        name: player.name || player.nickname || game.onlineSession.playerId,
+        team: player.team || game.player?.team || TEAM.BLUE,
+        slotId: player.slotId || "",
+        classId: player.classId || "",
+        currentClassId: player.currentClassId || player.classId || "",
+        weaponId: player.weaponId || position.weaponId || "",
+        factionId: player.factionId || player.skinId || "",
+        skinId: player.skinId || player.factionId || "",
+        state: position,
+        sentAt: now
+      }, { game, queueIfNeeded: false });
     }
 
     handlePlayerStateSocketMessage(raw) {
       let message = null;
       try { message = JSON.parse(String(raw || "{}")); } catch (_error) { return; }
-      if (message?.type !== "player_state") return;
-      this.applyRemotePlayerState(message.payload || {});
+      if (message?.type === "player_state") {
+        this.applyRemotePlayerState(message.payload || {});
+        return;
+      }
+      if (message?.type === "observer_snapshot") {
+        this.applyObserverSnapshot(message.payload || {});
+        return;
+      }
+      if (message?.type === "slot_result") {
+        this.handleSocketSlotResult(message.payload || {});
+        return;
+      }
+      if (message?.type === "ready_result") {
+        this.handleSocketReadyResult(message.payload || {});
+        return;
+      }
+      if (message?.type === "join_result") {
+        this.handleSocketJoinResult(message.payload || {});
+      }
+    }
+
+    socketSnapshotPhase(phase = "") {
+      if (phase === "loading" || phase === "playing" || phase === "ended") return phase;
+      return "waiting";
+    }
+
+    normalizeSocketSnapshotRoom(snapshot = {}, current = null) {
+      const roomId = String(snapshot.roomId || current?.id || "");
+      if (!roomId) return null;
+      return this.registry?.normalizeRoom?.({
+        ...(current || {}),
+        id: roomId,
+        phase: this.socketSnapshotPhase(snapshot.phase || current?.phase || "waiting"),
+        mode: snapshot.mode || current?.mode || "annihilation",
+        players: Array.isArray(snapshot.players) ? snapshot.players : current?.players || [],
+        spectators: Array.isArray(snapshot.spectators) ? snapshot.spectators : current?.spectators || [],
+        chat: Array.isArray(snapshot.chat) ? snapshot.chat : current?.chat || [],
+        events: Array.isArray(snapshot.events) ? snapshot.events : current?.events || [],
+        commands: Array.isArray(snapshot.commands) ? snapshot.commands : current?.commands || [],
+        combatEvents: Array.isArray(snapshot.combatEvents) ? snapshot.combatEvents : current?.combatEvents || [],
+        worldState: snapshot.worldState || current?.worldState || null,
+        updatedAt: Date.now()
+      }) || null;
+    }
+
+    applyObserverSnapshot(snapshot = {}, game = this.game()) {
+      const roomId = String(snapshot.roomId || "");
+      if (!roomId || !this.registry) return false;
+      const current = this.registry.getRoom(roomId) || null;
+      const nextRoom = this.normalizeSocketSnapshotRoom(snapshot, current);
+      if (!nextRoom) return false;
+      this.registry.upsertRemoteRoom(nextRoom, { persist: false });
+      this.registry.emit?.();
+      if (roomId !== game?.onlineSession?.roomId) return true;
+      this.syncCurrentRoom(game);
+      const localPlayer = game.localSessionPlayer?.();
+      if (localPlayer) {
+        const slotSettled = !this.pendingLobbySlotId || String(localPlayer.slotId || "") === this.pendingLobbySlotId;
+        const readySettled = this.pendingLobbyReady === null || Boolean(localPlayer.ready) === this.pendingLobbyReady;
+        if (slotSettled && readySettled) this.clearPendingLobbyAuthority();
+      }
+      game.hud?.update?.(game);
+      return true;
+    }
+
+    handleSocketJoinResult(payload = {}, game = this.game()) {
+      if (!payload?.ok || !game?.onlineSession) return false;
+      if (payload.playerId && payload.playerId !== game.onlineSession.playerId) return false;
+      if (payload.participantType) {
+        game.onlineSession.participantType = payload.participantType;
+        const player = game.localSessionPlayer?.();
+        if (player) player.participantType = payload.participantType;
+      }
+      return true;
+    }
+
+    handleSocketSlotResult(payload = {}, game = this.game()) {
+      if (!game?.onlineSession) return false;
+      if (!payload?.ok) {
+        this.clearPendingLobbyAuthority();
+        game.hud?.update?.(game);
+        return false;
+      }
+      const slotId = String(payload.slot?.id || this.pendingLobbySlotId || "");
+      if (slotId) {
+        game.assignPlayerToSlot?.(game.onlineSession.playerId, slotId, { skipPublish: true });
+      }
+      const localPlayer = game.localSessionPlayer?.();
+      if (localPlayer) localPlayer.ready = false;
+      game.onlineSession.localReady = false;
+      this.clearPendingLobbyAuthority();
+      this.publishLocalPlayer(game, { force: true, allowWhilePending: true });
+      game.hud?.update?.(game);
+      return true;
+    }
+
+    handleSocketReadyResult(payload = {}, game = this.game()) {
+      if (!game?.onlineSession) return false;
+      if (!payload?.ok) {
+        this.clearPendingLobbyAuthority();
+        game.hud?.update?.(game);
+        return false;
+      }
+      const nextReady = Boolean(payload.slot?.ready ?? this.pendingLobbyReady);
+      game.onlineSession.localReady = nextReady;
+      const player = game.localSessionPlayer?.();
+      if (player) player.ready = nextReady;
+      this.clearPendingLobbyAuthority();
+      this.publishLocalPlayer(game, { force: true, allowWhilePending: true });
+      game.hud?.update?.(game);
+      return true;
+    }
+
+    requestLobbySlotAssignment(game = this.game(), slotId = "", options = {}) {
+      if (!game?.onlineSession?.roomId || !game?.onlineSession?.playerId) return false;
+      if (!game.lobbyOpen || game.matchStarted || game.countdownStarted) return false;
+      const requestedSlotId = String(slotId || "");
+      if (!requestedSlotId) return false;
+      const localPlayer = game.localSessionPlayer?.();
+      if (!localPlayer) return false;
+      if (requestedSlotId === String(localPlayer.slotId || "") && !this.pendingLobbySlotId) return false;
+      const sent = this.sendPlayerStateSocketMessage({ type: "assign_slot", slotId: requestedSlotId }, { game });
+      if (sent) {
+        this.pendingLobbySlotId = requestedSlotId;
+        this.pendingLobbyReady = false;
+        this.pendingLobbyAuthorityAt = Date.now();
+        game.hud?.update?.(game);
+        return true;
+      }
+      return Boolean(game.assignPlayerToSlot?.(game.onlineSession.playerId, requestedSlotId, options));
+    }
+
+    requestLobbyReadyState(game = this.game(), ready = false) {
+      if (!game?.onlineSession?.roomId || !game?.onlineSession?.playerId) return false;
+      if (!game.lobbyOpen || game.matchStarted || game.countdownStarted) return false;
+      const nextReady = Boolean(ready);
+      const sent = this.sendPlayerStateSocketMessage({ type: "ready", ready: nextReady }, { game });
+      if (sent) {
+        this.pendingLobbyReady = nextReady;
+        this.pendingLobbyAuthorityAt = Date.now();
+        game.hud?.update?.(game);
+        return true;
+      }
+      game.onlineSession.localReady = nextReady;
+      const player = game.localSessionPlayer?.();
+      if (player) player.ready = nextReady;
+      this.publishLocalPlayer(game, { force: true });
+      game.hud?.update?.(game);
+      return true;
     }
 
     applyRemotePlayerState(payload = {}, game = this.game()) {
@@ -569,7 +801,7 @@
       if (!entity || !sessionPlayer) return null;
       this.syncLocalPlayerEntityFromSession(game, sessionPlayer);
       const mounted = entity.inTank || entity.inVehicle || null;
-      let point = mounted?.alive !== false ? mounted : entity;
+      let point = mounted && mounted.alive !== false ? mounted : entity;
       if (!this.isUsablePresencePoint(game, point)) {
         point = this.fallbackPresencePoint(game, sessionPlayer);
       }
@@ -667,6 +899,8 @@
       const playerId = game.onlineSession.playerId;
       if (playerId) this.registry?.removeParticipant?.(roomId, playerId, reason);
       this.closePlayerStateSocket();
+      this.playerStateSocketQueue = [];
+      this.clearPendingLobbyAuthority();
       this.remotePlayerStateBuffer.clear();
       game.onlineSession.roomId = "";
       game.onlineSession.localReady = false;
@@ -685,6 +919,8 @@
       if (game?.sessionMode !== "online") return;
       if (!game.onlineSession?.roomId || !game.onlineSession?.playerId) return;
       this.closePlayerStateSocket();
+      this.playerStateSocketQueue = [];
+      this.clearPendingLobbyAuthority();
       this.registry?.removeParticipant?.(game.onlineSession.roomId, game.onlineSession.playerId, "pagehide");
     }
 

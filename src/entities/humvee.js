@@ -38,11 +38,13 @@
       this.ai = null;
       this.vehicleType = "humvee";
       this.playerControlled = false;
+      this.playerSeat = "";
       this.crew = null;
       this.passengerCapacity = options.passengerCapacity || 4;
       this.passengers = [];
       this.repairHoldTimer = 0;
       this.repairHoldSource = "";
+      this.lastBailout = null;
     }
 
     hasCrew() {
@@ -177,6 +179,9 @@
         id: "machinegun",
         name: "Humvee MG",
         shortName: "HMG",
+        vehicleMounted: true,
+        tankDamage: 0.24,
+        lightVehicleDamage: 1.45,
         range: 700,
         cooldown: 0.092,
         damageMin: 3.8,
@@ -347,8 +352,19 @@
         weaponId: "machinegun"
       };
       const target = options.target || null;
-      const fired = target
-        ? IronLine.combat.fireRifle(game, shooter, target, {
+      const fired = target?.vehicleType
+        ? IronLine.combat.fireRifleAtTank(game, shooter, target, {
+          weapon,
+          range: weapon.range,
+          accuracyBonus: weapon.accuracyBonus + 0.08,
+          tracerLife: weapon.tracerLife,
+          tracerWidth: weapon.visualWidth,
+          startX: muzzle.x,
+          startY: muzzle.y,
+          impactChance: 0.52
+        })
+        : target
+          ? IronLine.combat.fireRifle(game, shooter, target, {
           weapon,
           range: weapon.range,
           baseAccuracy: 0.7,
@@ -362,12 +378,11 @@
           impactChance: 0.42,
           tracerColor: this.team === TEAM.BLUE ? "rgba(184, 224, 255, 0.9)" : "rgba(255, 174, 159, 0.9)"
         })
-        : IronLine.combat.fireRifleAtPoint(game, shooter, targetX, targetY, {
+          : IronLine.combat.fireRifleAtPoint(game, shooter, targetX, targetY, {
           weapon,
           range: weapon.range,
           spread: weapon.spread,
           targetTeam: this.team === TEAM.BLUE ? TEAM.RED : TEAM.BLUE,
-          damage: 0.04,
           tracerLife: weapon.tracerLife,
           tracerWidth: weapon.visualWidth,
           startX: muzzle.x,
@@ -385,6 +400,126 @@
       this.turnVelocity += Math.sin(normalizeAngle(this.machineGunAngle - this.angle)) * 0.016;
       this.emitMuzzleFlash(game);
       return true;
+    }
+
+    bailoutPoint(game, occupant = null, options = {}) {
+      const world = game?.world || {};
+      const margin = Math.max(occupant?.radius || 10, 12);
+      const width = Number.isFinite(world.width) ? world.width : this.x + 500;
+      const height = Number.isFinite(world.height) ? world.height : this.y + 500;
+      const baseDistance = (this.radius || 31) + margin + (options.catastrophic ? 30 : 24);
+      const angles = [
+        this.angle + Math.PI,
+        this.angle + Math.PI / 2,
+        this.angle - Math.PI / 2,
+        this.angle + Math.PI * 0.72,
+        this.angle - Math.PI * 0.72,
+        this.angle
+      ];
+      const distances = [baseDistance, baseDistance + 18, baseDistance + 34];
+
+      for (const distance of distances) {
+        for (const angle of angles) {
+          const x = clamp(this.x + Math.cos(angle) * distance, margin, Math.max(margin, width - margin));
+          const y = clamp(this.y + Math.sin(angle) * distance, margin, Math.max(margin, height - margin));
+          const blocked = (world.obstacles || []).some((obstacle) => (
+            circleRectCollision(x, y, margin + 2, obstacle)
+          ));
+          if (!blocked) return { x, y, angle };
+        }
+      }
+
+      const fallbackAngle = this.angle + Math.PI;
+      return {
+        x: clamp(this.x + Math.cos(fallbackAngle) * baseDistance, margin, Math.max(margin, width - margin)),
+        y: clamp(this.y + Math.sin(fallbackAngle) * baseDistance, margin, Math.max(margin, height - margin)),
+        angle: fallbackAngle
+      };
+    }
+
+    bailoutCrewMember(game, crew, options = {}) {
+      if (!crew?.alive) return false;
+      const point = this.bailoutPoint(game, crew, options);
+      crew.dismount?.(game);
+      this.leaveCrew(crew);
+      crew.targetTank = null;
+      crew.inTank = null;
+      crew.x = point.x;
+      crew.y = point.y;
+      crew.angle = point.angle;
+      crew.speed = 0;
+      crew.state = options.catastrophic ? "bailout-shocked" : "bailout";
+      crew.mountTimer = 0;
+      crew.maxSpeed = Math.min(crew.maxSpeed || 108, 96);
+      const survivorHp = Math.round((crew.maxHp || 45) * (options.catastrophic ? 0.34 : 0.52));
+      crew.hp = clamp(Math.min(crew.hp || crew.maxHp || 45, survivorHp), 10, crew.maxHp || 45);
+      return true;
+    }
+
+    bailoutPlayer(game, options = {}) {
+      if (!game?.player || game.player.inTank !== this) return false;
+      const point = this.bailoutPoint(game, game.player, options);
+      game.player.inTank = null;
+      this.playerControlled = false;
+      this.playerSeat = "";
+      game.player.x = point.x;
+      game.player.y = point.y;
+      game.player.angle = point.angle;
+      game.player.speed = 0;
+      game.player.vehicleBailoutTimer = 1.05;
+      const maxHp = game.player.maxHp || 100;
+      const survivorHp = Math.round(maxHp * (options.catastrophic ? 0.3 : 0.42));
+      game.player.hp = clamp(Math.min(game.player.hp || maxHp, survivorHp), 16, maxHp);
+      game.lastPlayerDamage = {
+        x: this.x,
+        y: this.y,
+        angle: Math.atan2(this.y - game.player.y, this.x - game.player.x),
+        amount: 0,
+        kind: "vehicle_bailout",
+        label: "Humvee bailout",
+        ttl: 1.2,
+        maxTtl: 1.2
+      };
+      return true;
+    }
+
+    emergencyBailout(game, options = {}) {
+      const result = {
+        crew: false,
+        player: false,
+        passengers: 0,
+        catastrophic: Boolean(options.catastrophic),
+        cause: options.cause || options.weaponId || "destruction"
+      };
+
+      if (this.crew?.alive) result.crew = this.bailoutCrewMember(game, this.crew, options);
+      if (game?.player?.inTank === this) result.player = this.bailoutPlayer(game, options);
+      result.passengers = this.dismountPassengers(game, {
+        emergency: true,
+        damage: options.catastrophic ? 38 : 30,
+        cooldown: 1.2
+      });
+
+      this.lastBailout = {
+        ...result,
+        failed: !result.crew && !result.player && result.passengers <= 0,
+        time: game?.matchTime || 0
+      };
+      if (!this.lastBailout.failed) this.recordBailoutEvent(game, result);
+      return result;
+    }
+
+    recordBailoutEvent(game, result) {
+      const targetLabel = this.callSign || "humvee";
+      game?.battlefieldEvents?.push?.({
+        type: "humvee_crew_bailout",
+        severity: result.catastrophic ? "warning" : "info",
+        team: this.team,
+        title: "Crew bailout",
+        detail: `${targetLabel} crew evacuated`,
+        source: "vehicle",
+        chat: false
+      });
     }
 
     emitMuzzleFlash(game) {
@@ -419,11 +554,12 @@
       });
     }
 
-    takeDamage(gameOrAmount, maybeAmount = null) {
+    takeDamage(gameOrAmount, maybeAmount = null, maybeOptions = {}) {
       if (!this.alive) return;
 
       const game = maybeAmount === null ? null : gameOrAmount;
       const amount = maybeAmount === null ? gameOrAmount : maybeAmount;
+      const options = maybeAmount === null ? {} : maybeOptions;
       this.hp -= amount;
       this.impactShake = Math.max(this.impactShake, 0.26);
       if (game?.effects) {
@@ -444,11 +580,11 @@
         this.speed = 0;
         this.machineGunKick = 0;
         this.turnVelocity = 0;
-        if (this.crew) this.crew.takeDamage(999);
-        this.dismountPassengers(game || { world: { width: Infinity, height: Infinity, obstacles: [] } }, {
-          emergency: true,
-          damage: 34,
-          cooldown: 1.2
+        const catastrophic = Boolean(options.catastrophic) || amount >= Math.max(22, this.maxHp * 0.5);
+        this.emergencyBailout(game || { world: { width: Infinity, height: Infinity, obstacles: [] } }, {
+          catastrophic,
+          weaponId: options.weaponId,
+          cause: options.cause
         });
         if (game?.effects) {
           game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 38, alpha: 0.34 });

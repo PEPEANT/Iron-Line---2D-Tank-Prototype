@@ -68,10 +68,10 @@
     actionLockMin: 0.72,
     actionLockMax: 1.42,
     squadOrderLockDuration: 1.85,
-    moveBurstMin: 1.25,
-    moveBurstMax: 2.15,
-    observePauseMin: 0.48,
-    observePauseMax: 0.95, tankAssaultAcquireRange: 96, tankAssaultAttachRange: 24, tankAssaultSuppressionLimit: 76
+    moveBurstMin: 1.9,
+    moveBurstMax: 3.2,
+    observePauseMin: 0.18,
+    observePauseMax: 0.4, tankAssaultAcquireRange: 96, tankAssaultAttachRange: 24, tankAssaultSuppressionLimit: 76
   };
 
   const TEMPO_MOVE_STATES = new Set(["advance", "secure", "report-move", "support-position", "pre-assault-position", "hold-wall-position", "recon-move", "recon-patrol", "squad-regroup", "rally-tank"]);
@@ -2648,18 +2648,18 @@
       this.observePauseTimer = 0;
       this.moveBurstTimer = this.randomTempo(INFANTRY_CONFIG.moveBurstMin, INFANTRY_CONFIG.moveBurstMax);
     }
-
     randomTempo(min, max) {
       return min + Math.random() * Math.max(0, max - min);
     }
-
     shouldUseMovementTempo(target, distance) {
       if (!target || target.recovery || target.fireLaneEscape || target.cover || target.tacticalSpread) return false;
       if (distance <= (target.stopDistance || 20) + 42) return false;
       if ((this.unit.suppression || 0) >= 52) return false;
-      return TEMPO_MOVE_STATES.has(this.state);
+      if (!TEMPO_MOVE_STATES.has(this.state)) return false;
+      const activeThreat = this.target || this.awarenessTarget || this.unit.lastThreat || this.order?.squadStatus?.lastThreat || null;
+      const nearObjective = distance <= Math.max((target.stopDistance || 20) + 120, (target.radius || 0) + 150);
+      return Boolean(activeThreat || nearObjective || this.state === "recon-move" || this.state === "recon-patrol");
     }
-
     applyMovementTempo(dt, target, distance) {
       if (!this.shouldUseMovementTempo(target, distance)) return false;
 

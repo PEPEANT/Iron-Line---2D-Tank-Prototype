@@ -101,9 +101,11 @@ class RoomRegistry {
     const requested = client.participantType || client.type || "";
     if (requested === "admin" || requested === "caster" || requested === "spectator") return requested;
     if (requested === "player" && client.playerId && room.players.has(client.playerId)) return "player";
-    const occupiedSlots = room.slots.filter((slot) => slot.playerId).length;
+    const activePlayers = Array.from(room.players.values())
+      .filter((participant) => participant?.playerId !== client.playerId)
+      .length;
     const locked = room.config.joinLocked || room.phase !== "lobby";
-    if (locked || occupiedSlots >= room.config.maxHumans) return "spectator";
+    if (locked || activePlayers >= room.config.maxHumans) return "spectator";
     return "player";
   }
 
@@ -144,8 +146,10 @@ class RoomRegistry {
 
   assignSlot(roomId, playerId, slotId) {
     const room = this.getOrCreateRoom(roomId);
+    if (!playerId) return { ok: false, reason: "not_joined" };
     const participant = room.participants.get(playerId);
-    if (participant && participant.participantType !== "player") return { ok: false, reason: "spectator" };
+    if (!participant) return { ok: false, reason: "not_joined" };
+    if (participant.participantType !== "player") return { ok: false, reason: "spectator" };
     if (room.phase !== "lobby" || room.config.joinLocked) return { ok: false, reason: "locked" };
     const slot = room.slots.find((item) => item.id === slotId);
     if (!slot) return { ok: false, reason: "slot_not_found" };
@@ -159,13 +163,21 @@ class RoomRegistry {
       }
     }
     const player = room.players.get(playerId);
+    if (participant) {
+      participant.slotId = slot.id;
+      participant.team = slot.team;
+      participant.ready = false;
+      participant.roleId = slot.role;
+    }
     slot.playerId = playerId;
-    slot.nickname = player?.nickname || playerId;
+    slot.nickname = player?.nickname || participant?.nickname || playerId;
     slot.ready = false;
     slot.aiControlled = false;
     if (player) {
       player.team = slot.team;
       player.slotId = slot.id;
+      player.ready = false;
+      player.roleId = slot.role;
     }
     this.pushEvent(room.config.roomId, {
       type: "slot_changed",
@@ -180,11 +192,17 @@ class RoomRegistry {
 
   setReady(roomId, playerId, ready) {
     const room = this.getOrCreateRoom(roomId);
+    if (!playerId) return { ok: false, reason: "not_joined" };
     const participant = room.participants.get(playerId);
-    if (participant && participant.participantType !== "player") return { ok: false, reason: "spectator" };
+    if (!participant) return { ok: false, reason: "not_joined" };
+    if (participant.participantType !== "player") return { ok: false, reason: "spectator" };
+    if (room.phase !== "lobby" || room.config.joinLocked) return { ok: false, reason: "locked" };
     const slot = room.slots.find((item) => item.playerId === playerId);
     if (!slot) return { ok: false, reason: "slot_required" };
     slot.ready = Boolean(ready);
+    if (participant) participant.ready = slot.ready;
+    const player = room.players.get(playerId);
+    if (player) player.ready = slot.ready;
     this.pushEvent(room.config.roomId, {
       type: "ready_changed",
       severity: "info",

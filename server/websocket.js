@@ -89,11 +89,17 @@ function handleClientMessage({ ws, registry, clients, client, message, combatOnl
   }
 
   if (message.type === "assign_slot") {
-    return send(ws, "slot_result", registry.assignSlot(client.roomId, client.playerId, message.slotId));
+    const result = registry.assignSlot(client.roomId, client.playerId, message.slotId);
+    send(ws, "slot_result", result);
+    if (result?.ok) broadcastRoom(clients, client.roomId, "observer_snapshot", registry.snapshot(client.roomId));
+    return;
   }
 
   if (message.type === "ready") {
-    return send(ws, "ready_result", registry.setReady(client.roomId, client.playerId, message.ready));
+    const result = registry.setReady(client.roomId, client.playerId, message.ready);
+    send(ws, "ready_result", result);
+    if (result?.ok) broadcastRoom(clients, client.roomId, "observer_snapshot", registry.snapshot(client.roomId));
+    return;
   }
 
   if (message.type === "command") {

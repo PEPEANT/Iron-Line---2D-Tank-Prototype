@@ -55,6 +55,7 @@
       this.impactShake = 0;
       this.alive = true;
       this.ai = null;
+      this.vehicleType = "tank";
       this.isPlayerTank = Boolean(options.isPlayerTank);
       this.crew = null;
       this.playerControlled = false;
@@ -837,6 +838,9 @@
         name: "기관총",
         shortName: "기관총",
         range: 760,
+        vehicleMounted: true,
+        tankDamage: 0.24,
+        lightVehicleDamage: 1.45,
         cooldown: 0.075,
         damageMin: 4,
         damageMax: 6,
@@ -892,33 +896,43 @@
         weaponId: "machinegun"
       };
       const target = options.target || null;
-      const fired = target
-        ? IronLine.combat.fireRifle(game, shooter, target, {
+      const fired = target?.vehicleType
+        ? IronLine.combat.fireRifleAtTank(game, shooter, target, {
           weapon,
           range: weapon.range,
-          baseAccuracy: 0.82,
-          accuracyBonus: weapon.accuracyBonus,
-          spread: weapon.spread,
+          accuracyBonus: weapon.accuracyBonus + 0.08,
           tracerLife: weapon.tracerLife,
           tracerWidth: weapon.visualWidth,
           startX: muzzle.x,
           startY: muzzle.y,
-          impactChance: 0.42,
-          tracerColor: this.team === IronLine.constants.TEAM.BLUE ? "rgba(184, 224, 255, 0.96)" : "rgba(255, 174, 159, 0.94)"
+          impactChance: 0.52
         })
-        : IronLine.combat.fireRifleAtPoint(game, shooter, targetX, targetY, {
-          weapon,
-          range: weapon.range,
-          spread: weapon.spread,
-          targetTeam: this.team === IronLine.constants.TEAM.BLUE ? IronLine.constants.TEAM.RED : IronLine.constants.TEAM.BLUE,
-          damage: 0.03,
-          tracerLife: weapon.tracerLife,
-          tracerWidth: weapon.visualWidth,
-          startX: muzzle.x,
-          startY: muzzle.y,
-          impactChance: 0.48,
-          tracerColor: this.team === IronLine.constants.TEAM.BLUE ? "rgba(184, 224, 255, 0.88)" : "rgba(255, 174, 159, 0.86)"
-        });
+        : target
+          ? IronLine.combat.fireRifle(game, shooter, target, {
+            weapon,
+            range: weapon.range,
+            baseAccuracy: 0.82,
+            accuracyBonus: weapon.accuracyBonus,
+            spread: weapon.spread,
+            tracerLife: weapon.tracerLife,
+            tracerWidth: weapon.visualWidth,
+            startX: muzzle.x,
+            startY: muzzle.y,
+            impactChance: 0.42,
+            tracerColor: this.team === IronLine.constants.TEAM.BLUE ? "rgba(184, 224, 255, 0.96)" : "rgba(255, 174, 159, 0.94)"
+          })
+          : IronLine.combat.fireRifleAtPoint(game, shooter, targetX, targetY, {
+            weapon,
+            range: weapon.range,
+            spread: weapon.spread,
+            targetTeam: this.team === IronLine.constants.TEAM.BLUE ? IronLine.constants.TEAM.RED : IronLine.constants.TEAM.BLUE,
+            tracerLife: weapon.tracerLife,
+            tracerWidth: weapon.visualWidth,
+            startX: muzzle.x,
+            startY: muzzle.y,
+            impactChance: 0.48,
+            tracerColor: this.team === IronLine.constants.TEAM.BLUE ? "rgba(184, 224, 255, 0.88)" : "rgba(255, 174, 159, 0.86)"
+          });
 
       if (!fired) return false;
       this.ammo.mg = Math.max(0, (this.ammo.mg || 0) - 1);

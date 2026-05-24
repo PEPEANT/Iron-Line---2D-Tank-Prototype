@@ -582,7 +582,12 @@
           event.preventDefault();
           event.stopPropagation();
           const game = IronLine.game;
-          if (game) game.assignPlayerToSlot(session.playerId, slot.id);
+          if (!game) return;
+          if (game.hud?.sessionFlow?.requestLobbySlotAssignment) {
+            game.hud.sessionFlow.requestLobbySlotAssignment(game, slot.id);
+            return;
+          }
+          game.assignPlayerToSlot(session.playerId, slot.id);
         });
         card.append(avatar, body, action);
       } else {
@@ -685,7 +690,9 @@
           const liveGame = IronLine.game;
           if (!liveGame || locked || option.active || option.occupied) return;
           if (liveGame.countdownStarted || liveGame.matchStarted) return;
-          const changed = liveGame.assignPlayerToSlot?.(session.playerId, option.slotId, { preserveReady: true });
+          const changed = liveGame.hud?.sessionFlow?.requestLobbySlotAssignment
+            ? liveGame.hud.sessionFlow.requestLobbySlotAssignment(liveGame, option.slotId, { preserveReady: true })
+            : liveGame.assignPlayerToSlot?.(session.playerId, option.slotId, { preserveReady: true });
           if (!changed) return;
           root.dataset.signature = "";
           if (this.nodes.lobbySlots) this.nodes.lobbySlots.dataset.signature = "";
