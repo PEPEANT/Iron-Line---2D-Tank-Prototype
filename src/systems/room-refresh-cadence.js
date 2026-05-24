@@ -3,7 +3,7 @@
 (function registerRoomRefreshCadence(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const ACTIVE_MATCH_SUMMARY_REFRESH_MS = 1500;
-  const ACTIVE_MATCH_DETAIL_REFRESH_MS = 500;
+  const ACTIVE_MATCH_DETAIL_REFRESH_MS = 750;
 
   function activeOnlineMatchRoomId(registry) {
     const game = IronLine.game;

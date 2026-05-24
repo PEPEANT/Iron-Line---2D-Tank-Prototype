@@ -96,6 +96,7 @@
       this.pendingPublishTimers = new Map();
       this.deletedRemoteRoomIds = new Set();
       this.remoteDetailCursors = new Map();
+      this.localRoomsWriteSignature = "";
       this.lastRemoteSummaryRefreshAt = 0;
       this.lastRemoteDetailRefreshAt = 0;
       this.apiBase = this.resolveRoomsApiBase();
@@ -1062,7 +1063,11 @@
       if (!next) return null;
       if (index >= 0) rooms[index] = next;
       else rooms.push(next);
-      this.saveRooms(rooms);
+      if (this.canUseRemoteApi() && base.phase === "playing") {
+        this.upsertRemoteRoom(next, { persist: false });
+      } else {
+        this.saveRooms(rooms);
+      }
       if (this.canUseRemoteApi()) {
         this.publishCombatEvent(room.id, combatEvent, next);
       } else {
@@ -1335,8 +1340,13 @@
 
     writeLocalRooms(rooms) {
       try {
-        localStorage.setItem(this.storageKey, JSON.stringify((rooms || []).map((room) => this.normalizeRoom(room)).filter(Boolean)));
+        const serialized = JSON.stringify((rooms || []).map((room) => this.normalizeRoom(room)).filter(Boolean));
+        if (serialized === this.localRoomsWriteSignature) return false;
+        localStorage.setItem(this.storageKey, serialized);
+        this.localRoomsWriteSignature = serialized;
+        return true;
       } catch (_error) {}
+      return false;
     }
 
     onChange(listener) {
