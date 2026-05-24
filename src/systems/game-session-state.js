@@ -25,6 +25,13 @@
       return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
     }
 
+    requestedCombatOnlyRecoveryMode() {
+      const params = new URLSearchParams(window.location.search || "");
+      const value = params.get("p0CombatOnly") || params.get("combatOnly") || "";
+      if (["0", "false", "no", "off"].includes(String(value).toLowerCase())) return false;
+      return true;
+    }
+
     isAdminStandalonePage() {
       return /admin\.html$/i.test(window.location.pathname || "") ||
         Boolean(document.body?.classList?.contains("admin-standalone-page"));

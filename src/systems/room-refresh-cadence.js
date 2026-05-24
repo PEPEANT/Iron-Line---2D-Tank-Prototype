@@ -42,7 +42,7 @@
       const previousDetail = registry.listRooms().find((room) => room.id === activeRoomId) || null;
       const detailRoom = await registry.fetchRemoteRoomDetail(activeRoomId, previousDetail);
       if (!detailRoom) return;
-      registry.upsertRemoteRoom(detailRoom, { persist: false });
+      registry.upsertRemoteRoom(registry.preserveFreshWorldState?.(detailRoom) || detailRoom, { persist: false });
       registry.lastRemoteDetailRefreshAt = now;
       registry.remoteOnline = true;
       if (!wasOnline || registry.remoteSignature !== previousSignature) registry.emit();

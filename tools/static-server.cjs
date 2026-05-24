@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { cleanupStaleServerParticipants, createRoomDeleteTombstones, removeParticipantFromRoom, updateRoomSlotsFromPlayers, upsertParticipantToServer } = require("../server/static-room-admin");
+const combatOnlyRecovery = require("../server/combat-only-recovery");
 const { createRoomDetailExporters } = require("../server/room-detail-response");
 const { handleWorldStatePost } = require("../server/world-state-endpoint");
 
@@ -16,6 +17,7 @@ const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
 const dataDir = process.env.IRONLINE_DATA_DIR ? path.resolve(process.env.IRONLINE_DATA_DIR) : path.join(root, ".data");
 const roomsStorePath = process.env.IRONLINE_ROOMS_FILE ? path.resolve(process.env.IRONLINE_ROOMS_FILE) : path.join(dataDir, "online-rooms.json");
 const serverStartedAt = new Date().toISOString();
+const P0_COMBAT_ONLY_RECOVERY = combatOnlyRecovery.enabled();
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -33,16 +35,7 @@ const ROOM_DELETE_TOMBSTONE_MS = 2 * 60 * 1000;
 const roomDeleteTombstones = createRoomDeleteTombstones(ROOM_DELETE_TOMBSTONE_MS);
 let combatPersistTimer = null;
 const DEFAULT_SPECTATOR_CAPACITY = 12, MAX_SPECTATOR_CAPACITY = 12, MAX_ROOM_HUMANS = 8;
-const ROOM_SLOT_IDS = Object.freeze([
-  "blue-infantry",
-  "blue-engineer",
-  "blue-recon",
-  "blue-armor",
-  "red-infantry",
-  "red-engineer",
-  "red-recon",
-  "red-armor"
-]);
+const ROOM_SLOT_IDS = Object.freeze(["blue-infantry", "blue-engineer", "blue-recon", "blue-armor", "red-infantry", "red-engineer", "red-recon", "red-armor"]);
 
 function clampInt(value, min, max, fallback) {
   const numeric = Math.round(Number(value));
@@ -101,7 +94,8 @@ function buildInfoPayload() {
     startedAt: serverStartedAt,
     nodeVersion: process.version,
     renderService: process.env.RENDER_SERVICE_NAME || "",
-    renderInstance: process.env.RENDER_INSTANCE_ID || ""
+    renderInstance: process.env.RENDER_INSTANCE_ID || "",
+    p0CombatOnlyRecovery: P0_COMBAT_ONLY_RECOVERY
   };
 }
 
@@ -268,12 +262,8 @@ function exportClientRoom(room) {
   const players = Array.from(room?.players?.values?.() || [])
     .map((item) => exportParticipant(item, "player"))
     .filter(Boolean);
-  const spectators = Array.from(room?.spectators?.values?.() || [])
-    .map((item) => exportParticipant(item, "spectator"))
-    .filter(Boolean);
-  const admins = Array.from(room?.admins?.values?.() || [])
-    .map((item) => exportParticipant(item, "admin"))
-    .filter(Boolean);
+  const spectators = P0_COMBAT_ONLY_RECOVERY ? [] : Array.from(room?.spectators?.values?.() || []).map((item) => exportParticipant(item, "spectator")).filter(Boolean);
+  const admins = P0_COMBAT_ONLY_RECOVERY ? [] : Array.from(room?.admins?.values?.() || []).map((item) => exportParticipant(item, "admin")).filter(Boolean);
   return {
     id: config.roomId || "local",
     name: String(config.name || config.roomId || "Iron Line Room").slice(0, 32),
@@ -288,7 +278,7 @@ function exportClientRoom(room) {
     players,
     capacity: clampInt(config.maxHumans, 1, MAX_ROOM_HUMANS, 8),
     spectators,
-    spectatorCapacity: Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(config.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY))),
+    spectatorCapacity: P0_COMBAT_ONLY_RECOVERY ? 0 : Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(config.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY))),
     difficulty: normalizeDifficulty(config.difficulty),
     aiDensityPreset: String(config.aiDensityPreset || "custom").slice(0, 24),
     blueAiTanks: clampInt(config.blueAiTanks, 0, 8, 3),
@@ -296,7 +286,7 @@ function exportClientRoom(room) {
     redTanks: clampInt(config.redTanks, 1, 10, 5),
     redInfantry: clampInt(config.redInfantry, 4, 64, 24),
     admins,
-    spectatorChatVisibleToPlayers: config.spectatorChatVisibleToPlayers !== false,
+    spectatorChatVisibleToPlayers: !P0_COMBAT_ONLY_RECOVERY && config.spectatorChatVisibleToPlayers !== false,
     moderation: Array.isArray(room?.moderation) ? room.moderation.slice(-80) : [],
     commandAuthorities: Array.isArray(room?.commandAuthorities) ? room.commandAuthorities.slice(-16) : [],
     commandAuthorityRequests: Array.isArray(room?.commandAuthorityRequests) ? room.commandAuthorityRequests.slice(-16) : [],
@@ -447,9 +437,12 @@ function applyClientRoomToServer(body = {}) {
     room.admins.clear();
     room.participants.clear();
   }
-  importParticipants(room, Array.isArray(body.players) ? body.players : [], "player");
-  importParticipants(room, Array.isArray(body.spectators) ? body.spectators : [], "spectator");
-  importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
+  importParticipants(room, combatOnlyRecovery.filterPlayerParticipants(body.players), "player");
+  if (P0_COMBAT_ONLY_RECOVERY) combatOnlyRecovery.clearObserverParticipants(room);
+  else {
+    importParticipants(room, Array.isArray(body.spectators) ? body.spectators : [], "spectator");
+    importParticipants(room, Array.isArray(body.admins) ? body.admins : [], "admin");
+  }
   enforceUniquePlayerSlots(room);
 
   updateRoomSlotsFromPlayers(room);
@@ -465,9 +458,10 @@ function applyClientRoomToServer(body = {}) {
   } else {
     room.worldState = room.worldState || null;
   }
-  room.moderation = Array.isArray(body.moderation) ? body.moderation.slice(-80) : [];
-  room.commandAuthorities = Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : [];
-  room.commandAuthorityRequests = Array.isArray(body.commandAuthorityRequests) ? body.commandAuthorityRequests.slice(-16) : [];
+  const activeCombatOnly = P0_COMBAT_ONLY_RECOVERY && combatOnlyRecovery.isActiveMatchRoom(room);
+  room.moderation = !activeCombatOnly && Array.isArray(body.moderation) ? body.moderation.slice(-80) : (room.moderation || []);
+  room.commandAuthorities = !activeCombatOnly && Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : (room.commandAuthorities || []);
+  room.commandAuthorityRequests = !activeCombatOnly && Array.isArray(body.commandAuthorityRequests) ? body.commandAuthorityRequests.slice(-16) : (room.commandAuthorityRequests || []);
   room.updatedAt = new Date(Number(body.updatedAt) || Date.now()).toISOString();
   return room;
 }
@@ -546,6 +540,10 @@ async function handleRoomsApi(req, res) {
       sendJson(res, 409, { ok: false, reason: "room_deleted_recently", roomId: requestedRoomId });
       return;
     }
+    if (P0_COMBAT_ONLY_RECOVERY && combatOnlyRecovery.isActiveMatchRoom(onlineRegistry.rooms.get(requestedRoomId)) && combatOnlyRecovery.isObserverOnlyRoomPatch(body)) {
+      sendJson(res, 423, { ok: false, reason: "combat_only_active_room_controls_locked", roomId: requestedRoomId });
+      return;
+    }
     const room = applyClientRoomToServer(body);
     if (!room) {
       sendJson(res, 400, { ok: false, reason: "room_id_required" });
@@ -568,6 +566,7 @@ async function handleRoomsApi(req, res) {
     }
     const body = await readJsonBody(req);
     if (!body) return sendJson(res, 400, { ok: false, reason: "invalid_json" });
+    if (P0_COMBAT_ONLY_RECOVERY && combatOnlyRecovery.isObserverParticipantType(body.participantType || body.type)) return sendJson(res, 423, { ok: false, reason: "combat_only_participant_disabled", roomId });
     const room = upsertParticipantToServer(onlineRegistry, roomId, body, {
       normalizeParticipant,
       importParticipants,
@@ -686,7 +685,7 @@ try {
   onlineRegistry = new RoomRegistry();
   const persistedCount = loadPersistedRooms();
   if (persistedCount > 0) console.log(`Loaded ${persistedCount} persisted online room(s).`);
-  onlineSocket = attachOnlineSocketServer({ server, registry: onlineRegistry });
+  onlineSocket = attachOnlineSocketServer({ server, registry: onlineRegistry, combatOnly: P0_COMBAT_ONLY_RECOVERY });
 } catch (error) {
   onlineSocket = { enabled: false, reason: error?.message || "online_socket_setup_failed" };
 }

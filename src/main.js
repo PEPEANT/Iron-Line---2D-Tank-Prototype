@@ -48,6 +48,7 @@
       this.fullscreenWasActive = this.isFullscreenActive();
       this.testLab = this.requestedTestLab();
       this.adminObserverMode = this.requestedObserverMode();
+      this.combatOnlyRecoveryMode = this.requestedCombatOnlyRecoveryMode?.() !== false;
       this.installFullscreenPreferenceListener();
       this.installInitialFullscreen();
       this.cameraZoomPreference = 1;
@@ -73,7 +74,7 @@
       this.commandBus = new IronLine.CommandBus(this);
       this.botCommander = IronLine.BotCommanderSkeleton ? new IronLine.BotCommanderSkeleton(this) : null;
       this.aiObservatory = IronLine.AIObservatory ? new IronLine.AIObservatory(this) : null;
-      this.observerBridge = IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
+      this.observerBridge = !this.combatOnlyRecoveryMode && IronLine.ObserverBridge ? new IronLine.ObserverBridge(this) : null;
       this.battlefieldEvents = IronLine.BattlefieldEvents ? new IronLine.BattlefieldEvents(this) : null;
       this.adminOps = IronLine.AdminOps ? new IronLine.AdminOps(this) : null;
       this.chat = !this.adminObserverMode && IronLine.ChatSystem ? new IronLine.ChatSystem(this) : null;
@@ -896,7 +897,7 @@
       this.updateTacticalMapHotkey();
       this.updateAdminMessage(dt);
       this.updateCombatFeedback(dt);
-      this.observerBridge?.update(dt);
+      if (!this.combatOnlyRecoveryMode) this.observerBridge?.update(dt);
       this.chat?.update?.(dt);
       this.roleChange?.update?.(dt);
       this.battlefieldEvents?.update?.(dt);

@@ -73,6 +73,10 @@
       const selected = room?.id ? this.registry?.selectRoom?.(room.id) || room : room;
       const game = this.game();
       const playerId = game?.localProfile?.playerId || game?.onlineSession?.playerId || "";
+      if (game?.combatOnlyRecoveryMode && this.isSpectatorType(options.participantType)) {
+        this.handleJoinDenied("P0 전투 복구 모드에서는 관전 입장을 잠시 비활성화했습니다.");
+        return false;
+      }
       if (this.isPlayerKicked(selected, playerId)) {
         this.handleJoinDenied("관리자에 의해 강퇴된 방에는 다시 입장할 수 없습니다.");
         return false;
@@ -80,6 +84,10 @@
       const participantType = this.resolveParticipantType(selected, options);
       if (this.isSpectatorType(participantType) && this.isSpectatorFull(selected, playerId)) {
         this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
+        return false;
+      }
+      if (game?.combatOnlyRecoveryMode && this.isSpectatorType(participantType)) {
+        this.handleJoinDenied("P0 combat-only recovery mode has spectator entry disabled for active rooms.");
         return false;
       }
       return this.openLobby({
@@ -157,6 +165,10 @@
         this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
         return false;
       }
+      if (game.combatOnlyRecoveryMode && this.isSpectatorType(participantType)) {
+        this.handleJoinDenied("P0 combat-only recovery mode has spectator entry disabled.");
+        return false;
+      }
       session.roomId = options.roomId || room?.id || session.roomId || "";
       session.playerId = game.localProfile?.playerId || session.playerId;
       session.hostId = options.host ? session.playerId : room?.createdBy || "admin";
@@ -227,7 +239,7 @@
     }
 
     resolveParticipantType(room, options = {}) {
-      if (["spectator", "caster", "admin"].includes(options.participantType)) return options.participantType;
+      if (["player", "spectator", "caster", "admin"].includes(options.participantType)) return options.participantType;
       if (!room) return "player";
       const players = (room.players || []).filter((player) => player.participantType !== "spectator");
       const full = players.length >= (room.capacity || 8);

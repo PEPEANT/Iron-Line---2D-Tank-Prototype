@@ -43,7 +43,7 @@ body {
 
 .settings-button {
   position: fixed;
-  top: 14px;
+  top: 40px;
   right: 14px;
   z-index: 30;
   width: 42px;
@@ -62,7 +62,7 @@ body {
 
 .settings-panel {
   position: fixed;
-  top: 64px;
+  top: 90px;
   right: 14px;
   z-index: 31;
   width: min(360px, calc(100vw - 28px));

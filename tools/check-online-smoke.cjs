@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const port = Number(process.env.IRONLINE_SMOKE_PORT || 4191);
 const baseUrl = `http://127.0.0.1:${port}`;
 const roomId = `SMOKE-${Date.now()}`;
+const combatOnlyRecovery = process.env.IRONLINE_P0_COMBAT_ONLY !== "0";
 
 function requestJson(pathname, options = {}) {
   const body = options.body ? JSON.stringify(options.body) : "";
@@ -89,6 +90,11 @@ function wsSmoke() {
       ws.close();
       reject(new Error("WebSocket smoke timed out."));
     }, 5000);
+    const closeDone = (payload = {}) => {
+      clearTimeout(timer);
+      ws.close();
+      resolve(payload);
+    };
 
     ws.on("message", (raw) => {
       const message = JSON.parse(raw.toString());
@@ -101,10 +107,17 @@ function wsSmoke() {
           nickname: "Blue"
         }));
       }
+      if (message.type === "join_result" && message.payload?.ok && combatOnlyRecovery) {
+        setTimeout(() => closeDone({ events, snapshot: null }), 180);
+      }
       if (message.type === "observer_snapshot") {
-        clearTimeout(timer);
-        ws.close();
-        resolve({ events, snapshot: message.payload });
+        if (combatOnlyRecovery) {
+          clearTimeout(timer);
+          ws.close();
+          reject(new Error("WebSocket observer_snapshot was sent during combat-only recovery mode."));
+          return;
+        }
+        closeDone({ events, snapshot: message.payload });
       }
     });
     ws.on("error", (error) => {
@@ -416,7 +429,6 @@ async function runSmoke() {
     throw new Error("Combat event was not preserved.");
   }
   if (room.worldState?.hostId !== "p-blue") throw new Error("World state host was not preserved.");
-
   const smallRoomId = `${roomId}-CAP4`;
   await postRoom({
     ...baseRoom,
@@ -610,7 +622,7 @@ async function runSmoke() {
   }
 
   const ws = await wsSmoke();
-  if (!ws.events.includes("hello") || !ws.events.includes("observer_snapshot")) {
+  if (!ws.events.includes("hello") || !ws.events.includes("join_result") || (combatOnlyRecovery && ws.events.includes("observer_snapshot"))) {
     throw new Error(`Unexpected WebSocket events: ${ws.events.join(",")}`);
   }
   const wsCommand = await wsCommandSmoke();
@@ -620,7 +632,7 @@ async function runSmoke() {
     throw new Error("WebSocket player_state relay failed.");
   }
 
-  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast, wsPlayerState=relay`);
+  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, combatOnly=${combatOnlyRecovery ? "on" : "off"}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast, wsPlayerState=relay`);
 }
 
 const server = spawn(process.execPath, ["tools/static-server.cjs", String(port)], {

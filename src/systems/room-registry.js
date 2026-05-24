@@ -30,6 +30,10 @@
     "red-armor"
   ]);
 
+  function combatOnlyRecoveryMode() {
+    try { const params = new URLSearchParams(global.location?.search || ""), value = params.get("p0CombatOnly") || params.get("combatOnly") || ""; return !["0", "false", "no", "off"].includes(String(value).toLowerCase()); } catch (_error) { return true; }
+  }
+
   function finiteNumber(value, fallback = 0) {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : fallback;
@@ -315,7 +319,7 @@
       if (optimisticRoom) {
         this.pendingRemoteRoomIds.add(optimisticRoom.id);
         this.deletedRemoteRoomIds.delete(optimisticRoom.id);
-        this.upsertRemoteRoom(optimisticRoom);
+        this.upsertRemoteRoom(this.preserveFreshWorldState(optimisticRoom));
         this.emit();
       }
       return fetch(this.roomsApiUrl(), {
@@ -334,7 +338,7 @@
           if (!localRoom || this.roomUpdatedAt(remoteRoom) >= this.roomUpdatedAt(localRoom)) {
             this.pendingRemoteRoomIds.delete(remoteRoom.id);
           }
-          this.upsertRemoteRoom(remoteRoom);
+          this.upsertRemoteRoom(this.preserveFreshWorldState(remoteRoom));
           this.remoteOnline = true;
           this.emit();
           return remoteRoom;
@@ -372,7 +376,7 @@
       this.pendingRemoteRoomIds.add(normalized.id);
       this.deletedRemoteRoomIds.delete(normalized.id);
       this.pendingPublishRooms.set(normalized.id, normalized);
-      this.upsertRemoteRoom(normalized);
+      this.upsertRemoteRoom(this.preserveFreshWorldState(normalized));
       if (this.pendingPublishTimers.has(normalized.id)) return;
       const delay = Math.max(40, Math.min(500, Math.round(Number(delayMs) || 160)));
       const timer = window.setTimeout(() => {
@@ -389,6 +393,7 @@
       const roomTime = this.roomUpdatedAt(room);
       const current = this.remoteRooms?.find?.((item) => item.id === room.id) || this.readLocalRooms().find((item) => item.id === room.id);
       if (current && this.roomUpdatedAt(current) > roomTime) return;
+      if ((Number(current?.worldState?.updatedAt) || 0) > (Number(room.worldState?.updatedAt) || 0)) room = { ...room, worldState: current.worldState };
       const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== room.id);
       nextRooms.push(room);
       this.remoteRooms = nextRooms.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
@@ -402,7 +407,10 @@
       const parsed = Date.parse(room?.updatedAt || "");
       return Number.isFinite(parsed) ? parsed : 0;
     }
-
+    preserveFreshWorldState(room = null) {
+      const current = room?.id ? this.getRoom(room.id) : null;
+      return (Number(current?.worldState?.updatedAt) || 0) > (Number(room?.worldState?.updatedAt) || 0) ? { ...room, worldState: current.worldState } : room;
+    }
     deleteRemoteRoom(id) {
       if (!this.canUseRemoteApi() || !id) return Promise.resolve(false);
       this.pendingRemoteRoomIds.delete(id);
@@ -570,6 +578,7 @@
       const room = this.getRoom(roomId);
       if (!room || !player.id) return null;
       const participantType = this.normalizeParticipantType(player.participantType);
+      if (combatOnlyRecoveryMode() && participantType !== "player") return null;
       if (this.isKicked(room, player.id)) return null;
       const position = this.normalizePlayerPosition(player);
       const previous = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === player.id) || null;
@@ -643,7 +652,7 @@
         ? this.normalizeRoom({ ...room, ...patch, updatedAt: Date.now() })
         : this.updateRoom(roomId, patch, { skipPublish: true });
       if (updated) {
-        if (livePositionOnly) this.upsertRemoteRoom(updated, { persist: false });
+        if (livePositionOnly) this.upsertRemoteRoom(this.preserveFreshWorldState(updated), { persist: false });
         if (structuralChange) this.schedulePublishRoom(updated, 120);
         this.publishParticipant(roomId, nextPlayer);
       }
@@ -750,6 +759,7 @@
     touchAdmin(roomId, admin = {}) {
       const room = this.getRoom(roomId);
       if (!room) return null;
+      if (combatOnlyRecoveryMode() && room.phase === "playing") return null;
       const now = Date.now();
       const id = String(admin.id || "admin-local").slice(0, 36);
       const admins = (room.admins || []).filter((item) => item.id !== id);
@@ -910,7 +920,7 @@
           .then((payload) => {
             const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
             if (remoteRoom) {
-              this.upsertRemoteRoom(remoteRoom);
+              this.upsertRemoteRoom(this.preserveFreshWorldState(remoteRoom));
               this.emit();
             }
           })
@@ -937,7 +947,7 @@
           const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
           if (remoteRoom) {
             this.pendingRemoteRoomIds.delete(remoteRoom.id);
-            this.upsertRemoteRoom(remoteRoom);
+            this.upsertRemoteRoom(this.preserveFreshWorldState(remoteRoom));
             this.remoteOnline = true;
             this.emit();
             return payload;
@@ -972,7 +982,7 @@
         .then((payload) => {
           const remoteRoom = payload?.room ? this.normalizeRoom(payload.room) : null;
           if (remoteRoom) {
-            this.upsertRemoteRoom(remoteRoom);
+            this.upsertRemoteRoom(this.preserveFreshWorldState(remoteRoom));
             this.remoteOnline = true;
             this.emit();
           }

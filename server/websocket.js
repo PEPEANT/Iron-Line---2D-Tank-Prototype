@@ -3,7 +3,7 @@
 const { createAdminSnapshot } = require("./admin-state");
 const { createCommandPacket } = require("./schemas");
 
-function attachOnlineSocketServer({ server, registry, path = "/ws" }) {
+function attachOnlineSocketServer({ server, registry, path = "/ws", combatOnly = false }) {
   let WebSocketServer = null;
   try {
     ({ WebSocketServer } = require("ws"));
@@ -32,13 +32,15 @@ function attachOnlineSocketServer({ server, registry, path = "/ws" }) {
     ws.on("message", (raw) => {
       const message = parseMessage(raw);
       if (!message) return send(ws, "error", { reason: "invalid_json" });
-      handleClientMessage({ ws, registry, clients, client, message });
+      handleClientMessage({ ws, registry, clients, client, message, combatOnly });
     });
 
     ws.on("close", () => {
       clients.delete(clientId);
       registry.leaveClient(clientId);
-      broadcastRoom(clients, client.roomId, "admin_snapshot", createAdminSnapshot(registry, { roomId: client.roomId }));
+      if (!combatOnly) {
+        broadcastRoom(clients, client.roomId, "admin_snapshot", createAdminSnapshot(registry, { roomId: client.roomId }));
+      }
     });
 
     send(ws, "hello", { clientId, protocol: 1 });
@@ -47,15 +49,34 @@ function attachOnlineSocketServer({ server, registry, path = "/ws" }) {
   return { enabled: true, wss };
 }
 
-function handleClientMessage({ ws, registry, clients, client, message }) {
+function handleClientMessage({ ws, registry, clients, client, message, combatOnly = false }) {
   if (message.type === "join") {
     client.roomId = message.roomId || "local";
     client.playerId = message.playerId || client.playerId || client.clientId;
     client.nickname = message.nickname || client.playerId;
     client.participantType = message.participantType || message.typeHint || "";
+    if (combatOnly && isNonPlayerParticipant(client.participantType)) {
+      return send(ws, "join_result", {
+        ok: false,
+        roomId: client.roomId,
+        playerId: client.playerId,
+        participantType: client.participantType,
+        reason: "combat_only"
+      });
+    }
     const room = registry.joinRoom(client.roomId, client);
     const participant = room.participants?.get(client.playerId);
     client.participantType = participant?.participantType || client.participantType || "player";
+    if (combatOnly && isNonPlayerParticipant(client.participantType)) {
+      registry.leaveClient(client.clientId);
+      return send(ws, "join_result", {
+        ok: false,
+        roomId: client.roomId,
+        playerId: client.playerId,
+        participantType: client.participantType,
+        reason: "combat_only"
+      });
+    }
     client.team = registry.participantTeam?.(room, participant) || "";
     send(ws, "join_result", {
       ok: true,
@@ -63,7 +84,7 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
       playerId: client.playerId,
       participantType: client.participantType
     });
-    send(ws, "observer_snapshot", registry.snapshot(client.roomId));
+    if (!combatOnly) send(ws, "observer_snapshot", registry.snapshot(client.roomId));
     return;
   }
 
@@ -117,10 +138,15 @@ function handleClientMessage({ ws, registry, clients, client, message }) {
   }
 
   if (message.type === "admin_snapshot") {
+    if (combatOnly) return send(ws, "error", { reason: "combat_only_admin_snapshot_disabled" });
     return send(ws, "admin_snapshot", createAdminSnapshot(registry, { roomId: client.roomId }));
   }
 
   return send(ws, "error", { reason: "unknown_message" });
+}
+
+function isNonPlayerParticipant(participantType = "") {
+  return ["spectator", "caster", "admin"].includes(String(participantType || ""));
 }
 
 function applyAuthoritativePlayerIdentity(registry, client, packet) {
