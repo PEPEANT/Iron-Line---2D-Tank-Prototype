@@ -72,7 +72,11 @@
     joinOnlineRoom(room, options = {}) {
       const selected = room?.id ? this.registry?.selectRoom?.(room.id) || room : room;
       const game = this.game();
-      const playerId = game?.localProfile?.playerId || game?.onlineSession?.playerId || "";
+      const participantType = this.resolveParticipantType(selected, options);
+      const playerId = this.ensureUniquePlayerIdentity(game, selected, participantType) ||
+        game?.localProfile?.playerId ||
+        game?.onlineSession?.playerId ||
+        "";
       if (game?.combatOnlyRecoveryMode && this.isSpectatorType(options.participantType)) {
         this.handleJoinDenied("P0 전투 복구 모드에서는 관전 입장을 잠시 비활성화했습니다.");
         return false;
@@ -81,7 +85,6 @@
         this.handleJoinDenied("관리자에 의해 강퇴된 방에는 다시 입장할 수 없습니다.");
         return false;
       }
-      const participantType = this.resolveParticipantType(selected, options);
       if (this.isSpectatorType(participantType) && this.isSpectatorFull(selected, playerId)) {
         this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
         return false;
@@ -154,14 +157,17 @@
 
     prepareOnlineSession(game, options = {}) {
       const session = game.onlineSession || (game.onlineSession = {});
-      const player = game.localSessionPlayer?.() || session.players?.[0];
       const room = options.room || this.registry?.getRoom?.(options.roomId) || null;
       const participantType = this.resolveParticipantType(room, options);
-      if (this.isPlayerKicked(room, game.localProfile?.playerId || session.playerId)) {
+      const playerId = this.ensureUniquePlayerIdentity(game, room, participantType) ||
+        game.localProfile?.playerId ||
+        session.playerId ||
+        "";
+      if (this.isPlayerKicked(room, playerId)) {
         this.handleJoinDenied("관리자에 의해 강퇴된 방에는 다시 입장할 수 없습니다.");
         return false;
       }
-      if (this.isSpectatorType(participantType) && this.isSpectatorFull(room, game.localProfile?.playerId || session.playerId)) {
+      if (this.isSpectatorType(participantType) && this.isSpectatorFull(room, playerId)) {
         this.handleJoinDenied("관전자 정원이 가득 찼습니다.");
         return false;
       }
@@ -170,7 +176,7 @@
         return false;
       }
       session.roomId = options.roomId || room?.id || session.roomId || "";
-      session.playerId = game.localProfile?.playerId || session.playerId;
+      session.playerId = playerId || game.localProfile?.playerId || session.playerId;
       session.hostId = options.host ? session.playerId : room?.createdBy || "admin";
       session.participantType = participantType;
       session.localReady = false;
@@ -180,6 +186,7 @@
       session.spectators = Array.isArray(room?.spectators) ? room.spectators.slice() : [];
       session.blueFactionId = room?.blueFactionId || session.blueFactionId || "korea";
       session.redFactionId = room?.redFactionId || session.redFactionId || "russia";
+      const player = game.localSessionPlayer?.() || session.players?.[0];
       if (player) {
         player.host = options.host === true && participantType === "player";
         player.participantType = participantType;
@@ -201,6 +208,57 @@
         }
       }
       return this.publishLocalPlayer(game, { force: true }) !== false;
+    }
+
+    ensureUniquePlayerIdentity(game = this.game(), room = null, participantType = "player") {
+      if (!game || participantType !== "player") return game?.localProfile?.playerId || game?.onlineSession?.playerId || "";
+      const currentId = game.localProfile?.playerId || game.onlineSession?.playerId || "";
+      if (!currentId || !this.roomHasPlayerId(room, currentId)) return currentId;
+      const alreadyLocalRoom = game.onlineSession?.roomId && game.onlineSession.roomId === room?.id;
+      const localPlayer = game.localSessionPlayer?.();
+      if (alreadyLocalRoom && localPlayer?.id === currentId) return currentId;
+      const nextId = game.createId?.("player") || `player-${Date.now().toString(36)}-${Math.floor(Math.random() * 10000).toString(36)}`;
+      this.applySessionPlayerIdentity(game, nextId, currentId);
+      game.adminNotify?.("Duplicate player identity repaired for this tab.");
+      return nextId;
+    }
+
+    roomHasPlayerId(room = null, playerId = "") {
+      const id = String(playerId || "");
+      if (!room || !id) return false;
+      return (room.players || []).some((player) => (player.participantType || "player") === "player" && player.id === id);
+    }
+
+    applySessionPlayerIdentity(game = this.game(), nextId = "", previousId = "") {
+      if (!game || !nextId || nextId === previousId) return false;
+      const profile = game.localProfile || game.defaultLocalProfile?.() || {};
+      const persistentPlayerId = profile.persistentPlayerId || previousId || profile.playerId || nextId;
+      game.localProfile = {
+        ...profile,
+        persistentPlayerId,
+        playerId: nextId,
+        updatedAt: Date.now()
+      };
+      game.writeSessionPlayerId?.(nextId, persistentPlayerId);
+      const session = game.onlineSession || null;
+      if (session) {
+        session.playerId = nextId;
+        if (!session.hostId || session.hostId === previousId || session.hostId === "local-player") session.hostId = nextId;
+        for (const player of session.players || []) {
+          if (player.id === previousId || player.playerId === previousId || player === session.players[0]) {
+            player.id = nextId;
+            player.playerId = nextId;
+            player.name = profile.nickname || player.name || nextId;
+            player.nickname = profile.nickname || player.nickname || nextId;
+            break;
+          }
+        }
+        for (const slot of session.roleSlots || []) {
+          if (slot.playerId === previousId || slot.playerId === "local-player") slot.playerId = nextId;
+          if (slot.commandAuthorityPlayerId === previousId) slot.commandAuthorityPlayerId = nextId;
+        }
+      }
+      return true;
     }
 
     resolveJoinSlot(game, room = null, player = null) {

@@ -192,6 +192,10 @@
       return "iron-line-local-profile-v1";
     }
 
+    sessionPlayerIdStorageKey() {
+      return "iron-line-session-player-id-v1";
+    }
+
     createId(prefix = "player") {
       if (global.crypto?.randomUUID) return `${prefix}-${global.crypto.randomUUID().slice(0, 8)}`;
       return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 10000).toString(36)}`;
@@ -231,9 +235,8 @@
       const fallback = this.defaultLocalProfile();
       try {
         const raw = localStorage.getItem(this.profileStorageKey());
-        if (!raw) return fallback;
-        const saved = JSON.parse(raw);
-        return {
+        const saved = raw ? JSON.parse(raw) : {};
+        const profile = {
           ...fallback,
           clientId: typeof saved.clientId === "string" && saved.clientId ? saved.clientId : fallback.clientId,
           playerId: typeof saved.playerId === "string" && saved.playerId ? saved.playerId : fallback.playerId,
@@ -243,17 +246,60 @@
           createdAt: Number(saved.createdAt) || fallback.createdAt,
           updatedAt: Number(saved.updatedAt) || fallback.updatedAt
         };
+        return this.applySessionPlayerIdToProfile(profile);
       } catch (_error) {
-        return fallback;
+        return this.applySessionPlayerIdToProfile(fallback);
       }
     }
 
     saveLocalProfile(profile = this.localProfile) {
       try {
-        localStorage.setItem(this.profileStorageKey(), JSON.stringify(profile));
+        const persistentPlayerId = profile?.persistentPlayerId || profile?.playerId;
+        localStorage.setItem(this.profileStorageKey(), JSON.stringify({
+          ...profile,
+          playerId: persistentPlayerId
+        }));
       } catch (_error) {
         // Local profile persistence is best-effort only.
       }
+    }
+
+    readSessionPlayerId() {
+      try {
+        const raw = sessionStorage.getItem(this.sessionPlayerIdStorageKey());
+        if (!raw) return "";
+        const saved = JSON.parse(raw);
+        return typeof saved.playerId === "string" ? saved.playerId : "";
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    writeSessionPlayerId(playerId = "", basePlayerId = "") {
+      try {
+        if (!playerId) return;
+        sessionStorage.setItem(this.sessionPlayerIdStorageKey(), JSON.stringify({
+          playerId,
+          basePlayerId,
+          updatedAt: Date.now()
+        }));
+      } catch (_error) {
+        // Session identity repair should not block joining.
+      }
+    }
+
+    applySessionPlayerIdToProfile(profile = {}) {
+      let sessionPlayerId = this.readSessionPlayerId();
+      if (!sessionPlayerId) {
+        sessionPlayerId = this.createId("player");
+        this.writeSessionPlayerId(sessionPlayerId, profile.playerId || sessionPlayerId);
+      }
+      if (!sessionPlayerId || sessionPlayerId === profile.playerId) return profile;
+      return {
+        ...profile,
+        persistentPlayerId: profile.persistentPlayerId || profile.playerId,
+        playerId: sessionPlayerId
+      };
     }
 
     setLocalProfile(input = {}) {
