@@ -428,21 +428,11 @@ function roomSeed(roomId, blueId, redId) {
     id: roomId,
     name: "P0-9D Frame Stall Probe",
     mode: "annihilation",
-    phase: "waiting",
-    capacity: 8,
-    blueFactionId: "korea",
-    redFactionId: "russia",
-    blueAiTanks: 0,
-    blueInfantry: 4,
-    redTanks: 1,
-    redInfantry: 4,
+    phase: "playing", startedAt: now,
+    capacity: 8, blueFactionId: "korea", redFactionId: "russia",
+    blueAiTanks: 0, blueInfantry: 4, redTanks: 1, redInfantry: 4,
     players: [player(blueId, "Blue", "blue", "blue-infantry", now, 1200, 1400), player(redId, "Red", "red", "red-infantry", now, 1600, 1412)],
-    spectators: [],
-    admins: [],
-    chat: [],
-    events: [],
-    commands: [],
-    combatEvents: [],
+    spectators: [], admins: [], chat: [], events: [], commands: [], combatEvents: [],
     worldState: { roomId, hostId: blueId, tick: 0, updatedAt: now, vehicles: [], units: [], capturePoints: [] },
     updatedAt: now
   };
@@ -465,8 +455,13 @@ async function preparePage(page, roomId, slotId, baseX, baseY, direction) {
   const result = await page.eval(`(async () => {
     const game = window.IronLine.game;
     localStorage.setItem("iron-line-selected-room-v1", ${JSON.stringify(roomId)});
-    await window.IronLine.roomRegistry.refreshRemoteRooms();
-    const room = window.IronLine.roomRegistry.getRoom(${JSON.stringify(roomId)});
+    let room = null;
+    for (let i = 0; i < 20; i += 1) {
+      await window.IronLine.roomRegistry.refreshRemoteRooms();
+      room = window.IronLine.roomRegistry.getRoom(${JSON.stringify(roomId)});
+      if (room) break;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
     if (!room) return { ok: false, reason: "missing-room" };
     const opened = game.hud.sessionFlow.openLobby({ roomId: ${JSON.stringify(roomId)}, room, participantType: "player" });
     if (!opened) return { ok: false, reason: "open-lobby-failed", sessionMode: game.sessionMode };

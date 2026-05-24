@@ -14,10 +14,12 @@
         : null;
       this.publishTimer = 0;
       this.readTimer = 0;
+      this.storagePublishTimer = 0;
       this.remoteSnapshot = null;
       this.remoteLastSeen = 0;
       this.publishInterval = 0.75;
       this.readInterval = 0.5;
+      this.storageFallbackInterval = 5;
 
       this.channel?.addEventListener("message", (event) => {
         const message = event.data || {};
@@ -38,6 +40,7 @@
         return;
       }
       this.publishTimer -= dt;
+      this.storagePublishTimer -= dt;
       if (this.publishTimer > 0) return;
       this.publishTimer = this.publishInterval;
       const snapshot = this.createSnapshot();
@@ -45,7 +48,10 @@
         type: "observer-snapshot",
         snapshot
       });
-      this.writeStoredSnapshot(snapshot);
+      if (!this.channel || this.storagePublishTimer <= 0) {
+        this.storagePublishTimer = this.channel ? this.storageFallbackInterval : this.publishInterval;
+        this.writeStoredSnapshot(snapshot);
+      }
     }
 
     writeStoredSnapshot(snapshot) {
