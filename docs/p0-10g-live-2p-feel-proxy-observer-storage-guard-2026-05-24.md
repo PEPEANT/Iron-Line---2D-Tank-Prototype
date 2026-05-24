@@ -1,6 +1,28 @@
 # P0-10G Live 2P Feel Proxy / Observer Storage Guard
 
-Conclusion: P0-10G is an automated 2P feel-proxy PASS candidate after a narrow observer localStorage fallback guard. This is not a human manual PASS declaration, and it does not reopen 4-player alpha scope.
+Conclusion: P0-10G is a manual live 2P FAIL. The automated 2P feel-proxy PASS candidate below remains useful as background evidence for storage/frame improvements, but it is superseded by the manual video result and must not be used to advance to limited 2P sanity or 4-player alpha.
+
+## Manual Result
+
+Video evidence:
+
+`C:\Users\rneet\Videos\Captures\Iron Line - 2D Tank Prototype - Chrome 2026-05-24 15-57-43.mp4`
+
+Video metadata: `31.56s`, `1312x700`, `17.36MB`.
+
+Observed result:
+
+- Position synchronization is still visibly wrong.
+- AI/worldState shows a new oscillation-like bug: AI appears near a capture/frontline state, moves, then appears to revert toward the capture/frontline state again.
+- This is not just the small `10-20px` apply snap that P0-10D reduced.
+- Current suspicion is source/state flip: host worldState and non-host local AI simulation or stale room refresh state may be alternating on the rendered client.
+
+Decision:
+
+- P0-10G manual result: FAIL.
+- Do not proceed to `P0-10H limited 2P sanity record`.
+- Next gate is `P0-10H live repro instrumentation`.
+- No code fix should start until instrumentation separates other-player `player_state` from AI/worldState source flip.
 
 ## Why
 
