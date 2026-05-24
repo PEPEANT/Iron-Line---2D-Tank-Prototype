@@ -606,10 +606,10 @@ async function main() {
     };
     report.decision = decide(report);
     report.nextRecommendation = report.decision.includes("Cadence primary")
-      ? "P0-10C narrow worldState cadence trim with payload/write guard; keep AI behavior and transport unchanged."
+      ? "Reopen the P0-10C cadence/payload guard slice; keep AI behavior and transport unchanged."
       : report.decision.includes("Apply snap primary")
-        ? "P0-10C narrow remote worldState interpolation buffer; keep AI behavior and transport unchanged."
-        : "P0-10C collect a manual AI snap capture before changing worldState behavior.";
+        ? "P0-10D narrow remote worldState interpolation buffer; keep AI behavior and transport unchanged."
+        : "P0-10D PASS candidate for automated worldState cadence/snap; do not add another worldState change before live 2P visual verification.";
     fs.writeFileSync(report.resultPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     fs.writeFileSync(report.reportPath, markdownReport(report), "utf8");
     print(report);
