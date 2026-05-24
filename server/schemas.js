@@ -75,6 +75,7 @@ function createPlayerSlot(input = {}) {
     playerId: input.playerId || null,
     nickname: input.nickname || "",
     ready: Boolean(input.ready),
+    locked: Boolean(input.locked),
     aiControlled: input.aiControlled !== undefined ? Boolean(input.aiControlled) : !input.playerId,
     squadIds: Array.isArray(input.squadIds) ? [...input.squadIds] : [],
     vehicleIds: Array.isArray(input.vehicleIds) ? [...input.vehicleIds] : []

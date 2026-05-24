@@ -19,16 +19,8 @@
     redTanks: { min: 1, max: 10, fallback: 5 },
     redInfantry: { min: 4, max: 64, fallback: 24 }
   });
-  const ROLE_SLOT_IDS = Object.freeze([
-    "blue-infantry",
-    "blue-engineer",
-    "blue-recon",
-    "blue-armor",
-    "red-infantry",
-    "red-engineer",
-    "red-recon",
-    "red-armor"
-  ]);
+  const ROLE_SLOT_IDS = Object.freeze((IronLine.roomSlotIds || ["blue-infantry", "blue-engineer", "blue-recon", "blue-armor", "red-infantry", "red-engineer", "red-recon", "red-armor"]).slice());
+  const normalizedRoomSlotLocks = (room = {}) => IronLine.normalizeRoomSlotLocks?.(room) || [];
 
   function combatOnlyRecoveryMode() {
     try { const params = new URLSearchParams(global.location?.search || ""), value = params.get("p0CombatOnly") || params.get("combatOnly") || ""; return !["0", "false", "no", "off"].includes(String(value).toLowerCase()); } catch (_error) { return true; }
@@ -459,6 +451,7 @@
         startedBy: "",
         players: [],
         capacity: input.capacity,
+        slotLocks: input.slotLocks,
         spectators: [],
         spectatorCapacity: input.spectatorCapacity,
         difficulty: input.difficulty,
@@ -635,7 +628,7 @@
         players.push(nextPlayer);
       }
       else {
-        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY));
+        const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, DEFAULT_SPECTATOR_CAPACITY) ?? DEFAULT_SPECTATOR_CAPACITY;
         const alreadySpectating = Boolean(previous && previous.participantType !== "player");
         if (!alreadySpectating && spectators.length >= spectatorCapacity) return null;
         spectators.push(nextPlayer);
@@ -662,6 +655,7 @@
     resolvePlayerSlot(room, player = {}, existingPlayers = []) {
       const slots = ROLE_SLOT_IDS;
       const validSlots = new Set(slots);
+      const locked = new Set(normalizedRoomSlotLocks(room));
       const occupied = new Set(
         existingPlayers
           .filter((item) => (item.participantType || "player") === "player")
@@ -669,13 +663,13 @@
           .filter((slotId) => validSlots.has(slotId))
       );
       const requested = this.normalizeSlotId(player.slotId);
-      if (requested && validSlots.has(requested) && !occupied.has(requested)) return requested;
+      if (requested && validSlots.has(requested) && !occupied.has(requested) && !locked.has(requested)) return requested;
       const teams = this.balancedSlotTeams(occupied);
       for (const team of teams) {
-        const slot = slots.find((slotId) => this.slotTeam(slotId) === team && !occupied.has(slotId));
+        const slot = slots.find((slotId) => this.slotTeam(slotId) === team && !occupied.has(slotId) && !locked.has(slotId));
         if (slot) return slot;
       }
-      return slots.find((slotId) => !occupied.has(slotId)) || "";
+      return slots.find((slotId) => !occupied.has(slotId) && !locked.has(slotId)) || "";
     }
 
     balancedSlotTeams(occupied = new Set()) {
@@ -1392,8 +1386,9 @@
       const mode = room.mode === "annihilation" ? "annihilation" : "conquest";
       const phase = ["waiting", "loading", "playing", "ended"].includes(room.phase) ? room.phase : "waiting";
       const capacity = this.normalizeRoomNumber(room.capacity, ROOM_SETTING_LIMITS.capacity);
-      const spectatorCapacity = Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(room.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY)));
-      const players = this.normalizeRoomPlayers(Array.isArray(room.players) ? room.players.slice(0, capacity) : [], capacity);
+      const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, DEFAULT_SPECTATOR_CAPACITY) ?? DEFAULT_SPECTATOR_CAPACITY;
+      const players = this.normalizeRoomPlayers(Array.isArray(room.players) ? room.players.slice(0, capacity) : [], room, capacity);
+      const slotLocks = normalizedRoomSlotLocks({ ...room, players });
       const spectators = Array.isArray(room.spectators) ? room.spectators.slice(0, spectatorCapacity) : [];
       const admins = this.normalizeAdmins(room.admins);
       const matchSettings = this.normalizeRoomMatchSettings(room);
@@ -1411,6 +1406,7 @@
         startedBy: String(room.startedBy || ""),
         players,
         capacity,
+        slotLocks,
         spectators,
         spectatorCapacity,
         ...matchSettings,
@@ -1438,12 +1434,12 @@
       return Math.max(limit.min, Math.min(limit.max, safe));
     }
 
-    normalizeRoomPlayers(players = [], capacity = ROOM_SETTING_LIMITS.capacity.fallback) {
+    normalizeRoomPlayers(players = [], room = {}, capacity = ROOM_SETTING_LIMITS.capacity.fallback) {
       const resolved = [];
       for (const player of players) {
         if (!player || (player.participantType && player.participantType !== "player")) continue;
         const nextPlayer = { ...player, participantType: "player" };
-          const slotId = this.resolvePlayerSlot({ capacity }, nextPlayer, resolved);
+        const slotId = this.resolvePlayerSlot({ ...room, capacity }, nextPlayer, resolved);
         if (!slotId) continue;
         nextPlayer.slotId = slotId;
         nextPlayer.team = this.slotTeam(slotId) || nextPlayer.team || "blue";

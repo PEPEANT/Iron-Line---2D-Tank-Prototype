@@ -8,6 +8,7 @@ const { cleanupStaleServerParticipants, createRoomDeleteTombstones, removePartic
 const combatOnlyRecovery = require("../server/combat-only-recovery");
 const { createRoomDetailExporters } = require("../server/room-detail-response");
 const { handleWorldStatePost } = require("../server/world-state-endpoint");
+const { createStaticRoomSlotHelpers } = require("./static-room-slot-helpers.cjs");
 
 const root = path.resolve(__dirname, "..");
 const requestedPort = Number.parseInt(process.env.PORT || process.argv[2] || "4173", 10);
@@ -35,7 +36,17 @@ const ROOM_DELETE_TOMBSTONE_MS = 2 * 60 * 1000;
 const roomDeleteTombstones = createRoomDeleteTombstones(ROOM_DELETE_TOMBSTONE_MS);
 let combatPersistTimer = null;
 const DEFAULT_SPECTATOR_CAPACITY = 12, MAX_SPECTATOR_CAPACITY = 12, MAX_ROOM_HUMANS = 8;
+
+function normalizeSpectatorCapacity(value, fallback = DEFAULT_SPECTATOR_CAPACITY) {
+  const rounded = Math.round(Number(value));
+  const fallbackRounded = Math.round(Number(fallback));
+  const safe = Number.isFinite(rounded)
+    ? rounded
+    : (Number.isFinite(fallbackRounded) ? fallbackRounded : DEFAULT_SPECTATOR_CAPACITY);
+  return Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, safe));
+}
 const ROOM_SLOT_IDS = Object.freeze(["blue-infantry", "blue-engineer", "blue-recon", "blue-armor", "red-infantry", "red-engineer", "red-recon", "red-armor"]);
+const { applyRoomSlotLocks, enforceUniquePlayerSlots, normalizeSlotId, slotTeam } = createStaticRoomSlotHelpers(ROOM_SLOT_IDS, MAX_ROOM_HUMANS);
 
 function clampInt(value, min, max, fallback) {
   const numeric = Math.round(Number(value));
@@ -171,50 +182,6 @@ function isStaleParticipantUpdate(previous = {}, incoming = {}) {
   return previousTime > incomingTime;
 }
 
-function normalizeSlotId(slotId = "") {
-  const text = String(slotId || "");
-  return text.endsWith("-scout") ? text.replace("-scout", "-recon") : text;
-}
-
-function slotTeam(slotId = "") {
-  if (String(slotId).startsWith("red-")) return "red";
-  if (String(slotId).startsWith("blue-")) return "blue";
-  return "";
-}
-
-function balancedSlotTeams(occupied = new Set()) {
-  const counts = { blue: 0, red: 0 };
-  for (const slotId of occupied) {
-    const team = slotTeam(slotId);
-    if (team) counts[team] += 1;
-  }
-  return counts.blue <= counts.red ? ["blue", "red"] : ["red", "blue"];
-}
-
-function resolveParticipantSlot(participant, occupied = new Set(), capacity = MAX_ROOM_HUMANS) {
-  const slots = ROOM_SLOT_IDS;
-  const validSlots = new Set(slots);
-  const requested = normalizeSlotId(participant.slotId);
-  if (requested && validSlots.has(requested) && !occupied.has(requested)) return requested;
-  for (const team of balancedSlotTeams(occupied)) {
-    const slot = slots.find((slotId) => slotTeam(slotId) === team && !occupied.has(slotId));
-    if (slot) return slot;
-  }
-  return slots.find((slotId) => !occupied.has(slotId)) || "";
-}
-
-function enforceUniquePlayerSlots(room) {
-  if (!room?.players) return;
-  const occupied = new Set();
-  for (const participant of room.players.values()) {
-    const slotId = resolveParticipantSlot(participant, occupied, room.config?.maxHumans || MAX_ROOM_HUMANS);
-    if (!slotId) continue;
-    occupied.add(slotId);
-    participant.slotId = slotId;
-    participant.team = slotTeam(slotId);
-  }
-}
-
 function exportParticipant(input = {}, fallbackType = "player") {
   const participant = normalizeParticipant(input, fallbackType);
   if (!participant) return null;
@@ -253,6 +220,7 @@ function exportParticipant(input = {}, fallbackType = "player") {
     skinId: participant.skinId || participant.factionId || "",
     ready: Boolean(participant.ready),
     host: Boolean(participant.host),
+    connected: participant.connected !== false,
     updatedAt: toClientTimestamp(participant.updatedAt || participant.lastSeenAt || Date.now())
   };
 }
@@ -264,6 +232,10 @@ function exportClientRoom(room) {
     .filter(Boolean);
   const spectators = P0_COMBAT_ONLY_RECOVERY ? [] : Array.from(room?.spectators?.values?.() || []).map((item) => exportParticipant(item, "spectator")).filter(Boolean);
   const admins = P0_COMBAT_ONLY_RECOVERY ? [] : Array.from(room?.admins?.values?.() || []).map((item) => exportParticipant(item, "admin")).filter(Boolean);
+  const slotLocks = Array.from(room?.slots || [])
+    .filter((slot) => slot?.locked)
+    .map((slot) => normalizeSlotId(slot.id))
+    .filter(Boolean);
   return {
     id: config.roomId || "local",
     name: String(config.name || config.roomId || "Iron Line Room").slice(0, 32),
@@ -277,8 +249,9 @@ function exportClientRoom(room) {
     startedBy: config.startedBy || "",
     players,
     capacity: clampInt(config.maxHumans, 1, MAX_ROOM_HUMANS, 8),
+    slotLocks,
     spectators,
-    spectatorCapacity: P0_COMBAT_ONLY_RECOVERY ? 0 : Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(config.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY))),
+    spectatorCapacity: P0_COMBAT_ONLY_RECOVERY ? 0 : normalizeSpectatorCapacity(config.maxSpectators, DEFAULT_SPECTATOR_CAPACITY),
     difficulty: normalizeDifficulty(config.difficulty),
     aiDensityPreset: String(config.aiDensityPreset || "custom").slice(0, 24),
     blueAiTanks: clampInt(config.blueAiTanks, 0, 8, 3),
@@ -310,7 +283,7 @@ function importParticipants(room, participants = [], fallbackType = "player", op
       : room.spectators;
   if (options.replace) targetMap.clear();
   const source = fallbackType === "spectator"
-    ? participants.slice(0, Math.max(0, Math.round(Number(room.config?.maxSpectators) || DEFAULT_SPECTATOR_CAPACITY)))
+    ? participants.slice(0, normalizeSpectatorCapacity(room.config?.maxSpectators, DEFAULT_SPECTATOR_CAPACITY))
     : participants;
   for (const participant of source) {
     const normalized = normalizeParticipant(participant, fallbackType);
@@ -393,7 +366,7 @@ function applyClientRoomToServer(body = {}) {
       name: body.name,
       mode: body.mode,
       maxHumans: Number(body.capacity) || 8,
-      maxSpectators: Number(body.spectatorCapacity) || DEFAULT_SPECTATOR_CAPACITY,
+      maxSpectators: normalizeSpectatorCapacity(body.spectatorCapacity, DEFAULT_SPECTATOR_CAPACITY),
       difficulty: body.difficulty,
       aiDensityPreset: body.aiDensityPreset,
       blueAiTanks: body.blueAiTanks,
@@ -407,7 +380,7 @@ function applyClientRoomToServer(body = {}) {
   room.config.name = String(body.name || room.config.name || roomId).slice(0, 32);
   room.config.mode = body.mode === "conquest" ? "conquest" : "annihilation";
   room.config.maxHumans = clampInt(body.capacity, 1, MAX_ROOM_HUMANS, room.config.maxHumans || 8);
-  room.config.maxSpectators = Math.max(0, Math.min(MAX_SPECTATOR_CAPACITY, Math.round(Number(body.spectatorCapacity) || room.config.maxSpectators || DEFAULT_SPECTATOR_CAPACITY)));
+  room.config.maxSpectators = normalizeSpectatorCapacity(body.spectatorCapacity, room.config.maxSpectators ?? DEFAULT_SPECTATOR_CAPACITY);
   room.config.blueFactionId = body.blueFactionId || room.config.blueFactionId || "singularity";
   room.config.redFactionId = body.redFactionId || room.config.redFactionId || "military-gallery";
   room.config.difficulty = normalizeDifficulty(body.difficulty || room.config.difficulty);
@@ -430,6 +403,9 @@ function applyClientRoomToServer(body = {}) {
     room.config.startedAt = 0;
   }
   room.phase = resolvedPhase;
+  if (body.slotLocks !== undefined || Array.isArray(body.roleSlots) || Array.isArray(body.slots)) {
+    applyRoomSlotLocks(room, body);
+  }
 
   if (resetRequested) {
     room.players.clear();

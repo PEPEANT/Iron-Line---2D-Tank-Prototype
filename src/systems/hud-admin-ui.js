@@ -91,6 +91,7 @@
             <span>인원 제한</span>
             <input id="adminRoomCapacity" type="number" min="1" max="8" step="1" value="8">
           </label>
+          <label><span>관전자 정원</span><input id="adminSpectatorCapacity" type="number" min="0" max="12" step="1" value="12"></label>
           <label>
             <span>AI 난이도</span>
             <select id="adminRoomDifficulty">
@@ -116,6 +117,7 @@
             <input id="adminRedInfantry" type="number" min="4" max="64" step="1" value="24">
           </label>
         </div>
+        <div class="admin-room-slot-locks"><strong>대기 슬롯 열기 / 닫기</strong><div id="adminRoomSlotLocks" class="admin-room-slot-lock-list"></div></div>
         <div class="admin-grid-actions admin-room-actions">
           <button type="button" data-admin-action="room-create">방 생성</button>
           <button type="button" data-admin-action="room-save">설정 저장</button>
@@ -188,15 +190,13 @@
       ui.adminRoomControls = roomControls;
       ui.adminRoomName = roomControls.querySelector("#adminRoomName");
       ui.adminRoomMode = roomControls.querySelector("#adminRoomMode");
-      ui.adminBlueFaction = roomControls.querySelector("#adminBlueFaction");
-      ui.adminRedFaction = roomControls.querySelector("#adminRedFaction");
+      ui.adminBlueFaction = roomControls.querySelector("#adminBlueFaction"); ui.adminRedFaction = roomControls.querySelector("#adminRedFaction");
       ui.adminRoomSelect = roomControls.querySelector("#adminRoomSelect");
-      ui.adminRoomCapacity = roomControls.querySelector("#adminRoomCapacity");
+      ui.adminRoomCapacity = roomControls.querySelector("#adminRoomCapacity"); ui.adminSpectatorCapacity = roomControls.querySelector("#adminSpectatorCapacity");
       ui.adminRoomDifficulty = roomControls.querySelector("#adminRoomDifficulty");
-      ui.adminBlueTanks = roomControls.querySelector("#adminBlueTanks");
-      ui.adminRedTanks = roomControls.querySelector("#adminRedTanks");
-      ui.adminBlueInfantry = roomControls.querySelector("#adminBlueInfantry");
-      ui.adminRedInfantry = roomControls.querySelector("#adminRedInfantry");
+      ui.adminBlueTanks = roomControls.querySelector("#adminBlueTanks"); ui.adminRedTanks = roomControls.querySelector("#adminRedTanks");
+      ui.adminBlueInfantry = roomControls.querySelector("#adminBlueInfantry"); ui.adminRedInfantry = roomControls.querySelector("#adminRedInfantry");
+      ui.adminRoomSlotLocks = roomControls.querySelector("#adminRoomSlotLocks");
       ui.adminOpsLobby = lobby;
       ui.adminOpsLobbyStatus = lobbyStatus;
       ui.adminOpsLobbyChat = lobbyChat;
@@ -655,13 +655,12 @@
       if (selectedRoom) {
         this.setAdminRoomControlValue(this.nodes.adminRoomName, selectedRoom.name || "", roomChanged);
         this.setAdminRoomControlValue(this.nodes.adminRoomMode, selectedRoom.mode || "conquest", roomChanged);
-        this.setAdminRoomControlValue(this.nodes.adminRoomCapacity, selectedRoom.capacity || 8, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminRoomCapacity, selectedRoom.capacity || 8, roomChanged); this.setAdminRoomControlValue(this.nodes.adminSpectatorCapacity, IronLine.normalizeSpectatorCapacity?.(selectedRoom.spectatorCapacity, 12) ?? 12, roomChanged);
         this.setAdminRoomControlValue(this.nodes.adminRoomDifficulty, selectedRoom.difficulty || "normal", roomChanged);
-        this.setAdminRoomControlValue(this.nodes.adminBlueTanks, selectedRoom.blueAiTanks ?? 3, roomChanged);
-        this.setAdminRoomControlValue(this.nodes.adminRedTanks, selectedRoom.redTanks ?? 5, roomChanged);
-        this.setAdminRoomControlValue(this.nodes.adminBlueInfantry, selectedRoom.blueInfantry ?? 21, roomChanged);
-        this.setAdminRoomControlValue(this.nodes.adminRedInfantry, selectedRoom.redInfantry ?? 24, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminBlueTanks, selectedRoom.blueAiTanks ?? 3, roomChanged); this.setAdminRoomControlValue(this.nodes.adminRedTanks, selectedRoom.redTanks ?? 5, roomChanged);
+        this.setAdminRoomControlValue(this.nodes.adminBlueInfantry, selectedRoom.blueInfantry ?? 21, roomChanged); this.setAdminRoomControlValue(this.nodes.adminRedInfantry, selectedRoom.redInfantry ?? 24, roomChanged);
       }
+      this.renderAdminRoomSlotLocks(selectedRoom);
       if (this.nodes.adminRoomControls) this.nodes.adminRoomControls.dataset.selectedRoomKey = roomKey;
       const signature = JSON.stringify({
         rooms: rooms.map((room) => [
@@ -733,13 +732,14 @@
       const room = snapshot.room || {};
       const match = snapshot.match || {};
       const ai = snapshot.ai?.summary || {};
-      const playerCount = this.adminRoomPlayerCount(room), spectatorCount = server.spectatorCount ?? this.adminRoomSpectatorCount(room), spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+      const playerCount = this.adminRoomPlayerCount(room), spectatorCount = server.spectatorCount ?? this.adminRoomSpectatorCount(room), spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
+      const humanCapacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? ((room.roleSlots || []).length || room.capacity || 0);
       const matchActive = Boolean(match.started || room.phase === "playing" || match.phase === "playing" || match.phase === "live"), lobbyLike = room.phase === "lobby" || room.phase === "waiting" || match.phase === "lobby" || match.phase === "waiting";
       const values = [
         { label: "연결", value: `${server.clientCount || 0}명` },
         { label: "관리자", value: `${server.adminCount || 0}명` },
         { label: "방", value: `${server.roomCount || 0}개` },
-        { label: "플레이어", value: `${playerCount || 0}/${(room.roleSlots || []).length || room.capacity || 0}` },
+        { label: "플레이어", value: `${playerCount || 0}/${humanCapacity}` },
         { label: "관전", value: `${spectatorCount || 0}/${spectatorCapacity}` },
         { label: "경기", value: matchActive ? "진행 중" : lobbyLike ? "로비" : "대기" },
         { label: "모드", value: match.mode === "conquest" ? "점령전" : "섬멸전" },
@@ -780,8 +780,8 @@
       const rows = rooms.map((room) => {
         const players = this.adminRoomPlayerCount(room);
         const spectators = this.adminRoomSpectatorCount(room);
-        const capacity = room.capacity || 8;
-        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+        const capacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room.capacity ?? 8;
+        const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
         return {
           id: room.id || "local",
           phase: room.phase || "waiting",

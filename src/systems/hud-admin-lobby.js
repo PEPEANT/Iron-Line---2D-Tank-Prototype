@@ -13,8 +13,15 @@
 
     setAdminRoomControlValue(control, value, force = false) {
       if (!control) return;
-      if (!force && document.activeElement === control) return;
-      if (force || !control.value) control.value = String(value);
+      const nextValue = String(value);
+      const previousServerValue = control.dataset.serverValue;
+      if (!force && document.activeElement === control) {
+        control.dataset.serverValue = nextValue;
+        return;
+      }
+      const userModified = typeof previousServerValue === "string" && control.value !== previousServerValue;
+      if (force || !userModified || !control.value) control.value = nextValue;
+      control.dataset.serverValue = nextValue;
     },
 
     adminDifficultyLabel(id = "normal") {
@@ -43,7 +50,8 @@
       const admins = hasRoom ? (room.admins || []) : [];
       if (hasRoom) this.touchAdminOpsPresence(room.id);
       const ready = players.filter((player) => player.ready).length;
-      const spectatorCapacity = Math.max(0, Math.round(Number(room?.spectatorCapacity) || 12));
+      const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room?.spectatorCapacity, 12) ?? 12;
+      const playerCapacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room?.capacity ?? 8;
       const statusRows = hasRoom
         ? [
             { title: `${room.id} · ${room.name || "대기방"}`, meta: `${this.adminRoomPhaseLabel(room.phase)} · ${room.mode === "conquest" ? "점령전" : "섬멸전"} · ${this.factionName(room.blueFactionId)} vs ${this.factionName(room.redFactionId)}` },

@@ -547,12 +547,14 @@
       const player = players.find((item) => item.id === slot.playerId) || null;
       const local = Boolean(player?.id && player.id === session.playerId);
       const ready = Boolean(player?.ready);
+      const locked = Boolean(slot.locked);
       const card = document.createElement("div");
       card.className = "lobby-player-card";
       card.classList.toggle("is-local", local);
       card.classList.toggle("is-ready", ready);
       card.classList.toggle("is-ai", !player);
       card.classList.toggle("empty", !player);
+      card.classList.toggle("locked", locked);
 
       const avatar = document.createElement("div");
       avatar.className = "lobby-player-avatar";
@@ -561,17 +563,22 @@
       const body = document.createElement("div");
       body.className = "lobby-player-main";
       const name = document.createElement("strong");
+      const lockedEmptySlotLabel = `${this.roleLabel(slot.roleId)} 쨌 닫힌 슬롯`;
       name.textContent = player ? `${this.roleLabel(slot.roleId)} · ${player.name || "Player"}` : "\ube48 \uc2ac\ub86f";
       const badges = document.createElement("span");
+      if (!player && locked) name.textContent = lockedEmptySlotLabel;
       badges.textContent = player
         ? this.playerBadges({ local, ready, loadout: this.playerLoadoutText(player, slot) })
         : "";
+      if (!player && locked) badges.textContent = "관리자 잠금";
       if (player) body.append(name, badges);
       else body.append(name);
+      if (!player && locked) body.append(badges);
 
       const state = document.createElement("em");
       state.textContent = player ? (ready ? "준비" : "대기") : "";
-      const canSelect = !player || local;
+      if (!player && locked) state.textContent = "닫힘";
+      const canSelect = (!player || local) && !locked;
       if (canSelect) {
         const action = document.createElement("button");
         action.type = "button";
@@ -678,17 +685,18 @@
         button.type = "button";
         button.className = "lobby-loadout-role";
         button.classList.toggle("active", option.active);
-        button.classList.toggle("occupied", option.occupied);
-        button.disabled = locked || option.active || option.occupied || !option.slotId;
+        button.classList.toggle("occupied", option.occupied || option.locked);
+        button.disabled = locked || option.active || option.occupied || option.locked || !option.slotId;
         button.textContent = option.label;
         button.title = option.occupied
           ? `${option.occupiedName || "다른 플레이어"} 사용 중`
           : `${option.label} 역할 선택`;
+        if (option.locked) button.title = "관리자가 닫아 둔 슬롯입니다.";
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
           const liveGame = IronLine.game;
-          if (!liveGame || locked || option.active || option.occupied) return;
+          if (!liveGame || locked || option.active || option.occupied || option.locked) return;
           if (liveGame.countdownStarted || liveGame.matchStarted) return;
           const changed = liveGame.hud?.sessionFlow?.requestLobbySlotAssignment
             ? liveGame.hud.sessionFlow.requestLobbySlotAssignment(liveGame, option.slotId, { preserveReady: true })
@@ -776,12 +784,14 @@
         const owner = slot?.playerId
           ? (session.players || []).find((player) => player.id === slot.playerId)
           : null;
+        const locked = Boolean(slot?.locked);
         const occupied = Boolean(owner && owner.id !== localPlayer?.id);
         return {
           roleId: role.id,
           slotId: slot?.id || "",
           label: this.roleLabel(role.id) || role.label || role.id,
           active: Boolean(slot?.id && slot.id === localPlayer?.slotId),
+          locked,
           occupied,
           occupiedName: owner?.name || owner?.nickname || ""
         };

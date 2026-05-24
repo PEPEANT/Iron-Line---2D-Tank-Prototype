@@ -91,8 +91,8 @@
         const players = (room.players || []).filter((player) => player.participantType !== "spectator");
         const playerCount = players.length;
         const spectatorCount = (room.spectators || []).length;
-        const capacity = room.capacity || 8;
-        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+        const capacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room.capacity ?? 8;
+        const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
         const spectatorFull = spectatorCount >= spectatorCapacity;
         const spectatorJoin = room.phase === "playing" || room.locked || playerCount >= capacity;
         const joinLabel = spectatorJoin ? (spectatorFull ? "관전 만석" : "관전 입장") : "참가";

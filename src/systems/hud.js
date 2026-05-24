@@ -1565,6 +1565,7 @@
   IronLine.installHudAdminNotes?.(Hud);
   IronLine.installHudAdminLobby?.(Hud);
   IronLine.installHudAdminUi?.(Hud);
+  IronLine.installHudAdminRoomControls?.(Hud);
   IronLine.installHudAdminLayout?.(Hud);
   IronLine.installHudSpectatorPanel?.(Hud);
   IronLine.installHudReadability?.(Hud);

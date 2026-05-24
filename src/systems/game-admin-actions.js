@@ -42,13 +42,22 @@
         blueFactionId: document.getElementById("adminBlueFaction")?.value || "singularity",
         redFactionId: document.getElementById("adminRedFaction")?.value || "military-gallery",
         capacity: readInt("adminRoomCapacity", 8, { min: 1, max: 8 }),
+        spectatorCapacity: readInt("adminSpectatorCapacity", 12, { min: 0, max: 12 }),
         difficulty: ["easy", "normal", "hard"].includes(difficulty) ? difficulty : "normal",
         aiDensityPreset: "custom",
         blueAiTanks: readInt("adminBlueTanks", match.blueAiTanks ?? 3, bounds.blueAiTanks),
         blueInfantry: readInt("adminBlueInfantry", match.blueInfantry ?? 21, bounds.blueInfantry),
         redTanks: readInt("adminRedTanks", match.redTanks ?? 5, bounds.redTanks),
-        redInfantry: readInt("adminRedInfantry", match.redInfantry ?? 24, bounds.redInfantry)
+        redInfantry: readInt("adminRedInfantry", match.redInfantry ?? 24, bounds.redInfantry),
+        slotLocks: this.adminRoomSlotLocksFromControls()
       };
+    },
+    adminRoomSlotLocksFromControls() {
+      const controls = document.getElementById("adminRoomSlotLocks");
+      if (!controls) return [];
+      return Array.from(controls.querySelectorAll("button[data-slot-id][data-locked='true']"))
+        .map((button) => String(button.dataset.slotId || ""))
+        .filter(Boolean);
     },
     adminClassLabel(classId) {
       if (classId === "engineer") return "공병";
@@ -245,12 +254,9 @@
         room = registry.endRoom(selectedId);
         if (!room) return false;
         if (this.onlineSession?.roomId === room.id) {
-          this.matchStarted = false;
-          this.countdownStarted = false;
-          this.lobbyOpen = false;
-          this.matchPhase = "ended";
           this.result = "ended";
           this.resultReason = "관리자가 방을 종료했습니다.";
+          this.hud?.sessionFlow?.syncCurrentRoom?.(this);
         }
         registry.refreshRemoteRooms?.();
         this.adminNotify(`방 종료: ${room.id}`);
@@ -269,6 +275,12 @@
       }
 
       if (action === "room-delete") {
+        if (this.onlineSession?.roomId === selectedId) {
+          this.hud?.sessionFlow?.leaveOnlineRoom?.(this, "room_deleted");
+          this.roomListOpen = true;
+          this.lobbyOpen = true;
+          this.matchPhase = "rooms";
+        }
         registry.deleteRoom(selectedId);
         registry.refreshRemoteRooms?.();
         this.adminNotify(`방 삭제: ${selectedId}`);
@@ -277,6 +289,20 @@
       }
 
       return false;
+    },
+    adminSetRoomSlotLock(roomId = "", slotId = "", locked = false) {
+      const registry = IronLine.roomRegistry;
+      if (!registry || !roomId || !slotId) return false;
+      const room = registry.setSlotLocked(roomId, slotId, locked);
+      if (!room) {
+        this.adminNotify(locked ? "사용 중이거나 진행 중인 슬롯은 닫을 수 없습니다." : "슬롯 상태를 바꾸지 못했습니다.");
+        return false;
+      }
+      registry.refreshRemoteRooms?.();
+      this.adminNotify(`${locked ? "슬롯 닫힘" : "슬롯 열림"}: ${slotId}`);
+      this.hud?.sessionFlow?.syncCurrentRoom?.(this);
+      this.hud?.update?.(this);
+      return true;
     },
     adminApplyRoom(room, options = {}) {
       if (!room) return false;

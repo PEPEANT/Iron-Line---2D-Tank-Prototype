@@ -3,7 +3,7 @@
 const OBSERVER_TYPES = new Set(["spectator", "caster", "admin"]);
 
 function enabled(env = process.env) {
-  return env.IRONLINE_P0_COMBAT_ONLY !== "0";
+  return env.IRONLINE_P0_COMBAT_ONLY === "1";
 }
 
 function isObserverParticipantType(value = "") {

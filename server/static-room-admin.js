@@ -1,5 +1,41 @@
 "use strict";
 
+function connectedRoomPlayers(room) {
+  const activeClientPlayerIds = new Set(
+    Array.from(room?.clients?.values?.() || [])
+      .map((client) => String(client?.playerId || ""))
+      .filter(Boolean)
+  );
+  return Array.from(room?.players?.values?.() || [])
+    .filter((participant) => participant &&
+      (participant.participantType || "player") === "player" &&
+      participant.connected !== false &&
+      activeClientPlayerIds.has(String(participant.playerId || participant.id || "")));
+}
+
+function resolveRoomHostId(room) {
+  const players = connectedRoomPlayers(room);
+  if (!players.length) return "";
+  const slotOrder = new Map((room?.slots || []).map((slot, index) => [slot.id, index]));
+  players.sort((a, b) => (
+    (slotOrder.get(a.slotId) ?? 999) - (slotOrder.get(b.slotId) ?? 999) ||
+    String(a.playerId || a.id || "").localeCompare(String(b.playerId || b.id || ""))
+  ));
+  return players[0]?.playerId || players[0]?.id || "";
+}
+
+function reconcileRoomAuthority(room) {
+  if (!room) return room;
+  room.hostId = resolveRoomHostId(room);
+  if (room.worldState) {
+    room.worldState = {
+      ...room.worldState,
+      hostId: room.hostId || ""
+    };
+  }
+  return room;
+}
+
 function createRoomDeleteTombstones(ttlMs = 120000) {
   const deleted = new Map();
   const cleanup = (now = Date.now()) => {
@@ -28,6 +64,11 @@ function removeParticipantFromRoom(room, playerId = "") {
   const id = String(playerId || "");
   if (!room || !id) return false;
   let changed = false;
+  for (const [clientId, client] of room.clients?.entries?.() || []) {
+    if (client?.playerId !== id) continue;
+    room.clients.delete(clientId);
+    changed = true;
+  }
   for (const map of [room.players, room.spectators, room.participants, room.admins]) {
     if (map?.delete?.(id)) changed = true;
   }
@@ -39,7 +80,10 @@ function removeParticipantFromRoom(room, playerId = "") {
     slot.aiControlled = true;
     changed = true;
   }
-  if (changed) room.updatedAt = new Date().toISOString();
+  if (changed) {
+    reconcileRoomAuthority(room);
+    room.updatedAt = new Date().toISOString();
+  }
   return changed;
 }
 
@@ -96,6 +140,7 @@ module.exports = {
   cleanupStaleServerParticipants,
   createRoomDeleteTombstones,
   removeParticipantFromRoom,
+  reconcileRoomAuthority,
   updateRoomSlotsFromPlayers,
   upsertParticipantToServer
 };

@@ -32,6 +32,7 @@ class RoomRegistry {
       hostId: input.hostId || "",
       players: new Map(),
       spectators: new Map(),
+      admins: new Map(),
       participants: new Map(),
       clients: new Map(),
       slots: createDefaultSlots(),
@@ -64,7 +65,13 @@ class RoomRegistry {
 
   joinRoom(roomId, client) {
     const room = this.getOrCreateRoom(roomId);
+    this.purgeLobbyGhostParticipants(room);
     const playerId = client.playerId || client.clientId;
+    for (const [existingClientId, existingClient] of room.clients.entries()) {
+      if (existingClientId !== client.clientId && existingClient?.playerId === playerId) {
+        room.clients.delete(existingClientId);
+      }
+    }
     const previous = room.participants.get(playerId) || null;
     const participantType = this.resolveParticipantType(room, { ...client, playerId });
     const participant = createParticipant({
@@ -79,6 +86,7 @@ class RoomRegistry {
       currentClassId: client.currentClassId || previous?.currentClassId || "",
       weaponId: client.weaponId || previous?.weaponId || "",
       position: client.position || previous?.position || null,
+      connected: true,
       joinedAt: previous?.joinedAt || this.now(),
       lastSeenAt: this.now()
     });
@@ -92,6 +100,7 @@ class RoomRegistry {
       room.players.delete(playerId);
       room.spectators.set(playerId, participant);
     }
+    this.reconcileRoomAuthority(room);
     this.pushParticipantEvent(room, previous, participant);
     room.updatedAt = this.now();
     return room;
@@ -101,12 +110,102 @@ class RoomRegistry {
     const requested = client.participantType || client.type || "";
     if (requested === "admin" || requested === "caster" || requested === "spectator") return requested;
     if (requested === "player" && client.playerId && room.players.has(client.playerId)) return "player";
+    const activeClientPlayerIds = new Set(
+      Array.from(room?.clients?.values?.() || [])
+        .map((entry) => String(entry?.playerId || ""))
+        .filter(Boolean)
+    );
     const activePlayers = Array.from(room.players.values())
-      .filter((participant) => participant?.playerId !== client.playerId)
+      .filter((participant) =>
+        participant?.playerId !== client.playerId &&
+        participant?.connected !== false &&
+        activeClientPlayerIds.has(String(participant?.playerId || participant?.id || "")))
       .length;
     const locked = room.config.joinLocked || room.phase !== "lobby";
-    if (locked || activePlayers >= room.config.maxHumans) return "spectator";
+    const humanCapacity = this.availableHumanSlotCapacity(room);
+    if (locked || activePlayers >= humanCapacity) return "spectator";
     return "player";
+  }
+
+  connectedRoomPlayers(room) {
+    const activeClientPlayerIds = new Set(
+      Array.from(room?.clients?.values?.() || [])
+        .map((client) => String(client?.playerId || ""))
+        .filter(Boolean)
+    );
+    return Array.from(room?.players?.values?.() || [])
+      .filter((participant) => participant &&
+        (participant.participantType || "player") === "player" &&
+        participant.connected !== false &&
+        activeClientPlayerIds.has(String(participant.playerId || participant.id || "")));
+  }
+
+  availableHumanSlotCapacity(room) {
+    const slots = Array.isArray(room?.slots) ? room.slots : [];
+    if (!slots.length) return Math.max(1, Number(room?.config?.maxHumans) || 8);
+    const eligible = slots.filter((slot) => !slot?.locked || slot?.playerId);
+    return Math.max(0, Math.min(eligible.length, Number(room?.config?.maxHumans) || eligible.length));
+  }
+
+  purgeLobbyGhostParticipants(room) {
+    if (!room || room.phase !== "lobby") return room;
+    const activeClientPlayerIds = new Set(
+      Array.from(room.clients?.values?.() || [])
+        .map((client) => String(client?.playerId || ""))
+        .filter(Boolean)
+    );
+    const playerIds = new Set([
+      ...Array.from(room.players?.keys?.() || []),
+      ...Array.from(room.spectators?.keys?.() || []),
+      ...Array.from(room.participants?.keys?.() || [])
+    ]);
+    let changed = false;
+    for (const playerId of playerIds) {
+      if (activeClientPlayerIds.has(String(playerId || ""))) continue;
+      if (room.players?.delete?.(playerId)) changed = true;
+      if (room.spectators?.delete?.(playerId)) changed = true;
+      if (room.participants?.delete?.(playerId)) changed = true;
+      for (const slot of room.slots || []) {
+        if (slot.playerId !== playerId) continue;
+        slot.playerId = null;
+        slot.nickname = "";
+        slot.ready = false;
+        slot.aiControlled = true;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.reconcileRoomAuthority(room);
+      room.updatedAt = this.now();
+    }
+    return room;
+  }
+
+  resolveRoomHostId(room) {
+    const players = this.connectedRoomPlayers(room);
+    if (!players.length) return "";
+    const slotOrder = new Map((room?.slots || []).map((slot, index) => [slot.id, index]));
+    players.sort((a, b) => (
+      (slotOrder.get(a.slotId) ?? 999) - (slotOrder.get(b.slotId) ?? 999) ||
+      String(a.playerId || a.id || "").localeCompare(String(b.playerId || b.id || ""))
+    ));
+    return players[0]?.playerId || players[0]?.id || "";
+  }
+
+  reconcileRoomAuthority(room) {
+    if (!room) return room;
+    const nextHostId = this.resolveRoomHostId(room);
+    room.hostId = nextHostId;
+    if (room.worldState) {
+      const currentHostId = String(room.worldState.hostId || "");
+      if (currentHostId !== nextHostId) {
+        room.worldState = {
+          ...room.worldState,
+          hostId: nextHostId
+        };
+      }
+    }
+    return room;
   }
 
   leaveClient(clientId) {
@@ -114,9 +213,14 @@ class RoomRegistry {
       const client = room.clients.get(clientId);
       if (!client) continue;
       room.clients.delete(clientId);
+      const playerId = String(client.playerId || "");
+      const stillConnected = playerId
+        ? Array.from(room.clients.values()).some((entry) => entry?.playerId === playerId)
+        : false;
       const participant = client.playerId ? room.participants.get(client.playerId) : null;
+      const lobbyDisconnect = room.phase === "lobby" && playerId;
       if (participant) {
-        participant.connected = false;
+        participant.connected = stillConnected;
         participant.lastSeenAt = this.now();
         const slot = room.slots.find((item) => item.playerId === participant.playerId);
         if (slot && room.phase === "lobby") slot.ready = false;
@@ -128,16 +232,32 @@ class RoomRegistry {
           actorId: participant.playerId
         });
       }
+      if (lobbyDisconnect) {
+        room.participants.delete(playerId);
+        room.players.delete(playerId);
+        room.spectators.delete(playerId);
+        const slot = room.slots.find((item) => item.playerId === playerId);
+        if (slot) {
+          slot.playerId = null;
+          slot.nickname = "";
+          slot.ready = false;
+          slot.aiControlled = true;
+        }
+        this.reconcileRoomAuthority(room);
+        room.updatedAt = this.now();
+        return room;
+      }
       const player = client.playerId ? room.players.get(client.playerId) : null;
       if (player) {
-        player.connected = false;
+        player.connected = stillConnected;
         player.lastSeenAt = this.now();
       }
       const spectator = client.playerId ? room.spectators.get(client.playerId) : null;
       if (spectator) {
-        spectator.connected = false;
+        spectator.connected = stillConnected;
         spectator.lastSeenAt = this.now();
       }
+      this.reconcileRoomAuthority(room);
       room.updatedAt = this.now();
       return room;
     }
@@ -153,6 +273,7 @@ class RoomRegistry {
     if (room.phase !== "lobby" || room.config.joinLocked) return { ok: false, reason: "locked" };
     const slot = room.slots.find((item) => item.id === slotId);
     if (!slot) return { ok: false, reason: "slot_not_found" };
+    if (slot.locked) return { ok: false, reason: "slot_locked" };
     if (slot.playerId && slot.playerId !== playerId) return { ok: false, reason: "occupied" };
     for (const item of room.slots) {
       if (item.playerId === playerId) {

@@ -7,7 +7,7 @@ function createOnlineSmokeWsHelpers(options = {}) {
   const roomId = String(options.roomId || "SMOKE");
   const combatOnlyRecovery = options.combatOnlyRecovery !== undefined
     ? Boolean(options.combatOnlyRecovery)
-    : process.env.IRONLINE_P0_COMBAT_ONLY !== "0";
+    : process.env.IRONLINE_P0_COMBAT_ONLY === "1";
   const requestJson = options.requestJson;
   const fetchRoomById = options.fetchRoomById || (async (roomIdValue) => {
     const payload = await requestJson(`/api/rooms/${encodeURIComponent(roomIdValue)}`);

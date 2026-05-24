@@ -133,6 +133,7 @@
           team: slot.team,
           label: slot.label,
           playerId: slot.playerId || "",
+          locked: Boolean(slot.locked),
           aiControlled: Boolean(slot.aiControlled),
           controllerType: slot.controllerType || (slot.playerId ? "human" : "bot"),
           botCommanderState: slot.botCommanderState || null,

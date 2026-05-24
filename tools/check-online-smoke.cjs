@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, "..");
 const port = Number(process.env.IRONLINE_SMOKE_PORT || 4191);
 const baseUrl = `http://127.0.0.1:${port}`;
 const roomId = `SMOKE-${Date.now()}`;
-const combatOnlyRecovery = process.env.IRONLINE_P0_COMBAT_ONLY !== "0";
+const combatOnlyRecovery = process.env.IRONLINE_P0_COMBAT_ONLY === "1";
 
 function requestJson(pathname, options = {}) {
   const body = options.body ? JSON.stringify(options.body) : "";

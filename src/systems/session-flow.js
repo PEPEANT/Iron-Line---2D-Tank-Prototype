@@ -191,6 +191,10 @@
       session.spectators = Array.isArray(room?.spectators) ? room.spectators.slice() : [];
       session.blueFactionId = room?.blueFactionId || session.blueFactionId || "korea";
       session.redFactionId = room?.redFactionId || session.redFactionId || "russia";
+      const lockedSlots = new Set((room?.slotLocks || []).map((slotId) => String(slotId || "")));
+      for (const slot of session.roleSlots || []) {
+        slot.locked = lockedSlots.has(slot.id);
+      }
       const player = game.localSessionPlayer?.() || session.players?.[0];
       if (player) {
         player.host = options.host === true && participantType === "player";
@@ -219,19 +223,17 @@
       if (!game || participantType !== "player") return game?.localProfile?.playerId || game?.onlineSession?.playerId || "";
       const currentId = game.localProfile?.playerId || game.onlineSession?.playerId || "";
       if (!currentId || !this.roomHasPlayerId(room, currentId)) return currentId;
-      const alreadyLocalRoom = game.onlineSession?.roomId && game.onlineSession.roomId === room?.id;
-      const localPlayer = game.localSessionPlayer?.();
-      if (alreadyLocalRoom && localPlayer?.id === currentId) return currentId;
-      const nextId = game.createId?.("player") || `player-${Date.now().toString(36)}-${Math.floor(Math.random() * 10000).toString(36)}`;
-      this.applySessionPlayerIdentity(game, nextId, currentId);
-      game.adminNotify?.("Duplicate player identity repaired for this tab.");
-      return nextId;
+      return currentId;
     }
 
     roomHasPlayerId(room = null, playerId = "") {
+      return Boolean(this.roomPlayerById(room, playerId));
+    }
+
+    roomPlayerById(room = null, playerId = "") {
       const id = String(playerId || "");
-      if (!room || !id) return false;
-      return (room.players || []).some((player) => (player.participantType || "player") === "player" && player.id === id);
+      if (!room || !id) return null;
+      return (room.players || []).find((player) => (player.participantType || "player") === "player" && player.id === id) || null;
     }
 
     applySessionPlayerIdentity(game = this.game(), nextId = "", previousId = "") {
@@ -270,6 +272,7 @@
       const slots = game?.onlineSession?.roleSlots || game?.createRoleSlots?.() || [];
       const localId = game?.onlineSession?.playerId || player?.id || "";
       const validIds = new Set(slots.map((slot) => slot.id));
+      const locked = new Set((room?.slotLocks || []).map((slotId) => this.normalizeJoinSlotId(slotId)).filter((slotId) => validIds.has(slotId)));
       const occupied = new Set(
         (room?.players || [])
           .filter((item) => item.id !== localId && (item.participantType || "player") === "player")
@@ -277,13 +280,13 @@
           .filter((slotId) => validIds.has(slotId))
       );
       const requested = this.normalizeJoinSlotId(player?.slotId || "");
-      if (requested && validIds.has(requested) && !occupied.has(requested)) return requested;
+      if (requested && validIds.has(requested) && !occupied.has(requested) && !locked.has(requested)) return requested;
       const teamOrder = this.joinSlotTeamOrder(occupied);
       for (const team of teamOrder) {
-        const slot = slots.find((item) => item.team === team && !occupied.has(item.id));
+        const slot = slots.find((item) => item.team === team && !occupied.has(item.id) && !locked.has(item.id));
         if (slot) return slot.id;
       }
-      return slots.find((slot) => !occupied.has(slot.id))?.id || requested || "blue-infantry";
+      return slots.find((slot) => !occupied.has(slot.id) && !locked.has(slot.id))?.id || requested || "blue-infantry";
     }
 
     joinSlotTeamOrder(occupied = new Set()) {
@@ -305,7 +308,8 @@
       if (["player", "spectator", "caster", "admin"].includes(options.participantType)) return options.participantType;
       if (!room) return "player";
       const players = (room.players || []).filter((player) => player.participantType !== "spectator");
-      const full = players.length >= (room.capacity || 8);
+      const humanCapacity = this.registry?.effectiveRoomCapacity?.(room) ?? (room.capacity || 8);
+      const full = players.length >= humanCapacity;
       if (room.phase === "playing" || room.phase === "loading" || room.locked || full) return "spectator";
       return "player";
     }
@@ -322,7 +326,7 @@
 
     isSpectatorFull(room = null, playerId = "") {
       if (!room) return false;
-      const capacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+      const capacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
       const id = String(playerId || "");
       const spectators = Array.isArray(room.spectators) ? room.spectators : [];
       const alreadyInside = id && spectators.some((item) => item.id === id);
@@ -591,6 +595,11 @@
         phase: this.socketSnapshotPhase(snapshot.phase || current?.phase || "waiting"),
         mode: snapshot.mode || current?.mode || "annihilation",
         players: Array.isArray(snapshot.players) ? snapshot.players : current?.players || [],
+        slotLocks: Array.isArray(snapshot.slotLocks)
+          ? snapshot.slotLocks
+          : Array.isArray(snapshot.slots)
+            ? snapshot.slots.filter((slot) => slot?.locked).map((slot) => slot?.id)
+            : current?.slotLocks || [],
         spectators: Array.isArray(snapshot.spectators) ? snapshot.spectators : current?.spectators || [],
         chat: Array.isArray(snapshot.chat) ? snapshot.chat : current?.chat || [],
         events: Array.isArray(snapshot.events) ? snapshot.events : current?.events || [],
@@ -731,6 +740,7 @@
         currentClassId: previous?.currentClassId || payload.currentClassId || payload.classId || "",
         weaponId: payload.weaponId || incoming.weaponId || previous?.weaponId || "",
         participantType: "player",
+        connected: true,
         factionId: previous?.factionId || payload.factionId || payload.skinId || "",
         skinId: previous?.skinId || payload.skinId || payload.factionId || "",
         position: { ...(previous?.position || {}), ...incoming },
@@ -960,20 +970,35 @@
       IronLine.factionVisuals?.syncGame?.(game);
       this.publishLocalPlayer(game);
 
+      if (room.phase === "ended") {
+        this.handleRoomEnded(game, room);
+        return;
+      }
+
       if (room.phase === "playing" && game.lobbyOpen && !game.matchStarted && !game.countdownStarted) {
         if (game.isLocalSpectator?.()) game.enterSpectatorMode?.({ roomId: room.id, participantType: game.onlineSession?.participantType || "spectator" });
         else game.beginDeploymentCountdown?.({ room, startedAt: room.startedAt });
-      } else if (room.phase === "ended" && game.matchStarted) {
-        game.matchStarted = false;
-        game.countdownStarted = false;
-        game.matchPhase = "ended";
-        game.lobbyOpen = true;
-        game.result = "ended";
-        game.resultReason = "관리자가 방을 종료했습니다.";
       }
       if (game.result === "ended" && game.matchPhase === "ended") {
         game.resultReason = "관리자가 방을 종료했습니다.";
       }
+    }
+
+    handleRoomEnded(game = this.game(), room = null) {
+      if (!game?.onlineSession?.roomId || !room?.id) return false;
+      if (game.onlineSession.roomId !== room.id) return false;
+      game.matchStarted = false;
+      game.countdownStarted = false;
+      game.result = "ended";
+      game.resultReason = "관리자가 방을 종료했습니다.";
+      this.leaveOnlineRoom(game, "room_ended");
+      game.roomListOpen = true;
+      game.lobbyOpen = true;
+      game.entryOpen = true;
+      game.matchPhase = "rooms";
+      game.adminNotify?.("방이 종료되어 방 목록으로 이동했습니다.");
+      game.hud?.update?.(game);
+      return true;
     }
 
     isLocalKicked(game = this.game(), room = null) {
@@ -1026,8 +1051,10 @@
           .filter((player) => (player.participantType || "player") === "player" && player.slotId)
           .map((player) => [player.slotId, player])
       );
+      const lockedSlots = new Set((room.slotLocks || []).map((slotId) => String(slotId || "")));
       for (const slot of session.roleSlots || []) {
         const player = playerBySlot.get(slot.id) || null;
+        slot.locked = lockedSlots.has(slot.id);
         slot.playerId = player?.id || null;
         slot.nickname = player?.name || player?.nickname || "";
         slot.ready = Boolean(player?.ready);

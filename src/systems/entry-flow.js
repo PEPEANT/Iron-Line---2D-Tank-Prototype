@@ -276,8 +276,8 @@
       for (const room of rooms) {
         const players = (room.players || []).filter((player) => (player.participantType || "player") === "player");
         const spectators = room.spectators || [];
-        const capacity = room.capacity || 8;
-        const spectatorCapacity = Math.max(0, Math.round(Number(room.spectatorCapacity) || 12));
+        const capacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room.capacity ?? 8;
+        const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
         const spectatorFull = spectators.length >= spectatorCapacity;
         const spectatorJoin = room.phase === "playing" || room.locked || players.length >= capacity;
         const wrap = document.createElement("div");

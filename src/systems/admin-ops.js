@@ -84,7 +84,7 @@
         players: selectedRegistryRoom?.players || players,
         spectators: selectedRegistryRoom?.spectators || [],
         capacity: selectedRegistryRoom?.capacity || 8,
-        spectatorCapacity: selectedRegistryRoom?.spectatorCapacity || 12,
+        spectatorCapacity: IronLine.normalizeSpectatorCapacity?.(selectedRegistryRoom?.spectatorCapacity, 12) ?? 12,
         difficulty: selectedRegistryRoom?.difficulty || game.matchConfig?.difficulty || "normal",
         aiDensityPreset: selectedRegistryRoom?.aiDensityPreset || game.matchConfig?.aiDensityPreset || "custom",
         blueAiTanks: selectedRegistryRoom?.blueAiTanks ?? game.matchConfig?.blueAiTanks ?? 3,
