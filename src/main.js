@@ -2667,11 +2667,18 @@
         vehicle.alive = true;
         vehicle.destructionPending = false;
         vehicle.hp = Math.max(1, Math.min(vehicle.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
-        vehicle.x = lerp(vehicle.x, Number(snap.x) || vehicle.x, vehicleBlend);
-        vehicle.y = lerp(vehicle.y, Number(snap.y) || vehicle.y, vehicleBlend);
-        vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, Math.min(0.45, vehicleBlend * 1.35)));
-        if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(lerp(vehicle.turretAngle, Number(snap.turretAngle) || vehicle.turretAngle, Math.min(0.48, vehicleBlend * 1.45)));
-        if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(lerp(vehicle.machineGunAngle, Number(snap.machineGunAngle) || vehicle.machineGunAngle, Math.min(0.48, vehicleBlend * 1.45)));
+        const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : vehicle.x;
+        const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : vehicle.y;
+        const followBlend = this.onlineWorldCatchUpBlend(vehicleBlend, distXY(vehicle.x, vehicle.y, targetX, targetY), {
+          start: 160,
+          full: 420,
+          max: 0.1
+        });
+        vehicle.x = lerp(vehicle.x, targetX, followBlend);
+        vehicle.y = lerp(vehicle.y, targetY, followBlend);
+        vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, Math.min(0.45, followBlend * 1.35)));
+        if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(lerp(vehicle.turretAngle, Number(snap.turretAngle) || vehicle.turretAngle, Math.min(0.48, followBlend * 1.45)));
+        if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(lerp(vehicle.machineGunAngle, Number(snap.machineGunAngle) || vehicle.machineGunAngle, Math.min(0.48, followBlend * 1.45)));
         vehicle.playerControlled = Boolean(snap.controllerId);
       }
 
@@ -2703,9 +2710,16 @@
         }
         unit.alive = true;
         unit.hp = Math.max(1, Math.min(unit.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
-        unit.x = lerp(unit.x, Number(snap.x) || unit.x, unitBlend);
-        unit.y = lerp(unit.y, Number(snap.y) || unit.y, unitBlend);
-        unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, Math.min(0.42, unitBlend * 1.35)));
+        const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : unit.x;
+        const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : unit.y;
+        const followBlend = this.onlineWorldCatchUpBlend(unitBlend, distXY(unit.x, unit.y, targetX, targetY), {
+          start: 64,
+          full: 180,
+          max: 0.18
+        });
+        unit.x = lerp(unit.x, targetX, followBlend);
+        unit.y = lerp(unit.y, targetY, followBlend);
+        unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, Math.min(0.42, followBlend * 1.35)));
         if (snap.state && !unit.inTank && !unit.inVehicle) unit.state = snap.state;
       }
 
@@ -2750,6 +2764,14 @@
       const seconds = Math.max(1 / 120, Math.min(0.12, Number(dt) || 1 / 60));
       const halfLife = Math.max(0.05, Number(halfLifeSeconds) || 0.2);
       return Math.max(0.035, Math.min(0.28, 1 - Math.pow(0.5, seconds / halfLife)));
+    }
+
+    onlineWorldCatchUpBlend(baseBlend = 0.05, distance = 0, options = {}) {
+      const start = Math.max(0, Number(options.start) || 0);
+      const full = Math.max(start + 1, Number(options.full) || start + 1);
+      const maxBlend = Math.max(baseBlend, Math.min(0.22, Number(options.max) || baseBlend));
+      const amount = clamp(((Number(distance) || 0) - start) / (full - start), 0, 1);
+      return Math.max(baseBlend, lerp(baseBlend, maxBlend, amount));
     }
 
     recordCombatKill(source = null, victim = null, kind = "kill") {

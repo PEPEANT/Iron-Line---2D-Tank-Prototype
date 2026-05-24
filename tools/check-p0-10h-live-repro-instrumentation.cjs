@@ -65,7 +65,8 @@ async function installProbe(page) {
     const idOf = (item) => String(item?.callSign || item?.id || item?.name || "");
     const mapPositions = (items = []) => new Map(items.map((item) => [idOf(item), {
       x: Number(item?.x) || 0, y: Number(item?.y) || 0, state: String(item?.state || ""),
-      owner: String(item?.owner || ""), progress: Number(item?.progress) || 0
+      owner: String(item?.owner || ""), progress: Number(item?.progress) || 0,
+      inVehicle: Boolean(item?.inVehicle || item?.inTank)
     }]).filter(([id]) => id));
     const entityMaps = (game) => ({
       units: mapPositions([...(game?.infantry || []), ...(game?.crews || [])]),
@@ -73,15 +74,21 @@ async function installProbe(page) {
       capturePoints: mapPositions(game?.capturePoints || [])
     });
     const snapMap = (items = []) => mapPositions(items);
-    const movementStats = (snaps = [], before = new Map(), after = new Map()) => {
-      let maxTarget = 0, maxApplied = 0, maxResidual = 0, over32 = 0, over64 = 0, over96 = 0, maxId = "", changedState = 0;
+    const movementStats = (snaps = [], before = new Map(), after = new Map(), options = {}) => {
+      let maxTarget = 0, maxApplied = 0, maxResidual = 0, over32 = 0, over64 = 0, over96 = 0, maxId = "", changedState = 0, skippedMounted = 0, considered = 0;
       for (const snap of snaps || []) {
         const id = idOf(snap);
         const from = before.get(id);
         const to = after.get(id);
         if (!id || !from || !to) continue;
+        const mounted = Boolean(snap.inVehicle || from.inVehicle || to.inVehicle);
+        if (options.skipMounted && mounted) {
+          skippedMounted += 1;
+          continue;
+        }
         const target = { x: Number(snap.x), y: Number(snap.y), state: String(snap.state || "") };
         if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) continue;
+        considered += 1;
         const targetDelta = Math.hypot(target.x - from.x, target.y - from.y);
         const appliedDelta = Math.hypot(to.x - from.x, to.y - from.y);
         const residualDelta = Math.hypot(target.x - to.x, target.y - to.y);
@@ -94,15 +101,19 @@ async function installProbe(page) {
         maxApplied = Math.max(maxApplied, appliedDelta);
         maxResidual = Math.max(maxResidual, residualDelta);
       }
-      return { count: snaps?.length || 0, maxId, maxTarget, maxApplied, maxResidual, over32, over64, over96, changedState, ratio: maxTarget > 0 ? maxApplied / maxTarget : 0 };
+      return { count: snaps?.length || 0, considered, skippedMounted, maxId, maxTarget, maxApplied, maxResidual, over32, over64, over96, changedState, ratio: maxTarget > 0 ? maxApplied / maxTarget : 0 };
     };
-    const postFrameStats = (snaps = [], after = new Map(), post = new Map()) => {
+    const postFrameStats = (snaps = [], after = new Map(), post = new Map(), options = {}) => {
       const targets = snapMap(snaps);
-      let maxLocalDrift = 0, maxResidualGrowth = 0, pushedAway = 0, maxId = "";
+      let maxLocalDrift = 0, maxResidualGrowth = 0, pushedAway = 0, maxId = "", skippedMounted = 0;
       for (const [id, target] of targets.entries()) {
         const a = after.get(id);
         const p = post.get(id);
         if (!a || !p) continue;
+        if (options.skipMounted && (target.inVehicle || a.inVehicle || p.inVehicle)) {
+          skippedMounted += 1;
+          continue;
+        }
         const localDrift = Math.hypot(p.x - a.x, p.y - a.y);
         const residualAfter = Math.hypot(target.x - a.x, target.y - a.y);
         const residualPost = Math.hypot(target.x - p.x, target.y - p.y);
@@ -112,7 +123,7 @@ async function installProbe(page) {
         maxResidualGrowth = Math.max(maxResidualGrowth, growth);
         if (localDrift > 4 && growth > 2) pushedAway += 1;
       }
-      return { maxId, maxLocalDrift, maxResidualGrowth, pushedAway };
+      return { maxId, maxLocalDrift, maxResidualGrowth, pushedAway, skippedMounted };
     };
     const worldAt = (room) => Number(room?.worldState?.updatedAt) || 0;
     const worldTick = (room) => Number(room?.worldState?.tick) || 0;
@@ -201,13 +212,14 @@ async function installProbe(page) {
       wrap(game, "applyOnlineWorldState", "worldApplies", function(args, result, ms, before, prevAppliedAt) {
         const state = args?.[0] || {};
         const after = entityMaps(this);
-        const unit = movementStats(state.units || [], before?.units, after.units);
+        const unit = movementStats(state.units || [], before?.units, after.units, { skipMounted: true });
+        const unitAll = movementStats(state.units || [], before?.units, after.units);
         const vehicle = movementStats(state.vehicles || [], before?.vehicles, after.vehicles);
         requestAnimationFrame(() => {
           const post = entityMaps(this);
-          push("worldPostFrames", { hostId: state.hostId || "", updatedAt: Number(state.updatedAt) || 0, tick: Number(state.tick) || 0, unit: postFrameStats(state.units || [], after.units, post.units), vehicle: postFrameStats(state.vehicles || [], after.vehicles, post.vehicles) });
+          push("worldPostFrames", { hostId: state.hostId || "", updatedAt: Number(state.updatedAt) || 0, tick: Number(state.tick) || 0, unit: postFrameStats(state.units || [], after.units, post.units, { skipMounted: true }), vehicle: postFrameStats(state.vehicles || [], after.vehicles, post.vehicles) });
         });
-        return { applied: Boolean(result), ms, hostId: state.hostId || "", updatedAt: Number(state.updatedAt) || 0, tick: Number(state.tick) || 0, prevAppliedAt, staleInput: Number(state.updatedAt || 0) < prevAppliedAt, units: state.units?.length || 0, vehicles: state.vehicles?.length || 0, unit, vehicle };
+        return { applied: Boolean(result), ms, hostId: state.hostId || "", updatedAt: Number(state.updatedAt) || 0, tick: Number(state.tick) || 0, prevAppliedAt, staleInput: Number(state.updatedAt || 0) < prevAppliedAt, units: state.units?.length || 0, vehicles: state.vehicles?.length || 0, unit, unitAll, vehicle };
       });
       wrap(registry, "mergeRoomDetailDelta", "detailMerges", function(args, result, ms) {
         const previous = args?.[0] || null, delta = args?.[1] || null;
@@ -354,6 +366,8 @@ async function collectPage(page) {
       unitTarget: stat(worldApplies.map((item) => Number(item.unit?.maxTarget) || 0)),
       unitApplied: stat(worldApplies.map((item) => Number(item.unit?.maxApplied) || 0)),
       unitResidual: stat(worldApplies.map((item) => Number(item.unit?.maxResidual) || 0)),
+      unitAllTarget: stat(worldApplies.map((item) => Number(item.unitAll?.maxTarget) || 0)),
+      unitMountedSkipped: sumEvents(worldApplies, "unit.skippedMounted"),
       unitChangedState: sumEvents(worldApplies, "unit.changedState"),
       vehicleTarget: stat(worldApplies.map((item) => Number(item.vehicle?.maxTarget) || 0)),
       vehicleApplied: stat(worldApplies.map((item) => Number(item.vehicle?.maxApplied) || 0)),
@@ -391,11 +405,12 @@ function decide(report) {
   const postPush = sumOf(pages, (page) => page.world.postUnitPushedAway + page.world.postVehiclePushedAway);
   const postResidualGrowth = maxOf(pages, (page) => page.world.postUnitResidualGrowth.max);
   const unitTarget = maxOf(pages, (page) => page.world.unitTarget.max);
+  const unitTargetP95 = maxOf(pages, (page) => page.world.unitTarget.p95);
   const unitApplied = maxOf(pages, (page) => page.world.unitApplied.max);
   if (stalePackets > 0 || playerRenderMax > 96) return "other_player_position";
   if (staleMerge > 0 || hostChanges > 0) return "stale_worldstate_merge";
   if (postPush > 0 || postResidualGrowth > 12) return "non_host_local_simulation_drift";
-  if (unitTarget > 96 && unitApplied < unitTarget * 0.4) return "worldstate_interpolation_lag";
+  if (unitTargetP95 > 96 || (unitTarget > 180 && unitApplied < unitTarget * 0.3)) return "worldstate_interpolation_lag";
   return "no_high_risk_reproduced";
 }
 function nextRecommendation(decision) {
