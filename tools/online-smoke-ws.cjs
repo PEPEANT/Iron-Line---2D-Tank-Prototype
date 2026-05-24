@@ -5,6 +5,9 @@ const { WebSocket } = require("ws");
 function createOnlineSmokeWsHelpers(options = {}) {
   const port = Number(options.port || 4191);
   const roomId = String(options.roomId || "SMOKE");
+  const combatOnlyRecovery = options.combatOnlyRecovery !== undefined
+    ? Boolean(options.combatOnlyRecovery)
+    : process.env.IRONLINE_P0_COMBAT_ONLY !== "0";
   const requestJson = options.requestJson;
   const fetchRoomById = options.fetchRoomById || (async (roomIdValue) => {
     const payload = await requestJson(`/api/rooms/${encodeURIComponent(roomIdValue)}`);
@@ -25,6 +28,11 @@ function createOnlineSmokeWsHelpers(options = {}) {
         ws.close();
         reject(new Error("WebSocket smoke timed out."));
       }, 5000);
+      const closeDone = (payload = {}) => {
+        clearTimeout(timer);
+        ws.close();
+        resolve(payload);
+      };
 
       ws.on("message", (raw) => {
         const message = JSON.parse(raw.toString());
@@ -37,10 +45,18 @@ function createOnlineSmokeWsHelpers(options = {}) {
             nickname: "Blue"
           }));
         }
+        if (message.type === "join_result" && message.payload?.ok && combatOnlyRecovery) {
+          setTimeout(() => closeDone({ events, snapshot: null }), 180);
+          return;
+        }
         if (message.type === "observer_snapshot") {
-          clearTimeout(timer);
-          ws.close();
-          resolve({ events, snapshot: message.payload });
+          if (combatOnlyRecovery) {
+            clearTimeout(timer);
+            ws.close();
+            reject(new Error("WebSocket observer_snapshot was sent during combat-only recovery mode."));
+            return;
+          }
+          closeDone({ events, snapshot: message.payload });
         }
       });
       ws.on("error", (error) => {
@@ -522,8 +538,12 @@ function createOnlineSmokeWsHelpers(options = {}) {
           const room = await fetchRoomById(wsRoomId);
           if (!room) throw new Error("4v4 smoke room was not returned.");
           if ((room.players || []).length !== 8) throw new Error(`Expected 8 players in 4v4 room, got ${(room.players || []).length}.`);
-          if (!(room.spectators || []).some((participant) => participant.id === "ws-4v4-overflow")) {
+          const overflowVisibleAsSpectator = (room.spectators || []).some((participant) => participant.id === "ws-4v4-overflow");
+          if (!combatOnlyRecovery && !overflowVisibleAsSpectator) {
             throw new Error("Overflow WebSocket participant did not downgrade to spectator.");
+          }
+          if ((room.players || []).some((player) => player.id === "ws-4v4-overflow")) {
+            throw new Error("Overflow WebSocket participant incorrectly remained a player in a full 4v4 room.");
           }
           const occupiedSlots = (room.players || []).map((player) => player.slotId).filter(Boolean);
           if (new Set(occupiedSlots).size !== 8) throw new Error(`Expected 8 unique occupied slots, got ${occupiedSlots.join(",")}`);
@@ -554,13 +574,14 @@ function createOnlineSmokeWsHelpers(options = {}) {
           if ((roomAfterHttpOverflow.players || []).some((player) => player.id === "ws-4v4-http-overflow")) {
             throw new Error("HTTP overflow participant incorrectly remained a player in a full 4v4 room.");
           }
-          if (!(roomAfterHttpOverflow.spectators || []).some((participant) => participant.id === "ws-4v4-http-overflow")) {
+          const httpOverflowVisibleAsSpectator = (roomAfterHttpOverflow.spectators || []).some((participant) => participant.id === "ws-4v4-http-overflow");
+          if (!combatOnlyRecovery && !httpOverflowVisibleAsSpectator) {
             throw new Error("HTTP overflow participant was not downgraded to spectator.");
           }
           done({
             roomId: wsRoomId,
             playerCount: (room.players || []).length,
-            spectatorCount: (roomAfterHttpOverflow.spectators || []).length,
+            spectatorCount: combatOnlyRecovery ? 0 : (roomAfterHttpOverflow.spectators || []).length,
             readyCount: readyPlayers.length
           });
         } catch (error) {

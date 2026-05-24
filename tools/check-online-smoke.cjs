@@ -89,6 +89,7 @@ async function fetchRoomById(roomIdValue) {
 const { wsSmoke, wsCommandSmoke, wsLobbyGuardSmoke, wsPlayerStateSmoke, wsPlayerStateThreePlayerSameTeamSmoke, wsFourVsFourSmoke } = createOnlineSmokeWsHelpers({
   port,
   roomId,
+  combatOnlyRecovery,
   requestJson,
   fetchRoomById
 });

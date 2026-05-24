@@ -108,9 +108,16 @@ Current behavior:
   - PASS
 - `npm run check:online`
   - PASS
+  - final release-gate smoke was re-verified after rebase with the combat-only WebSocket/helper contract restored
   - retained `wsLobbyGuards=not_joined/locked`
   - retained `wsPlayerState3pSameTeam=3p`
   - retained `ws4v4=8p/8ready`
+- `node tools/check-p0-11d-3p-same-team-sync.cjs`
+  - PASS
+  - current browser gate still renders 3 human players with same-team remote preservation intact
+- `node tools/check-p0-team-damage-full-path.cjs`
+  - PASS
+  - same-team small-arms, projectile, explosion, and stat-pollution guards remained intact after the P1 vehicle/MG changes
 
 ### Vehicle / anti-vehicle proof
 
