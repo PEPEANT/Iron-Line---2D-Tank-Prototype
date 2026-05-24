@@ -389,12 +389,12 @@ function decide(report) {
   const staleMerge = sumOf(pages, (page) => page.staleMerge.detailFetchStale + page.staleMerge.detailMergeStale + page.staleMerge.upsertStale);
   const hostChanges = sumOf(pages, (page) => page.staleMerge.hostChanges);
   const postPush = sumOf(pages, (page) => page.world.postUnitPushedAway + page.world.postVehiclePushedAway);
-  const postDrift = Math.max(maxOf(pages, (page) => page.world.postUnitDrift.max), maxOf(pages, (page) => page.world.postVehicleDrift.max));
+  const postResidualGrowth = maxOf(pages, (page) => page.world.postUnitResidualGrowth.max);
   const unitTarget = maxOf(pages, (page) => page.world.unitTarget.max);
   const unitApplied = maxOf(pages, (page) => page.world.unitApplied.max);
   if (stalePackets > 0 || playerRenderMax > 96) return "other_player_position";
   if (staleMerge > 0 || hostChanges > 0) return "stale_worldstate_merge";
-  if (postPush > 0 || postDrift > 12) return "non_host_local_simulation_drift";
+  if (postPush > 0 || postResidualGrowth > 12) return "non_host_local_simulation_drift";
   if (unitTarget > 96 && unitApplied < unitTarget * 0.4) return "worldstate_interpolation_lag";
   return "no_high_risk_reproduced";
 }

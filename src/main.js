@@ -993,6 +993,7 @@
     updateBattlefield(dt) {
       if (!this.matchStarted || this.result) return;
       const perf = this.perfMonitor;
+      const remoteWorldFollower = this.isRemoteOnlineWorldFollower();
       perf?.begin("battlefield");
       if (this.updateAnnihilationIntermission?.(dt)) {
         perf?.begin("combat.effects");
@@ -1004,34 +1005,42 @@
       }
 
       this.matchTime += dt;
-      perf?.begin("ai.tacticalMap");
-      this.tacticalMap?.update?.(dt);
-      perf?.end("ai.tacticalMap");
-      this.updateDroneDesignation(dt);
-      this.updateConquestRespawns(dt);
+      if (!remoteWorldFollower) {
+        perf?.begin("ai.tacticalMap");
+        this.tacticalMap?.update?.(dt);
+        perf?.end("ai.tacticalMap");
+        this.updateDroneDesignation(dt);
+        this.updateConquestRespawns(dt);
+      }
       perf?.begin("crews");
-      for (const crew of this.crews) crew.update(this, dt);
+      for (const crew of this.crews) {
+        if (!remoteWorldFollower || crew.inTank) crew.update(this, dt);
+      }
       perf?.end("crews");
-      if (!this.testLabAiPaused) {
+      if (!this.testLabAiPaused && !remoteWorldFollower) {
         perf?.begin("ai.commanders");
         for (const commander of Object.values(this.commanders)) commander.update(dt);
         this.botCommander?.update?.(dt);
         perf?.end("ai.commanders");
       }
-      this.refreshFollowPlayerOrders();
-      this.coverSlots.update(dt);
-      if (!this.testLabAiPaused) {
+      if (!remoteWorldFollower) {
+        this.refreshFollowPlayerOrders();
+        this.coverSlots.update(dt);
+      }
+      if (!this.testLabAiPaused && !remoteWorldFollower) {
         perf?.begin("ai.squads");
         for (const squad of this.squads) squad.update(dt);
         perf?.end("ai.squads");
       }
 
-      perf?.begin("drones");
-      this.updateDrones(dt);
-      perf?.end("drones");
+      if (!remoteWorldFollower) {
+        perf?.begin("drones");
+        this.updateDrones(dt);
+        perf?.end("drones");
+      }
       perf?.begin("ai.infantry");
       for (const unit of this.infantry) {
-        const lodStep = this.aiLodStep(unit, dt);
+        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(unit, dt);
         unit.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       perf?.end("ai.infantry");
@@ -1041,11 +1050,11 @@
 
       perf?.begin("vehicles");
       for (const tank of this.tanks) {
-        const lodStep = this.aiLodStep(tank, dt);
+        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(tank, dt);
         tank.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       for (const humvee of this.humvees || []) {
-        const lodStep = this.aiLodStep(humvee, dt);
+        const lodStep = remoteWorldFollower ? { skipAi: true, dt: 0 } : this.aiLodStep(humvee, dt);
         humvee.update(this, dt, { skipAi: lodStep.skipAi, aiDt: lodStep.dt });
       }
       perf?.end("vehicles");
@@ -1057,15 +1066,19 @@
       IronLine.combat.updateEffects(this, dt);
       perf?.end("combat.effects");
 
-      perf?.begin("objectives");
-      for (const point of this.capturePoints) point.update(this, dt);
-      this.updateConquestScoring(dt);
-      perf?.end("objectives");
+      if (!remoteWorldFollower) {
+        perf?.begin("objectives");
+        for (const point of this.capturePoints) point.update(this, dt);
+        this.updateConquestScoring(dt);
+        perf?.end("objectives");
+      }
 
-      perf?.begin("spacing");
-      resolveTankSpacing(this, dt);
-      resolveInfantryTankSpacing(this, dt);
-      perf?.end("spacing");
+      if (!remoteWorldFollower) {
+        perf?.begin("spacing");
+        resolveTankSpacing(this, dt);
+        resolveInfantryTankSpacing(this, dt);
+        perf?.end("spacing");
+      }
       perf?.begin("result");
       this.updateResult(dt);
       perf?.end("result");
@@ -2536,6 +2549,15 @@
       const localId = this.onlineSession?.playerId || "";
       if (!localId || this.isLocalSpectator?.()) return false;
       return this.onlineWorldHostPlayerId(room) === localId;
+    }
+
+    isRemoteOnlineWorldFollower(room = this.onlineCombatRoom()) {
+      return Boolean(
+        this.sessionMode === "online" &&
+        this.matchStarted &&
+        room?.worldState?.hostId &&
+        !this.isOnlineWorldHost(room)
+      );
     }
 
     onlineVehicleControllerId(vehicle = null) {
