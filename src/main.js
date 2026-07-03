@@ -70,6 +70,8 @@
       this.onlineWorldSyncTimer = 0;
       this.onlineWorldAppliedAt = 0;
       this.onlineWorldInterpolationTarget = null;
+      this.onlineWorldStateBuffer = [];
+      this.onlineWorldStateGapMs = 0;
       this.tacticalMapOpen = false;
       this.commandBus = new IronLine.CommandBus(this);
       this.botCommander = IronLine.BotCommanderSkeleton ? new IronLine.BotCommanderSkeleton(this) : null;
@@ -2687,14 +2689,18 @@
       if (updatedAt > (this.onlineWorldAppliedAt || 0)) {
         this.onlineWorldAppliedAt = updatedAt;
         this.onlineWorldInterpolationTarget = state;
+        this.pushOnlineWorldStateSample(state, updatedAt);
       }
+      const buffered = this.bufferedOnlineWorldState();
+      if (buffered) return this.stepOnlineWorldInterpolation(buffered, dt, { buffered: true });
       return this.stepOnlineWorldInterpolation(this.onlineWorldInterpolationTarget || state, dt);
     }
 
-    stepOnlineWorldInterpolation(state = null, dt = 0) {
+    stepOnlineWorldInterpolation(state = null, dt = 0, options = {}) {
       if (!state) return false;
-      const unitBlend = this.onlineWorldInterpolationBlend(dt, 0.2);
-      const vehicleBlend = this.onlineWorldInterpolationBlend(dt, 0.18);
+      const buffered = Boolean(options.buffered);
+      const unitBlend = buffered ? 0.5 : this.onlineWorldInterpolationBlend(dt, 0.2);
+      const vehicleBlend = buffered ? 0.5 : this.onlineWorldInterpolationBlend(dt, 0.18);
       const vehicleById = new Map(
         [...(this.tanks || []), ...(this.humvees || [])]
           .map((vehicle) => [vehicle.callSign || vehicle.id || "", vehicle])
@@ -2716,10 +2722,20 @@
         vehicle.hp = Math.max(1, Math.min(vehicle.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
         const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : vehicle.x;
         const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : vehicle.y;
-        const followBlend = this.onlineWorldCatchUpBlend(vehicleBlend, distXY(vehicle.x, vehicle.y, targetX, targetY), {
+        const targetDistance = distXY(vehicle.x, vehicle.y, targetX, targetY);
+        if (targetDistance > 620) {
+          vehicle.x = targetX;
+          vehicle.y = targetY;
+          vehicle.angle = normalizeAngle(Number(snap.angle) || vehicle.angle);
+          if (vehicle.turretAngle !== undefined) vehicle.turretAngle = normalizeAngle(Number(snap.turretAngle) || vehicle.turretAngle);
+          if (vehicle.machineGunAngle !== undefined) vehicle.machineGunAngle = normalizeAngle(Number(snap.machineGunAngle) || vehicle.machineGunAngle);
+          vehicle.playerControlled = Boolean(snap.controllerId);
+          continue;
+        }
+        const followBlend = buffered ? vehicleBlend : this.onlineWorldCatchUpBlend(vehicleBlend, targetDistance, {
           start: 160,
           full: 420,
-          max: 0.1
+          max: 0.14
         });
         vehicle.x = lerp(vehicle.x, targetX, followBlend);
         vehicle.y = lerp(vehicle.y, targetY, followBlend);
@@ -2743,7 +2759,11 @@
           unit.alive = false;
           continue;
         }
-        if (snap.inVehicle) continue;
+        if (snap.inVehicle) {
+          if (Number.isFinite(Number(snap.x))) unit.x = Number(snap.x);
+          if (Number.isFinite(Number(snap.y))) unit.y = Number(snap.y);
+          continue;
+        }
         if (unit.inTank) {
           unit.inTank.leaveCrew?.(unit);
           unit.inTank = null;
@@ -2759,10 +2779,18 @@
         unit.hp = Math.max(1, Math.min(unit.maxHp || snap.maxHp || 1, Number(snap.hp) || 1));
         const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : unit.x;
         const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : unit.y;
-        const followBlend = this.onlineWorldCatchUpBlend(unitBlend, distXY(unit.x, unit.y, targetX, targetY), {
+        const targetDistance = distXY(unit.x, unit.y, targetX, targetY);
+        if (targetDistance > 340) {
+          unit.x = targetX;
+          unit.y = targetY;
+          unit.angle = normalizeAngle(Number(snap.angle) || unit.angle);
+          if (snap.state && !unit.inTank && !unit.inVehicle) unit.state = snap.state;
+          continue;
+        }
+        const followBlend = buffered ? unitBlend : this.onlineWorldCatchUpBlend(unitBlend, targetDistance, {
           start: 64,
-          full: 180,
-          max: 0.18
+          full: 240,
+          max: 0.24
         });
         unit.x = lerp(unit.x, targetX, followBlend);
         unit.y = lerp(unit.y, targetY, followBlend);
@@ -2816,7 +2844,7 @@
     onlineWorldCatchUpBlend(baseBlend = 0.05, distance = 0, options = {}) {
       const start = Math.max(0, Number(options.start) || 0);
       const full = Math.max(start + 1, Number(options.full) || start + 1);
-      const maxBlend = Math.max(baseBlend, Math.min(0.22, Number(options.max) || baseBlend));
+      const maxBlend = Math.max(baseBlend, Math.min(0.3, Number(options.max) || baseBlend));
       const amount = clamp(((Number(distance) || 0) - start) / (full - start), 0, 1);
       return Math.max(baseBlend, lerp(baseBlend, maxBlend, amount));
     }
@@ -3028,6 +3056,8 @@
       this.resetPlayerFeedbackState();
       this.onlineWorldAppliedAt = 0;
       this.onlineWorldInterpolationTarget = null;
+      this.onlineWorldStateBuffer = [];
+      this.onlineWorldStateGapMs = 0;
       this.matchTime = 0;
       this.startLoading = this.defaultStartLoadingState();
       this.conquest = this.defaultConquestState();
@@ -4303,6 +4333,7 @@
   IronLine.installFogOfWar?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
   IronLine.installMobileCameraGestures?.(Game);
+  IronLine.installOnlineWorldStateBuffer?.(Game);
   IronLine.Game = Game;
   IronLine.game = new Game();
 })(window);
