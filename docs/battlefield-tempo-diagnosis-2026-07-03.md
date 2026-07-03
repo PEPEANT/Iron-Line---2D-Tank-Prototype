@@ -120,3 +120,26 @@ node tools/check-battlefield-tempo.cjs
 - D1(첫 접촉 학살 버스트)은 크게 완화됐다.
 - D2(제압/엎드림이 전장 리듬을 만드는 문제)는 일부만 개선됐다. 엎드림이 화면에 확실히 보이는 수준은 아직 아니다.
 - 이후 작업은 더 강한 수치 튜닝보다, 제압 수치가 높은 유닛의 행동 선택을 직접 관찰하는 디버그/리플레이 확인이 먼저다.
+
+## Codex 제압 추적 패스 (2026-07-03)
+
+추가 도구:
+- `tools/check-suppression-flow.cjs`: 런타임에서 `InfantryUnit.suppress()`, `takeDamage()`, `updateSuppression()`, `InfantryAI.enterProne()/clearProne()`, `combat.fireRifle()`을 후킹해 제압 입력/감쇠/임계값/엎드림 전환을 추적한다.
+
+진단 결과:
+- 제압이 아예 안 들어가는 것은 아니다. `reports/playtests/suppression-flow-20260703124438/` 기준 30명 중 17명이 한 번 이상 suppression 30 이상까지 올라갔고, 유닛 최대 제압 p50도 76.96이었다.
+- 낮은 평균 제압의 핵심 원인은 "입력 부족"보다 "짧은 고제압 스파이크 + 즉시 이동/엄폐 루프로 전환"이다.
+- 특히 `moveTo()`는 이동 시작 시 prone을 해제한다. 그래서 고제압 유닛도 엄폐 이동이나 재탑승/이동 상태로 넘어가면 엎드림이 화면에 오래 남지 않는다.
+
+적용한 작은 수정:
+- `src/ai/infantry-ai.js`의 suppressed 분기에서, 비차량 위협이고 suppression 52 이상이면 엄폐 이동 전에 1.65초 동안 짧게 `prone-fire` 상태로 버티게 했다.
+
+검증:
+- `reports/playtests/suppression-flow-20260703125206/`: prone 경험 유닛 6명 → 17명, prone 전환 10회 → 39회.
+- 같은 런의 90~100초 교전 구간에서는 prone ratio가 0.18~0.20까지 올라가는 장면이 생겼다.
+- `reports/playtests/battlefield-tempo-20260703125554/`: 사망 속도 6명/분, 접촉 후 생존 p50 34초로 전체 전투 페이스는 목표권에 가까웠다.
+
+남은 판단:
+- D1은 실사용 기준 개선됐다.
+- D2는 "보이는 엎드림 장면"은 생겼지만, 전체 평균 prone ratio는 아직 낮다. 다음 단계는 더 강한 전역 수치 튜닝보다, 고제압 상태에서 어떤 상태가 prone을 해제하는지 상태별로 좁혀 보는 것이다.
+- 차량/전차가 보병 교전보다 먼저 킬을 내는 문제는 아직 별도 과제다.

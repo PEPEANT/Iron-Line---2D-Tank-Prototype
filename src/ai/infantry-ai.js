@@ -404,6 +404,13 @@
         this.faceContact(this.target, dt);
         if (contact && this.unit.suppression < 84) this.tryFire(contact);
 
+        if (!pressureThreat.vehicleType && this.unit.suppression >= 52 && this.enterProne({ mode: "suppressed", hold: 1.65, force: this.unit.suppression >= 72 })) {
+          this.state = "prone-fire";
+          if (contact && this.unit.suppression < 88) this.tryFire(contact);
+          this.unit.speed = approach(this.unit.speed, 0, 280 * dt);
+          this.updateDebug(null); return;
+        }
+
         if (coverTarget) {
           this.moveTo(dt, coverTarget);
           this.recordMovement(dt, beforeX, beforeY, coverTarget);
