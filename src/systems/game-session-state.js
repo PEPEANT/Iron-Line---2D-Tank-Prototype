@@ -27,9 +27,10 @@
 
     requestedCombatOnlyRecoveryMode() {
       const params = new URLSearchParams(window.location.search || "");
-      const value = params.get("p0CombatOnly") || params.get("combatOnly") || "";
-      if (["0", "false", "no", "off"].includes(String(value).toLowerCase())) return false;
-      return true;
+      if (!params.has("p0CombatOnly") && !params.has("combatOnly")) return false;
+      const value = params.has("p0CombatOnly") ? params.get("p0CombatOnly") : params.get("combatOnly");
+      const normalized = String(value || "").toLowerCase();
+      return normalized === "" || ["1", "true", "yes", "on"].includes(normalized);
     }
 
     isAdminStandalonePage() {

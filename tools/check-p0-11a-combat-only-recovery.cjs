@@ -161,7 +161,7 @@ async function run() {
 
 const server = spawn(process.execPath, ["tools/static-server.cjs", String(port)], {
   cwd: root,
-  env: { ...process.env, IRONLINE_ROOMS_FILE: roomsFile },
+  env: { ...process.env, IRONLINE_P0_COMBAT_ONLY: "1", IRONLINE_ROOMS_FILE: roomsFile },
   stdio: "ignore",
   windowsHide: true
 });

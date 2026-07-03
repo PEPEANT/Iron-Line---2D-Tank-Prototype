@@ -44,6 +44,14 @@
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
+    assetStyle(slotId, fallback = {}) {
+      return IronLine.assetRegistry?.style?.(slotId, fallback) || fallback;
+    }
+
+    assetColor(color, alpha) {
+      return IronLine.assetAlphaColor?.(color, alpha) || color;
+    }
+
     draw(game) {
       const ctx = this.ctx;
       const camera = this.camera;
@@ -754,12 +762,17 @@
     drawGunSmokePuffs(game) {
       const ctx = this.ctx;
       const puffs = game.effects.gunSmokePuffs || [];
+      const style = this.assetStyle("combat.gun-smoke.puff", {
+        warmColor: "#d7c1a0",
+        coolColor: "#bfc5bf",
+        alphaScale: 1
+      });
       ctx.save();
       for (const puff of puffs) {
         const lifePct = clamp(puff.life / puff.maxLife, 0, 1);
         const radius = Math.max(0.1, Number.isFinite(puff.radius) ? puff.radius : 0);
-        ctx.globalAlpha = Math.pow(lifePct, 1.35) * (puff.alpha || 0.2);
-        ctx.fillStyle = puff.warm ? "#d7c1a0" : "#bfc5bf";
+        ctx.globalAlpha = Math.pow(lifePct, 1.35) * (puff.alpha || 0.2) * (style.alphaScale ?? 1);
+        ctx.fillStyle = puff.color || (puff.warm ? style.warmColor : style.coolColor);
         ctx.beginPath();
         ctx.ellipse(puff.x, puff.y, radius * 1.45, radius, puff.angle || 0, 0, Math.PI * 2);
         ctx.fill();
@@ -769,16 +782,22 @@
 
     drawMuzzleFlashes(game) {
       const ctx = this.ctx;
+      const style = this.assetStyle("combat.muzzle.flash", {
+        outerColor: "rgba(255, 226, 160, 0.92)",
+        innerColor: "rgba(255, 248, 210, 0.9)",
+        mobileScale: 1
+      });
+      const scale = this.camera.width <= 760 ? (style.mobileScale || 1) : 1;
       for (const flash of game.effects.muzzleFlashes || []) {
         const lifePct = clamp(flash.life / flash.maxLife, 0, 1);
-        const length = flash.length * (0.65 + lifePct * 0.35);
-        const width = flash.width * lifePct;
+        const length = flash.length * (0.65 + lifePct * 0.35) * scale;
+        const width = flash.width * lifePct * scale;
 
         ctx.save();
         ctx.translate(flash.x, flash.y);
         ctx.rotate(flash.angle);
         ctx.globalAlpha = lifePct;
-        ctx.fillStyle = flash.color || "rgba(255, 226, 160, 0.92)";
+        ctx.fillStyle = flash.color || style.outerColor;
         ctx.beginPath();
         ctx.moveTo(-6, 0);
         ctx.lineTo(length * 0.72, -width * 0.5);
@@ -786,7 +805,7 @@
         ctx.lineTo(length * 0.72, width * 0.5);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "rgba(255, 248, 210, 0.9)";
+        ctx.fillStyle = style.innerColor;
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(length * 0.46, -width * 0.22);
@@ -1792,12 +1811,19 @@
 
     drawTracers(game) {
       const ctx = this.ctx;
+      const style = this.assetStyle("combat.tracer.line", {
+        alpha: 0.42,
+        maxWidth: 1.2,
+        mobileMinWidth: 1.2,
+        color: "rgba(255, 236, 172, 0.82)"
+      });
+      const mobileMinWidth = this.camera.width <= 760 ? (style.mobileMinWidth || 0) : 0;
       for (const tracer of game.effects.tracers || []) {
         const alpha = clamp(tracer.life / tracer.maxLife, 0, 1);
-        const width = Math.min(tracer.width || 1.2, 1.2);
+        const width = Math.max(mobileMinWidth, Math.min(tracer.width || style.maxWidth || 1.2, style.maxWidth || 1.2));
         ctx.save();
-        ctx.globalAlpha = alpha * 0.42;
-        ctx.strokeStyle = tracer.color;
+        ctx.globalAlpha = alpha * (tracer.alpha ?? style.alpha ?? 0.42);
+        ctx.strokeStyle = tracer.color || style.color;
         ctx.lineWidth = width;
         ctx.lineCap = "round";
         ctx.beginPath();
@@ -1812,16 +1838,24 @@
       const ctx = this.ctx;
       for (const explosion of game.effects.explosions) {
         const alpha = clamp(explosion.life / explosion.maxLife, 0, 1);
+        const style = this.assetStyle(explosion.smoke ? "combat.explosion.smoke" : "combat.explosion.core", {
+          coreColor: explosion.smoke ? "rgba(45, 41, 35, 1)" : "rgba(255, 246, 198, 1)",
+          coreAlpha: explosion.smoke ? 0.42 : 0.9,
+          midAlpha: explosion.smoke ? 0.28 : 0.78,
+          edgeAlpha: 0.28,
+          outerColor: explosion.smoke ? "rgba(42, 38, 31, 0)" : "rgba(0, 0, 0, 0)"
+        });
+        const effectColor = explosion.color || (explosion.smoke ? "rgba(220, 226, 230, 0.7)" : "rgba(255, 145, 58, 0.86)");
         const gradient = ctx.createRadialGradient(explosion.x, explosion.y, 0, explosion.x, explosion.y, explosion.radius);
         if (explosion.smoke) {
-          gradient.addColorStop(0, `rgba(45, 41, 35, ${0.42 * alpha})`);
-          gradient.addColorStop(0.5, explosion.color.replace(/[\d.]+\)$/u, `${0.28 * alpha})`));
-          gradient.addColorStop(1, "rgba(42, 38, 31, 0)");
+          gradient.addColorStop(0, this.assetColor(style.coreColor, style.coreAlpha * alpha));
+          gradient.addColorStop(0.5, this.assetColor(effectColor, style.midAlpha * alpha));
+          gradient.addColorStop(1, style.outerColor);
         } else {
-          gradient.addColorStop(0, `rgba(255, 246, 198, ${0.9 * alpha})`);
-          gradient.addColorStop(0.2, explosion.color.replace(/[\d.]+\)$/u, `${0.78 * alpha})`));
-          gradient.addColorStop(0.58, explosion.color.replace(/[\d.]+\)$/u, `${0.28 * alpha})`));
-          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+          gradient.addColorStop(0, this.assetColor(style.coreColor, style.coreAlpha * alpha));
+          gradient.addColorStop(0.2, this.assetColor(effectColor, style.midAlpha * alpha));
+          gradient.addColorStop(0.58, this.assetColor(effectColor, style.edgeAlpha * alpha));
+          gradient.addColorStop(1, style.outerColor);
         }
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -1832,13 +1866,17 @@
 
     drawBlastRings(game) {
       const ctx = this.ctx;
+      const style = this.assetStyle("combat.blast.ring", {
+        color: "rgba(255, 238, 178, 0.65)",
+        width: 5
+      });
       ctx.save();
       ctx.lineCap = "round";
       for (const ring of game.effects.blastRings || []) {
         const alpha = clamp(ring.life / ring.maxLife, 0, 1);
         ctx.globalAlpha = alpha;
-        ctx.strokeStyle = ring.color || "rgba(255, 238, 178, 0.65)";
-        ctx.lineWidth = (ring.width || 5) * alpha;
+        ctx.strokeStyle = ring.color || style.color;
+        ctx.lineWidth = (ring.width || style.width || 5) * alpha;
         ctx.beginPath();
         ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -1848,6 +1886,12 @@
 
     drawBlastSparks(game) {
       const ctx = this.ctx;
+      const style = this.assetStyle("combat.impact.spark", {
+        color: "rgba(255, 172, 92, 0.86)",
+        width: 2.2,
+        mobileMinWidth: 0
+      });
+      const mobileMinWidth = this.camera.width <= 760 ? (style.mobileMinWidth || 0) : 0;
       ctx.save();
       ctx.lineCap = "round";
       for (const spark of game.effects.blastSparks || []) {
@@ -1856,8 +1900,8 @@
         const tailX = spark.x - Math.cos(speedAngle) * spark.length;
         const tailY = spark.y - Math.sin(speedAngle) * spark.length;
         ctx.globalAlpha = alpha * (spark.alpha ?? 1);
-        ctx.strokeStyle = spark.color || "rgba(255, 172, 92, 0.86)";
-        ctx.lineWidth = (spark.width || 2.2) * alpha + 0.35;
+        ctx.strokeStyle = spark.color || style.color;
+        ctx.lineWidth = Math.max(mobileMinWidth, (spark.width || style.width || 2.2) * alpha + 0.35);
         ctx.beginPath();
         ctx.moveTo(tailX, tailY);
         ctx.lineTo(spark.x, spark.y);
@@ -1868,12 +1912,18 @@
 
     drawSmoke(game) {
       const ctx = this.ctx;
+      const style = this.assetStyle("combat.smoke.cloud", {
+        coreColor: "rgba(223, 231, 233, 1)",
+        bodyColor: "rgba(185, 196, 199, 1)",
+        coreAlpha: 0.36,
+        bodyAlpha: 0.24
+      });
       for (const cloud of game.effects.smokeClouds) {
         const alpha = clamp(cloud.life / cloud.maxLife, 0, 1);
         const gradient = ctx.createRadialGradient(cloud.x, cloud.y, cloud.radius * 0.1, cloud.x, cloud.y, cloud.radius);
-        gradient.addColorStop(0, `rgba(223, 231, 233, ${0.36 * alpha})`);
-        gradient.addColorStop(0.55, `rgba(185, 196, 199, ${0.24 * alpha})`);
-        gradient.addColorStop(1, "rgba(185, 196, 199, 0)");
+        gradient.addColorStop(0, this.assetColor(style.coreColor, style.coreAlpha * alpha));
+        gradient.addColorStop(0.55, this.assetColor(style.bodyColor, style.bodyAlpha * alpha));
+        gradient.addColorStop(1, this.assetColor(style.bodyColor, 0));
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2);

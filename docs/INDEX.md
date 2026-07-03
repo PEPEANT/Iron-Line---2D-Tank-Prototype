@@ -9,7 +9,9 @@ Iron Line 2D Tank Prototype의 현재 구조, 운영 설계, AI 설계, 코드 �
 - [테스트랩 설계](test-lab-design.md): 관리자 테스트 허브와 `index.html?testLab=...` 기반 실험장 확장 설계.
 - [인공지능/전투 구조](ai-and-combat-architecture.md): 전차 인공지능, 보병 인공지능, 병과/장비, 무기/전투 시스템의 현재 구조와 다음 확장 순서.
 - [인공지능 교리 2차안](ai-doctrine-v2.md): 분대 지휘요청, 지원가 자산 배정, 공병/대전차/드론 교리 확장을 위한 2차 인공지능 설계 기준.
+- [에셋팩 구조](asset-pack-structure.md): 외주/AI 생성 에셋을 안전하게 갈아끼우기 위한 manifest, registry, renderer fallback, 전투 피드백 슬롯 기준.
 - [배포 전 준비](production-prep.md): 로컬 실행, 문법 검사, 시작 화면/플레이 검증 기준.
+- [Iron Line core doctrine](iron-line-core-doctrine.md): 2026-07-03 현재 대화에서 도달한 핵심 판단. V1-V5 방향표, 모바일 첫 체감, AI 전장 템포, 에셋 기반, 로비 디자인, 공개 푸시를 본질 보존 관점에서 정리.
 - [Commander order QA interim report](commander-order-qa-interim-report-2026-05-22.md): 2026-05-22 local live-play evidence for role-special command flow, command state visibility, command locks, and remaining offline gate checks.
 - [Commander order QA completion report](commander-order-qa-completion-report-2026-05-22.md): 2026-05-22 role-level PASS decision for moving into the offline command stability gate.
 - [Offline command stability gate report](offline-command-stability-gate-report-2026-05-22.md): 2026-05-22 local/offline PASS decision for role command stability, stopped-state visibility, duplicate/cancel behavior, and basic vehicle wait/stuck diagnostics before online command synchronization.
