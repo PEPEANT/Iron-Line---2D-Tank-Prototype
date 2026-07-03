@@ -574,7 +574,7 @@
         });
       } else if (target.takeDamage) {
         if (target.vehicleType) target.takeDamage(game, damage);
-        else target.takeDamage(damage);
+        else target.takeDamage(damage, shooter);
       } else if (target.hp !== undefined) target.hp = Math.max(0, target.hp - damage);
       if (shooter === game.player) game.recordPlayerHitConfirm?.(target, damage, weapon.id || "rifle", { x: finalEndX, y: finalEndY, lethal: targetWasAlive && !targetScoreAlive(target) });
       recordKillIfDestroyed(game, shooter, target, targetWasAlive, weapon.id || "rifle");
@@ -911,7 +911,7 @@
 
   function applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon) {
     const targetTeam = target.team ?? null;
-    if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit : weapon.suppressionMiss, awarenessSignals.suppressionSourceForUnit?.(game, target, shooter, hit) || shooter);
+    if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit * 1.05 : weapon.suppressionMiss * 1.55, awarenessSignals.suppressionSourceForUnit?.(game, target, shooter, hit) || shooter);
 
     for (const unit of game.infantry || []) {
       if (!unit.alive || unit.inVehicle || unit === target || unit.team === shooter.team) continue;
@@ -923,8 +923,8 @@
       const nearImpact = endDistance < 72;
       if (!nearLine && !nearImpact) continue;
 
-      const linePressure = nearLine ? weapon.lineSuppression * (1 - lineDistance / 62) : 0;
-      const impactPressure = nearImpact ? weapon.impactSuppression * (1 - endDistance / 72) : 0;
+      const linePressure = nearLine ? weapon.lineSuppression * 1.35 * (1 - lineDistance / 62) : 0;
+      const impactPressure = nearImpact ? weapon.impactSuppression * 1.35 * (1 - endDistance / 72) : 0;
       unit.suppress(Math.max(linePressure, impactPressure), awarenessSignals.suppressionSourceForUnit?.(game, unit, shooter, false) || shooter);
     }
   }

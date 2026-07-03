@@ -60,6 +60,11 @@
       severity: "info",
       message: "Staging reached; assault approval requested."
     },
+    assaultApproved: {
+      kind: "assaultApproved",
+      severity: "info",
+      message: "Assault approved; moving in on"
+    },
     retreatNeeded: {
       kind: "retreatNeeded",
       severity: "major",
@@ -265,6 +270,16 @@
 
     const current = v2.assaultApproval;
     if (current?.status === "approved" && now <= current.approvedUntil) return current;
+    if (current?.status === "pending" && now <= current.expiresAt && this.v2BotCommanderShouldApprove(current, now)) {
+      const approval = this.approveV2Assault("bot-commander");
+      this.recordV2RadioReport({
+        ...REPORTS.assaultApproved,
+        reason: "assaultApproval",
+        approvalId: approval.id,
+        message: `${REPORTS.assaultApproved.message} ${approval.objectiveName}`.trim()
+      }, ["assaultApproval"]);
+      return approval;
+    }
     if (current?.status === "pending" && now > current.expiresAt) {
       current.status = "timed-out";
       current.blocking = false;
@@ -312,6 +327,20 @@
     if (!approval || approval.status !== "pending" || !approval.blocking) return false;
     if (performance.now() > approval.expiresAt) return false;
     return desiredMode === "advance" || desiredMode === "pre-assault";
+  };
+
+  proto.v2CommanderSlot = function v2CommanderSlot() {
+    const slotId = this.commanderSlotId || this.ownerSlotId || "";
+    if (!slotId) return null;
+    return (this.game?.onlineSession?.roleSlots || []).find((slot) => slot?.id === slotId) || null;
+  };
+
+  proto.v2BotCommanderShouldApprove = function v2BotCommanderShouldApprove(request, now = performance.now()) {
+    const slot = this.v2CommanderSlot();
+    if (slot?.playerId) return false;
+    if (slot && (slot.controllerType === "empty" || slot.aiControlled === false)) return false;
+    if (now - Number(request?.requestedAt || 0) < 1600) return false;
+    return Number(request?.confidence || 0) >= 0.3;
   };
 
   proto.approveV2Assault = function approveV2Assault(source = "player") {
@@ -425,14 +454,21 @@
       reason: event.reason,
       issues: event.failureReasons
     });
+    const chatWorthy = this.team === this.game.player?.team && (
+      event.kind === "assaultReady" ||
+      event.kind === "assaultApproved" ||
+      event.severity === "major"
+    );
+    const echoChat = chatWorthy && now - Number(this.game.__v2RadioChatAt || 0) >= 4000;
+    if (echoChat) this.game.__v2RadioChatAt = now;
     this.game.battlefieldEvents?.push?.({
       type: "squad_radio",
       severity: event.severity,
       team: this.team,
       title: `${this.callSign} ${event.kind}`,
-      detail: event.message,
+      detail: `${this.callSign}: ${event.message}`,
       source: "ai-v2",
-      chat: false
+      chat: echoChat
     });
     return event;
   };

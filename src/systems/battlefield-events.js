@@ -60,7 +60,8 @@
         "objective_captured",
         "player_down",
         "vehicle_destroyed",
-        "squad_leader_lost"
+        "squad_leader_lost",
+        "squad_radio"
       ].includes(event.type);
     }
 

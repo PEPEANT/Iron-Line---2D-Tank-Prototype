@@ -10,7 +10,7 @@
     sightRange: 620,
     coverThreatRange: 720,
     coverDuration: 2.7,
-    suppressedThreshold: 58,
+    suppressedThreshold: 30,
     tankHarassRange: 600,
     tankHarassMinGroup: 2,
     tankEvadeRange: 620,
@@ -62,8 +62,10 @@
     scoutVisionHalfAngle: 1.68,
     peripheralAwarenessRange: 150,
     rearAwarenessRange: 82,
-    reactionDelayMin: 0.18,
-    reactionDelayMax: 1.24,
+    reactionDelayMin: 0.32,
+    reactionDelayMax: 2.05,
+    firstContactShotPenalty: 0.28,
+    secondContactShotPenalty: 0.16,
     fireFacingTolerance: 0.42,
     actionLockMin: 0.72,
     actionLockMax: 1.42,
@@ -111,6 +113,8 @@
       this.awarenessTarget = null;
       this.awarenessTimer = 0;
       this.reactionDelay = 0;
+      this.fireTargetKey = "";
+      this.fireTargetShots = 0;
       this.rpgAimTargetKey = "";
       this.rpgAimTime = 0;
       this.rpgAimRequired = 0;
@@ -197,30 +201,6 @@
 
     isSupportWeapon(weapon = this.weapon()) {
       return weapon.id === "lmg" || weapon.id === "machinegun";
-    }
-
-    proneSuppressionThreshold(role = this.squadRole(), weapon = this.weapon(), mode = "contact") {
-      if (this.isSupportWeapon(weapon) || role === "support") return mode === "suppressed" ? 30 : 24;
-      if (role === "security") return mode === "suppressed" ? 40 : 34;
-      return mode === "suppressed" ? 56 : 48;
-    }
-
-    canEnterProne(options = {}) {
-      const weapon = options.weapon || this.weapon();
-      const role = options.role || this.squadRole();
-      if (options.force) return true;
-      if ((this.unit.proneCooldown || 0) > 0) return false;
-      if (weapon.id === "rpg") return false;
-
-      const threshold = this.proneSuppressionThreshold(role, weapon, options.mode);
-      if ((this.unit.suppression || 0) < threshold) return false;
-
-      if (options.distance !== undefined && weapon.desiredRange) {
-        const minScale = role === "support" || this.isSupportWeapon(weapon) ? 0.58 : role === "security" ? 0.72 : 0.92;
-        if (options.distance < weapon.desiredRange * minScale) return false;
-      }
-
-      return true;
     }
 
     enterProne(options = {}) {
@@ -1028,6 +1008,8 @@
         this.awarenessTarget = null;
         this.awarenessTimer = 0;
         this.reactionDelay = 0;
+        this.fireTargetKey = "";
+        this.fireTargetShots = 0;
         return;
       }
 
@@ -1035,6 +1017,8 @@
         this.awarenessTarget = target;
         this.awarenessTimer = 0;
         this.reactionDelay = this.reactionDelayFor(target);
+        this.fireTargetKey = "";
+        this.fireTargetShots = 0;
         return;
       }
 
@@ -1045,16 +1029,20 @@
       const distance = distXY(this.unit.x, this.unit.y, target.x, target.y);
       const angle = angleTo(this.unit.x, this.unit.y, target.x, target.y);
       const diff = Math.abs(normalizeAngle(angle - this.unit.angle));
+      const weapon = this.weapon();
+      const rangeRatio = clamp(distance / Math.max(1, weapon.range || INFANTRY_CONFIG.sightRange), 0, 1.35);
       const halfAngle = this.unit.classId === "scout"
         ? INFANTRY_CONFIG.scoutVisionHalfAngle
         : INFANTRY_CONFIG.visionHalfAngle;
-      let delay = this.unit.classId === "scout" ? 0.2 : 0.28;
+      let delay = this.unit.classId === "scout" ? 0.28 : 0.46;
 
       if (diff > halfAngle) delay += diff > Math.PI * 0.72 ? 0.72 : 0.44;
       else if (diff > halfAngle * 0.72) delay += 0.16;
+      delay += clamp((rangeRatio - 0.45) * 0.72, 0, 0.64);
+      delay += 0.16 + (this.seed % 9) * 0.055;
       if (distance <= INFANTRY_CONFIG.rearAwarenessRange + (target.radius || 0)) delay = diff <= halfAngle ? delay * 0.72 : delay + 0.24;
       if (target.isDrone) delay += target.droneRole === "attack" ? 0.34 : 0.42;
-      if (this.unit.suppression > 45) delay *= 0.72;
+      if (this.unit.suppression > 45) delay *= 0.86;
       delay *= IronLine.InfantryCombatBalance.difficultyProfile(this.game).reactionScale;
       return clamp(delay, INFANTRY_CONFIG.reactionDelayMin, INFANTRY_CONFIG.reactionDelayMax);
     }
@@ -1745,6 +1733,7 @@
 
     tryFire(target) {
       if (this.fireCooldown > 0 || !target) return false;
+      if ((this.unit.hitReactTimer || 0) > 0) return false;
       if (!this.isReadyToFireAt(target) || !this.isFacingTarget(target)) return false;
       const weapon = this.weapon(), range = IronLine.combat?.smallArmsRange?.(weapon, this.unit, weapon.range) || weapon.range;
       if (distXY(this.unit.x, this.unit.y, target.x, target.y) > range) return false;
@@ -1754,16 +1743,18 @@
       }
 
       const suppressionPenalty = clamp(this.unit.suppression / 165, 0, 0.36);
+      const firstContactPenalty = this.contactShotPenalty(target);
       const reconSnipeBonus = this.state === "recon-snipe" || this.state === "recon-watch" ? 0.12 : 0;
       const difficulty = IronLine.InfantryCombatBalance.difficultyProfile(this.game), antiDroneBonus = IronLine.InfantryCombatBalance.antiDroneAccuracyBonus({ unit: this.unit, target, weapon });
       const fired = IronLine.combat.fireRifle(this.game, this.unit, target, {
         weapon,
         range: weapon.range,
         damage: weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin),
-        accuracyBonus: weapon.accuracyBonus + (this.state === "secure" ? 0.06 : 0) + reconSnipeBonus + difficulty.accuracyBonus + antiDroneBonus - suppressionPenalty
+        accuracyBonus: weapon.accuracyBonus + (this.state === "secure" ? 0.06 : 0) + reconSnipeBonus + difficulty.accuracyBonus + antiDroneBonus - suppressionPenalty - firstContactPenalty
       });
       if (fired) {
-        this.fireCooldown = Math.max(0.08, weapon.cooldown * difficulty.cooldownScale + difficulty.cooldownAdd + suppressionPenalty * 0.7 + Math.random() * weapon.cooldown * 0.45);
+        this.fireTargetShots = Math.min(8, (this.fireTargetShots || 0) + 1);
+        this.fireCooldown = Math.max(0.08, weapon.cooldown * difficulty.cooldownScale + difficulty.cooldownAdd + suppressionPenalty * 0.7 + firstContactPenalty * 0.45 + Math.random() * weapon.cooldown * 0.45);
       }
       return fired;
     }
@@ -1787,6 +1778,7 @@
 
     tryFireTank(tank) {
       if (this.fireCooldown > 0 || !tank) return false;
+      if ((this.unit.hitReactTimer || 0) > 0) return false;
       const weapon = this.weapon();
       const range = IronLine.combat?.smallArmsRange?.(weapon, this.unit, weapon.range) || weapon.range;
       const suppressionPenalty = clamp(this.unit.suppression / 180, 0, 0.32);
@@ -2350,7 +2342,8 @@
       this.unit.angle = this.moveHeading;
       const moraleSpeed = clamp(this.unit.morale + 0.22, 0.58, 1);
       const weaponSpeed = this.weapon().moveSpeedMultiplier || 1;
-      const targetSpeed = this.unit.maxSpeed * clamp(distance / 180, 0.45, 1) * moraleSpeed * weaponSpeed;
+      const hitSlow = (this.unit.hitSlowTimer || 0) > 0 ? 0.52 : 1;
+      const targetSpeed = this.unit.maxSpeed * clamp(distance / 180, 0.45, 1) * moraleSpeed * weaponSpeed * hitSlow;
       this.unit.speed = approach(this.unit.speed, targetSpeed, 320 * dt);
       tryMoveCircle(
         this.game,

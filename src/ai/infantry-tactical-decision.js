@@ -55,13 +55,13 @@
           1
         ),
         prone: clamp(
-          suppression * 0.42 +
-          tankMg * 0.24 +
-          (softContact ? 0.14 : 0) +
-          (role === "support" ? 0.1 : 0) +
-          (defendIntent ? 0.1 : 0) -
+          suppression * 0.68 +
+          tankMg * 0.28 +
+          (softContact ? 0.18 : 0) +
+          (role === "support" ? 0.12 : 0) +
+          (defendIntent ? 0.12 : 0) -
           tankCannon * 0.34 -
-          (attackIntent && nearObjective ? 0.16 : 0),
+          (attackIntent && nearObjective ? 0.12 : 0),
           0,
           1
         ),
@@ -93,7 +93,7 @@
         reason = tankCannon >= 0.34 ? "tank_he_spread" : "cluster_spread";
         target = this.tacticalSpreadTarget(tankThreat || contact || order?.point);
         score = scores.spread;
-      } else if (scores.prone >= 0.5 && scores.prone >= scores.advance && scores.prone >= scores.cover - 0.04) {
+      } else if (scores.prone >= 0.34 && scores.prone >= scores.advance - 0.06 && scores.prone >= scores.cover - 0.04) {
         decision = "prone";
         reason = "suppression_prone";
         score = scores.prone;

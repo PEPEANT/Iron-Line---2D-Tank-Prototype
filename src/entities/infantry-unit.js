@@ -36,6 +36,8 @@
       this.isProne = false;
       this.proneCooldown = 0;
       this.proneHoldTimer = 0;
+      this.hitReactTimer = 0;
+      this.hitSlowTimer = 0;
       this.deathTime = 0;
       this.deathPoseAngle = 0;
       this.alive = true;
@@ -60,6 +62,8 @@
       this.transportCooldown = Math.max(0, (this.transportCooldown || 0) - dt);
       this.proneCooldown = Math.max(0, (this.proneCooldown || 0) - dt);
       this.proneHoldTimer = Math.max(0, (this.proneHoldTimer || 0) - dt);
+      this.hitReactTimer = Math.max(0, (this.hitReactTimer || 0) - dt);
+      this.hitSlowTimer = Math.max(0, (this.hitSlowTimer || 0) - dt);
       if (this.inVehicle) {
         if (!this.inVehicle.alive) {
           this.inVehicle = null;
@@ -81,12 +85,12 @@
     }
 
     updateSuppression(dt) {
-      const recoveryRate = this.suppressed ? 11 : 18;
+      const recoveryRate = this.suppressed ? 7 : 10;
       this.suppression = Math.max(0, this.suppression - recoveryRate * dt);
       this.suppressionTimer = Math.max(0, this.suppressionTimer - dt);
 
-      if (this.suppression > 58) this.suppressed = true;
-      else if (this.suppression < 34) this.suppressed = false;
+      if (this.suppression > 30) this.suppressed = true;
+      else if (this.suppression < 14) this.suppressed = false;
 
       if (this.suppressionTimer <= 0 && this.suppression < 8) this.lastThreat = null;
       this.morale = Math.max(0.35, Math.min(1, 1 - this.suppression / 125));
@@ -97,13 +101,13 @@
       this.suppression = Math.min(100, this.suppression + amount);
       this.suppressionTimer = Math.max(this.suppressionTimer, 1.4 + this.suppression / 72);
       if (source) this.lastThreat = source;
-      if (this.suppression > 58) this.suppressed = true;
+      if (this.suppression > 30) this.suppressed = true;
       this.morale = Math.max(0.35, Math.min(1, 1 - this.suppression / 125));
     }
 
-    takeDamage(amount) {
+    takeDamage(amount, source = null) {
       if (!this.alive) return;
-      this.suppress(26 + amount * 0.42, null);
+      this.suppress(26 + amount * 0.42, source);
       this.hp -= amount;
       if (this.hp <= 0) {
         this.hp = 0;
@@ -111,6 +115,10 @@
         this.speed = 0;
         this.deathTime = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
         this.deathPoseAngle = this.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.42;
+      } else {
+        const impact = Math.min(0.16, Math.max(0.08, amount / Math.max(1, this.maxHp) * 0.42));
+        this.hitReactTimer = Math.max(this.hitReactTimer || 0, impact);
+        this.hitSlowTimer = Math.max(this.hitSlowTimer || 0, 0.32 + Math.min(0.2, amount / 80));
       }
     }
   }
