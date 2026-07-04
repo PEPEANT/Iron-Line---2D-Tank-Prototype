@@ -365,6 +365,122 @@
     `).join("");
   }
 
+  function colorSwatch(value) {
+    return `<span style="background:${escapeHtml(value || "rgba(255,255,255,0.12)")};"></span>`;
+  }
+
+  function renderFactionCatalog() {
+    const factions = IronLine.playerFactions || IronLine.playerSkins || [];
+    if (!factions.length) return "";
+    return `
+      <div class="test-lab-catalog-group">
+        <h4>Factions <span>${factions.length}</span></h4>
+        <div class="test-lab-catalog-grid is-factions">
+          ${factions.map((faction) => `
+            <article class="test-lab-catalog-card">
+              <div class="test-lab-catalog-head">
+                ${faction.logo ? `<img src="${escapeHtml(faction.logo)}" alt="">` : "<i></i>"}
+                <div>
+                  <strong>${escapeHtml(faction.id)}</strong>
+                  <small>${escapeHtml(faction.category || faction.role || "runtime faction")}</small>
+                </div>
+              </div>
+              <div class="test-lab-catalog-swatches">
+                ${colorSwatch(faction.cloth)}
+                ${colorSwatch(faction.vest)}
+                ${colorSwatch(faction.helmet)}
+                ${colorSwatch(faction.accent)}
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWeaponCatalog() {
+    const weapons = Object.values(IronLine.constants?.INFANTRY_WEAPONS || {})
+      .filter((weapon) => weapon?.id)
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    if (!weapons.length) return "";
+    return `
+      <div class="test-lab-catalog-group">
+        <h4>Weapons <span>${weapons.length}</span></h4>
+        <div class="test-lab-catalog-grid is-weapons">
+          ${weapons.map((weapon) => `
+            <article class="test-lab-catalog-card">
+              <div class="test-lab-catalog-thumb is-weapon">
+                <img src="assets/weapons/${escapeHtml(weapon.id)}.png" alt="">
+              </div>
+              <strong>${escapeHtml(weapon.id)}</strong>
+              <small>${escapeHtml(weapon.type || "tool")} / range ${escapeHtml(Math.round(weapon.range || 0))}</small>
+            </article>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTankSlotCatalog() {
+    const slots = Object.entries(ASSETS);
+    return `
+      <div class="test-lab-catalog-group">
+        <h4>Tank Pack Slots <span>${slots.length}</span></h4>
+        <div class="test-lab-catalog-grid is-tank-slots">
+          ${slots.map(([id, asset]) => `
+            <article class="test-lab-catalog-card">
+              <div class="test-lab-catalog-thumb">
+                <img src="${escapeHtml(asset.src)}" alt="">
+              </div>
+              <strong>${escapeHtml(id)}</strong>
+              <small>${escapeHtml(asset.metric || "bbox pending")}</small>
+            </article>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSceneryCatalog() {
+    const items = IronLine.sceneryCatalog?.obstacleKinds || [];
+    if (!items.length) return "";
+    return `
+      <div class="test-lab-catalog-group">
+        <h4>Objects <span>${items.length}</span></h4>
+        <div class="test-lab-catalog-grid is-objects">
+          ${items.map((item) => {
+            const size = item.defaultSize || { w: 160, h: 60 };
+            const aspect = Math.max(0.28, Math.min(3.8, (size.w || 160) / Math.max(1, size.h || 60)));
+            return `
+              <article class="test-lab-catalog-card">
+                <div class="test-lab-catalog-object">
+                  <span style="aspect-ratio:${escapeHtml(aspect)} / 1;"></span>
+                </div>
+                <strong>${escapeHtml(item.kind)}</strong>
+                <small>${escapeHtml(item.group || "object")} / ${escapeHtml(size.w)}x${escapeHtml(size.h)}</small>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCatalogSection() {
+    return `
+      <div class="test-lab-section test-lab-asset-catalog-section">
+        <div class="test-lab-section-title">
+          <strong>Asset Catalog v1</strong>
+          <span>Runtime view only. No gameplay values are duplicated here.</span>
+        </div>
+        ${renderFactionCatalog()}
+        ${renderWeaponCatalog()}
+        ${renderTankSlotCatalog()}
+        ${renderSceneryCatalog()}
+      </div>
+    `;
+  }
+
   function renderAssetSection() {
     return `
       <div class="test-lab-section test-lab-ai-tank-section">
@@ -394,6 +510,7 @@
           ${renderMetrics()}
         </div>
       </div>
+      ${renderCatalogSection()}
     `;
   }
 

@@ -766,6 +766,138 @@
   border-radius: 6px;
 }
 
+.test-lab-asset-catalog-section {
+  gap: 14px;
+}
+
+.test-lab-catalog-group {
+  display: grid;
+  gap: 8px;
+}
+
+.test-lab-catalog-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: rgba(244, 249, 244, 0.86);
+  font-size: 0.78rem;
+  letter-spacing: 0;
+}
+
+.test-lab-catalog-group h4 span {
+  color: rgba(224, 235, 226, 0.56);
+  font-size: 0.72rem;
+}
+
+.test-lab-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.test-lab-catalog-grid.is-weapons,
+.test-lab-catalog-grid.is-tank-slots,
+.test-lab-catalog-grid.is-objects {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.test-lab-catalog-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  min-height: 92px;
+  padding: 8px;
+  background: rgba(2, 7, 8, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.test-lab-catalog-card strong,
+.test-lab-catalog-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-lab-catalog-card strong {
+  color: #ffffff;
+  font-size: 0.74rem;
+}
+
+.test-lab-catalog-card small {
+  color: rgba(224, 235, 226, 0.58);
+  font-size: 0.66rem;
+}
+
+.test-lab-catalog-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.test-lab-catalog-head img,
+.test-lab-catalog-head i {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+}
+
+.test-lab-catalog-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.test-lab-catalog-swatches span {
+  min-height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+}
+
+.test-lab-catalog-thumb,
+.test-lab-catalog-object {
+  display: grid;
+  place-items: center;
+  min-height: 46px;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04)),
+    repeating-linear-gradient(0deg, transparent 0 11px, rgba(255, 255, 255, 0.045) 12px),
+    repeating-linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.045) 12px);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 7px;
+}
+
+.test-lab-catalog-thumb img {
+  width: 82%;
+  height: 42px;
+  object-fit: contain;
+}
+
+.test-lab-catalog-thumb.is-weapon img {
+  width: 70%;
+  height: 34px;
+}
+
+.test-lab-catalog-object span {
+  width: 72%;
+  max-width: 70px;
+  min-height: 14px;
+  max-height: 38px;
+  background: rgba(135, 157, 133, 0.72);
+  border: 1px solid rgba(224, 238, 219, 0.16);
+  border-radius: 4px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+}
+
 .test-lab-dialog {
   position: fixed;
   inset: 0;
