@@ -71,7 +71,31 @@
     }
 
     createOnlineRoom() {
-      return false;
+      const game = this.game();
+      if (!game || !this.registry) return false;
+      const match = game.matchConfig || game.defaultMatchConfig?.() || {};
+      const profile = game.localProfile || {};
+      const room = this.registry.createRoom({
+        name: "온라인 방",
+        mode: match.mode || "annihilation",
+        blueFactionId: match.blueFactionId || profile.factionId || profile.skinId || "korea",
+        redFactionId: match.redFactionId || "russia",
+        difficulty: match.difficulty || "normal",
+        aiDensityPreset: match.aiDensityPreset || "custom",
+        blueAiTanks: match.blueAiTanks,
+        blueInfantry: match.blueInfantry,
+        redTanks: match.redTanks,
+        redInfantry: match.redInfantry,
+        capacity: 8,
+        spectatorCapacity: 0
+      });
+      if (!room) return false;
+      return this.openLobby({
+        host: true,
+        roomId: room.id,
+        room,
+        participantType: "player"
+      });
     }
 
     joinOnlineRoom(room, options = {}) {

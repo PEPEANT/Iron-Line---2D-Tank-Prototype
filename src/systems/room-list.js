@@ -19,19 +19,18 @@
       const screen = document.createElement("div");
       screen.id = "onlineRoomListScreen";
       screen.className = "room-list-screen hidden";
-      screen.setAttribute("aria-label", "온라인 방 목록");
+      screen.setAttribute("aria-label", "방 목록");
 
       const card = document.createElement("section");
       card.className = "room-list-card";
       card.innerHTML = `
         <header class="room-list-head">
-          <span>온라인</span>
           <h2>방 목록</h2>
-          <p>관리자가 생성한 테스트 방에 참가하거나 진행 중인 방을 관전합니다.</p>
         </header>
         <div class="room-list-toolbar">
+          <button type="button" id="roomCreateButton" class="room-list-create">방 만들기</button>
           <button type="button" id="roomRefreshButton">새로고침</button>
-          <button type="button" id="roomBackButton">처음으로</button>
+          <button type="button" id="roomBackButton" class="room-list-muted">메인</button>
         </div>
         <div class="room-list-items" id="roomListItems"></div>
       `;
@@ -40,9 +39,11 @@
       this.nodes = {
         screen,
         items: card.querySelector("#roomListItems"),
+        create: card.querySelector("#roomCreateButton"),
         refresh: card.querySelector("#roomRefreshButton"),
         back: card.querySelector("#roomBackButton")
       };
+      this.nodes.create.addEventListener("click", () => this.flow.createOnlineRoom());
       this.nodes.refresh.addEventListener("click", () => {
         this.lastSignature = "";
         IronLine.roomRegistry?.refreshRemoteRooms?.();
@@ -63,7 +64,15 @@
     renderRooms() {
       if (!this.nodes.items) return;
       const rooms = IronLine.roomRegistry?.listRooms?.() || [];
-      const signature = JSON.stringify(rooms);
+      const signature = JSON.stringify(rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        phase: room.phase,
+        locked: room.locked,
+        players: (room.players || []).filter((player) => (player.participantType || "player") === "player").length,
+        capacity: room.capacity,
+        updatedAt: room.updatedAt
+      })));
       if (this.lastSignature === signature) return;
       this.lastSignature = signature;
       this.nodes.items.textContent = "";
@@ -72,70 +81,50 @@
         const empty = document.createElement("div");
         empty.className = "room-list-empty";
         empty.innerHTML = `
-          <strong>생성된 방 없음</strong>
-          <span>관리자 운영센터에서 방을 만든 뒤 다시 확인하세요.</span>
+          <strong>방이 없습니다</strong>
+          <span>방 만들기로 새 전장을 열 수 있습니다.</span>
         `;
         this.nodes.items.append(empty);
         return;
       }
 
       for (const room of rooms) {
+        const players = (room.players || []).filter((player) => (player.participantType || "player") === "player");
+        const playerCount = players.length;
+        const capacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room.capacity ?? 8;
+        const full = playerCount >= capacity;
+        const canJoin = room.phase !== "ended" && room.phase !== "playing" && room.phase !== "loading" && !room.locked && !full;
+        const status = this.roomStatusLabel(room, full);
+
         const wrap = document.createElement("div");
         wrap.className = "room-list-item-wrap";
         const button = document.createElement("button");
         button.type = "button";
         button.className = "room-list-item";
-        button.disabled = room.phase === "ended";
-        const blueFaction = this.factionLabel(room.blueFactionId);
-        const redFaction = this.factionLabel(room.redFactionId);
-        const players = (room.players || []).filter((player) => player.participantType !== "spectator");
-        const playerCount = players.length;
-        const spectatorCount = (room.spectators || []).length;
-        const capacity = IronLine.roomRegistry?.effectiveRoomCapacity?.(room) ?? room.capacity ?? 8;
-        const spectatorCapacity = IronLine.normalizeSpectatorCapacity?.(room.spectatorCapacity, 12) ?? 12;
-        const spectatorFull = spectatorCount >= spectatorCapacity;
-        const spectatorJoin = room.phase === "playing" || room.locked || playerCount >= capacity;
-        const joinLabel = spectatorJoin ? (spectatorFull ? "관전 만석" : "관전 입장") : "참가";
         button.dataset.phase = room.phase || "waiting";
-        button.classList.toggle("is-spectator-join", spectatorJoin);
-        button.disabled = room.phase === "ended" || (spectatorJoin && spectatorFull);
+        button.disabled = !canJoin;
         button.innerHTML = `
-          <strong>${this.escape(room.name)}</strong>
-          <span>${this.modeLabel(room.mode)} · ${this.phaseLabel(room.phase)} · ${blueFaction} vs ${redFaction} · 슬롯 ${playerCount}/${capacity} · 관전 ${spectatorCount}/${spectatorCapacity}</span>
-          <em>${this.escape(room.id)} · ${joinLabel}</em>
+          <span class="room-list-title">
+            <strong>${this.escape(room.name || "온라인 방")}</strong>
+            <small>${status} · ${playerCount}/${capacity}명</small>
+          </span>
+          <span class="room-list-action">${canJoin ? "입장" : "마감"}</span>
         `;
-        button.addEventListener("click", () => this.flow.joinOnlineRoom(room));
+        button.addEventListener("click", () => {
+          if (canJoin) this.flow.joinOnlineRoom(room, { participantType: "player" });
+        });
         wrap.append(button);
-        if (room.phase !== "ended") {
-          const spectator = document.createElement("button");
-          spectator.type = "button";
-          spectator.className = "room-list-spectator";
-          spectator.textContent = spectatorFull ? "관전 만석" : "관전자 입장";
-          spectator.disabled = spectatorFull;
-          spectator.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            this.flow.joinOnlineRoom(room, { participantType: "spectator" });
-          });
-          wrap.append(spectator);
-        }
         this.nodes.items.append(wrap);
       }
     }
 
-    modeLabel(mode) {
-      return mode === "conquest" ? "점령전" : "섬멸전";
-    }
-
-    phaseLabel(phase) {
-      if (phase === "playing") return "진행 중";
-      if (phase === "loading") return "로딩";
-      if (phase === "ended") return "종료";
-      return "대기";
-    }
-
-    factionLabel(id) {
-      return IronLine.playerFactionById?.(id)?.name || IronLine.playerSkinById?.(id)?.name || "세력 미정";
+    roomStatusLabel(room, full = false) {
+      if (room?.phase === "ended") return "종료";
+      if (room?.phase === "playing") return "진행 중";
+      if (room?.phase === "loading") return "로딩 중";
+      if (room?.locked) return "잠김";
+      if (full) return "가득 참";
+      return "대기 중";
     }
 
     escape(value) {
