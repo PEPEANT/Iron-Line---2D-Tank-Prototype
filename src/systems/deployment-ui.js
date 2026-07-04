@@ -102,6 +102,30 @@
         const value = game.matchConfig[key];
         if (value !== undefined) control.value = value;
       });
+      this.updateCollapsedSummaries(game);
+    }
+
+    updateCollapsedSummaries(game) {
+      const modeSummary = document.querySelector('[data-deployment-summary="mode"]');
+      const classSummary = document.querySelector('[data-deployment-summary="class"]');
+      const settingsSummary = document.querySelector('[data-deployment-summary="settings"]');
+
+      if (modeSummary) {
+        modeSummary.textContent = game.matchConfig?.mode === "conquest" ? "점령전" : "섬멸전";
+      }
+      if (classSummary) {
+        const classId = game.player?.classId || "infantry";
+        classSummary.textContent = INFANTRY_CLASSES?.[classId]?.name || "보병";
+      }
+      if (settingsSummary) {
+        const blueName = this.factionName(game.matchConfig?.blueFactionId || "korea");
+        const redName = this.factionName(game.matchConfig?.redFactionId || "russia");
+        settingsSummary.textContent = `${blueName} vs ${redName}`;
+      }
+    }
+
+    factionName(id) {
+      return IronLine.playerFactionById?.(id)?.name || IronLine.playerSkinById?.(id)?.name || id || "세력";
     }
 
     ensureFactionSettingOptions() {

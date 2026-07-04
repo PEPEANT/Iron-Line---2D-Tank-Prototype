@@ -243,8 +243,11 @@
             <h1>전투 준비</h1>
           </div>
           <button type="button" class="deployment-map-toggle" id="deploymentMapToggle">작전 지도 보기</button>
-          <div class="deployment-mode-section">
-            <span class="deployment-section-label">모드</span>
+          <details class="deployment-collapse deployment-mode-section">
+            <summary class="deployment-collapse-summary">
+              <span class="deployment-section-label">모드</span>
+              <span class="deployment-collapse-value" data-deployment-summary="mode">섬멸전</span>
+            </summary>
             <div class="deployment-mode-row">
               <button type="button" class="deployment-mode active" data-mode-id="annihilation">
                 <strong>섬멸전</strong>
@@ -253,9 +256,12 @@
                 <strong>점령전</strong>
               </button>
             </div>
-          </div>
-          <div class="deployment-pick-section">
-            <span class="deployment-section-label">병과</span>
+          </details>
+          <details class="deployment-collapse deployment-pick-section">
+            <summary class="deployment-collapse-summary">
+              <span class="deployment-section-label">병과</span>
+              <span class="deployment-collapse-value" data-deployment-summary="class">보병</span>
+            </summary>
             <div class="deployment-class-list" id="deploymentClassList">
               <button type="button" class="deployment-class" data-class-id="infantry">
                 <strong>보병</strong>
@@ -267,9 +273,12 @@
                 <strong>정찰</strong>
               </button>
             </div>
-          </div>
-          <div class="deployment-pick-section">
-            <span class="deployment-section-label">전장 설정</span>
+          </details>
+          <details class="deployment-collapse deployment-pick-section">
+            <summary class="deployment-collapse-summary">
+              <span class="deployment-section-label">전장 설정</span>
+              <span class="deployment-collapse-value" data-deployment-summary="settings">대한민국군 vs 러시아군</span>
+            </summary>
             <div class="deployment-settings" id="deploymentSettings">
               <label class="deployment-setting">
                 <span>아군 세력</span>
@@ -304,7 +313,7 @@
                 <input type="number" data-setting="redInfantry" min="4" max="34" step="1" value="14">
               </label>
             </div>
-          </div>
+          </details>
           <button type="button" class="deployment-start" id="deploymentStart">출격 시작</button>
         </section>
       </div>
