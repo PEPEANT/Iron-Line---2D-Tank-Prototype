@@ -40,7 +40,8 @@
     grenadeCooldownMin: 8.8,
     grenadeCooldownMax: 13.4,
     grenadeAimMin: 0.42,
-    grenadeAimMax: 0.95,
+    grenadeAimMax: 0.95, grenadeAimCacheGrace: 0.78,
+    grenadeReportAimGrace: 0.55,
     droneDeployCooldownMin: 10,
     droneDeployCooldownMax: 16,
     reconDroneObserveRange: 1220,
@@ -108,7 +109,7 @@
       this.repairDecisionTimer = Math.random() * 0.25;
       this.cachedRepairTarget = null;
       this.grenadeDecisionTimer = Math.random() * 0.22;
-      this.cachedGrenadeTarget = null;
+      this.cachedGrenadeTarget = null; this.grenadeTargetGraceTimer = 0;
       this.target = null;
       this.awarenessTarget = null;
       this.awarenessTimer = 0;
@@ -328,6 +329,8 @@
       return this.unit.classId === "scout" ? INFANTRY_CONFIG.scoutSightRange : INFANTRY_CONFIG.sightRange;
     }
 
+    engagementHoldRange(weapon = this.weapon()) { const range = weapon.range || 560; return Math.min(range * 0.9, Math.max(weapon.desiredRange || 0, range * 0.72)); }
+
     update(dt) {
       const beforeX = this.unit.x;
       const beforeY = this.unit.y;
@@ -353,9 +356,8 @@
       this.reportTimer = Math.max(0, this.reportTimer - dt);
       this.repairDecisionTimer = Math.max(0, this.repairDecisionTimer - dt);
       this.grenadeDecisionTimer = Math.max(0, this.grenadeDecisionTimer - dt);
-      this.rpgHoldReason = "";
-      this.repairDecision = null;
-      this.tacticalDecision = null;
+      this.grenadeTargetGraceTimer = Math.max(0, (this.grenadeTargetGraceTimer || 0) - dt);
+      this.rpgHoldReason = ""; this.repairDecision = null; this.tacticalDecision = null;
 
       const order = this.resolveOrder();
       this.order = order;
@@ -394,6 +396,8 @@
         reportedVehicleThreat,
         reportedContact
       }) || null, order, contact, tankThreat, { pressureThreat });
+      if (this.continueGrenadeAim?.(dt, contact, tankThreat)) return;
+      if (this.executeFireMoveAdvance?.(dt, order, contact, tankThreat, reportedContact, beforeX, beforeY)) return;
 
       if (this.executeTacticalSpread?.(dt, this.tacticalDecision, tankThreat || pressureThreat, beforeX, beforeY)) return;
 
@@ -493,7 +497,7 @@
           return;
         }
       } else if (this.grenadePreparing) {
-        this.grenadePreparing = false;
+        this.grenadeTargetGraceTimer = Math.max(this.grenadeTargetGraceTimer || 0, 0.24);
       }
 
       if (this.handleTankThreat(dt, order, contact, tankThreat, beforeX, beforeY)) return;
@@ -522,12 +526,7 @@
         }
 
         if (outOfRange) {
-          const approachTarget = {
-            x: contact.x,
-            y: contact.y,
-            stopDistance: weapon.desiredRange,
-            final: false
-          };
+          const approachTarget = { x: contact.x, y: contact.y, stopDistance: this.engagementHoldRange(weapon), final: false };
           this.moveTo(dt, approachTarget);
           this.recordMovement(dt, beforeX, beforeY, approachTarget);
           this.updateDebug(approachTarget);
@@ -545,7 +544,7 @@
       }
 
       if (reportedContact) {
-        const reportMoveTarget = this.reportInvestigateTarget(reportedContact, this.weapon().desiredRange);
+        const reportMoveTarget = this.reportInvestigateTarget(reportedContact, this.engagementHoldRange(this.weapon()));
         this.state = "report-move";
         this.target = reportedContact.target;
         this.faceContact(reportedContact, dt);

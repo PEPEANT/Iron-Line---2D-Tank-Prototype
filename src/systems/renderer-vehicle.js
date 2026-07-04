@@ -168,6 +168,38 @@
       this.drawTankLabel(tank);
     },
 
+    vehicleSpriteSlot(kind, team) {
+      const registry = IronLine.assetRegistry;
+      if (!registry?.imageReady) return null;
+      const teamKey = team === TEAM.BLUE ? "blue" : "red";
+      for (const id of [`vehicle.${kind}.${teamKey}`, `vehicle.${kind}`]) {
+        if (registry.imageReady(id)) {
+          return { image: registry.image(id), style: registry.style(id, {}) };
+        }
+      }
+      return null;
+    },
+
+    drawVehicleSprite(sprite, defaults = {}) {
+      const ctx = this.ctx;
+      const image = sprite.image;
+      const style = sprite.style || {};
+      const crop = Array.isArray(style.crop) && style.crop.length === 4 ? style.crop : null;
+      const width = Number(style.width) || defaults.width || image.naturalWidth;
+      const height = Number(style.height) || defaults.height || image.naturalHeight;
+      const rotate = ((Number(style.rotate) || 0) * Math.PI) / 180;
+      const offsetX = Number(style.offsetX) || 0;
+      const offsetY = Number(style.offsetY) || 0;
+      ctx.save();
+      if (rotate) ctx.rotate(rotate);
+      if (crop) {
+        ctx.drawImage(image, crop[0], crop[1], crop[2], crop[3], -width / 2 + offsetX, -height / 2 + offsetY, width, height);
+      } else {
+        ctx.drawImage(image, -width / 2 + offsetX, -height / 2 + offsetY, width, height);
+      }
+      ctx.restore();
+    },
+
     tankRenderColors(game, tank) {
       return this.vehicleRenderColors(game, tank, {
         hullColor: tank.team === TEAM.BLUE ? "#566b60" : "#69584c",
@@ -222,6 +254,16 @@
         ctx.fill();
         return;
       }
+      const sprite = this.vehicleSpriteSlot("tank.wreck", tank.team);
+      if (sprite) {
+        ctx.globalAlpha = 0.86;
+        this.drawVehicleSprite(sprite, { width: 80, height: 54 });
+        ctx.fillStyle = "rgba(255, 174, 96, 0.18)";
+        ctx.beginPath();
+        ctx.arc(2, -2, 15 + Math.sin((tank.wreckTimer || 0) * 2.8) * 2, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
       ctx.globalAlpha = 0.82;
       ctx.fillStyle = "#151615";
       roundRect(ctx, -36, -25, 72, 50, 6);
@@ -254,6 +296,13 @@
       ctx.beginPath();
       ctx.ellipse(2, 7, 39, 23, 0, 0, Math.PI * 2);
       ctx.fill();
+
+      const sprite = this.vehicleSpriteSlot("tank.hull", tank.team);
+      if (sprite) {
+        this.drawVehicleSprite(sprite, { width: 80, height: 54 });
+        if (tank.destructionPending) this.drawTankDestructionCharge(game);
+        return;
+      }
 
       this.drawTankTracks(treadPhase, colors.darkColor);
       this.drawTankHullPlate(colors);
@@ -398,6 +447,21 @@
     drawTankTurret(tank, colors) {
       const ctx = this.ctx;
       const recoilOffset = -tank.recoil * 7;
+
+      const sprite = this.vehicleSpriteSlot("tank.turret", tank.team);
+      if (sprite) {
+        ctx.save();
+        ctx.translate(recoilOffset, 0);
+        this.drawVehicleSprite(sprite, { width: 92, height: 40 });
+        ctx.restore();
+        if (tank.destructionPending) {
+          ctx.fillStyle = "rgba(8, 7, 6, 0.44)";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 24, 14, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        return;
+      }
 
       ctx.fillStyle = colors.darkColor;
       roundRect(ctx, 8 + recoilOffset, -4, 58, 8, 2.5);

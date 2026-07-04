@@ -83,7 +83,7 @@
           type: started ? "match_started" : "match_stopped",
           severity: started ? "major" : "warning",
           title: started ? "전투 시작" : "전투 중지",
-          detail: started ? "전투가 시작되었습니다." : "전투가 중지되었습니다."
+          detail: started ? this.matchStartDetail() : "전투가 중지되었습니다."
         });
       }
       this.lastMatchStarted = started;
@@ -154,6 +154,23 @@
         });
       }
       this.lastPlayerDeathActive = active;
+    }
+
+    matchStartDetail() {
+      if (this.game.matchConfig?.mode === "conquest") {
+        const seconds = Math.max(0, Math.floor(this.game.conquest?.duration || 20 * 60));
+        return `전투 시작. 승리 조건: ${this.formatTime(seconds)} 종료 시 고득점. 거점 보유 중 점수 획득.`;
+      }
+
+      const target = this.game.annihilationObjectiveScoreTarget?.() || this.game.annihilation?.targetScore || 300;
+      return `전투 시작. 승리 조건: ${Math.floor(target)}점 도달 또는 상대 전투력 소멸.`;
+    }
+
+    formatTime(seconds = 0) {
+      const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+      const minutes = Math.floor(safeSeconds / 60).toString().padStart(2, "0");
+      const rest = (safeSeconds % 60).toString().padStart(2, "0");
+      return `${minutes}:${rest}`;
     }
 
     teamLabel(team) {

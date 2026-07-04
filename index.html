@@ -6,6 +6,7 @@
     <title>Iron Line - 2D Tank Prototype</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="settings-panel.css">
     <link rel="stylesheet" href="game-version.css">
     <link rel="stylesheet" href="build-info.css">
     <link rel="stylesheet" href="scoreboard.css">
@@ -20,53 +21,84 @@
     <link rel="stylesheet" href="chat.css">
     <link rel="stylesheet" href="role-change.css">
     <link rel="stylesheet" href="test-lab.css">
+    <link rel="stylesheet" href="lobby-flow.css">
+    <link rel="stylesheet" href="combat-hud.css?v=20260704-r1">
   </head>
   <body>
+    <div class="boot-screen" id="bootScreen" aria-label="로딩 중">
+      <div class="boot-inner">
+        <span class="boot-mark">IRON LINE</span>
+        <strong>전장 준비 중</strong>
+        <div class="boot-bar"><span></span></div>
+        <small>ALPHA R1.0</small>
+      </div>
+    </div>
     <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
-    <div class="game-version-badge" aria-label="version">v1</div>
+    <div class="game-version-badge" aria-label="version">ALPHA R1.0</div>
     <button type="button" class="admin-button hidden" id="adminButton" aria-label="관리자 패널 열기" title="관리자">관리자</button>
 
     <button type="button" class="settings-button" id="settingsButton" aria-label="설정 열기" title="설정">&#9881;</button>
 
     <section class="settings-panel hidden" id="settingsPanel" aria-label="설정">
-      <div class="settings-head">
-        <strong>설정</strong>
-        <button type="button" id="settingsClose" aria-label="설정 닫기">&times;</button>
-      </div>
-      <div class="settings-list">
-        <label class="settings-toggle">
-          <input type="checkbox" data-debug-option="ai">
-          <span>AI 판단 표시</span>
-          <small>G</small>
-        </label>
-        <label class="settings-toggle">
-          <input type="checkbox" data-debug-option="navGraph">
-          <span>경로 그리드 표시</span>
-          <small>N</small>
-        </label>
-        <label class="settings-toggle">
-          <input type="checkbox" data-debug-option="tacticalMap">
-          <span>Tactical Map</span>
-          <small>AI</small>
-        </label>
-        <label class="settings-toggle">
-          <input type="checkbox" data-debug-option="performance">
-          <span>성능 계측 표시</span>
-          <small>P</small>
-        </label>
-        <label class="settings-toggle">
-          <input type="checkbox" data-mobile-controls>
-          <span>모바일 조작 UI</span>
-          <small>터치</small>
-        </label>
-        <button type="button" class="settings-action" id="settingsFullscreen">전체화면 켜기</button>
-        <button type="button" class="settings-action" id="settingsMainMenu">메인메뉴로 가기</button>
-      </div>
-      <div class="control-help">
-        <strong>PC 조작</strong>
-        <p>WASD 이동 · F 탑승/하차 · E 역할/드론 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
-        <strong>모바일 조작</strong>
-        <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼 · 병과 버튼</p>
+      <div class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-head">
+          <div>
+            <strong id="settingsTitle">설정</strong>
+            <span>플레이 중 필요한 항목만 빠르게 바꿉니다.</span>
+          </div>
+          <button type="button" id="settingsClose" aria-label="설정 닫기">&times;</button>
+        </div>
+        <div class="settings-list">
+          <div class="settings-section">
+            <span class="settings-section-title">기본</span>
+            <label class="settings-toggle">
+              <input type="checkbox" data-mobile-controls>
+              <span>모바일 조작 UI</span>
+              <small>터치</small>
+            </label>
+            <label class="settings-toggle">
+              <input type="checkbox" data-debug-option="tacticalMap">
+              <span>전술 지도</span>
+              <small>AI</small>
+            </label>
+            <label class="settings-toggle">
+              <input type="checkbox" data-debug-option="performance">
+              <span>성능 표시</span>
+              <small>P</small>
+            </label>
+          </div>
+
+          <div class="settings-actions">
+            <button type="button" class="settings-action" id="settingsFullscreen">전체화면 켜기</button>
+            <button type="button" class="settings-action secondary" id="settingsMainMenu">메인메뉴로 가기</button>
+          </div>
+
+          <details class="settings-details">
+            <summary>조작법</summary>
+            <div class="control-help">
+              <strong>PC</strong>
+              <p>WASD 이동 · F 탑승/하차 · E 역할/드론 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
+              <strong>모바일</strong>
+              <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼 · 병과 버튼</p>
+            </div>
+          </details>
+
+          <details class="settings-details">
+            <summary>개발자 표시</summary>
+            <div class="settings-section compact">
+              <label class="settings-toggle">
+                <input type="checkbox" data-debug-option="ai">
+                <span>AI 판단 표시</span>
+                <small>G</small>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-debug-option="navGraph">
+                <span>경로 그리드 표시</span>
+                <small>N</small>
+              </label>
+            </div>
+          </details>
+        </div>
       </div>
     </section>
 
@@ -215,11 +247,9 @@
             <div class="deployment-mode-row">
               <button type="button" class="deployment-mode active" data-mode-id="annihilation">
                 <strong>섬멸전</strong>
-                <span>거점 장악 또는 적 전투력 제거</span>
               </button>
               <button type="button" class="deployment-mode" data-mode-id="conquest">
                 <strong>점령전</strong>
-                <span>20분 제한, 거점 점수와 리스폰</span>
               </button>
             </div>
           </div>
@@ -228,15 +258,12 @@
             <div class="deployment-class-list" id="deploymentClassList">
               <button type="button" class="deployment-class" data-class-id="infantry">
                 <strong>보병</strong>
-                <span>기관총 · 수류탄</span>
               </button>
               <button type="button" class="deployment-class" data-class-id="engineer">
                 <strong>공병</strong>
-                <span>RPG · 수리</span>
               </button>
               <button type="button" class="deployment-class" data-class-id="scout">
                 <strong>정찰</strong>
-                <span>저격 · 감시</span>
               </button>
             </div>
           </div>
@@ -375,6 +402,8 @@
     <script src="src/ai/infantry-combat-balance.js"></script>
     <script src="src/ai/infantry-ai.js"></script>
     <script src="src/ai/infantry-fire-tempo.js"></script>
+    <script src="src/ai/infantry-support-fire.js"></script>
+    <script src="src/ai/infantry-suppression-posture.js"></script>
     <script src="src/ai/infantry-melee.js"></script>
     <script src="src/ai/infantry-tactical-map.js"></script>
     <script src="src/ai/infantry-command-priority.js"></script>
@@ -384,10 +413,12 @@
     <script src="src/ai/infantry-tactical-decision.js"></script>
     <script src="src/ai/infantry-repair-decision.js"></script>
     <script src="src/ai/infantry-weapon-decision.js"></script>
+    <script src="src/ai/infantry-fire-move.js"></script>
     <script src="src/ai/tank-ai.js"></script>
     <script src="src/ai/squad-tactical-map.js"></script>
     <script src="src/ai/vehicle-tactical-hints.js"></script>
     <script src="src/ai/squad-v2-first-pass.js"></script>
+    <script src="src/systems/combat-friendly-body-block.js"></script>
     <script src="src/systems/combat.js"></script>
     <script src="src/systems/melee-combat.js"></script>
     <script src="src/systems/chat.js"></script>
@@ -420,12 +451,13 @@
     <script src="src/systems/hud-spectator-panel.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/hud-readability-hook.js"></script>
-    <script src="src/systems/renderer.js"></script>
+    <script src="src/systems/renderer.js?v=20260704-r1"></script>
     <script src="src/systems/renderer-vehicle.js"></script>
     <script src="src/systems/renderer-scenery.js"></script>
     <script src="src/systems/renderer-drone.js"></script>
     <script src="src/systems/renderer-minimap.js"></script>
     <script src="src/systems/renderer-tactical-map.js"></script>
+    <script src="src/systems/renderer-combat-hud.js?v=20260704-r1"></script>
     <script src="src/systems/renderer-debug.js"></script>
     <script src="src/systems/player-loadout.js"></script>
     <script src="src/systems/game-session-state.js"></script>

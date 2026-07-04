@@ -86,6 +86,12 @@
       const beforeY = this.y;
       this.age += dt;
       this.updateFeedbackTimers(dt);
+      if (this.isDeploying?.()) {
+        this.boosting = false;
+        this.clearLockAttempt();
+        super.update(game, dt);
+        return;
+      }
       this.updateLockState();
       this.updateAiAutopilot(game, dt);
       if (this.diveActive && this.boosting) {
@@ -122,6 +128,7 @@
 
     setAiTarget(target) {
       if (!target) return false;
+      if (!this.hasLaunched?.()) return false;
       const alive = target.alive !== undefined ? target.alive : target.hp > 0;
       if (!alive || target.team === this.team) return false;
       this.aiControlled = true;
@@ -132,6 +139,7 @@
 
     updateAiAutopilot(game, dt) {
       if (!this.aiControlled || this.controlled || !game) return;
+      if (!this.hasLaunched?.()) return;
 
       let target = this.validAiTarget(this.aiTarget) ? this.aiTarget : null;
       this.aiRetargetTimer = Math.max(0, (this.aiRetargetTimer || 0) - dt);
@@ -213,13 +221,16 @@
     }
 
     armProgress() {
-      const timeProgress = this.armTime <= 0 ? 1 : clamp(this.age / Math.max(this.armTime, 0.001), 0, 1);
+      const flightAge = Math.max(0, this.age - (this.launchedAtAge || 0));
+      const timeProgress = this.armTime <= 0 ? 1 : clamp(flightAge / Math.max(this.armTime, 0.001), 0, 1);
       const distanceProgress = this.minArmedDistance <= 0 ? 1 : clamp(this.flightDistance / Math.max(this.minArmedDistance, 1), 0, 1);
       return Math.min(timeProgress, distanceProgress);
     }
 
     isArmed() {
-      return this.age >= this.armTime && this.flightDistance >= this.minArmedDistance;
+      if (!this.hasLaunched?.()) return false;
+      const flightAge = Math.max(0, this.age - (this.launchedAtAge || 0));
+      return flightAge >= this.armTime && this.flightDistance >= this.minArmedDistance;
     }
 
     canDetonate() {
@@ -256,6 +267,7 @@
     }
 
     lockOn(target) {
+      if (!this.hasLaunched?.()) return false;
       if (!target) return false;
       const alive = target.alive !== undefined ? target.alive : target.hp > 0;
       if (!alive || target.team === this.team) return false;
@@ -267,6 +279,7 @@
     }
 
     lockGround(x, y) {
+      if (!this.hasLaunched?.()) return false;
       this.lockTarget = null;
       this.lockPoint = { x, y };
       this.diveActive = false;
@@ -324,6 +337,7 @@
     }
 
     startAttackDive(game) {
+      if (!this.hasLaunched?.()) return false;
       if (!this.canDetonate() || !this.hasLock()) return false;
       const lock = this.lockPosition();
       if (!lock) return false;

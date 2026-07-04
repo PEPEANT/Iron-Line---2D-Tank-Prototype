@@ -53,6 +53,8 @@
     }
 
     draw(game) {
+      const tacticalOpen = Boolean(game.tacticalMapOpen);
+      document.body?.classList.toggle("tactical-map-open", tacticalOpen);
       const ctx = this.ctx;
       const camera = this.camera;
       ctx.clearRect(0, 0, camera.width, camera.height);
@@ -99,19 +101,22 @@
 
       ctx.restore();
       game.perfMonitor?.begin("render.minimap");
-      this.drawMinimap(game);
+      if (!tacticalOpen) this.drawMinimap(game);
       game.perfMonitor?.end("render.minimap");
+      game.perfMonitor?.begin("render.canvasHud");
+      if (!tacticalOpen) {
+        if (!game.adminObserverMode) this.drawScreenVignette(game);
+        this.drawStartCountdown(game);
+        this.drawAnnihilationRoundOverlay(game);
+        this.drawTestLabOverlay(game);
+        this.drawCombatCompassHud?.(game);
+        if (!game.adminObserverMode) this.drawAimModeOverlay(game);
+        if (!game.adminObserverMode) this.drawScoutAimOverlay(game);
+      }
+      game.perfMonitor?.end("render.canvasHud");
       game.perfMonitor?.begin("render.tactical");
       this.drawTacticalMapOverlay?.(game);
       game.perfMonitor?.end("render.tactical");
-      game.perfMonitor?.begin("render.canvasHud");
-      if (!game.adminObserverMode) this.drawScreenVignette(game);
-      this.drawStartCountdown(game);
-      this.drawAnnihilationRoundOverlay(game);
-      this.drawTestLabOverlay(game);
-      if (!game.adminObserverMode) this.drawAimModeOverlay(game);
-      if (!game.adminObserverMode) this.drawScoutAimOverlay(game);
-      game.perfMonitor?.end("render.canvasHud");
     }
 
     drawChatBubbles(game) {
@@ -1147,8 +1152,13 @@
       const phase = clock * (prone ? 9.5 : 8.2) + (unit.x + unit.y) * 0.035;
       const controlledDrone = unit === game.player && unit.controlledDrone?.alive ? unit.controlledDrone : null;
       const bodyAngle = controlledDrone ? angleTo(unit.x, unit.y, controlledDrone.x, controlledDrone.y) : unit.angle;
+      const hitReact = clamp((unit.hitReactTimer || 0) / 0.16, 0, 1);
+      const hitAngle = Number.isFinite(unit.hitReactAngle) ? unit.hitReactAngle : bodyAngle + Math.PI;
+      const hitOffset = hitReact > 0
+        ? Math.sin(hitReact * Math.PI) * Math.max(1.2, unit.hitReactStrength || (prone ? 1.8 : 3.2))
+        : 0;
       ctx.save();
-      ctx.translate(unit.x, unit.y);
+      ctx.translate(unit.x + Math.cos(hitAngle) * hitOffset, unit.y + Math.sin(hitAngle) * hitOffset);
       ctx.rotate(bodyAngle);
 
       ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
@@ -1163,6 +1173,7 @@
 
       if (controlledDrone) this.drawInfantryDroneController(ctx, controlledDrone);
       else this.drawInfantryWeapon(ctx, unit, weapon, pose, scoped, phase);
+      if (hitReact > 0) this.drawInfantryHitFlash(ctx, unit, prone, hitReact);
       ctx.restore();
 
       if (options.showPrompt === false) return;
@@ -1177,6 +1188,26 @@
         ctx.stroke();
         ctx.restore();
       }
+    }
+
+    drawInfantryHitFlash(ctx, unit, prone, hitReact) {
+      const radius = unit.radius || 10;
+      const alpha = clamp(hitReact, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.42;
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.86)";
+      ctx.lineWidth = prone ? 1.4 : 1.7;
+      ctx.beginPath();
+      if (prone) ctx.ellipse(-radius * 0.16, 0, radius * 1.62, radius * 0.66, 0, 0, Math.PI * 2);
+      else ctx.ellipse(-radius * 0.12, 0, radius * 0.88, radius * 0.78, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = alpha * 0.18;
+      ctx.fillStyle = "rgba(255, 232, 164, 0.8)";
+      ctx.beginPath();
+      ctx.arc(radius * 0.12, 0, prone ? 4.2 : 4.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     infantryVisualStyle(game, unit, teamColor) {
@@ -1614,6 +1645,21 @@
       ctx.fillStyle = unit.team === TEAM.BLUE ? "#8ed8ff" : "#ff938c";
       roundRect(ctx, -width / 2, -3, width * pct, 5, 2);
       ctx.fill();
+
+      if ((unit.healthRevealTimer || 0) > 0) {
+        const alpha = clamp(unit.healthRevealTimer / 1.55, 0, 1);
+        const label = `${Math.ceil(unit.hp)}`;
+        ctx.globalAlpha = alpha;
+        ctx.font = "900 9px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const textWidth = ctx.measureText(label).width + 8;
+        ctx.fillStyle = "rgba(6, 12, 11, 0.72)";
+        roundRect(ctx, -textWidth / 2, -17, textWidth, 11, 3);
+        ctx.fill();
+        ctx.fillStyle = unit.team === TEAM.BLUE ? "#d8f4ff" : "#ffd9d6";
+        ctx.fillText(label, 0, -11.5);
+      }
       ctx.restore();
     }
 
@@ -2347,45 +2393,26 @@
       const state = game.annihilation;
       if (!state || game.matchConfig?.mode !== "annihilation" || game.result) return;
       if (!game.matchStarted && state.state !== "intermission") return;
+      if (!game.isRoundSpectatorMode?.()) return;
 
       const ctx = this.ctx;
       const camera = this.camera;
-      const blueName = game.annihilationTeamName?.(TEAM.BLUE) || "청팀";
-      const redName = game.annihilationTeamName?.(TEAM.RED) || "홍팀";
-      const score = game.annihilationScoreText?.() || `${state.score?.[TEAM.BLUE] || 0} : ${state.score?.[TEAM.RED] || 0}`;
-      const targetScore = game.annihilationObjectiveScoreTarget?.() || state.targetScore || 300;
-      const topText = `${blueName} ${score} ${redName} · 목표 ${targetScore}점`;
 
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "900 13px Inter, sans-serif";
-      const topWidth = Math.min(camera.width - 28, Math.max(260, ctx.measureText(topText).width + 44));
-      const topX = camera.width / 2 - topWidth / 2;
-      const topY = 18;
-      roundRect(ctx, topX, topY, topWidth, 34, 8);
-      ctx.fillStyle = "rgba(7, 13, 12, 0.78)";
+      const specText = "관전 중";
+      ctx.font = "900 12px Inter, sans-serif";
+      const specWidth = Math.min(camera.width - 28, Math.max(160, ctx.measureText(specText).width + 34));
+      const specX = camera.width / 2 - specWidth / 2;
+      const specY = 88;
+      roundRect(ctx, specX, specY, specWidth, 28, 8);
+      ctx.fillStyle = "rgba(255, 209, 102, 0.15)";
       ctx.fill();
-      ctx.strokeStyle = "rgba(237, 244, 239, 0.22)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 209, 102, 0.36)";
       ctx.stroke();
-      ctx.fillStyle = "#edf4ef";
-      ctx.fillText(topText, camera.width / 2, topY + 17);
-
-      if (game.isRoundSpectatorMode?.()) {
-        const specText = "관전 중";
-        ctx.font = "900 12px Inter, sans-serif";
-        const specWidth = Math.min(camera.width - 28, Math.max(160, ctx.measureText(specText).width + 34));
-        const specX = camera.width / 2 - specWidth / 2;
-        const specY = topY + 42;
-        roundRect(ctx, specX, specY, specWidth, 28, 8);
-        ctx.fillStyle = "rgba(255, 209, 102, 0.15)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255, 209, 102, 0.36)";
-        ctx.stroke();
-        ctx.fillStyle = "#ffe2a3";
-        ctx.fillText(specText, camera.width / 2, specY + 14);
-      }
+      ctx.fillStyle = "#ffe2a3";
+      ctx.fillText(specText, camera.width / 2, specY + 14);
 
       ctx.restore();
     }

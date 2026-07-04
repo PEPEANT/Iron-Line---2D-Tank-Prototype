@@ -24,7 +24,8 @@ const lineBudgets = new Map([
   ["src/systems/renderer.js", 3050],
   ["styles.css", 3100],
   ["src/ai/infantry-ai.js", 2850],
-  ["src/tools/map-editor.js", 2400]
+  ["src/tools/map-editor.js", 2400],
+  ["tools/check-behavior-census.cjs", 950]
 ]);
 
 const defaultBudgets = {

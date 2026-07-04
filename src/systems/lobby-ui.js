@@ -670,8 +670,9 @@
       meta.textContent = `${this.roleLabel(slot?.roleId)} · ${this.classLabel(classId)}`;
       titleWrap.append(title, meta);
       const state = document.createElement("em");
-      state.textContent = locked ? "경기 시작 중" : "언제든 변경 가능";
-      head.append(titleWrap, state);
+      state.textContent = locked ? "시작 중" : "";
+      if (locked) head.append(titleWrap, state);
+      else head.append(titleWrap);
 
       const roleSection = document.createElement("section");
       roleSection.className = "lobby-loadout-roles";
@@ -731,7 +732,15 @@
           button.className = "lobby-loadout-choice";
           button.classList.toggle("active", weaponId === item.weaponId);
           button.disabled = locked || weaponId === item.weaponId;
-          button.textContent = this.weaponLabel(weaponId);
+          const choiceIcon = document.createElement("img");
+          choiceIcon.className = "loadout-choice-icon";
+          choiceIcon.src = `assets/weapons/${weaponId}.png`;
+          choiceIcon.alt = "";
+          choiceIcon.draggable = false;
+          choiceIcon.addEventListener("error", () => choiceIcon.classList.add("missing"), { once: true });
+          const choiceName = document.createElement("span");
+          choiceName.textContent = this.weaponLabel(weaponId);
+          button.append(choiceIcon, choiceName);
           button.title = INFANTRY_WEAPONS?.[weaponId]?.name || weaponId;
           button.addEventListener("click", (event) => {
             event.preventDefault();
@@ -761,12 +770,13 @@
         grid.append(row);
       }
 
-      const hint = document.createElement("p");
-      hint.className = "lobby-loadout-hint";
-      hint.textContent = locked
-        ? "경기 시작 중에는 장비를 변경할 수 없습니다."
-        : "준비 완료 후에도 경기 시작 전까지 장비를 바꿀 수 있습니다.";
-      root.append(head, roleSection, grid, hint);
+      root.append(head, roleSection, grid);
+      if (locked) {
+        const hint = document.createElement("p");
+        hint.className = "lobby-loadout-hint";
+        hint.textContent = "시작 중에는 변경 불가";
+        root.append(hint);
+      }
     }
 
     loadoutRoleOptions(game, session = {}, localPlayer = null, activeSlot = null) {

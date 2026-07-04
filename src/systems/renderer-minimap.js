@@ -115,7 +115,6 @@
       }
 
       this.drawHumanMinimapMarkers(game, map, viewerTeam, player);
-      this.drawCommandMinimapOverlays?.(game, map, viewerTeam, false);
 
       ctx.strokeStyle = "rgba(255,255,255,0.42)";
       ctx.lineWidth = 1;

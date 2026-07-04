@@ -157,10 +157,15 @@
       return `${ammo}발`;
     }
 
-    loadoutSummaryText(classId) {
-      if (classId === "engineer") return "RPG, 수리, 공병 장비 운용";
-      if (classId === "scout") return "장거리 관측과 표적 보고 특화";
-      return "화력 유지와 근거리 제압 특화";
+    weaponIcon(weaponId, className) {
+      if (!weaponId) return null;
+      const icon = document.createElement("img");
+      icon.className = className;
+      icon.src = `assets/weapons/${weaponId}.png`;
+      icon.alt = "";
+      icon.draggable = false;
+      icon.addEventListener("error", () => icon.classList.add("missing"), { once: true });
+      return icon;
     }
 
     renderClassCards(game) {
@@ -176,9 +181,7 @@
 
         const name = document.createElement("strong");
         name.textContent = infantryClass.name || classId;
-        const summary = document.createElement("em");
-        summary.textContent = this.loadoutSummaryText(classId);
-        head.append(name, summary);
+        head.append(name);
 
         const slotRow = document.createElement("span");
         slotRow.className = "deployment-class-slots";
@@ -187,9 +190,12 @@
           item.className = `deployment-mini-slot${slot.weapon ? "" : " empty"}`;
           const key = document.createElement("b");
           key.textContent = slot.label;
+          item.append(key);
+          const icon = this.weaponIcon(slot.weaponId, "mini-slot-icon");
+          if (icon) item.append(icon);
           const weapon = document.createElement("span");
-          weapon.textContent = slot.weapon?.shortName || "비어 있음";
-          item.append(key, weapon);
+          weapon.textContent = slot.weapon?.shortName || "";
+          item.append(weapon);
           slotRow.append(item);
         }
 
@@ -211,8 +217,8 @@
       if (ui.deploymentLoadoutSlots.dataset.signature === signature) return;
 
       if (ui.deploymentLoadoutTitle) ui.deploymentLoadoutTitle.textContent = infantryClass.name || classId;
-      if (ui.deploymentLoadoutRole) ui.deploymentLoadoutRole.textContent = this.loadoutSummaryText(classId);
-      if (ui.deploymentLoadoutSummary) ui.deploymentLoadoutSummary.textContent = infantryClass.description || "";
+      if (ui.deploymentLoadoutRole) ui.deploymentLoadoutRole.textContent = "";
+      if (ui.deploymentLoadoutSummary) ui.deploymentLoadoutSummary.textContent = "";
 
       ui.deploymentLoadoutSlots.textContent = "";
       ui.deploymentLoadoutSlots.dataset.signature = signature;
@@ -223,6 +229,11 @@
         const key = document.createElement("span");
         key.className = "loadout-key";
         key.textContent = slot.label;
+
+        const art = document.createElement("span");
+        art.className = "loadout-weapon-art";
+        const artIcon = this.weaponIcon(slot.weaponId, "");
+        if (artIcon) art.append(artIcon);
 
         const body = document.createElement("span");
         body.className = "loadout-body";
@@ -252,7 +263,11 @@
             choiceButton.dataset.loadoutChoiceSlot = String(slot.index);
             choiceButton.dataset.loadoutChoiceWeapon = choiceId;
             choiceButton.classList.toggle("active", choiceId === slot.weaponId);
-            choiceButton.textContent = choice.shortName || choice.name || choiceId;
+            const choiceIcon = this.weaponIcon(choiceId, "loadout-choice-icon");
+            if (choiceIcon) choiceButton.append(choiceIcon);
+            const choiceName = document.createElement("span");
+            choiceName.textContent = choice.shortName || choice.name || choiceId;
+            choiceButton.append(choiceName);
             choiceButton.addEventListener("click", (event) => {
               event.stopPropagation();
               if (game.setDeploymentEquipmentChoice?.(slot.index, choiceId)) this.updateLoadout(game);
@@ -262,7 +277,7 @@
           actions.append(choiceRow);
         }
 
-        row.append(key, body, actions);
+        row.append(key, art, body, actions);
         ui.deploymentLoadoutSlots.append(row);
       }
     }

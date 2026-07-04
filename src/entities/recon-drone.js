@@ -29,6 +29,10 @@
       this.angle = options.angle || 0;
       this.targetX = options.targetX ?? this.x;
       this.targetY = options.targetY ?? this.y;
+      this.deployDelay = Math.max(0, Number(options.deployDelay) || 0);
+      this.deployDelayTimer = this.deployDelay;
+      this.deployState = this.deployDelay > 0 ? "grounded" : "airborne";
+      this.launchedAtAge = 0;
       this.reportTimer = 0;
       this.rotorPhase = Math.random() * Math.PI * 2;
       this.alive = true;
@@ -83,6 +87,8 @@
         return;
       }
 
+      if (this.updateDeployState(game, dt)) return;
+
       const roofHold = this.roofLocked && this.roofLockPoint && !this.autoReturn;
       if (roofHold) {
         this.targetX = this.roofLockPoint.x;
@@ -99,6 +105,51 @@
         this.reportContacts(game);
         this.reportTimer = 0.22 + Math.random() * 0.1;
       }
+    }
+
+    updateDeployState(game, dt) {
+      if ((this.deployDelayTimer || 0) <= 0) {
+        if (this.deployState === "grounded") this.markLaunched(game);
+        return false;
+      }
+
+      this.deployState = "grounded";
+      this.deployDelayTimer = Math.max(0, this.deployDelayTimer - dt);
+      if (this.deployDelayTimer > 0) return true;
+
+      this.markLaunched(game);
+      return false;
+    }
+
+    markLaunched(game = null) {
+      if (this.deployState === "airborne") return;
+      this.deployState = "airborne";
+      this.launchedAtAge = Number.isFinite(this.age) ? this.age : 0;
+      this.emitLaunchEffect(game);
+    }
+
+    isDeploying() {
+      return this.deployState === "grounded" && (this.deployDelayTimer || 0) > 0;
+    }
+
+    hasLaunched() {
+      return !this.isDeploying();
+    }
+
+    emitLaunchEffect(game) {
+      if (!game?.effects) return;
+      const puffs = game.effects.dustPuffs || (game.effects.dustPuffs = []);
+      if (puffs.length > 220) puffs.shift();
+      puffs.push({
+        x: this.x,
+        y: this.y,
+        radius: 3,
+        maxRadius: this.droneRole === "attack" ? 16 : 13,
+        life: 0.22,
+        maxLife: 0.22,
+        alpha: 0.28,
+        color: this.droneRole === "attack" ? "#d5b16f" : "#9fc8d6"
+      });
     }
 
     moveToward(x, y, dt) {

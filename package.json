@@ -7,6 +7,8 @@
     "start": "node tools/static-server.cjs",
     "check": "node tools/check-syntax.cjs && node tools/check-duplicates.cjs && node tools/check-code-health.cjs && node tools/check-asset-pack.cjs",
     "check:online": "node tools/check-online-smoke.cjs",
+    "census": "node tools/check-behavior-census.cjs",
+    "tempo": "node tools/check-battlefield-tempo.cjs",
     "health": "node tools/code-health-report.cjs",
     "heal": "npm run check && npm run health"
   },

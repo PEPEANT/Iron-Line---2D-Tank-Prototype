@@ -6,11 +6,14 @@
   class EntryFlow {
     constructor(hud) {
       this.hud = hud;
+      this.stage = "main";
       this.selectedMode = "offline";
       this.selectedFactionId = "";
       this.factionSignature = "";
       this.roomSignature = "";
       this.bound = false;
+      this.bootHidden = false;
+      this.mainSeeded = false;
     }
 
     get nodes() {
@@ -26,8 +29,26 @@
 
       const screen = document.createElement("div");
       screen.id = "entryScreen";
-      screen.className = "entry-screen hidden";
+      screen.className = "entry-screen stage-main hidden";
       screen.setAttribute("aria-label", "전장 입장");
+
+      const main = document.createElement("section");
+      main.className = "entry-main";
+      main.innerHTML = `
+        <div class="entry-main-hero">
+          <span class="entry-main-badge">${IronLine.gameVersion || "ALPHA R1.0"}</span>
+          <h1>IRON LINE</h1>
+        </div>
+        <div class="entry-main-panel">
+          <label class="entry-field">
+            <span>닉네임</span>
+            <input id="entryNickname" type="text" maxlength="16" autocomplete="nickname" placeholder="닉네임">
+          </label>
+          <button type="button" id="entryMainStart" class="entry-enter">입장</button>
+          <button type="button" id="entryMainGuest" class="entry-guest">게스트 입장</button>
+          <p class="entry-main-hint" id="entryMainHint"></p>
+        </div>
+      `;
 
       const card = document.createElement("div");
       card.className = "entry-card";
@@ -41,19 +62,17 @@
         <div>
           <h1>전장 입장</h1>
         </div>
+        <button type="button" id="entryBackButton" class="entry-back">← 메인</button>
       `;
       const skinWrap = document.createElement("div");
       skinWrap.className = "entry-skin-wrap";
       const skinLabel = document.createElement("span");
       skinLabel.className = "entry-label";
-      skinLabel.textContent = "세력 스킨";
+      skinLabel.textContent = "세력";
       const skinList = document.createElement("div");
       skinList.id = "entrySkinList";
       skinList.className = "entry-skin-list";
-      const skinDetail = document.createElement("article");
-      skinDetail.id = "entrySkinDetail";
-      skinDetail.className = "entry-skin-detail";
-      skinWrap.append(skinLabel, skinList, skinDetail);
+      skinWrap.append(skinLabel, skinList);
 
       const onlineRooms = document.createElement("section");
       onlineRooms.id = "entryOnlineRooms";
@@ -72,18 +91,6 @@
       const panel = document.createElement("section");
       panel.className = "entry-panel entry-session-pane";
 
-      const nameField = document.createElement("label");
-      nameField.className = "entry-field";
-      const nameLabel = document.createElement("span");
-      nameLabel.textContent = "닉네임";
-      const nickname = document.createElement("input");
-      nickname.id = "entryNickname";
-      nickname.type = "text";
-      nickname.maxLength = 16;
-      nickname.autocomplete = "nickname";
-      nickname.placeholder = "닉네임";
-      nameField.append(nameLabel, nickname);
-
       const modeWrap = document.createElement("div");
       modeWrap.className = "entry-mode-wrap";
       const modeLabel = document.createElement("span");
@@ -94,10 +101,6 @@
       modeList.className = "entry-mode-list";
       modeWrap.append(modeLabel, modeList);
 
-      const roomStatus = document.createElement("section");
-      roomStatus.id = "entryRoomStatus";
-      roomStatus.className = "entry-room-status";
-
       const status = document.createElement("p");
       status.id = "entryStatus";
       status.className = "entry-status";
@@ -107,22 +110,23 @@
       enter.type = "button";
       enter.className = "entry-enter";
 
-      panel.append(nameField, modeWrap, roomStatus, status, enter);
+      panel.append(modeWrap, status, enter);
       card.append(factionPane, panel);
-      screen.append(card);
+      screen.append(main, card);
       document.body.prepend(screen);
 
       ui.entryScreen = screen;
-      ui.entryIntro = head.querySelector("#entryIntro");
-      ui.entryNickname = nickname;
+      ui.entryNickname = main.querySelector("#entryNickname");
+      ui.entryMainStart = main.querySelector("#entryMainStart");
+      ui.entryMainGuest = main.querySelector("#entryMainGuest");
+      ui.entryMainHint = main.querySelector("#entryMainHint");
+      ui.entryBackButton = head.querySelector("#entryBackButton");
       ui.entrySkinWrap = skinWrap;
       ui.entrySkinList = skinList;
-      ui.entrySkinDetail = skinDetail;
       ui.entryOnlineRooms = onlineRooms;
       ui.entryOnlineRoomList = onlineRooms.querySelector("#entryOnlineRoomList");
       ui.entryRoomRefreshButton = onlineRooms.querySelector("#entryRoomRefreshButton");
       ui.entryModeList = modeList;
-      ui.entryRoomStatus = roomStatus;
       ui.entryEnterButton = enter;
       ui.entryStatus = status;
       this.bind();
@@ -132,6 +136,9 @@
       const ui = this.nodes;
       if (this.bound || !ui?.entryEnterButton || !ui.entryNickname) return;
       this.bound = true;
+      ui.entryMainStart?.addEventListener("click", () => this.startFromMain(false));
+      ui.entryMainGuest?.addEventListener("click", () => this.startFromMain(true));
+      ui.entryBackButton?.addEventListener("click", () => this.setStage("main"));
       ui.entryEnterButton.addEventListener("click", () => this.submit());
       ui.entryRoomRefreshButton?.addEventListener("click", () => {
         this.roomSignature = "";
@@ -139,15 +146,47 @@
         this.renderEntryRooms(IronLine.game);
       });
       ui.entryNickname.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") this.submit();
+        if (event.key === "Enter") this.startFromMain(false);
       });
+      ui.entryNickname.addEventListener("input", () => this.setMainHint(""));
+    }
+
+    setMainHint(message, warn = false) {
+      const hint = this.nodes.entryMainHint;
+      if (!hint) return;
+      hint.textContent = message;
+      hint.classList.toggle("warn", Boolean(warn && message));
+    }
+
+    startFromMain(asGuest) {
+      const ui = this.nodes;
+      const game = IronLine.game;
+      let nickname = String(ui.entryNickname?.value || "").trim();
+      if (asGuest) {
+        nickname = `게스트${Math.floor(100 + Math.random() * 900)}`;
+        if (ui.entryNickname) ui.entryNickname.value = nickname;
+      } else if (!nickname) {
+        this.setMainHint("닉네임을 입력하거나 게스트로 입장하세요", true);
+        ui.entryNickname?.focus();
+        return;
+      }
+      this.setMainHint("");
+      game?.setLocalProfile?.(this.entryProfile(game));
+      this.setStage("lobby");
+    }
+
+    setStage(stage) {
+      this.stage = stage;
+      this.factionSignature = "";
+      this.roomSignature = "";
+      if (IronLine.game) this.update(IronLine.game);
     }
 
     entryProfile(game) {
       const fallbackFaction = IronLine.playerFactions?.[0]?.id || IronLine.playerSkins?.[0]?.id || "korea";
-      const factionId = this.selectedFactionId || game.localProfile?.factionId || game.localProfile?.skinId || fallbackFaction;
+      const factionId = this.selectedFactionId || game?.localProfile?.factionId || game?.localProfile?.skinId || fallbackFaction;
       return {
-        nickname: this.nodes.entryNickname?.value || game.localProfile?.nickname || "",
+        nickname: this.nodes.entryNickname?.value || game?.localProfile?.nickname || "",
         factionId,
         skinId: factionId
       };
@@ -174,27 +213,40 @@
       return Boolean(this.hud.sessionFlow?.joinOnlineRoom?.(room, options));
     }
 
+    hideBootScreen() {
+      if (this.bootHidden) return;
+      this.bootHidden = true;
+      document.getElementById("bootScreen")?.classList.add("boot-done");
+    }
+
     update(game) {
       this.ensure();
       const ui = this.nodes;
       if (!ui?.entryScreen) return;
+      this.hideBootScreen();
 
       const visible = Boolean(game.entryOpen);
       ui.entryScreen.classList.toggle("hidden", !visible);
       document.body.classList.toggle("entry-open", visible);
       if (!visible) return;
+
+      const profile = game.localProfile || {};
+      if (ui.entryNickname && !this.mainSeeded) {
+        ui.entryNickname.value = profile.nickname || "";
+        this.mainSeeded = true;
+      }
+
+      const mainStage = this.stage === "main";
+      ui.entryScreen.classList.toggle("stage-main", mainStage);
+      if (mainStage) return;
+
       const onlineMode = this.selectedMode === "online";
       ui.entryScreen.classList.toggle("entry-online-mode", onlineMode);
       ui.entrySkinWrap?.classList.toggle("hidden", onlineMode);
       ui.entryOnlineRooms?.classList.toggle("hidden", !onlineMode);
 
-      const profile = game.localProfile || {};
       const fallbackFaction = IronLine.playerFactions?.[0]?.id || IronLine.playerSkins?.[0]?.id || "korea";
       if (!this.selectedFactionId) this.selectedFactionId = profile.factionId || profile.skinId || fallbackFaction;
-      if (ui.entryNickname && !ui.entryNickname.dataset.entrySeeded) {
-        ui.entryNickname.value = profile.nickname || "";
-        ui.entryNickname.dataset.entrySeeded = "1";
-      }
       if (ui.entryStatus) {
         ui.entryStatus.textContent = "";
         ui.entryStatus.hidden = true;
@@ -208,9 +260,7 @@
         this.renderEntryRooms(game);
       } else {
         this.renderSkinCards(game);
-        this.renderSkinDetail(game);
       }
-      this.renderRoomStatus(game);
     }
 
     renderModeCards() {
@@ -294,10 +344,9 @@
             <small>${this.modeLabel(room.mode)} · ${this.phaseLabel(room.phase)}</small>
           </span>
           <span class="entry-online-room-meta">
-            <em>${this.factionLabel(room.blueFactionId)} vs ${this.factionLabel(room.redFactionId)}</em>
-            <em>슬롯 ${players.length}/${capacity} · 관전 ${spectators.length}/${spectatorCapacity}</em>
+            <em>${players.length}/${capacity} · 관전 ${spectators.length}/${spectatorCapacity}</em>
           </span>
-          <b>${spectatorJoin ? (spectatorFull ? "관전 만석" : "관전 입장") : "대기방 입장"}</b>
+          <b>${spectatorJoin ? (spectatorFull ? "관전 만석" : "관전") : "입장"}</b>
         `;
         button.addEventListener("click", () => this.joinRoom(room));
         wrap.append(button);
@@ -378,9 +427,7 @@
         text.className = "entry-skin-text";
         const name = document.createElement("strong");
         name.textContent = skin.name;
-        const role = document.createElement("small");
-        role.textContent = skin.role || skin.concept || "";
-        text.append(name, role);
+        text.append(name);
         button.append(preview, text);
 
         button.addEventListener("click", () => {
@@ -390,73 +437,6 @@
         });
         list.append(button);
       }
-    }
-
-    renderSkinDetail(game) {
-      const detail = this.nodes.entrySkinDetail;
-      const skins = IronLine.playerFactions || IronLine.playerSkins || [];
-      if (!detail || skins.length === 0) return;
-
-      const selectedId = this.selectedFactionId || game.localProfile?.factionId || game.localProfile?.skinId || skins[0].id;
-      const skin = IronLine.playerFactionById?.(selectedId) || IronLine.playerSkinById?.(selectedId) || skins[0];
-      if (!skin) return;
-
-      detail.innerHTML = `
-        <div class="entry-skin-detail-head">
-          <span>${skin.category || "세력 스킨"}</span>
-          <strong>${skin.name}</strong>
-        </div>
-        <p class="entry-skin-tagline">“${skin.tagline || skin.motto || "전장을 선택한 색으로 칠한다."}”</p>
-        <p>${skin.description || skin.concept || ""}</p>
-        <div class="entry-skin-meta">
-          <span>${skin.rankNote || "참고 순위 없음"}</span>
-          <span>2026년 5월 기준 참고 순위 · 게임 밸런스와 무관</span>
-        </div>
-      `;
-    }
-
-    renderRoomStatus(game) {
-      const root = this.nodes.entryRoomStatus;
-      if (!root) return;
-
-      const selectedId = this.selectedFactionId || game.localProfile?.factionId || game.localProfile?.skinId || "";
-      const skin = IronLine.playerFactionById?.(selectedId) || IronLine.playerSkinById?.(selectedId) || null;
-      const nickname = String(this.nodes.entryNickname?.value || game.localProfile?.nickname || "Player").trim() || "Player";
-      const modeOnline = this.selectedMode === "online";
-      root.classList.toggle("hidden", modeOnline);
-      if (modeOnline) {
-        root.textContent = "";
-        return;
-      }
-
-      root.textContent = "";
-
-      const title = document.createElement("div");
-      title.className = "entry-room-title";
-      const kicker = document.createElement("span");
-      kicker.textContent = "플레이";
-      const strong = document.createElement("strong");
-      strong.textContent = "오프라인";
-      title.append(kicker, strong);
-
-      const grid = document.createElement("div");
-      grid.className = "entry-room-grid";
-      const facts = [
-        ["플레이어", nickname],
-        ["세력", skin?.name || "선택 대기"]
-      ];
-      for (const [label, value] of facts) {
-        const item = document.createElement("div");
-        item.className = "entry-room-fact";
-        const small = document.createElement("span");
-        small.textContent = label;
-        const text = document.createElement("strong");
-        text.textContent = value;
-        item.append(small, text);
-        grid.append(item);
-      }
-
-      root.append(title, grid);
     }
   }
 

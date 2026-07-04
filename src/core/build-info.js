@@ -3,6 +3,8 @@
 (function registerBuildInfo(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const STATIC_BUILD_ID = "deploy-check-2026-05-21";
+  const GAME_VERSION = "ALPHA R1.0";
+  IronLine.gameVersion = GAME_VERSION;
 
   const info = {
     source: "client",
@@ -53,6 +55,8 @@
 
   function render() {
     if (!document.body) return;
+    const versionBadge = document.querySelector(".game-version-badge");
+    if (versionBadge) versionBadge.textContent = GAME_VERSION;
     document.body.dataset.ironLineBuild = info.buildId || "";
     document.body.dataset.ironLineCommit = info.commit || "";
     const badge = ensureBadge();

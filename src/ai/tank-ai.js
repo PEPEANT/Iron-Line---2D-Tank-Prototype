@@ -54,6 +54,8 @@
       this.trafficBypassTarget = "";
       this.suspicionPoint = null;
       this.suspicionTimer = 0;
+      this.machineGunTargetKey = "";
+      this.machineGunTrackTimer = 0;
       this.debug = {
         state: this.state,
         goal: "",
@@ -503,6 +505,8 @@
 
       const target = this.findMachineGunTarget();
       if (!target) {
+        this.machineGunTargetKey = "";
+        this.machineGunTrackTimer = 0;
         this.tank.machineGunAngle = rotateTowards(
           this.tank.machineGunAngle,
           this.tank.turretAngle,
@@ -519,8 +523,31 @@
         this.tank.machineGunTurnRate * turnScale * dt
       );
       const aimError = Math.abs(normalizeAngle(this.tank.machineGunAngle - targetAngle));
-      if (aimError > (target.isDrone ? 0.24 : 0.17)) return false;
+      if (aimError > (target.isDrone ? 0.24 : 0.17) || !this.trackMachineGunTarget(target, dt, aimError)) return false;
       return this.tank.fireMachineGun(this.game, target.x, target.y, { target });
+    }
+
+    machineGunTargetId(target) {
+      return target?.callSign || target?.id || `${target?.team || ""}:${Math.round(target?.x || 0)}:${Math.round(target?.y || 0)}`;
+    }
+
+    machineGunTrackRequired(target) {
+      if (target?.isDrone || target === this.tank.infantryAssault?.attacker) return 0.08;
+      if (target?.vehicleType) return 0.24;
+      const distance = distXY(this.tank.x, this.tank.y, target.x, target.y);
+      const movingPenalty = clamp(Math.abs(this.tank.speed || 0) / Math.max(this.tank.maxSpeed || 1, 1), 0, 1) * 0.22;
+      return clamp(0.58 + distance / 1600 + movingPenalty, 0.66, 1.05);
+    }
+
+    trackMachineGunTarget(target, dt, aimError) {
+      const key = this.machineGunTargetId(target);
+      if (key !== this.machineGunTargetKey) {
+        this.machineGunTargetKey = key;
+        this.machineGunTrackTimer = 0;
+      }
+      if (aimError <= 0.34 || target?.isDrone || target?.vehicleType) this.machineGunTrackTimer += dt;
+      else this.machineGunTrackTimer = Math.max(0, this.machineGunTrackTimer - dt * 0.6);
+      return this.machineGunTrackTimer >= this.machineGunTrackRequired(target);
     }
 
     findMachineGunTarget() {

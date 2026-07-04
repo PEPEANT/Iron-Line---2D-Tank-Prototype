@@ -22,3 +22,24 @@
 .mobile-action.tactical-map-toggle.hidden {
   display: none;
 }
+
+body.tactical-map-open .hud,
+body.tactical-map-open .scoreboard,
+body.tactical-map-open .command-panel,
+body.tactical-map-open .command-radio-toggle,
+body.tactical-map-open .settings-button,
+body.tactical-map-open .settings-panel,
+body.tactical-map-open .admin-button,
+body.tactical-map-open .admin-panel,
+body.tactical-map-open .game-version-badge,
+body.tactical-map-open .mobile-controls,
+body.tactical-map-open .hud-readability-strip,
+body.tactical-map-open .chat-panel,
+body.tactical-map-open .test-lab-panel,
+body.tactical-map-open .test-lab-dialog,
+body.tactical-map-open .role-change-panel,
+body.tactical-map-open .spectator-panel,
+body.tactical-map-open .performance-monitor {
+  opacity: 0;
+  pointer-events: none;
+}

@@ -349,7 +349,8 @@
         angle: this.machineGunAngle,
         alive: true,
         hp: this.hp,
-        weaponId: "machinegun"
+        weaponId: "machinegun",
+        sourceVehicle: this
       };
       const target = options.target || null;
       const fired = target?.vehicleType

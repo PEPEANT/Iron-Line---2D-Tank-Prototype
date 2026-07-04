@@ -6,6 +6,7 @@
   const { clamp, distXY, normalizeAngle, circleRectCollision, expandedRect, lineIntersectsRect, segmentDistanceToPoint, lerp } = IronLine.math;
   const awarenessSignals = IronLine.awarenessSignals || {};
   const wreckCover = IronLine.wreckCover || {};
+  const friendlyBodyBlock = IronLine.combatFriendlyBodyBlock || { find: () => null, nearest: (_x, _y, ...hits) => hits.find(Boolean) || null, resolve: (_game, _shooter, _x1, _y1, x2, y2, tankBlock) => ({ firstBlock: tankBlock || null, finalTankBlock: tankBlock || null, finalBodyBlock: null, finalEndX: tankBlock?.x ?? x2, finalEndY: tankBlock?.y ?? y2 }), emit: () => false };
   const isVehicleWreck = wreckCover.isVehicleWreck || ((vehicle) => Boolean(vehicle && !vehicle.coverDestroyed && (!vehicle.alive || vehicle.hp <= 0)));
   const damageVehicleWreck = wreckCover.damageVehicleWreck || (() => false), shellWreckDamage = wreckCover.shellWreckDamage || (() => 0);
 
@@ -527,12 +528,9 @@
     const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34);
     const endX = hit ? target.x : startX + Math.cos(missAngle) * Math.min(range, distance + 80);
     const endY = hit ? target.y : startY + Math.sin(missAngle) * Math.min(range, distance + 80);
-    const wreckBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, {
-      onlyWrecks: true
-    });
-    const finalEndX = wreckBlock ? wreckBlock.x : endX;
-    const finalEndY = wreckBlock ? wreckBlock.y : endY;
-    const impactAngle = wreckBlock
+    const tankBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, options);
+    const { firstBlock, finalTankBlock, finalBodyBlock, finalEndX, finalEndY } = friendlyBodyBlock.resolve(game, shooter, startX, startY, endX, endY, tankBlock, { ignoreTarget: target, ignoreFriendlyBodyBlock: options.ignoreFriendlyBodyBlock });
+    const impactAngle = firstBlock
       ? Math.atan2(finalEndY - startY, finalEndX - startX)
       : hit ? Math.atan2(endY - startY, endX - startX) : missAngle;
 
@@ -550,16 +548,19 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
-    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !wreckBlock ? target : null });
-    applyRifleSuppression(game, shooter, target, startX, startY, finalEndX, finalEndY, hit && !wreckBlock, weapon);
-    if (target === game.player && game.isLocalPlayerEnemyFor?.(shooter.team)) {
+    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !firstBlock ? target : null });
+    if (finalBodyBlock) applyLineSuppression(game, shooter, startX, startY, finalEndX, finalEndY, weapon, target.team ?? null);
+    else applyRifleSuppression(game, shooter, target, startX, startY, finalEndX, finalEndY, hit && !finalTankBlock, weapon);
+    if (!finalBodyBlock && target === game.player && game.isLocalPlayerEnemyFor?.(shooter.team)) {
       game.warnPlayerDanger?.(shooter, weapon.id === "sniper" ? "sniper" : weapon.id, {
         ttl: weapon.id === "sniper" ? 1.25 : 0.76
       });
     }
 
-    if (wreckBlock) {
-      applySmallArmsWreckHit(game, shooter, wreckBlock.tank, finalEndX, finalEndY, weapon);
+    if (finalBodyBlock) friendlyBodyBlock.emit(game, shooter, finalBodyBlock.unit, finalEndX, finalEndY, impactAngle, weapon);
+    else if (finalTankBlock) {
+      if (finalTankBlock.wreck) applySmallArmsWreckHit(game, shooter, finalTankBlock.tank, finalEndX, finalEndY, weapon);
+      else applySmallArmsTankHit(game, shooter, finalTankBlock.tank, finalEndX, finalEndY, weapon, options);
     } else if (hit) {
       const baseDamage = options.damage || (weapon.damageMin + Math.random() * (weapon.damageMax - weapon.damageMin));
       const damage = baseDamage * droneProfile.damageScale;
@@ -618,6 +619,7 @@
       if (impact.wreck) applySmallArmsWreckHit(game, shooter, impact.tank, impact.x, impact.y, weapon);
       else applySmallArmsTankHit(game, shooter, impact.tank, impact.x, impact.y, weapon, options);
     }
+    else if (impact.friendlyBodyBlock) friendlyBodyBlock.emit(game, shooter, impact.friendlyBodyBlock, impact.x, impact.y, shotAngle, weapon);
     else if (impact.blocked || Math.random() < (options.impactChance ?? 0.28)) {
       emitSmallArmsImpact(game, impact.x, impact.y, shotAngle, weapon, { hard: impact.blocked });
     }
@@ -646,12 +648,9 @@
     const missAngle = shooter.angle + (Math.random() - 0.5) * (weapon.spread || 0.34) * (shooter.isProne ? 0.74 : 1);
     const endX = hit ? tank.x + (Math.random() - 0.5) * tank.radius : startX + Math.cos(missAngle) * Math.min(range, distance + 90);
     const endY = hit ? tank.y + (Math.random() - 0.5) * tank.radius : startY + Math.sin(missAngle) * Math.min(range, distance + 90);
-    const wreckBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, {
-      onlyWrecks: true
-    });
-    const finalEndX = wreckBlock ? wreckBlock.x : endX;
-    const finalEndY = wreckBlock ? wreckBlock.y : endY;
-    const finalAngle = wreckBlock ? Math.atan2(finalEndY - startY, finalEndX - startX) : missAngle;
+    const tankBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, { ...options, ignoreVehicle: tank });
+    const { firstBlock, finalTankBlock, finalBodyBlock, finalEndX, finalEndY } = friendlyBodyBlock.resolve(game, shooter, startX, startY, endX, endY, tankBlock, { ignoreFriendlyBodyBlock: options.ignoreFriendlyBodyBlock });
+    const finalAngle = firstBlock ? Math.atan2(finalEndY - startY, finalEndX - startX) : missAngle;
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
     if (tracers.length > 180) tracers.shift();
@@ -667,15 +666,17 @@
       length: options.tracerLength || weapon.visualLength || 18
     });
 
-    if (wreckBlock) {
-      applySmallArmsWreckHit(game, shooter, wreckBlock.tank, finalEndX, finalEndY, weapon);
+    if (finalBodyBlock) friendlyBodyBlock.emit(game, shooter, finalBodyBlock.unit, finalEndX, finalEndY, finalAngle, weapon);
+    else if (finalTankBlock) {
+      if (finalTankBlock.wreck) applySmallArmsWreckHit(game, shooter, finalTankBlock.tank, finalEndX, finalEndY, weapon);
+      else applySmallArmsTankHit(game, shooter, finalTankBlock.tank, finalEndX, finalEndY, weapon, options);
     } else if (hit) {
       applySmallArmsTankHit(game, shooter, tank, finalEndX, finalEndY, weapon, options);
     } else if (Math.random() < (options.impactChance ?? 0.18)) {
       emitSmallArmsImpact(game, finalEndX, finalEndY, finalAngle, weapon);
     }
 
-    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !wreckBlock ? tank : null });
+    awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !firstBlock ? tank : null });
     return true;
   }
 
@@ -790,14 +791,10 @@
       if (blocked) return { x, y, blocked: true };
 
       const hitTank = findSmallArmsTankHit(game, shooter, lastX, lastY, x, y, options);
-      if (hitTank) {
-        return {
-          x: hitTank.x,
-          y: hitTank.y,
-          tank: hitTank.tank,
-          wreck: hitTank.wreck
-        };
-      }
+      const hitFriendlyBody = friendlyBodyBlock.find(game, shooter, lastX, lastY, x, y, options);
+      const firstHit = friendlyBodyBlock.nearest(lastX, lastY, hitFriendlyBody, hitTank);
+      if (firstHit?.bodyBlocked) return { x: firstHit.x, y: firstHit.y, friendlyBodyBlock: firstHit.unit, bodyBlocked: true };
+      if (firstHit?.tank) return { x: firstHit.x, y: firstHit.y, tank: firstHit.tank, wreck: firstHit.wreck };
 
       lastX = x;
       lastY = y;
@@ -816,10 +813,10 @@
     for (const tank of vehicleTargets(game)) {
       const wreck = isVehicleWreck(tank);
       if (tank === shooter) continue;
+      if (tank === shooter?.sourceVehicle || tank === options.ignoreVehicle || options.ignoreVehicles?.includes?.(tank)) continue;
       if (options.onlyWrecks && !wreck) continue;
       if (wreck && options.ignoreWrecks) continue;
       if (!wreck && !tank.alive) continue;
-      if (!wreck && options.targetTeam && tank.team !== options.targetTeam) continue;
 
       const laneDistance = segmentDistanceToPoint(x1, y1, x2, y2, tank.x, tank.y);
       if (laneDistance > tank.radius + 2) continue;
@@ -893,24 +890,27 @@
   }
 
   function applyLineSuppression(game, shooter, startX, startY, endX, endY, weapon, targetTeam = null) {
+    const supportWeapon = weapon.id === "lmg" || weapon.id === "machinegun";
+    const [lineRadius, impactRadius] = supportWeapon ? [82, 96] : [58, 68];
     for (const unit of game.infantry || []) {
       if (!unit.alive || unit.inVehicle || unit.team === shooter.team) continue;
       if (targetTeam && unit.team !== targetTeam) continue;
 
       const lineDistance = segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y);
       const endDistance = distXY(endX, endY, unit.x, unit.y);
-      const nearLine = lineDistance < 58;
-      const nearImpact = endDistance < 68;
+      const nearLine = lineDistance < lineRadius;
+      const nearImpact = endDistance < impactRadius;
       if (!nearLine && !nearImpact) continue;
 
-      const linePressure = nearLine ? weapon.lineSuppression * 0.58 * (1 - lineDistance / 58) : 0;
-      const impactPressure = nearImpact ? weapon.impactSuppression * 0.72 * (1 - endDistance / 68) : 0;
+      const linePressure = nearLine ? weapon.lineSuppression * (supportWeapon ? 1.15 : 0.58) * (1 - lineDistance / lineRadius) : 0;
+      const impactPressure = nearImpact ? weapon.impactSuppression * (supportWeapon ? 0.95 : 0.72) * (1 - endDistance / impactRadius) : 0;
       unit.suppress(Math.max(linePressure, impactPressure), awarenessSignals.suppressionSourceForUnit?.(game, unit, shooter, false) || shooter);
     }
   }
 
   function applyRifleSuppression(game, shooter, target, startX, startY, endX, endY, hit, weapon) {
     const targetTeam = target.team ?? null;
+    const supportWeapon = weapon.id === "lmg" || weapon.id === "machinegun";
     if (target.suppress && !target.inVehicle) target.suppress(hit ? weapon.suppressionHit * 1.05 : weapon.suppressionMiss * 1.55, awarenessSignals.suppressionSourceForUnit?.(game, target, shooter, hit) || shooter);
 
     for (const unit of game.infantry || []) {
@@ -919,12 +919,13 @@
 
       const lineDistance = segmentDistanceToPoint(startX, startY, endX, endY, unit.x, unit.y);
       const endDistance = distXY(endX, endY, unit.x, unit.y);
-      const nearLine = lineDistance < 62;
-      const nearImpact = endDistance < 72;
+      const [lineRadius, impactRadius] = supportWeapon ? [76, 88] : [62, 72];
+      const nearLine = lineDistance < lineRadius;
+      const nearImpact = endDistance < impactRadius;
       if (!nearLine && !nearImpact) continue;
 
-      const linePressure = nearLine ? weapon.lineSuppression * 1.35 * (1 - lineDistance / 62) : 0;
-      const impactPressure = nearImpact ? weapon.impactSuppression * 1.35 * (1 - endDistance / 72) : 0;
+      const linePressure = nearLine ? weapon.lineSuppression * (supportWeapon ? 1.65 : 1.35) * (1 - lineDistance / lineRadius) : 0;
+      const impactPressure = nearImpact ? weapon.impactSuppression * (supportWeapon ? 1.5 : 1.35) * (1 - endDistance / impactRadius) : 0;
       unit.suppress(Math.max(linePressure, impactPressure), awarenessSignals.suppressionSourceForUnit?.(game, unit, shooter, false) || shooter);
     }
   }

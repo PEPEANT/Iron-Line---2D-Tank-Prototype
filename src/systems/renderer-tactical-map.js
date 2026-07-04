@@ -10,6 +10,8 @@
   const ORDER_COLOR = "rgba(255, 209, 102, 0.94)";
   const ORDER_FILL = "rgba(255, 209, 102, 0.16)";
   const SELECTED_COLOR = "rgba(246, 255, 232, 0.96)";
+  const MAP_COLS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const MAP_ROWS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
   Object.assign(proto, {
     drawCommandMinimapOverlays(game, map, viewerTeam, expanded = false) {
@@ -58,109 +60,255 @@
       if (!game.tacticalMapOpen) return;
       const ctx = this.ctx;
       const camera = this.camera;
-      const width = Math.min(camera.width - 28, 920);
-      const height = Math.min(camera.height - 34, 610);
-      if (width < 260 || height < 180) return;
+      const compact = camera.width < 740 || camera.height < 560;
+      const mapSize = Math.floor(Math.min(
+        compact ? camera.width - 54 : camera.width - 140,
+        compact ? camera.height - 82 : camera.height - 128,
+        compact ? 500 : 620
+      ));
+      if (mapSize < 230) return;
 
-      const x = (camera.width - width) / 2;
-      const y = (camera.height - height) / 2;
+      const gutterX = compact ? 24 : 31;
+      const gutterTop = compact ? 28 : 34;
+      const gutterBottom = compact ? 24 : 30;
+      const width = mapSize + gutterX * 2;
+      const height = mapSize + gutterTop + gutterBottom;
+      const x = Math.round((camera.width - width) / 2);
+      const y = Math.round((camera.height - height) / 2);
       const map = {
-        x: x + 18,
-        y: y + 44,
-        w: width - 36,
-        h: height - 62,
-        sx: (width - 36) / game.world.width,
-        sy: (height - 62) / game.world.height
+        x: x + gutterX,
+        y: y + gutterTop,
+        w: mapSize,
+        h: mapSize,
+        sx: mapSize / game.world.width,
+        sy: mapSize / game.world.height,
+        cols: MAP_COLS.length,
+        rows: MAP_ROWS.length
       };
       const player = game.adminObserverMode ? null : game.player;
       const viewerTeam = player?.team;
 
       ctx.save();
-      ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.58)";
       ctx.fillRect(0, 0, camera.width, camera.height);
-      ctx.fillStyle = "rgba(8, 14, 12, 0.91)";
-      ctx.strokeStyle = "rgba(255, 209, 102, 0.38)";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 12;
+      ctx.fillStyle = "rgba(7, 12, 11, 0.92)";
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.18)";
       ctx.lineWidth = 1.5;
-      roundRect(ctx, x, y, width, height, 9);
+      roundRect(ctx, x, y, width, height, 6);
       ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
       ctx.stroke();
 
-      ctx.fillStyle = "#ffe8a8";
-      ctx.font = "900 16px system-ui, sans-serif";
+      ctx.fillStyle = "rgba(237, 244, 239, 0.88)";
+      ctx.font = "900 12px Rajdhani, system-ui, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("전술지도", x + 18, y + 23);
-      ctx.fillStyle = "rgba(237, 244, 239, 0.68)";
-      ctx.font = "800 11px system-ui, sans-serif";
-      ctx.fillText("M: 닫기 · 노랑: 최근/진행 명령 · 초록: 실제 플레이어", x + 100, y + 23);
+      ctx.fillText("TACTICAL MAP", x + gutterX, y + 15);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(237, 244, 239, 0.5)";
+      ctx.font = "800 10px Rajdhani, system-ui, sans-serif";
+      ctx.fillText("M CLOSE", x + width - gutterX, y + 15);
 
-      roundRect(ctx, map.x, map.y, map.w, map.h, 7);
+      ctx.save();
+      roundRect(ctx, map.x, map.y, map.w, map.h, 2);
       ctx.clip();
       this.drawTacticalMapBase(game, map, viewerTeam, player);
       this.drawCommandMinimapOverlays(game, map, viewerTeam, true);
       this.drawTacticalViewRect(map, camera);
       ctx.restore();
+
+      this.drawTacticalCoordinateFrame(game, map, x, y, width, height);
+      ctx.restore();
     },
 
     drawTacticalMapBase(game, map, viewerTeam, player) {
       const ctx = this.ctx;
-      ctx.fillStyle = "rgba(24, 48, 32, 0.96)";
-      ctx.fillRect(map.x, map.y, map.w, map.h);
-
-      ctx.strokeStyle = "rgba(237, 244, 239, 0.055)";
-      ctx.lineWidth = 1;
-      for (let gx = 400; gx < game.world.width; gx += 400) {
-        ctx.beginPath();
-        ctx.moveTo(map.x + gx * map.sx, map.y);
-        ctx.lineTo(map.x + gx * map.sx, map.y + map.h);
-        ctx.stroke();
-      }
-      for (let gy = 400; gy < game.world.height; gy += 400) {
-        ctx.beginPath();
-        ctx.moveTo(map.x, map.y + gy * map.sy);
-        ctx.lineTo(map.x + map.w, map.y + gy * map.sy);
-        ctx.stroke();
-      }
+      this.drawTacticalTerrainBackdrop(game, map);
 
       for (const road of game.world.roads || []) {
         if (!road.length) continue;
         ctx.beginPath();
         ctx.moveTo(map.x + road[0].x * map.sx, map.y + road[0].y * map.sy);
-        for (let i = 1; i < road.length; i += 1) ctx.lineTo(map.x + road[i].x * map.sx, map.y + road[i].y * map.sy);
-        ctx.strokeStyle = "rgba(60, 67, 70, 0.76)";
-        ctx.lineWidth = 6;
+        for (let i = 1; i < road.length; i += 1) {
+          ctx.lineTo(map.x + road[i].x * map.sx, map.y + road[i].y * map.sy);
+        }
+        ctx.strokeStyle = "rgba(11, 14, 14, 0.48)";
+        ctx.lineWidth = 10;
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(122, 131, 125, 0.38)";
+        ctx.lineWidth = 6.4;
         ctx.stroke();
       }
 
+      this.drawTacticalMapObjects(game, map);
+
       for (const zone of game.world.safeZones || []) {
         const point = this.mapPoint(map, zone);
-        ctx.fillStyle = zone.team === TEAM.RED ? "rgba(255, 103, 97, 0.18)" : "rgba(100, 181, 246, 0.18)";
-        ctx.strokeStyle = zone.team === TEAM.RED ? "rgba(255, 103, 97, 0.52)" : "rgba(100, 181, 246, 0.52)";
-        ctx.lineWidth = 1.2;
+        ctx.fillStyle = zone.team === TEAM.RED ? "rgba(255, 103, 97, 0.15)" : "rgba(79, 210, 255, 0.15)";
+        ctx.strokeStyle = zone.team === TEAM.RED ? "rgba(255, 103, 97, 0.5)" : "rgba(79, 210, 255, 0.5)";
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 17, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, 20, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
 
       for (const point of game.capturePoints || []) {
         const screen = this.mapPoint(map, point);
-        ctx.fillStyle = TEAM_COLORS[point.owner] || "#d6d1bd";
+        const ownerColor = TEAM_COLORS[point.owner] || "#d6d1bd";
+        ctx.fillStyle = "rgba(6, 12, 11, 0.78)";
         ctx.strokeStyle = "rgba(237, 244, 239, 0.72)";
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 7, 0, Math.PI * 2);
+        ctx.lineWidth = 1.2;
+        roundRect(ctx, screen.x - 11, screen.y - 9, 22, 18, 2);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = "#07100d";
-        ctx.font = "900 10px system-ui, sans-serif";
+        ctx.fillStyle = ownerColor;
+        ctx.fillRect(screen.x - 8, screen.y + 6, 16, 4);
+        ctx.fillStyle = "rgba(237, 244, 239, 0.94)";
+        ctx.font = "900 10px Rajdhani, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(point.name, screen.x, screen.y + 0.5);
+        ctx.fillText(point.name, screen.x, screen.y - 1);
       }
 
       this.drawTacticalUnitDots(game, map, viewerTeam);
       this.drawTacticalHumanDots(game, map, viewerTeam, player);
+    },
+
+    drawTacticalTerrainBackdrop(game, map) {
+      const ctx = this.ctx;
+      const gradient = ctx.createLinearGradient(map.x, map.y, map.x + map.w, map.y + map.h);
+      gradient.addColorStop(0, "#314039");
+      gradient.addColorStop(0.48, "#252f2b");
+      gradient.addColorStop(1, "#59605a");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(map.x, map.y, map.w, map.h);
+
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      for (let row = -1; row < 16; row += 1) {
+        const y = map.y + row * 42;
+        ctx.beginPath();
+        for (let i = 0; i <= 34; i += 1) {
+          const t = i / 34;
+          const x = map.x + t * map.w;
+          const wave = Math.sin(t * 12 + row * 0.7) * 14 + Math.cos(t * 23 + row) * 5;
+          if (i === 0) ctx.moveTo(x, y + wave);
+          else ctx.lineTo(x, y + wave);
+        }
+        ctx.strokeStyle = row % 3 === 0 ? "rgba(237, 244, 239, 0.24)" : "rgba(15, 20, 19, 0.26)";
+        ctx.lineWidth = row % 3 === 0 ? 1.2 : 0.8;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      for (let i = 0; i < 38; i += 1) {
+        const px = map.x + ((i * 73) % Math.max(1, map.w));
+        const py = map.y + ((i * 119) % Math.max(1, map.h));
+        const r = 10 + (i % 6) * 5;
+        ctx.fillStyle = i % 4 === 0 ? "#73806f" : "#141b18";
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+
+    drawTacticalMapObjects(game, map) {
+      const ctx = this.ctx;
+      const drawRect = (item, fill, stroke, alpha = 1) => {
+        if (!item || item.destroyed) return;
+        const x = map.x + (Number(item.x) || 0) * map.sx;
+        const y = map.y + (Number(item.y) || 0) * map.sy;
+        const w = Math.max(2, (Number(item.w) || Number(item.r) * 2 || 24) * map.sx);
+        const h = Math.max(2, (Number(item.h) || Number(item.r) * 2 || 24) * map.sy);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 0.8;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+        ctx.globalAlpha = 1;
+      };
+
+      for (const obstacle of game.world.obstacles || []) {
+        if (obstacle.kind === "tree" || obstacle.kind === "brush" || obstacle.kind === "rubble") continue;
+        drawRect(obstacle, "rgba(41, 47, 44, 0.74)", "rgba(237, 244, 239, 0.14)", 0.86);
+      }
+
+      for (const item of game.world.scenery || []) {
+        if (item.destroyed) continue;
+        if (item.shape === "circle" || item.type === "tree" || item.type === "brush" || item.r) {
+          const x = map.x + (Number(item.x) || 0) * map.sx;
+          const y = map.y + (Number(item.y) || 0) * map.sy;
+          const r = Math.max(2.5, (Number(item.r) || 18) * Math.max(map.sx, map.sy));
+          ctx.fillStyle = item.type === "tree" ? "rgba(37, 68, 44, 0.68)" : "rgba(79, 87, 72, 0.42)";
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          drawRect(item, "rgba(83, 82, 67, 0.5)", "rgba(237, 244, 239, 0.1)", 0.75);
+        }
+      }
+    },
+
+    drawTacticalCoordinateFrame(game, map, panelX, panelY, panelW, panelH) {
+      const ctx = this.ctx;
+      const cellW = map.w / map.cols;
+      const cellH = map.h / map.rows;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.28)";
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(map.x, map.y, map.w, map.h);
+
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.18)";
+      ctx.lineWidth = 1;
+      for (let i = 1; i < map.cols; i += 1) {
+        const x = map.x + cellW * i;
+        ctx.beginPath();
+        ctx.moveTo(x, map.y);
+        ctx.lineTo(x, map.y + map.h);
+        ctx.stroke();
+      }
+      for (let i = 1; i < map.rows; i += 1) {
+        const y = map.y + cellH * i;
+        ctx.beginPath();
+        ctx.moveTo(map.x, y);
+        ctx.lineTo(map.x + map.w, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.72)";
+      ctx.font = "900 11px Rajdhani, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (let i = 0; i < map.cols; i += 1) {
+        const x = map.x + cellW * (i + 0.5);
+        ctx.fillText(MAP_COLS[i], x, map.y - 13);
+        ctx.fillText(MAP_COLS[i], x, map.y + map.h + 14);
+      }
+
+      for (let i = 0; i < map.rows; i += 1) {
+        const y = map.y + cellH * (i + 0.5);
+        ctx.fillText(MAP_ROWS[i], map.x - 14, y);
+        ctx.fillText(MAP_ROWS[i], map.x + map.w + 14, y);
+      }
+
+      const gridMeters = Math.round(game.world.width / map.cols);
+      ctx.fillStyle = "rgba(237, 244, 239, 0.44)";
+      ctx.font = "800 9px Rajdhani, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`GRID ${gridMeters}m`, panelX + 10, panelY + panelH - 9);
+      ctx.textAlign = "right";
+      ctx.fillText("BLUE/RED UNIT SYMBOLS", panelX + panelW - 10, panelY + panelH - 9);
+      ctx.restore();
     },
 
     drawTacticalUnitDots(game, map, viewerTeam) {
@@ -170,21 +318,55 @@
         const point = this.minimapContactPoint(game, entity, viewerTeam);
         const screen = this.mapPoint(map, point);
         ctx.globalAlpha = point.alpha ?? 1;
-        ctx.fillStyle = TEAM_COLORS[entity.team] || "#edf4ef";
-        if (square) ctx.fillRect(screen.x - radius, screen.y - radius, radius * 2, radius * 2);
+        if (square) this.drawTacticalVehicleIcon(entity, screen, radius);
         else {
+          ctx.fillStyle = TEAM_COLORS[entity.team] || "#edf4ef";
           ctx.beginPath();
           ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.globalAlpha = 1;
       };
-      for (const tank of game.tanks || []) drawUnit(tank, 3.4, true);
-      for (const humvee of game.humvees || []) drawUnit(humvee, 3, true);
+      for (const tank of game.tanks || []) drawUnit(tank, 1, true);
+      for (const humvee of game.humvees || []) drawUnit(humvee, 0.72, true);
       for (const unit of game.infantry || []) {
         if (unit.inVehicle) continue;
         drawUnit(unit, 2.2);
       }
+    },
+
+    drawTacticalVehicleIcon(entity, screen, scale = 1) {
+      const ctx = this.ctx;
+      const teamColor = TEAM_COLORS[entity.team] || "#edf4ef";
+      const tankLike = entity.type === "tank" || entity.constructor?.name === "Tank" || (entity.radius || 0) >= 28;
+      const length = tankLike ? 20 * scale : 17 * scale;
+      const width = tankLike ? 12 * scale : 9 * scale;
+      const trackW = Math.max(2, width * 0.24);
+
+      ctx.save();
+      ctx.translate(screen.x, screen.y);
+      ctx.rotate(entity.angle || 0);
+      ctx.fillStyle = "rgba(4, 8, 8, 0.72)";
+      ctx.fillRect(-length / 2 - 1.5, -width / 2 - 2, length + 3, width + 4);
+      ctx.fillStyle = "rgba(13, 17, 16, 0.86)";
+      ctx.fillRect(-length / 2, -width / 2, length, trackW);
+      ctx.fillRect(-length / 2, width / 2 - trackW, length, trackW);
+      ctx.fillStyle = teamColor;
+      ctx.fillRect(-length / 2 + 2, -width / 2 + trackW, length - 4, width - trackW * 2);
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.54)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-length / 2 + 2, -width / 2 + trackW, length - 4, width - trackW * 2);
+      if (tankLike) {
+        ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
+        ctx.fillRect(-2.2, -3.4, 7.6, 6.8);
+        ctx.strokeStyle = "rgba(237, 244, 239, 0.76)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(3, 0);
+        ctx.lineTo(length / 2 + 8, 0);
+        ctx.stroke();
+      }
+      ctx.restore();
     },
 
     drawTacticalHumanDots(game, map, viewerTeam, player) {
@@ -263,6 +445,7 @@
       for (const item of (game.commandBus?.log || []).slice(-8)) {
         const packet = item.packet;
         if (!item.accepted || !packet || !allowTeam(packet.team)) continue;
+        if (!this.commandPacketPlayerIssued(packet)) continue;
         if (!this.commandVisibleToViewer(game, packet.issuerPlayerId || packet.playerId, packet.team, viewerTeam)) continue;
         const target = this.commandPacketTarget(game, packet);
         if (!target) continue;
@@ -283,6 +466,11 @@
       return entries.slice(-18);
     },
 
+    commandPacketPlayerIssued(packet) {
+      const source = packet?.commandSource || (packet?.controllerType === "bot" ? "bot" : "player");
+      return source === "player";
+    },
+
     commandVisibleToViewer(game, issuerPlayerId, team, viewerTeam) {
       if (game.adminObserverMode) return true;
       if (viewerTeam && team && team !== viewerTeam) return false;
@@ -298,7 +486,7 @@
         ...input,
         recent,
         alpha: recent ? 1 : clamp(1 - (age - 4200) / 18000, 0.38, 0.82),
-        label: this.commandTypeLabel?.(input.type) || input.type || "명령"
+        label: this.commandTypeLabel?.(input.type) || input.type || "ORDER"
       };
     },
 

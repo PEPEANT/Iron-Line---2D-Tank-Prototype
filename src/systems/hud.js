@@ -229,6 +229,9 @@
     bindSettingsControls() {
       this.nodes.settingsButton?.addEventListener("click", () => this.toggleSettingsPanel());
       this.nodes.settingsClose?.addEventListener("click", () => this.toggleSettingsPanel(false));
+      this.nodes.settingsPanel?.addEventListener("click", (event) => {
+        if (event.target === this.nodes.settingsPanel) this.toggleSettingsPanel(false);
+      });
       this.nodes.settingsFullscreen?.addEventListener("click", () => {
         const game = IronLine.game;
         if (game) game.toggleAppFullscreen?.();
@@ -528,13 +531,13 @@
       this.nodes.mobileTacticalMapButton?.setAttribute("aria-label", game.tacticalMapOpen ? "전술지도 닫기" : "전술지도 열기");
 
       if (this.nodes.mobileInteractButton) {
-        const label = canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : inTank ? "\uD558\uCC28" : "\uD0D1\uC2B9";
-        const mobileKey = canPickupDrone || controlledDrone || canDrone ? "KeyE" : "KeyF";
+        const label = inTank ? "\uD558\uCC28" : canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : "\uD0D1\uC2B9";
+        const mobileKey = inTank ? "KeyF" : canPickupDrone || controlledDrone || canDrone ? "KeyE" : "KeyF";
         this.nodes.mobileInteractButton.textContent = label;
         this.nodes.mobileInteractButton.dataset.mobileKey = mobileKey;
         this.nodes.mobileInteractButton.setAttribute(
           "aria-label",
-          canPickupDrone ? "retrieve drone" : controlledDrone ? "return from drone" : canDrone ? "control drone" : inTank ? "dismount" : "mount"
+          inTank ? "dismount" : canPickupDrone ? "retrieve drone" : controlledDrone ? "return from drone" : canDrone ? "control drone" : "mount"
         );
       }
 
@@ -850,8 +853,8 @@
       return this.deploymentUI?.loadoutAmmoText(infantryClass, weapon) || "";
     }
 
-    loadoutSummaryText(classId) {
-      return this.deploymentUI?.loadoutSummaryText(classId) || "";
+    loadoutSummaryText() {
+      return "";
     }
 
     renderDeploymentClassCards(game) {

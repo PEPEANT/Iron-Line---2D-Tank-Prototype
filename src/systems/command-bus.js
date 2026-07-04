@@ -85,6 +85,9 @@
         : issuedAtEpoch + this.commandLockSeconds(type) * 1000;
       const commandId = input.id || input.commandId || `${this.game.onlineSession?.roomId || "local"}:${tick}:${++this.sequence}`;
 
+      const controllerType = input.controllerType || slot?.controllerType || (slot?.playerId ? "human" : "bot");
+      const commandSource = input.commandSource || (controllerType === "bot" ? "bot" : "player");
+
       return {
         id: commandId,
         roomId: input.roomId || this.game.onlineSession?.roomId || "local",
@@ -100,8 +103,8 @@
         commanderSlotId: input.commanderSlotId || input.slotId || slot?.id || player.slotId || "",
         slotRole: input.slotRole || slot?.role || player.role || "",
         role: input.role || slot?.roleId || player.roleId || "",
-        controllerType: input.controllerType || slot?.controllerType || (slot?.playerId ? "human" : "bot"),
-        commandSource: input.commandSource || "",
+        controllerType,
+        commandSource,
         commandReason: input.commandReason || input.reason || type,
         authority: input.authority || "owned_squad",
         type,
@@ -224,7 +227,7 @@
       squads.forEach((squad, index) => this.applySquadOrder(packet, squad, commandPoint, index, squads.length));
       vehicles.forEach((vehicle, index) => this.applyVehicleOrder(packet, vehicle, commandPoint, index, vehicles.length));
       if (!packet.skipCooldown) this.setCooldown(packet, slot);
-      if (!packet.suppressPing) this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
+      if (!packet.suppressPing && this.isPlayerIssuedPacket(packet)) this.addRolePing(packet, commandPoint, squads.length + vehicles.length);
       this.markCommandApplied(packet);
 
       return {
@@ -237,6 +240,11 @@
 
     reject(packet, reason, extra = {}) {
       return { accepted: false, packet, reason, ...extra };
+    }
+
+    isPlayerIssuedPacket(packet) {
+      const source = packet?.commandSource || (packet?.controllerType === "bot" ? "bot" : "player");
+      return source === "player";
     }
 
     resolveSquads(packet, slot) {
@@ -548,6 +556,12 @@
         id: `${packet.id}:ping`,
         type: packet.type,
         team: packet.team,
+        issuerPlayerId: packet.issuerPlayerId || packet.playerId || "",
+        playerId: packet.playerId || packet.issuerPlayerId || "",
+        slotId: packet.slotId || "",
+        commandSource: packet.commandSource || (packet.controllerType === "bot" ? "bot" : "player"),
+        controllerType: packet.controllerType || "",
+        playerIssued: this.isPlayerIssuedPacket(packet),
         x: point.x,
         y: point.y,
         radius: packet.type === "scan" ? 420 : packet.type === "fire_support" ? 330 : 220,

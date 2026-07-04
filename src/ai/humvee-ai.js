@@ -54,6 +54,8 @@
       this.trafficBypassTarget = "";
       this.suspicionPoint = null;
       this.suspicionTimer = 0;
+      this.machineGunTargetKey = "";
+      this.machineGunTrackTimer = 0;
       this.debug = {
         state: this.state,
         goal: "",
@@ -97,6 +99,8 @@
       } else {
         const suspicion = this.activeSuspicionPoint();
         this.target = null;
+        this.machineGunTargetKey = "";
+        this.machineGunTrackTimer = 0;
         if (suspicion) {
           this.state = "search";
           const angle = angleTo(this.vehicle.x, this.vehicle.y, suspicion.x, suspicion.y);
@@ -490,7 +494,29 @@
       );
 
       const aimError = Math.abs(normalizeAngle(this.vehicle.machineGunAngle - targetAngle));
-      if (aimError < 0.18) this.vehicle.fireMachineGun(this.game, target.x, target.y, { target });
+      if (aimError < 0.18 && this.trackMachineGunTarget(target, dt, aimError)) this.vehicle.fireMachineGun(this.game, target.x, target.y, { target });
+    }
+
+    machineGunTargetId(target) {
+      return target?.callSign || target?.id || `${target?.team || ""}:${Math.round(target?.x || 0)}:${Math.round(target?.y || 0)}`;
+    }
+
+    machineGunTrackRequired(target) {
+      if (target?.vehicleType) return 0.22;
+      const distance = distXY(this.vehicle.x, this.vehicle.y, target.x, target.y);
+      const movingPenalty = clamp(Math.abs(this.vehicle.speed || 0) / Math.max(this.vehicle.maxSpeed || 1, 1), 0, 1) * 0.3;
+      return clamp(0.62 + distance / 1500 + movingPenalty, 0.72, 1.16);
+    }
+
+    trackMachineGunTarget(target, dt, aimError) {
+      const key = this.machineGunTargetId(target);
+      if (key !== this.machineGunTargetKey) {
+        this.machineGunTargetKey = key;
+        this.machineGunTrackTimer = 0;
+      }
+      if (aimError <= 0.34 || target?.vehicleType) this.machineGunTrackTimer += dt;
+      else this.machineGunTrackTimer = Math.max(0, this.machineGunTrackTimer - dt * 0.6);
+      return this.machineGunTrackTimer >= this.machineGunTrackRequired(target);
     }
 
     driveTo(dt, x, y, stopDistance = 0, options = {}) {

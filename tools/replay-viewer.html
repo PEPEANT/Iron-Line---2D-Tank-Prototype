@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iron Line Replay Viewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101614;
+      --panel: #17211d;
+      --line: #2b3d36;
+      --text: #e8f1eb;
+      --muted: #9dafaa;
+      --blue: #6fc6ff;
+      --red: #ff7770;
+      --yellow: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #0c1210;
+      min-width: 0;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 750;
+      margin: 0;
+      white-space: nowrap;
+    }
+    input[type="file"] { max-width: 260px; }
+    button, select {
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: #1b2823;
+      border-radius: 6px;
+      min-height: 34px;
+      padding: 0 10px;
+      font-weight: 700;
+    }
+    button:hover { background: #24352f; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      min-height: 0;
+    }
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #141d19;
+    }
+    aside {
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      padding: 12px;
+      overflow: auto;
+    }
+    .controls {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: grid;
+      grid-template-columns: auto minmax(80px, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      background: rgba(8, 12, 10, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      backdrop-filter: blur(5px);
+    }
+    input[type="range"] { width: 100%; }
+    .time {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      min-width: 92px;
+      text-align: right;
+    }
+    .filters {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 7px 10px;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .kv span:nth-child(odd) { color: var(--muted); }
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+      aside { border-left: 0; border-top: 1px solid var(--line); max-height: 38vh; }
+      .controls { grid-template-columns: auto 1fr; }
+      .time, .controls select { justify-self: stretch; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Iron Line Replay Viewer</h1>
+    <input id="fileInput" type="file" accept=".json,application/json">
+    <button id="playButton" type="button">Play</button>
+    <button id="nextGrenadeButton" type="button">Next Grenade</button>
+  </header>
+  <main class="layout">
+    <section class="stage">
+      <canvas id="replayCanvas"></canvas>
+      <div id="emptyState" class="empty">Open reports/playtests/behavior-census-*/result.json</div>
+      <div class="controls">
+        <input id="timeline" type="range" min="0" max="0" value="0" step="1">
+        <div id="timeLabel" class="time">0.0 / 0.0</div>
+        <select id="speedSelect" title="Playback speed">
+          <option value="0.25">0.25x</option>
+          <option value="1" selected>1x</option>
+          <option value="4">4x</option>
+          <option value="16">16x</option>
+        </select>
+        <button id="fitButton" type="button">Fit</button>
+      </div>
+    </section>
+    <aside>
+      <strong>Filters</strong>
+      <div class="filters">
+        <label><input type="checkbox" data-filter="shot" checked> shots</label>
+        <label><input type="checkbox" data-filter="grenade" checked> grenades</label>
+        <label><input type="checkbox" data-filter="prone" checked> prone</label>
+        <label><input type="checkbox" data-filter="death" checked> deaths</label>
+      </div>
+      <strong>Selection</strong>
+      <div id="selection" class="kv"></div>
+      <strong>Run</strong>
+      <div id="runInfo" class="kv"></div>
+    </aside>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("replayCanvas");
+    const ctx = canvas.getContext("2d");
+    const fileInput = document.getElementById("fileInput");
+    const timeline = document.getElementById("timeline");
+    const timeLabel = document.getElementById("timeLabel");
+    const playButton = document.getElementById("playButton");
+    const nextGrenadeButton = document.getElementById("nextGrenadeButton");
+    const speedSelect = document.getElementById("speedSelect");
+    const fitButton = document.getElementById("fitButton");
+    const emptyState = document.getElementById("emptyState");
+    const selection = document.getElementById("selection");
+    const runInfo = document.getElementById("runInfo");
+    const filters = new Map(Array.from(document.querySelectorAll("[data-filter]")).map((node) => [node.dataset.filter, node]));
+
+    let replay = null;
+    let frameIndex = 0;
+    let playing = false;
+    let lastTime = 0;
+    let view = { minX: 0, minY: 0, maxX: 1, maxY: 1, scale: 1, padX: 0, padY: 0 };
+    let selectedUnitId = "";
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      draw();
+    }
+
+    function loadReplay(data) {
+      replay = data;
+      frameIndex = 0;
+      selectedUnitId = "";
+      timeline.max = Math.max(0, (data.frames || []).length - 1);
+      timeline.value = "0";
+      emptyState.style.display = "none";
+      computeFit();
+      renderInfo();
+      draw();
+    }
+
+    function computeFit() {
+      if (!replay?.frames?.length) return;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const frame of replay.frames) {
+        for (const unit of frame.units || []) {
+          minX = Math.min(minX, unit.x);
+          minY = Math.min(minY, unit.y);
+          maxX = Math.max(maxX, unit.x);
+          maxY = Math.max(maxY, unit.y);
+        }
+      }
+      if (!Number.isFinite(minX)) {
+        minX = 0; minY = 0; maxX = 1000; maxY = 1000;
+      }
+      const margin = 140;
+      view.minX = minX - margin;
+      view.minY = minY - margin;
+      view.maxX = maxX + margin;
+      view.maxY = maxY + margin;
+    }
+
+    function toScreen(x, y) {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(1, view.maxX - view.minX);
+      const h = Math.max(1, view.maxY - view.minY);
+      const scale = Math.min(rect.width / w, rect.height / h);
+      const padX = (rect.width - w * scale) / 2;
+      const padY = (rect.height - h * scale) / 2;
+      return {
+        x: padX + (x - view.minX) * scale,
+        y: padY + (y - view.minY) * scale,
+        scale
+      };
+    }
+
+    function fromScreen(x, y) {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(1, view.maxX - view.minX);
+      const h = Math.max(1, view.maxY - view.minY);
+      const scale = Math.min(rect.width / w, rect.height / h);
+      const padX = (rect.width - w * scale) / 2;
+      const padY = (rect.height - h * scale) / 2;
+      return {
+        x: view.minX + (x - padX) / scale,
+        y: view.minY + (y - padY) / scale
+      };
+    }
+
+    function visibleEvents(now) {
+      if (!replay?.events) return [];
+      return replay.events.filter((event) => {
+        const age = now - event.t;
+        if (event.type === "shot") return filters.get("shot").checked && age >= 0 && age <= 0.45;
+        if (event.type === "grenade" || event.type === "grenade-launch") return filters.get("grenade").checked && age >= 0 && age <= 4.5;
+        if (event.type === "prone-enter" || event.type === "prone-exit") return filters.get("prone").checked && age >= 0 && age <= 2.5;
+        if (event.type === "death") return filters.get("death").checked && age >= 0 && age <= 5.5;
+        return false;
+      });
+    }
+
+    function drawGrid(rect) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.lineWidth = 1;
+      const step = 200;
+      const startX = Math.floor(view.minX / step) * step;
+      const startY = Math.floor(view.minY / step) * step;
+      for (let x = startX; x <= view.maxX; x += step) {
+        const a = toScreen(x, view.minY);
+        const b = toScreen(x, view.maxY);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      for (let y = startY; y <= view.maxY; y += step) {
+        const a = toScreen(view.minX, y);
+        const b = toScreen(view.maxX, y);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawEvents(now) {
+      for (const event of visibleEvents(now)) {
+        if (event.type === "shot") {
+          const a = toScreen(event.x, event.y);
+          const b = toScreen(event.tx, event.ty);
+          ctx.save();
+          ctx.globalAlpha = Math.max(0.12, 1 - (now - event.t) / 0.45);
+          ctx.strokeStyle = event.mode === "point" || event.los === false ? "rgba(255, 209, 102, 0.92)" : "rgba(230, 238, 232, 0.55)";
+          ctx.lineWidth = event.mode === "point" ? 2.2 : 1.5;
+          if (event.mode === "point" || event.los === false) ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          ctx.restore();
+        } else if (event.type === "grenade" || event.type === "grenade-launch") {
+          const p = toScreen(event.tx, event.ty);
+          ctx.save();
+          ctx.strokeStyle = event.ok ? "rgba(255, 209, 102, 0.95)" : "rgba(255, 209, 102, 0.32)";
+          ctx.lineWidth = event.type === "grenade-launch" ? 3 : 1.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 10 + Math.sin(now * 8) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        } else if (event.type === "death") {
+          const p = toScreen(event.x, event.y);
+          ctx.save();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x - 7, p.y - 7);
+          ctx.lineTo(p.x + 7, p.y + 7);
+          ctx.moveTo(p.x + 7, p.y - 7);
+          ctx.lineTo(p.x - 7, p.y + 7);
+          ctx.stroke();
+          ctx.restore();
+        } else if (event.type === "prone-enter" || event.type === "prone-exit") {
+          const p = toScreen(event.x, event.y);
+          ctx.save();
+          ctx.fillStyle = event.type === "prone-enter" ? "rgba(120, 210, 160, 0.72)" : "rgba(180, 190, 180, 0.42)";
+          ctx.fillRect(p.x - 8, p.y - 2, 16, 4);
+          ctx.restore();
+        }
+      }
+    }
+
+    function drawUnits(frame) {
+      const units = frame?.units || [];
+      for (const unit of units) {
+        if (!unit.alive) continue;
+        const p = toScreen(unit.x, unit.y);
+        const hpRatio = Math.max(0.16, Math.min(1, unit.hp / Math.max(1, unit.maxHp || unit.hp || 1)));
+        ctx.save();
+        ctx.globalAlpha = 0.38 + hpRatio * 0.62;
+        ctx.fillStyle = unit.team === "blue" ? "#6fc6ff" : unit.team === "red" ? "#ff7770" : "#d8ded8";
+        ctx.strokeStyle = unit.id === selectedUnitId ? "#ffffff" : "rgba(0,0,0,0.65)";
+        ctx.lineWidth = unit.id === selectedUnitId ? 3 : 1;
+        ctx.beginPath();
+        if (unit.prone) {
+          ctx.ellipse(p.x, p.y, 6.5, 3.2, 0, 0, Math.PI * 2);
+        } else {
+          ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.stroke();
+        if (unit.sup > 20) {
+          ctx.strokeStyle = "rgba(255, 209, 102, 0.65)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 8 + Math.min(8, unit.sup / 12), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.fillStyle = "#141d19";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      if (!replay?.frames?.length) return;
+      const frame = replay.frames[Math.max(0, Math.min(frameIndex, replay.frames.length - 1))];
+      drawGrid(rect);
+      drawEvents(frame.t);
+      drawUnits(frame);
+      timeLabel.textContent = `${Number(frame.t || 0).toFixed(1)} / ${Number(replay.meta?.durationMs / 1000 || replay.frames.at(-1)?.t || 0).toFixed(1)}`;
+      timeline.value = String(frameIndex);
+      renderSelection(frame);
+    }
+
+    function renderInfo() {
+      const meta = replay?.meta || {};
+      const events = replay?.events || [];
+      runInfo.innerHTML = "";
+      const rows = [
+        ["profile", meta.profile || ""],
+        ["duration", `${Math.round((meta.durationMs || 0) / 1000)}s`],
+        ["frames", replay?.frames?.length || 0],
+        ["events", events.length],
+        ["shots", events.filter((event) => event.type === "shot").length],
+        ["grenades", events.filter((event) => event.type === "grenade" || event.type === "grenade-launch").length]
+      ];
+      for (const [k, v] of rows) {
+        runInfo.insertAdjacentHTML("beforeend", `<span>${k}</span><span>${v}</span>`);
+      }
+    }
+
+    function renderSelection(frame) {
+      const unit = (frame?.units || []).find((item) => item.id === selectedUnitId);
+      selection.innerHTML = "";
+      if (!unit) {
+        selection.insertAdjacentHTML("beforeend", "<span>unit</span><span>none</span>");
+        return;
+      }
+      const rows = [
+        ["id", unit.id],
+        ["team", unit.team],
+        ["squad", unit.squad],
+        ["weapon", unit.weapon],
+        ["state", unit.state],
+        ["hp", `${unit.hp}/${unit.maxHp}`],
+        ["suppression", unit.sup],
+        ["prone", unit.prone ? "yes" : "no"]
+      ];
+      for (const [k, v] of rows) {
+        selection.insertAdjacentHTML("beforeend", `<span>${k}</span><span>${v}</span>`);
+      }
+    }
+
+    function tick(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = (ts - lastTime) / 1000;
+      lastTime = ts;
+      if (playing && replay?.frames?.length) {
+        const speed = Number(speedSelect.value) || 1;
+        const current = replay.frames[frameIndex];
+        const targetTime = (current?.t || 0) + dt * speed;
+        while (frameIndex < replay.frames.length - 1 && replay.frames[frameIndex + 1].t <= targetTime) frameIndex += 1;
+        if (frameIndex >= replay.frames.length - 1) {
+          playing = false;
+          playButton.textContent = "Play";
+        }
+        draw();
+      }
+      requestAnimationFrame(tick);
+    }
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          loadReplay(JSON.parse(String(reader.result || "{}")));
+        } catch (error) {
+          alert(error.message || String(error));
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    timeline.addEventListener("input", () => {
+      frameIndex = Number(timeline.value) || 0;
+      draw();
+    });
+    playButton.addEventListener("click", () => {
+      playing = !playing;
+      playButton.textContent = playing ? "Pause" : "Play";
+      lastTime = 0;
+    });
+    nextGrenadeButton.addEventListener("click", () => {
+      if (!replay?.events?.length) return;
+      const now = replay.frames[frameIndex]?.t || 0;
+      const event = replay.events.find((item) => (
+        item.t > now && (item.type === "grenade" || item.type === "grenade-launch") && item.ok !== false
+      ));
+      if (!event) return;
+      frameIndex = replay.frames.findIndex((frame) => frame.t >= event.t);
+      if (frameIndex < 0) frameIndex = replay.frames.length - 1;
+      draw();
+    });
+    fitButton.addEventListener("click", () => {
+      computeFit();
+      draw();
+    });
+    for (const node of filters.values()) node.addEventListener("change", draw);
+    canvas.addEventListener("click", (event) => {
+      if (!replay?.frames?.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const world = fromScreen(event.clientX - rect.left, event.clientY - rect.top);
+      const frame = replay.frames[frameIndex];
+      let best = null;
+      let bestDistance = Infinity;
+      for (const unit of frame.units || []) {
+        if (!unit.alive) continue;
+        const d = Math.hypot(unit.x - world.x, unit.y - world.y);
+        if (d < bestDistance) {
+          best = unit;
+          bestDistance = d;
+        }
+      }
+      if (best && bestDistance < 34) selectedUnitId = best.id;
+      draw();
+    });
+
+    window.addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>

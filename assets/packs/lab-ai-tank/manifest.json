@@ -1,0 +1,27 @@
+{
+  "id": "lab-ai-tank",
+  "version": 1,
+  "label": "Lab AI Tank Sprite Pack",
+  "basePath": "assets/packs/lab-ai-tank/",
+  "lockedGameplay": true,
+  "slots": {
+    "vehicle.tank.hull": {
+      "type": "image",
+      "priority": "p1",
+      "src": "hull.png",
+      "style": { "crop": [334, 85, 583, 1054], "rotate": 90, "width": 48, "height": 82 }
+    },
+    "vehicle.tank.turret": {
+      "type": "image",
+      "priority": "p1",
+      "src": "turret.png",
+      "style": { "crop": [391, 49, 469, 1117], "rotate": 90, "width": 40, "height": 96, "offsetY": -21 }
+    },
+    "vehicle.tank.wreck": {
+      "type": "image",
+      "priority": "p1",
+      "src": "wreck.png",
+      "style": { "crop": [363, 73, 534, 1107], "rotate": 90, "width": 48, "height": 82 }
+    }
+  }
+}

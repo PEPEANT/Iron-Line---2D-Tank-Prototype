@@ -3,7 +3,7 @@
 (function registerInfantryWeaponDecision(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM, INFANTRY_WEAPONS } = IronLine.constants;
-  const { clamp, distXY, angleTo, normalizeAngle } = IronLine.math;
+  const { clamp, distXY, angleTo, normalizeAngle, approach } = IronLine.math;
   const { hasLineOfSight } = IronLine.physics;
   const INFANTRY_CONFIG = IronLine.InfantryAIConfig;
 
@@ -29,6 +29,8 @@
       this.grenadeAimRequired = 0;
       this.grenadePreparing = false;
       this.grenadeWeaponId = "";
+      this.cachedGrenadeTarget = null;
+      this.grenadeTargetGraceTimer = 0;
       if (reason) this.grenadeHoldReason = reason;
     },
     grenadeTargetKey(target) {
@@ -64,6 +66,12 @@
       this.grenadeAimRequired = required;
       this.grenadeAimTime = clamp(this.grenadeAimTime + dt * facingGain, 0, required);
       this.grenadePreparing = this.grenadeAimTime < required;
+      if (this.grenadePreparing) {
+        this.grenadeTargetGraceTimer = Math.max(
+          this.grenadeTargetGraceTimer || 0,
+          INFANTRY_CONFIG.grenadeAimCacheGrace || 0.78
+        );
+      }
       return this.grenadeAimTime >= required;
     },
     grenadeSoftTargets() {
@@ -85,23 +93,60 @@
 
       return targets;
     },
+    grenadeEntrenchedBonus(target) {
+      const suppression = target?.suppression || 0;
+      return (target?.isProne ? 0.72 : 0) + (suppression >= 45 ? 0.45 : suppression >= 30 ? 0.24 : 0);
+    },
     selectGrenadeTargetBudgeted(contact, tankThreat) {
       const cached = this.cachedGrenadeTarget;
-      const target = cached?.target || null;
-      const weapon = cached?.weapon || null;
-      const ammoKey = weapon?.ammoKey || weapon?.id || "";
-      const cacheValid = cached &&
-        weapon &&
-        (!target || target.alive !== false) &&
-        (!ammoKey || (this.unit.equipmentAmmo?.[ammoKey] || 0) > 0);
+      const cacheValid = this.isGrenadeCandidateCacheValid(cached, {
+        allowGrace: this.grenadePreparing || (this.grenadeTargetGraceTimer || 0) > 0
+      });
 
-      if (!this.grenadePreparing && this.grenadeDecisionTimer > 0) {
+      if (this.grenadePreparing && cacheValid) return cached;
+
+      if (this.grenadeDecisionTimer > 0) {
         return cacheValid ? cached : null;
       }
 
       this.grenadeDecisionTimer = 0.16 + (this.seed % 7) * 0.018 + Math.random() * 0.06;
       this.cachedGrenadeTarget = this.selectGrenadeTarget(contact, tankThreat);
+      if (this.cachedGrenadeTarget) {
+        this.grenadeTargetGraceTimer = Math.max(
+          this.grenadeTargetGraceTimer || 0,
+          INFANTRY_CONFIG.grenadeAimCacheGrace || 0.78
+        );
+      }
       return this.cachedGrenadeTarget;
+    },
+    continueGrenadeAim(dt, contact, tankThreat) {
+      if (!this.grenadePreparing || this.unit.suppression >= 84) return false;
+      const target = this.selectGrenadeTargetBudgeted(contact, tankThreat);
+      if (!target) return false;
+      this.faceContact(target, dt);
+      const thrown = this.tryThrowGrenade(target, dt);
+      if (!thrown && !this.grenadePreparing) return false;
+      this.state = thrown ? "grenade" : "grenade-aim";
+      this.target = target.target || contact;
+      this.unit.speed = approach(this.unit.speed, 0, 280 * dt);
+      this.updateDebug(target);
+      return true;
+    },
+    isGrenadeCandidateCacheValid(candidate, options = {}) {
+      const target = candidate?.target || null;
+      const weapon = candidate?.weapon || INFANTRY_WEAPONS.grenade;
+      const ammoKey = weapon?.ammoKey || weapon?.id || "";
+      if (!candidate || !weapon || !target || !this.isAliveEnemy(target)) return false;
+      if (ammoKey && (this.unit.equipmentAmmo?.[ammoKey] || 0) <= 0) return false;
+
+      const rangeGrace = options.allowGrace ? 36 : 0;
+      const distance = distXY(this.unit.x, this.unit.y, candidate.x, candidate.y);
+      if (distance < INFANTRY_CONFIG.grenadeMinRange - 8 || distance > (weapon.range || 360) + rangeGrace) return false;
+      if (!this.isGrenadePointSafe(candidate, weapon)) return false;
+      if (!options.skipStrict && this.isGrenadeTargetStillValid(candidate, weapon, {
+        aimGrace: options.allowGrace
+      })) return true;
+      return Boolean(options.allowGrace && (this.grenadeTargetGraceTimer || 0) > 0);
     },
     selectGrenadeTarget(contact, tankThreat) {
       const weapons = this.grenadeWeapons();
@@ -168,7 +213,8 @@
             Math.max(0, cluster.count - 1) * 0.28 +
             (covered ? 1.05 : 0) +
             (nearVehicle ? 1.15 : 0) +
-            (target.classId === "engineer" ? 0.18 : 0);
+            (target.classId === "engineer" ? 0.18 : 0) +
+            this.grenadeEntrenchedBonus(target);
 
           if (score >= INFANTRY_CONFIG.grenadeScoreThreshold) {
             addCandidate(weapon, cluster.center, target, score, covered ? "cover" : nearVehicle ? "vehicle" : "cluster");
@@ -194,7 +240,7 @@
       }
       return best;
     },
-    canUseReportedGrenadeTarget(report, weapon = INFANTRY_WEAPONS.grenade) {
+    canUseReportedGrenadeTarget(report, weapon = INFANTRY_WEAPONS.grenade, options = {}) {
       if (!report || !report.target) return false;
       if (report.sourceType === "objective") return false;
       if (!this.isAliveEnemy(report.target)) return false;
@@ -204,16 +250,21 @@
       const source = report.sourceType || "";
       const confirmed = report.certainty === "confirmed" || source === "scout" || source === "recon_drone";
       const launcher = weapon?.id === "grenadeLauncher";
+      const aimGrace = options.aimGrace ? INFANTRY_CONFIG.grenadeReportAimGrace || 0.55 : 0;
+      const combatFresh = source === "combat" &&
+        age <= (launcher ? 1.05 : 0.82) + aimGrace &&
+        confidence >= 0.64;
 
-      if (launcher) return age <= 1.45 && confidence >= 0.78 && (confirmed || source === "attack_drone");
-      return age <= 0.95 && confidence >= 0.88 && confirmed;
+      if (combatFresh) return true;
+      if (launcher) return age <= 1.9 + aimGrace && confidence >= 0.74 && (confirmed || source === "attack_drone");
+      return age <= 1.35 + aimGrace && confidence >= 0.82 && confirmed;
     },
-    isGrenadeTargetStillValid(target, weapon = INFANTRY_WEAPONS.grenade) {
+    isGrenadeTargetStillValid(target, weapon = INFANTRY_WEAPONS.grenade, options = {}) {
       const subject = target?.target || null;
       if (!target || !subject || !this.isAliveEnemy(subject)) return false;
       if (!this.isGrenadePointSafe(target, weapon)) return false;
       if (hasLineOfSight(this.game, this.unit, subject, { padding: this.isVehicleTarget(subject) ? 4 : 3 })) return true;
-      return this.canUseReportedGrenadeTarget(this.game.getReportedContact?.(this.unit.team, subject), weapon);
+      return this.canUseReportedGrenadeTarget(this.game.getReportedContact?.(this.unit.team, subject), weapon, options);
     },
     grenadeClusterAt(target, targets) {
       const members = targets.filter((item) => (
@@ -282,19 +333,37 @@
     },
     tryThrowGrenade(target, dt = 0.033) {
       const weapon = target?.weapon || INFANTRY_WEAPONS.grenade;
+      const wasPreparing = this.grenadePreparing;
       this.grenadePreparing = false;
       if (!weapon || !target || !this.hasGrenade(weapon.id)) {
         this.resetGrenadeAim("no-ammo");
         return false;
       }
-      if (this.fireCooldown > 0 || this.grenadeCooldown > 0) return false;
+      if (this.fireCooldown > 0 || this.grenadeCooldown > 0) {
+        if (this.fireCooldown > 0 && this.grenadeCooldown <= 0 && wasPreparing && this.isGrenadeCandidateCacheValid(target, {
+          allowGrace: true
+        })) {
+          this.grenadePreparing = true;
+        }
+        return false;
+      }
 
       const distance = distXY(this.unit.x, this.unit.y, target.x, target.y);
       if (distance < INFANTRY_CONFIG.grenadeMinRange || distance > weapon.range) {
         this.resetGrenadeAim("range");
         return false;
       }
-      if (!this.isGrenadeTargetStillValid(target, weapon)) {
+      if (!this.isGrenadeTargetStillValid(target, weapon, {
+        aimGrace: wasPreparing || (this.grenadeTargetGraceTimer || 0) > 0
+      })) {
+        if (this.isGrenadeCandidateCacheValid(target, {
+          allowGrace: true,
+          skipStrict: true
+        })) {
+          this.grenadePreparing = true;
+          this.grenadeTargetGraceTimer = Math.max(this.grenadeTargetGraceTimer || 0, 0.22);
+          return false;
+        }
         this.resetGrenadeAim("stale-report");
         return false;
       }

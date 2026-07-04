@@ -1,0 +1,4 @@
+body .hud-top .objective-strip,
+body.mobile-controls-active .hud-top .objective-strip {
+  display: none !important;
+}

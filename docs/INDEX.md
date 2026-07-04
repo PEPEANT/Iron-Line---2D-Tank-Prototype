@@ -12,6 +12,11 @@ Iron Line 2D Tank Prototype의 현재 구조, 운영 설계, AI 설계, 코드 �
 - [에셋팩 구조](asset-pack-structure.md): 외주/AI 생성 에셋을 안전하게 갈아끼우기 위한 manifest, registry, renderer fallback, 전투 피드백 슬롯 기준.
 - [배포 전 준비](production-prep.md): 로컬 실행, 문법 검사, 시작 화면/플레이 검증 기준.
 - [Iron Line core doctrine](iron-line-core-doctrine.md): 2026-07-03 현재 대화에서 도달한 핵심 판단. V1-V5 방향표, 모바일 첫 체감, AI 전장 템포, 에셋 기반, 로비 디자인, 공개 푸시를 본질 보존 관점에서 정리.
+- [R1 출시 게이트](r1-release-gate.md): 2026-07-04 ALPHA R1.0 범위, G1~G4 체크리스트, R2 백로그를 한 곳에 잠근 출시 기준.
+- [AI 행동 관측 계획](ai-behavior-observability-plan.md): 수류탄, 제압사격, 엎드림, 사격-기동 분업을 숫자와 리플레이로 검증하는 "AI의 눈" 상위 계획.
+- [AI의 눈 구현 설계도](ai-eyes-blueprint.md): `check-behavior-census.cjs`, 리플레이 뷰어, npm 별칭을 다른 AI에게 위임할 수 있게 정리한 구현 지시서.
+- [모바일 시야 확보 설계도](mobile-fov-blueprint.md): 모바일 기본 줌, 핀치 줌, 시야 토글을 좁은 화면 첫 체감 개선으로 묶은 지시서.
+- [지휘관 존재감 설계도](commander-presence-blueprint.md): 기존 지휘관 AI 명령을 무전으로 보이게 하고 정체 구간 재공세를 여는 최소 패치 지시서.
 - [Commander order QA interim report](commander-order-qa-interim-report-2026-05-22.md): 2026-05-22 local live-play evidence for role-special command flow, command state visibility, command locks, and remaining offline gate checks.
 - [Commander order QA completion report](commander-order-qa-completion-report-2026-05-22.md): 2026-05-22 role-level PASS decision for moving into the offline command stability gate.
 - [Offline command stability gate report](offline-command-stability-gate-report-2026-05-22.md): 2026-05-22 local/offline PASS decision for role command stability, stopped-state visibility, duplicate/cancel behavior, and basic vehicle wait/stuck diagnostics before online command synchronization.

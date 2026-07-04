@@ -38,6 +38,9 @@
       this.proneHoldTimer = 0;
       this.hitReactTimer = 0;
       this.hitSlowTimer = 0;
+      this.hitReactAngle = 0;
+      this.hitReactStrength = 0;
+      this.healthRevealTimer = 0;
       this.deathTime = 0;
       this.deathPoseAngle = 0;
       this.alive = true;
@@ -64,6 +67,7 @@
       this.proneHoldTimer = Math.max(0, (this.proneHoldTimer || 0) - dt);
       this.hitReactTimer = Math.max(0, (this.hitReactTimer || 0) - dt);
       this.hitSlowTimer = Math.max(0, (this.hitSlowTimer || 0) - dt);
+      this.healthRevealTimer = Math.max(0, (this.healthRevealTimer || 0) - dt);
       if (this.inVehicle) {
         if (!this.inVehicle.alive) {
           this.inVehicle = null;
@@ -85,7 +89,7 @@
     }
 
     updateSuppression(dt) {
-      const recoveryRate = this.suppressed ? 7 : 10;
+      const recoveryRate = this.isProne ? 3.9 : this.suppressed ? 5.8 : 9.2;
       this.suppression = Math.max(0, this.suppression - recoveryRate * dt);
       this.suppressionTimer = Math.max(0, this.suppressionTimer - dt);
 
@@ -109,6 +113,7 @@
       if (!this.alive) return;
       this.suppress(26 + amount * 0.42, source);
       this.hp -= amount;
+      this.healthRevealTimer = Math.max(this.healthRevealTimer || 0, 1.55);
       if (this.hp <= 0) {
         this.hp = 0;
         this.alive = false;
@@ -119,6 +124,10 @@
         const impact = Math.min(0.16, Math.max(0.08, amount / Math.max(1, this.maxHp) * 0.42));
         this.hitReactTimer = Math.max(this.hitReactTimer || 0, impact);
         this.hitSlowTimer = Math.max(this.hitSlowTimer || 0, 0.32 + Math.min(0.2, amount / 80));
+        if (source && Number.isFinite(source.x) && Number.isFinite(source.y)) {
+          this.hitReactAngle = Math.atan2(this.y - source.y, this.x - source.x);
+          this.hitReactStrength = Math.max(this.hitReactStrength || 0, Math.min(6, 2.4 + amount / 18));
+        }
       }
     }
   }

@@ -13,6 +13,8 @@
       this.target = null;
       this.lostContactTimer = 0;
       this.smokeCooldown = 0;
+      this.fireTargetKey = "";
+      this.fireTrackTimer = 0;
       this.lastDecision = this.captureDecision();
     }
 
@@ -23,6 +25,8 @@
       if (!contact) {
         this.target = null;
         this.lostContactTimer = 0;
+        this.fireTargetKey = "";
+        this.fireTrackTimer = 0;
         this.lastDecision = this.captureDecision();
         return this.lastDecision;
       }
@@ -49,6 +53,7 @@
       const shotClear = this.tank.loadedAmmo ? hasClearShot(this.game, this.tank, target, this.tank.loadedAmmo) : false;
       const ammoSafe = this.tank.loadedAmmo ? this.isAmmoSafeForTarget(target, this.tank.loadedAmmo) : true;
       const lineSafe = this.tank.loadedAmmo ? this.isFireLaneSafe(target, this.tank.loadedAmmo) : true;
+      const cannonAllowed = this.canUseCannonOnTarget(target, distance);
       const shotSafe = ammoSafe && lineSafe;
       const desiredRange = AI_CONFIG.desiredRange[ammoId] || AI_CONFIG.desiredRange.fallback;
       const mode = this.tank.hp < this.tank.maxHp * AI_CONFIG.retreatHealthRatio ? "retreat" : "engage";
@@ -57,6 +62,7 @@
       const targetAngle = angleTo(this.tank.x, this.tank.y, target.x, target.y);
       const aimDiff = Math.abs(normalizeAngle(this.tank.turretAngle - targetAngle));
       const aimAligned = aimDiff < 0.075;
+      const aimSettled = this.trackFireTarget(target, dt, aimDiff, distance);
       const fireDecision = this.scoreFireDecision({
         target,
         distance,
@@ -64,13 +70,15 @@
         shotClear,
         ammoSafe,
         lineSafe,
+        cannonAllowed,
         shotSafe,
         weaponReady,
         aimAligned,
+        aimSettled,
         aimDiff
       });
 
-      if (visible && shotClear && shotSafe && weaponReady && aimAligned) {
+      if (visible && shotClear && shotSafe && cannonAllowed && weaponReady && aimAligned && aimSettled) {
         this.tank.fire(this.game, { target });
       }
 
@@ -86,9 +94,11 @@
         unsafeLine: visible && shotClear && !lineSafe,
         ammoSafe,
         lineSafe,
+        cannonAllowed,
         weaponReady,
         aimDiff,
         aimAligned,
+        aimSettled,
         ammoId,
         desiredRange,
         decision: fireDecision
@@ -223,8 +233,8 @@
 
     chooseAmmo(target) {
       if (this.isInfantryTarget(target)) {
+        if (!this.canUseCannonOnTarget(target)) return null;
         if (this.tank.ammo.he > 0 && this.isAmmoSafeForTarget(target, "he")) return "he";
-        if (this.tank.ammo.ap > 0) return "ap";
         return null;
       }
 
@@ -296,6 +306,39 @@
       return target.radius <= 14 && !target.ammo;
     }
 
+    canUseCannonOnTarget(target, distance = null) {
+      if (!this.isInfantryTarget(target)) return true;
+      const d = distance ?? distXY(this.tank.x, this.tank.y, target.x, target.y);
+      const cluster = this.infantryClusterCount(target, 170);
+      if (cluster >= 4) return true;
+      const rpgThreat = target.classId === "engineer" || target.weaponId === "rpg";
+      return rpgThreat && cluster >= 2 && d <= 380;
+    }
+
+    fireTargetId(target) {
+      return target?.callSign || target?.id || `${target?.team || ""}:${Math.round(target?.x || 0)}:${Math.round(target?.y || 0)}`;
+    }
+
+    fireTrackRequired(target, distance) {
+      if (!this.isInfantryTarget(target)) return 0;
+      const cluster = this.infantryClusterCount(target, 170);
+      const clusterBonus = cluster >= 4 ? -0.24 : cluster >= 3 ? -0.12 : 0;
+      return clamp(0.92 + distance / 1900 + clusterBonus, 0.82, 1.35);
+    }
+
+    trackFireTarget(target, dt, aimDiff, distance) {
+      const required = this.fireTrackRequired(target, distance);
+      if (required <= 0) return true;
+      const key = this.fireTargetId(target);
+      if (key !== this.fireTargetKey) {
+        this.fireTargetKey = key;
+        this.fireTrackTimer = 0;
+      }
+      if (aimDiff <= 0.18) this.fireTrackTimer += dt;
+      else this.fireTrackTimer = Math.max(0, this.fireTrackTimer - dt * 0.7);
+      return this.fireTrackTimer >= required;
+    }
+
     infantryClusterCount(target, radius) {
       if (!target) return 0;
       let count = this.isInfantryTarget(target) ? 1 : 0;
@@ -361,6 +404,7 @@
         weaponReady: false,
         aimDiff: Math.PI,
         aimAligned: false,
+        aimSettled: false,
         ammoId: "",
         decision: this.scoreFireDecision({ reason: "no_target" }),
         desiredRange: AI_CONFIG.desiredRange.fallback
@@ -373,14 +417,17 @@
       const shotClear = Boolean(profile.shotClear);
       const ammoSafe = profile.ammoSafe !== false;
       const lineSafe = profile.lineSafe !== false;
+      const cannonAllowed = profile.cannonAllowed !== false;
       const weaponReady = Boolean(profile.weaponReady);
       const aimAligned = Boolean(profile.aimAligned);
+      const aimSettled = profile.aimSettled !== false;
       const shotSafe = profile.shotSafe !== false && ammoSafe && lineSafe;
       const score = clamp(
         (target ? 0.1 : 0) +
         (visible ? 0.25 : 0) +
         (shotClear ? 0.22 : 0) +
         (shotSafe ? 0.18 : -0.32) +
+        (cannonAllowed ? 0.04 : -0.16) +
         (weaponReady ? 0.13 : 0) +
         (aimAligned ? 0.12 : 0),
         0,
@@ -392,10 +439,12 @@
       if (!target) reason = "no_target";
       else if (!visible) reason = "no_line_of_sight";
       else if (!shotClear) reason = "no_line_of_sight";
+      else if (!cannonAllowed) reason = "mg_preferred_for_infantry";
       else if (!lineSafe) reason = "friendly_in_line";
       else if (!ammoSafe) reason = "friendly_splash_risk";
       else if (!weaponReady) reason = "weapon_not_ready";
       else if (!aimAligned) reason = "not_facing";
+      else if (!aimSettled) reason = "settling_aim";
       else {
         reason = "fire_ready";
         decision = "fire";
@@ -414,8 +463,10 @@
           shotClear,
           ammoSafe,
           lineSafe,
+          cannonAllowed,
           weaponReady,
           aimAligned,
+          aimSettled,
           aimDiff: Math.round((profile.aimDiff || 0) * 100) / 100,
           distance: Math.round(profile.distance || 0)
         }

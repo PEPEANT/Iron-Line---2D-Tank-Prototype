@@ -1,0 +1,331 @@
+/* Lobby flow overhaul: boot loading, main menu stage, deployment readability, weapon art. */
+
+/* ---------- boot loading screen ---------- */
+
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(142, 216, 255, 0.1), transparent 34%),
+    radial-gradient(circle at 78% 82%, rgba(255, 209, 102, 0.08), transparent 36%),
+    #060b09;
+  transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+.boot-screen.boot-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.boot-inner {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.boot-mark {
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 209, 102, 0.5);
+  border-radius: 4px;
+  color: #ffd166;
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: 0.22em;
+}
+
+.boot-inner strong {
+  color: rgba(237, 244, 239, 0.88);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.boot-bar {
+  width: min(260px, 60vw);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(237, 244, 239, 0.12);
+}
+
+.boot-bar span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.2), #ffd166);
+  animation: boot-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes boot-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(260%); }
+}
+
+.boot-inner small {
+  color: rgba(237, 244, 239, 0.5);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+/* ---------- entry: main menu stage ---------- */
+
+.entry-main {
+  display: none;
+}
+
+.entry-screen.stage-main .entry-card {
+  display: none;
+}
+
+.entry-screen.stage-main .entry-main {
+  width: min(460px, calc(100vw - 40px));
+  display: grid;
+  gap: 26px;
+}
+
+.entry-main-hero {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.entry-main-badge {
+  padding: 5px 11px;
+  border: 1px solid rgba(255, 209, 102, 0.5);
+  border-radius: 999px;
+  color: #ffd166;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.entry-main-hero h1 {
+  margin: 0;
+  color: #edf4ef;
+  font-size: clamp(44px, 9vw, 74px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.entry-main-hero p {
+  margin: 0;
+  color: rgba(237, 244, 239, 0.66);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.entry-main-panel {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid rgba(237, 244, 239, 0.16);
+  border-radius: 10px;
+  background: rgba(9, 15, 13, 0.92);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+}
+
+.entry-guest {
+  min-height: 46px;
+  border: 1px solid rgba(237, 244, 239, 0.22);
+  border-radius: 6px;
+  background: rgba(237, 244, 239, 0.07);
+  color: #edf4ef;
+  font: 900 15px Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.entry-guest:hover {
+  border-color: rgba(142, 216, 255, 0.6);
+  background: rgba(142, 216, 255, 0.1);
+}
+
+.entry-main-hint {
+  min-height: 16px;
+  margin: 2px 0 0;
+  color: rgba(237, 244, 239, 0.5);
+  font-size: 11px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.entry-main-hint.warn {
+  color: #ffb3a8;
+}
+
+.entry-back {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(237, 244, 239, 0.18);
+  border-radius: 6px;
+  background: rgba(237, 244, 239, 0.06);
+  color: rgba(237, 244, 239, 0.82);
+  font: 900 12px Inter, system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.entry-back:hover {
+  border-color: rgba(255, 209, 102, 0.54);
+  background: rgba(255, 209, 102, 0.1);
+}
+
+.entry-head {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+/* ---------- deployment (게임세팅) readability ---------- */
+
+.deployment-card {
+  max-width: 100%;
+}
+
+.deployment-panel {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.deployment-section-label {
+  color: rgba(237, 244, 239, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.deployment-class-list {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.deployment-class,
+.deployment-mode {
+  min-width: 0;
+}
+
+.deployment-class-slots {
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+}
+
+.deployment-mini-slot {
+  min-height: 38px;
+}
+
+.deployment-mini-slot span {
+  font-size: 12px;
+}
+
+.deployment-settings {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.deployment-setting span {
+  font-size: 11px;
+  color: rgba(237, 244, 239, 0.68);
+}
+
+.deployment-setting input,
+.deployment-setting select {
+  min-height: 40px;
+  font-size: 15px;
+}
+
+.deployment-start {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+@media (max-width: 480px) {
+  .deployment-screen {
+    padding:
+      max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .deployment-class-list {
+    grid-template-columns: 1fr;
+  }
+
+  .deployment-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- weapon illustration slots ---------- */
+
+.loadout-weapon-art {
+  width: 58px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(237, 244, 239, 0.12);
+  border-radius: 5px;
+  background: rgba(3, 8, 7, 0.44);
+}
+
+.loadout-weapon-art img {
+  max-width: 92%;
+  max-height: 88%;
+  object-fit: contain;
+  display: block;
+}
+
+.loadout-weapon-art img.missing {
+  display: none;
+}
+
+.deployment-loadout-slot {
+  grid-template-columns: 30px 58px minmax(0, 1fr) auto;
+}
+
+.loadout-choice,
+.lobby-loadout-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.loadout-choice-icon {
+  width: 32px;
+  height: 17px;
+  object-fit: contain;
+  display: block;
+}
+
+.loadout-choice-icon.missing {
+  display: none;
+}
+
+.deployment-mini-slot {
+  grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+.mini-slot-icon {
+  width: 28px;
+  height: 15px;
+  object-fit: contain;
+  display: block;
+}
+
+.mini-slot-icon.missing {
+  display: none;
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .loadout-weapon-art {
+    width: 46px;
+    height: 26px;
+  }
+
+  .deployment-loadout-slot {
+    grid-template-columns: 26px 46px minmax(0, 1fr) auto;
+  }
+}

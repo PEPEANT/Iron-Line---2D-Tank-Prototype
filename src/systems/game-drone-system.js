@@ -7,6 +7,7 @@
     clamp,
     distXY,
     angleTo,
+    lerp,
     normalizeAngle,
     rotateTowards,
     pointInRect,
@@ -194,6 +195,7 @@
         team: this.player.team,
         owner: this.player,
         weapon,
+        deployDelay: 1.25,
         targetX,
         targetY
       });
@@ -233,6 +235,7 @@
         team: this.player.team,
         owner: this.player,
         weapon,
+        deployDelay: 1.55,
         targetX,
         targetY
       });
@@ -350,6 +353,10 @@
     },
     updateSuicideDroneLocking(drone, dt) {
       if (!drone?.alive || drone.droneRole !== "attack") return false;
+      if (drone.isDeploying?.()) {
+        drone.clearLockAttempt?.();
+        return false;
+      }
       if (drone.diveActive) {
         drone.clearLockAttempt?.();
         return false;
@@ -401,6 +408,7 @@
     },
     startSuicideDroneAttack(drone = this.player?.controlledDrone) {
       if (!drone?.alive || drone.droneRole !== "attack" || drone.diveActive) return false;
+      if (drone.isDeploying?.()) return false;
       drone.clearLockAttempt?.();
 
       if ((drone.signalStrength?.() ?? 1) <= 0.04) {
@@ -445,6 +453,7 @@
 
       const drone = this.activePlayerDrone();
       if (!drone) return false;
+      if (drone.isDeploying?.()) return false;
 
       drone.autoReturn = false;
       drone.clearRoofLock?.();
@@ -534,6 +543,7 @@
         this.exitPlayerDroneControl();
         return;
       }
+      if (drone.isDeploying?.()) return;
 
       const moveX = this.input.axis("KeyA", "ArrowLeft", "KeyD", "ArrowRight");
       const moveY = this.input.axis("KeyW", "ArrowUp", "KeyS", "ArrowDown");
