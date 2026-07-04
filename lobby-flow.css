@@ -290,6 +290,171 @@
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.72);
 }
 
+.entry-account-widget {
+  position: absolute;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 3;
+}
+
+.entry-screen:not(.stage-main) .entry-account-widget {
+  display: none;
+}
+
+.entry-account-button {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(6, 8, 7, 0.64);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.entry-account-button:hover,
+.entry-account-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.entry-account-icon {
+  position: relative;
+  width: 23px;
+  height: 23px;
+  display: block;
+}
+
+.entry-account-icon::before,
+.entry-account-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+}
+
+.entry-account-icon::before {
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.entry-account-icon::after {
+  bottom: 1px;
+  width: 18px;
+  height: 10px;
+  border-radius: 999px 999px 6px 6px;
+}
+
+.entry-account-panel {
+  position: absolute;
+  right: 0;
+  bottom: 58px;
+  width: min(280px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 8, 7, 0.84);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.48);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.entry-account-panel.hidden {
+  display: none;
+}
+
+.entry-account-panel strong {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.entry-account-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.entry-account-tabs button,
+.entry-account-save,
+.entry-account-reset {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(237, 244, 239, 0.88);
+  font: 900 13px Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.entry-account-tabs button.active,
+.entry-account-save {
+  border-color: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.94);
+  color: #070807;
+}
+
+.entry-account-tabs button:disabled {
+  cursor: default;
+  opacity: 0.56;
+}
+
+.entry-account-field {
+  display: grid;
+  gap: 5px;
+}
+
+.entry-account-field span {
+  color: rgba(237, 244, 239, 0.66);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.entry-account-field input {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #070807;
+  font: 900 14px Inter, system-ui, sans-serif;
+  outline: none;
+  padding: 0 11px;
+}
+
+.entry-account-field input:disabled,
+.entry-screen.stage-main .entry-field.locked input {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.68);
+  color: rgba(7, 8, 7, 0.78);
+}
+
+.entry-account-reset {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+}
+
+.entry-account-reset.hidden,
+.entry-account-save.hidden {
+  display: none;
+}
+
+.entry-account-status {
+  min-height: 15px;
+  margin: 0;
+  color: rgba(237, 244, 239, 0.62);
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .entry-back {
   min-height: 32px;
   padding: 0 12px;

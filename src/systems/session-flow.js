@@ -163,6 +163,7 @@
       game.lobbyOpen = false;
       game.roomListOpen = false;
       game.matchPhase = "entry";
+      game.hud?.entryFlow?.setStage?.("main");
       game.hud?.update?.(game);
       return true;
     }

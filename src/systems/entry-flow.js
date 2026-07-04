@@ -16,6 +16,7 @@
       this.mainSeeded = false;
       this.mainNicknameVisible = false;
       this.mainOnlinePending = false;
+      this.accountMode = "login";
     }
 
     get nodes() {
@@ -51,6 +52,28 @@
           </label>
           <button type="button" id="entryMainStart" class="entry-enter hidden">입장하기</button>
           <p class="entry-main-hint" id="entryMainHint"></p>
+        </div>
+      `;
+
+      const account = document.createElement("aside");
+      account.className = "entry-account-widget";
+      account.innerHTML = `
+        <button type="button" id="entryAccountButton" class="entry-account-button" aria-label="계정">
+          <span class="entry-account-icon" aria-hidden="true"></span>
+        </button>
+        <div id="entryAccountPanel" class="entry-account-panel hidden">
+          <strong>계정</strong>
+          <div class="entry-account-tabs">
+            <button type="button" data-entry-account-mode="login" class="active">로그인</button>
+            <button type="button" data-entry-account-mode="signup">회원가입</button>
+          </div>
+          <label class="entry-account-field">
+            <span>닉네임</span>
+            <input id="entryAccountNickname" type="text" maxlength="16" autocomplete="nickname" placeholder="닉네임">
+          </label>
+          <button type="button" id="entryAccountSave" class="entry-account-save">저장</button>
+          <button type="button" id="entryAccountReset" class="entry-account-reset hidden">초기화</button>
+          <p id="entryAccountStatus" class="entry-account-status"></p>
         </div>
       `;
 
@@ -116,7 +139,7 @@
 
       panel.append(modeWrap, status, enter);
       card.append(factionPane, panel);
-      screen.append(main, card);
+      screen.append(main, card, account);
       document.body.prepend(screen);
 
       ui.entryScreen = screen;
@@ -127,6 +150,13 @@
       ui.entryNickname = main.querySelector("#entryNickname");
       ui.entryMainStart = main.querySelector("#entryMainStart");
       ui.entryMainHint = main.querySelector("#entryMainHint");
+      ui.entryAccountButton = account.querySelector("#entryAccountButton");
+      ui.entryAccountPanel = account.querySelector("#entryAccountPanel");
+      ui.entryAccountModes = Array.from(account.querySelectorAll("[data-entry-account-mode]"));
+      ui.entryAccountNickname = account.querySelector("#entryAccountNickname");
+      ui.entryAccountSave = account.querySelector("#entryAccountSave");
+      ui.entryAccountReset = account.querySelector("#entryAccountReset");
+      ui.entryAccountStatus = account.querySelector("#entryAccountStatus");
       ui.entryBackButton = head.querySelector("#entryBackButton");
       ui.entrySkinWrap = skinWrap;
       ui.entrySkinList = skinList;
@@ -146,6 +176,15 @@
       ui.entryMainOffline?.addEventListener("click", () => this.startOfflineFromMain());
       ui.entryMainOnline?.addEventListener("click", () => this.showOnlineNickname());
       ui.entryMainStart?.addEventListener("click", () => this.startOnlineFromMain());
+      ui.entryAccountButton?.addEventListener("click", () => this.toggleAccountPanel());
+      ui.entryAccountModes?.forEach((button) => {
+        button.addEventListener("click", () => this.setAccountMode(button.dataset.entryAccountMode || "login"));
+      });
+      ui.entryAccountSave?.addEventListener("click", () => this.saveLocalAccount());
+      ui.entryAccountReset?.addEventListener("click", () => this.resetLocalAccount());
+      ui.entryAccountNickname?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") this.saveLocalAccount();
+      });
       ui.entryBackButton?.addEventListener("click", () => this.setStage("main"));
       ui.entryEnterButton.addEventListener("click", () => this.submit());
       ui.entryRoomRefreshButton?.addEventListener("click", () => {
@@ -160,9 +199,46 @@
     }
 
     mainFallbackNickname() {
-      return this.nodes.entryNickname?.value ||
+      return this.lockedNickname() ||
+        this.nodes.entryNickname?.value ||
         IronLine.game?.localProfile?.nickname ||
         "Player";
+    }
+
+    accountStorageKey() {
+      return "iron-line-local-account-v1";
+    }
+
+    readLocalAccount() {
+      try {
+        const raw = localStorage.getItem(this.accountStorageKey());
+        if (!raw) return null;
+        const account = JSON.parse(raw);
+        const nickname = String(account?.nickname || "").trim().slice(0, 16);
+        if (!nickname) return null;
+        return {
+          nickname,
+          mode: account.mode === "signup" ? "signup" : "login",
+          locked: account.locked !== false,
+          updatedAt: Number(account.updatedAt) || Date.now()
+        };
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    writeLocalAccount(account) {
+      try {
+        localStorage.setItem(this.accountStorageKey(), JSON.stringify({
+          ...account,
+          updatedAt: Date.now()
+        }));
+      } catch (_error) {}
+    }
+
+    lockedNickname() {
+      const account = this.readLocalAccount();
+      return account?.locked ? account.nickname : "";
     }
 
     startOfflineFromMain() {
@@ -184,6 +260,7 @@
 
     showOnlineNickname() {
       const ui = this.nodes;
+      const locked = this.lockedNickname();
       this.mainNicknameVisible = true;
       this.mainOnlinePending = true;
       ui.entryMainActions?.classList.add("hidden");
@@ -191,20 +268,30 @@
       ui.entryMainStart?.classList.remove("hidden");
       ui.entryScreen?.classList.add("main-nickname-open");
       if (ui.entryMainStart) ui.entryMainStart.textContent = "입장하기";
-      this.setMainHint("");
-      ui.entryNickname?.focus();
-      ui.entryNickname?.select?.();
+      if (ui.entryNickname) {
+        ui.entryNickname.value = locked || ui.entryNickname.value || "";
+        ui.entryNickname.disabled = Boolean(locked);
+      }
+      ui.entryNicknameField?.classList.toggle("locked", Boolean(locked));
+      this.setMainHint(locked ? "닉네임 변경은 계정 초기화 후 가능합니다." : "");
+      if (!locked) {
+        ui.entryNickname?.focus();
+        ui.entryNickname?.select?.();
+      }
     }
 
     startOnlineFromMain() {
       this.selectedMode = "online";
       const ui = this.nodes;
-      const nickname = String(ui.entryNickname?.value || "").trim();
+      const locked = this.lockedNickname();
+      const nickname = locked || String(ui.entryNickname?.value || "").trim();
       if (!nickname) {
         this.setMainHint("닉네임을 입력하세요.", true);
         ui.entryNickname?.focus();
         return;
       }
+      if (ui.entryNickname) ui.entryNickname.value = nickname;
+      if (!locked) this.lockNickname(nickname, "login");
       this.setMainHint("");
       const game = IronLine.game;
       const profile = this.entryProfile(game);
@@ -239,19 +326,32 @@
     setStage(stage) {
       this.stage = stage;
       if (stage === "main") {
-        this.mainNicknameVisible = false;
-        this.mainOnlinePending = false;
+        this.resetMainControls();
       }
       this.factionSignature = "";
       this.roomSignature = "";
       if (IronLine.game) this.update(IronLine.game);
     }
 
+    resetMainControls() {
+      const ui = this.nodes;
+      this.mainNicknameVisible = false;
+      this.mainOnlinePending = false;
+      ui.entryMainActions?.classList.remove("hidden");
+      ui.entryNicknameField?.classList.add("hidden");
+      ui.entryNicknameField?.classList.remove("locked");
+      ui.entryMainStart?.classList.add("hidden");
+      ui.entryScreen?.classList.remove("main-nickname-open");
+      if (ui.entryNickname) ui.entryNickname.disabled = false;
+      this.setMainHint("");
+      this.syncAccountPanel();
+    }
+
     entryProfile(game) {
       const fallbackFaction = IronLine.playerFactions?.[0]?.id || IronLine.playerSkins?.[0]?.id || "korea";
       const factionId = this.selectedFactionId || game?.localProfile?.factionId || game?.localProfile?.skinId || fallbackFaction;
       return {
-        nickname: this.nodes.entryNickname?.value || game?.localProfile?.nickname || "",
+        nickname: this.lockedNickname() || this.nodes.entryNickname?.value || game?.localProfile?.nickname || "",
         factionId,
         skinId: factionId
       };
@@ -295,10 +395,11 @@
       ui.entryScreen.classList.toggle("hidden", !visible);
       document.body.classList.toggle("entry-open", visible);
       if (!visible) return;
+      this.syncAccountPanel();
 
       const profile = game.localProfile || {};
       if (ui.entryNickname && !this.mainSeeded) {
-        ui.entryNickname.value = profile.nickname || "";
+        ui.entryNickname.value = this.lockedNickname() || profile.nickname || "";
         this.mainSeeded = true;
       }
 
@@ -308,6 +409,8 @@
       if (mainStage) {
         ui.entryMainActions?.classList.toggle("hidden", Boolean(this.mainNicknameVisible));
         ui.entryNicknameField?.classList.toggle("hidden", !this.mainNicknameVisible);
+        ui.entryNicknameField?.classList.toggle("locked", Boolean(this.lockedNickname() && this.mainNicknameVisible));
+        if (ui.entryNickname) ui.entryNickname.disabled = Boolean(this.lockedNickname() && this.mainNicknameVisible);
         ui.entryMainStart?.classList.toggle("hidden", !this.mainNicknameVisible);
         if (ui.entryMainStart) ui.entryMainStart.textContent = "입장하기";
         return;
@@ -463,6 +566,101 @@
         "\"": "&quot;",
         "'": "&#39;"
       })[char]);
+    }
+
+    toggleAccountPanel(force = null) {
+      const panel = this.nodes.entryAccountPanel;
+      if (!panel) return;
+      const open = force === null ? panel.classList.contains("hidden") : Boolean(force);
+      panel.classList.toggle("hidden", !open);
+      if (open) {
+        this.syncAccountPanel();
+        this.nodes.entryAccountNickname?.focus();
+      }
+    }
+
+    setAccountMode(mode = "login") {
+      this.accountMode = mode === "signup" ? "signup" : "login";
+      this.syncAccountPanel();
+    }
+
+    syncAccountPanel() {
+      const ui = this.nodes;
+      if (!ui.entryAccountPanel) return;
+      const account = this.readLocalAccount();
+      const locked = Boolean(account?.locked);
+      const nickname = account?.nickname || IronLine.game?.localProfile?.nickname || "";
+      ui.entryAccountModes?.forEach((button) => {
+        button.classList.toggle("active", button.dataset.entryAccountMode === this.accountMode);
+        button.disabled = locked;
+      });
+      if (ui.entryAccountNickname) {
+        if (locked || document.activeElement !== ui.entryAccountNickname) {
+          ui.entryAccountNickname.value = locked ? account.nickname : nickname;
+        }
+        ui.entryAccountNickname.disabled = locked;
+      }
+      if (ui.entryAccountSave) {
+        ui.entryAccountSave.textContent = this.accountMode === "signup" ? "회원가입" : "로그인";
+        ui.entryAccountSave.classList.toggle("hidden", locked);
+      }
+      ui.entryAccountReset?.classList.toggle("hidden", !locked);
+      if (ui.entryAccountStatus) {
+        ui.entryAccountStatus.textContent = locked
+          ? `${account.nickname} 계정으로 고정됨`
+          : "닉네임은 저장 후 초기화 전까지 고정됩니다.";
+      }
+    }
+
+    lockNickname(nickname, mode = "login") {
+      const clean = String(nickname || "").replace(/\s+/g, " ").trim().slice(0, 16);
+      if (!clean) return false;
+      this.writeLocalAccount({
+        nickname: clean,
+        mode: mode === "signup" ? "signup" : "login",
+        locked: true
+      });
+      IronLine.game?.setLocalProfile?.({
+        ...(IronLine.game?.localProfile || {}),
+        nickname: clean
+      });
+      if (this.nodes.entryNickname) this.nodes.entryNickname.value = clean;
+      this.syncAccountPanel();
+      return true;
+    }
+
+    saveLocalAccount() {
+      const nickname = String(this.nodes.entryAccountNickname?.value || "").trim();
+      if (!nickname) {
+        if (this.nodes.entryAccountStatus) this.nodes.entryAccountStatus.textContent = "닉네임을 입력하세요.";
+        return false;
+      }
+      this.lockNickname(nickname, this.accountMode);
+      if (this.nodes.entryAccountStatus) this.nodes.entryAccountStatus.textContent = `${nickname} 계정으로 저장됨`;
+      return true;
+    }
+
+    resetLocalAccount() {
+      try {
+        localStorage.removeItem(this.accountStorageKey());
+      } catch (_error) {}
+      const game = IronLine.game;
+      game?.setLocalProfile?.({
+        ...(game.localProfile || {}),
+        nickname: "Player"
+      });
+      if (this.nodes.entryNickname) {
+        this.nodes.entryNickname.value = "";
+        this.nodes.entryNickname.disabled = false;
+      }
+      if (this.nodes.entryAccountNickname) {
+        this.nodes.entryAccountNickname.value = "";
+        this.nodes.entryAccountNickname.disabled = false;
+      }
+      this.mainSeeded = false;
+      this.setMainHint("");
+      this.syncAccountPanel();
+      return true;
     }
 
     renderSkinCards(game) {
