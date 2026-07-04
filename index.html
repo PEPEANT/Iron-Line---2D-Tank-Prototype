@@ -272,6 +272,14 @@
             <span class="deployment-section-label">전장 설정</span>
             <div class="deployment-settings" id="deploymentSettings">
               <label class="deployment-setting">
+                <span>아군 세력</span>
+                <select data-setting="blueFactionId"></select>
+              </label>
+              <label class="deployment-setting">
+                <span>적군 세력</span>
+                <select data-setting="redFactionId"></select>
+              </label>
+              <label class="deployment-setting">
                 <span>난이도</span>
                 <select data-setting="difficulty">
                   <option value="easy">쉬움</option>
@@ -477,5 +485,6 @@
     <script src="src/systems/mobile-camera-gestures.js"></script>
     <script src="src/systems/online-world-state-buffer.js"></script>
     <script src="src/main.js"></script>
+    <script src="src/systems/offline-faction-settings.js"></script>
   </body>
 </html>

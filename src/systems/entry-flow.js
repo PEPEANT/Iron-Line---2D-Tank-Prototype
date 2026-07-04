@@ -15,6 +15,7 @@
       this.bootHidden = false;
       this.mainSeeded = false;
       this.mainNicknameVisible = false;
+      this.mainOnlinePending = false;
     }
 
     get nodes() {
@@ -40,11 +41,15 @@
           <h1>수복</h1>
         </div>
         <div class="entry-main-panel">
+          <div class="entry-main-actions">
+            <button type="button" id="entryMainOffline" class="entry-enter">오프라인 모드</button>
+            <button type="button" id="entryMainOnline" class="entry-enter entry-secondary">온라인 모드</button>
+          </div>
           <label class="entry-field entry-nickname-field hidden">
             <span>닉네임</span>
             <input id="entryNickname" type="text" maxlength="16" autocomplete="nickname" placeholder="닉네임">
           </label>
-          <button type="button" id="entryMainStart" class="entry-enter">플레이</button>
+          <button type="button" id="entryMainStart" class="entry-enter hidden">입장하기</button>
           <p class="entry-main-hint" id="entryMainHint"></p>
         </div>
       `;
@@ -115,6 +120,9 @@
       document.body.prepend(screen);
 
       ui.entryScreen = screen;
+      ui.entryMainActions = main.querySelector(".entry-main-actions");
+      ui.entryMainOffline = main.querySelector("#entryMainOffline");
+      ui.entryMainOnline = main.querySelector("#entryMainOnline");
       ui.entryNicknameField = main.querySelector(".entry-nickname-field");
       ui.entryNickname = main.querySelector("#entryNickname");
       ui.entryMainStart = main.querySelector("#entryMainStart");
@@ -135,7 +143,9 @@
       const ui = this.nodes;
       if (this.bound || !ui?.entryEnterButton || !ui.entryNickname) return;
       this.bound = true;
-      ui.entryMainStart?.addEventListener("click", () => this.handleMainPlay());
+      ui.entryMainOffline?.addEventListener("click", () => this.startOfflineFromMain());
+      ui.entryMainOnline?.addEventListener("click", () => this.showOnlineNickname());
+      ui.entryMainStart?.addEventListener("click", () => this.startOnlineFromMain());
       ui.entryBackButton?.addEventListener("click", () => this.setStage("main"));
       ui.entryEnterButton.addEventListener("click", () => this.submit());
       ui.entryRoomRefreshButton?.addEventListener("click", () => {
@@ -144,24 +154,62 @@
         this.renderEntryRooms(IronLine.game);
       });
       ui.entryNickname.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") this.startFromMain(false);
+        if (event.key === "Enter" && this.mainOnlinePending) this.startOnlineFromMain();
       });
       ui.entryNickname.addEventListener("input", () => this.setMainHint(""));
     }
 
-    handleMainPlay() {
+    mainFallbackNickname() {
+      return this.nodes.entryNickname?.value ||
+        IronLine.game?.localProfile?.nickname ||
+        "Player";
+    }
+
+    startOfflineFromMain() {
+      const game = IronLine.game;
+      if (!game) return;
+      const blueFactionId = game.matchConfig?.blueFactionId ||
+        game.localProfile?.factionId ||
+        game.localProfile?.skinId ||
+        "korea";
+      game?.setLocalProfile?.({
+        ...this.entryProfile(game),
+        nickname: this.mainFallbackNickname(),
+        factionId: blueFactionId,
+        skinId: blueFactionId
+      });
+      this.selectedMode = "offline";
+      this.submit();
+    }
+
+    showOnlineNickname() {
       const ui = this.nodes;
-      if (!this.mainNicknameVisible) {
-        this.mainNicknameVisible = true;
-        ui.entryNicknameField?.classList.remove("hidden");
-        ui.entryScreen?.classList.add("main-nickname-open");
-        if (ui.entryMainStart) ui.entryMainStart.textContent = "시작";
-        this.setMainHint("");
+      this.mainNicknameVisible = true;
+      this.mainOnlinePending = true;
+      ui.entryMainActions?.classList.add("hidden");
+      ui.entryNicknameField?.classList.remove("hidden");
+      ui.entryMainStart?.classList.remove("hidden");
+      ui.entryScreen?.classList.add("main-nickname-open");
+      if (ui.entryMainStart) ui.entryMainStart.textContent = "입장하기";
+      this.setMainHint("");
+      ui.entryNickname?.focus();
+      ui.entryNickname?.select?.();
+    }
+
+    startOnlineFromMain() {
+      this.selectedMode = "online";
+      const ui = this.nodes;
+      const nickname = String(ui.entryNickname?.value || "").trim();
+      if (!nickname) {
+        this.setMainHint("닉네임을 입력하세요.", true);
         ui.entryNickname?.focus();
-        ui.entryNickname?.select?.();
         return;
       }
-      this.startFromMain(false);
+      this.setMainHint("");
+      const game = IronLine.game;
+      const profile = this.entryProfile(game);
+      game?.setLocalProfile?.(profile);
+      if (!this.hud.sessionFlow?.submitEntry?.("online", profile)) this.submit();
     }
 
     setMainHint(message, warn = false) {
@@ -190,7 +238,10 @@
 
     setStage(stage) {
       this.stage = stage;
-      if (stage === "main") this.mainNicknameVisible = false;
+      if (stage === "main") {
+        this.mainNicknameVisible = false;
+        this.mainOnlinePending = false;
+      }
       this.factionSignature = "";
       this.roomSignature = "";
       if (IronLine.game) this.update(IronLine.game);
@@ -212,8 +263,9 @@
       const profile = this.entryProfile(game);
       if (this.selectedMode === "online") {
         this.roomSignature = "";
-        this.renderEntryRooms(game);
         game.setLocalProfile?.(profile);
+        if (this.hud.sessionFlow?.submitEntry?.("online", profile)) return;
+        this.renderEntryRooms(game);
         return;
       }
       if (this.hud.sessionFlow?.submitEntry?.(this.selectedMode, profile)) return;
@@ -254,8 +306,10 @@
       ui.entryScreen.classList.toggle("stage-main", mainStage);
       ui.entryScreen.classList.toggle("main-nickname-open", Boolean(mainStage && this.mainNicknameVisible));
       if (mainStage) {
+        ui.entryMainActions?.classList.toggle("hidden", Boolean(this.mainNicknameVisible));
         ui.entryNicknameField?.classList.toggle("hidden", !this.mainNicknameVisible);
-        if (ui.entryMainStart) ui.entryMainStart.textContent = this.mainNicknameVisible ? "시작" : "플레이";
+        ui.entryMainStart?.classList.toggle("hidden", !this.mainNicknameVisible);
+        if (ui.entryMainStart) ui.entryMainStart.textContent = "입장하기";
         return;
       }
 

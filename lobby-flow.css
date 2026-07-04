@@ -204,6 +204,16 @@
   box-shadow: none;
 }
 
+.entry-main-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.entry-main-actions.hidden,
+.entry-screen.stage-main .entry-enter.hidden {
+  display: none;
+}
+
 .entry-screen.stage-main .entry-field {
   text-align: left;
 }
@@ -248,6 +258,17 @@
   border-color: #ffffff;
   background: #ffffff;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+}
+
+.entry-screen.stage-main .entry-secondary {
+  border-color: rgba(255, 255, 255, 0.44);
+  background: rgba(7, 8, 7, 0.62);
+  color: #ffffff;
+}
+
+.entry-screen.stage-main .entry-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(7, 8, 7, 0.78);
 }
 
 .entry-screen.stage-main .entry-enter:active {
@@ -330,6 +351,7 @@
 .deployment-panel {
   min-width: 0;
   overflow-x: hidden;
+  padding-bottom: 24px;
 }
 
 .deployment-section-label {
@@ -375,6 +397,7 @@
 }
 
 .deployment-start {
+  position: static;
   min-height: 56px;
   font-size: 17px;
 }

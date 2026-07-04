@@ -15,6 +15,9 @@
 
   function factionIdForTeam(game, team) {
     if (team === TEAM.RED) {
+      if (game?.sessionMode !== "online") {
+        return validFactionId(game?.matchConfig?.redFactionId || game?.onlineSession?.redFactionId, DEFAULT_FACTIONS.red);
+      }
       return validFactionId(game?.onlineSession?.redFactionId, DEFAULT_FACTIONS.red);
     }
 
@@ -23,7 +26,7 @@
       if (game?.sessionMode === "online") {
         return validFactionId(game?.onlineSession?.blueFactionId, DEFAULT_FACTIONS.blue);
       }
-      return validFactionId(localFaction, DEFAULT_FACTIONS.blue);
+      return validFactionId(game?.matchConfig?.blueFactionId || localFaction, DEFAULT_FACTIONS.blue);
     }
 
     return DEFAULT_FACTIONS.blue;

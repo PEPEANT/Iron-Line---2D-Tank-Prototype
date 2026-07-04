@@ -76,6 +76,7 @@
         this.hud.buildDeploymentMap(game);
         this.hud.deploymentMapBuilt = true;
       }
+      this.ensureFactionSettingOptions();
 
       ui.classButtons.forEach((button) => {
         button.classList.toggle("active", button.dataset.classId === game.player.classId);
@@ -101,6 +102,27 @@
         const value = game.matchConfig[key];
         if (value !== undefined) control.value = value;
       });
+    }
+
+    ensureFactionSettingOptions() {
+      const ui = this.nodes;
+      const factions = IronLine.playerFactions || IronLine.playerSkins || [];
+      if (!factions.length) return;
+      const signature = factions.map((faction) => `${faction.id}:${faction.name}`).join("|");
+      for (const control of ui.settingControls || []) {
+        const key = control.dataset.setting;
+        if ((key !== "blueFactionId" && key !== "redFactionId") || control.dataset.factionOptions === signature) continue;
+        const current = control.value;
+        control.textContent = "";
+        for (const faction of factions) {
+          const option = document.createElement("option");
+          option.value = faction.id;
+          option.textContent = faction.name || faction.id;
+          control.append(option);
+        }
+        control.dataset.factionOptions = signature;
+        if (current) control.value = current;
+      }
     }
 
     isMobileDeploymentLayout() {

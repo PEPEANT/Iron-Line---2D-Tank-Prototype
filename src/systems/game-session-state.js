@@ -127,6 +127,8 @@
       return {
         mode: "annihilation",
         difficulty: "normal",
+        blueFactionId: "korea",
+        redFactionId: "russia",
         aiDensityPreset: density.id,
         blueAiTanks: this.defaultAiTankCount(blueTankBase, density.blueTankBonus),
         blueInfantry: this.defaultAiInfantryCount(blueInfantryBase, density.blueInfantryScale),
