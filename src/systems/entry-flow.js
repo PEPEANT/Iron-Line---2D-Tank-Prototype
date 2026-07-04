@@ -14,6 +14,7 @@
       this.bound = false;
       this.bootHidden = false;
       this.mainSeeded = false;
+      this.mainNicknameVisible = false;
     }
 
     get nodes() {
@@ -36,16 +37,14 @@
       main.className = "entry-main";
       main.innerHTML = `
         <div class="entry-main-hero">
-          <span class="entry-main-badge">${IronLine.gameVersion || "ALPHA R1.0"}</span>
-          <h1>IRON LINE</h1>
+          <h1>수복</h1>
         </div>
         <div class="entry-main-panel">
-          <label class="entry-field">
+          <label class="entry-field entry-nickname-field hidden">
             <span>닉네임</span>
             <input id="entryNickname" type="text" maxlength="16" autocomplete="nickname" placeholder="닉네임">
           </label>
-          <button type="button" id="entryMainStart" class="entry-enter">입장</button>
-          <button type="button" id="entryMainGuest" class="entry-guest">게스트 입장</button>
+          <button type="button" id="entryMainStart" class="entry-enter">플레이</button>
           <p class="entry-main-hint" id="entryMainHint"></p>
         </div>
       `;
@@ -116,9 +115,9 @@
       document.body.prepend(screen);
 
       ui.entryScreen = screen;
+      ui.entryNicknameField = main.querySelector(".entry-nickname-field");
       ui.entryNickname = main.querySelector("#entryNickname");
       ui.entryMainStart = main.querySelector("#entryMainStart");
-      ui.entryMainGuest = main.querySelector("#entryMainGuest");
       ui.entryMainHint = main.querySelector("#entryMainHint");
       ui.entryBackButton = head.querySelector("#entryBackButton");
       ui.entrySkinWrap = skinWrap;
@@ -136,8 +135,7 @@
       const ui = this.nodes;
       if (this.bound || !ui?.entryEnterButton || !ui.entryNickname) return;
       this.bound = true;
-      ui.entryMainStart?.addEventListener("click", () => this.startFromMain(false));
-      ui.entryMainGuest?.addEventListener("click", () => this.startFromMain(true));
+      ui.entryMainStart?.addEventListener("click", () => this.handleMainPlay());
       ui.entryBackButton?.addEventListener("click", () => this.setStage("main"));
       ui.entryEnterButton.addEventListener("click", () => this.submit());
       ui.entryRoomRefreshButton?.addEventListener("click", () => {
@@ -149,6 +147,21 @@
         if (event.key === "Enter") this.startFromMain(false);
       });
       ui.entryNickname.addEventListener("input", () => this.setMainHint(""));
+    }
+
+    handleMainPlay() {
+      const ui = this.nodes;
+      if (!this.mainNicknameVisible) {
+        this.mainNicknameVisible = true;
+        ui.entryNicknameField?.classList.remove("hidden");
+        ui.entryScreen?.classList.add("main-nickname-open");
+        if (ui.entryMainStart) ui.entryMainStart.textContent = "시작";
+        this.setMainHint("");
+        ui.entryNickname?.focus();
+        ui.entryNickname?.select?.();
+        return;
+      }
+      this.startFromMain(false);
     }
 
     setMainHint(message, warn = false) {
@@ -177,6 +190,7 @@
 
     setStage(stage) {
       this.stage = stage;
+      if (stage === "main") this.mainNicknameVisible = false;
       this.factionSignature = "";
       this.roomSignature = "";
       if (IronLine.game) this.update(IronLine.game);
@@ -238,7 +252,12 @@
 
       const mainStage = this.stage === "main";
       ui.entryScreen.classList.toggle("stage-main", mainStage);
-      if (mainStage) return;
+      ui.entryScreen.classList.toggle("main-nickname-open", Boolean(mainStage && this.mainNicknameVisible));
+      if (mainStage) {
+        ui.entryNicknameField?.classList.toggle("hidden", !this.mainNicknameVisible);
+        if (ui.entryMainStart) ui.entryMainStart.textContent = this.mainNicknameVisible ? "시작" : "플레이";
+        return;
+      }
 
       const onlineMode = this.selectedMode === "online";
       ui.entryScreen.classList.toggle("entry-online-mode", onlineMode);

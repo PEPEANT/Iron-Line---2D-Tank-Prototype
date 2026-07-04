@@ -24,7 +24,7 @@
   function label() {
     const commit = short(info.commit || info.buildId);
     const branch = info.branch ? ` ${info.branch}` : "";
-    return `Build ${commit}${branch}`;
+    return `${GAME_VERSION} · Build ${commit}${branch}`;
   }
 
   function detail() {
@@ -45,7 +45,8 @@
     badge.id = "buildInfoBadge";
     badge.className = "build-info-badge";
     badge.setAttribute("aria-label", "build information");
-    const settings = document.querySelector(".settings-list");
+    const settings = document.querySelector(".settings-details .settings-section.compact") ||
+      document.querySelector(".settings-list");
     const adminHead = document.querySelector(".admin-head > div");
     if (settings) settings.appendChild(badge);
     else if (adminHead) adminHead.appendChild(badge);
