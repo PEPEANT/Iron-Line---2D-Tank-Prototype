@@ -8,11 +8,35 @@
   z-index: 60;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 22% 20%, rgba(142, 216, 255, 0.1), transparent 34%),
-    radial-gradient(circle at 78% 82%, rgba(255, 209, 102, 0.08), transparent 36%),
-    #060b09;
+  overflow: hidden;
+  isolation: isolate;
+  background: #060b09;
   transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+.boot-screen::before,
+.boot-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boot-screen::before {
+  z-index: -2;
+  background-image:
+    linear-gradient(90deg, rgba(3, 6, 5, 0.78), rgba(3, 6, 5, 0.42) 48%, rgba(3, 6, 5, 0.68)),
+    url("assets/ui/loading-background.png");
+  background-position: center;
+  background-size: cover;
+  filter: saturate(0.84) contrast(1.05);
+}
+
+.boot-screen::after {
+  z-index: -1;
+  background:
+    radial-gradient(circle at 50% 48%, transparent 0 32%, rgba(0, 0, 0, 0.62) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.46), transparent 38%, rgba(0, 0, 0, 0.62));
 }
 
 .boot-screen.boot-done {
@@ -22,10 +46,19 @@
 }
 
 .boot-inner {
+  position: relative;
+  z-index: 1;
   display: grid;
   justify-items: center;
   gap: 14px;
+  padding: 28px 34px;
+  border: 1px solid rgba(237, 244, 239, 0.12);
+  border-radius: 8px;
+  background: rgba(4, 8, 7, 0.48);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.5);
   text-align: center;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 .boot-mark {
@@ -79,6 +112,43 @@
   display: none;
 }
 
+.entry-screen.stage-main {
+  place-items: center start;
+  overflow: hidden;
+  isolation: isolate;
+  background: #060b09;
+}
+
+.entry-screen.stage-main::before,
+.entry-screen.stage-main::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.entry-screen.stage-main::before {
+  z-index: -2;
+  background-image:
+    linear-gradient(90deg, rgba(3, 6, 5, 0.38), rgba(3, 6, 5, 0.2) 42%, rgba(3, 6, 5, 0.62)),
+    url("assets/ui/main-background.png");
+  background-position: center;
+  background-size: cover;
+  filter: saturate(0.82) contrast(1.04);
+}
+
+.entry-screen.stage-main::after {
+  z-index: -1;
+  background:
+    radial-gradient(circle at 28% 48%, rgba(0, 0, 0, 0.08), transparent 0 28%, rgba(0, 0, 0, 0.64) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 42%, rgba(0, 0, 0, 0.7));
+}
+
+.entry-screen.stage-main > * {
+  position: relative;
+  z-index: 1;
+}
+
 .entry-screen.stage-main .entry-card {
   display: none;
 }
@@ -87,6 +157,7 @@
   width: min(460px, calc(100vw - 40px));
   display: grid;
   gap: 26px;
+  margin-left: clamp(18px, 8vw, 132px);
 }
 
 .entry-main-hero {
@@ -128,9 +199,11 @@
   gap: 10px;
   padding: 22px;
   border: 1px solid rgba(237, 244, 239, 0.16);
-  border-radius: 10px;
-  background: rgba(9, 15, 13, 0.92);
+  border-radius: 8px;
+  background: rgba(9, 15, 13, 0.84);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 .entry-guest {
@@ -180,6 +253,37 @@
 
 .entry-head {
   grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+@media (max-width: 720px) {
+  .entry-screen.stage-main {
+    place-items: center;
+  }
+
+  .entry-screen.stage-main .entry-main {
+    width: min(420px, calc(100vw - 28px));
+    margin-left: 0;
+  }
+
+  .entry-main-panel {
+    padding: 18px;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .entry-screen.stage-main .entry-main {
+    width: min(420px, calc(100vw - 24px));
+    gap: 14px;
+    margin-left: clamp(8px, 5vw, 72px);
+  }
+
+  .entry-main-hero h1 {
+    font-size: 42px;
+  }
+
+  .entry-main-panel {
+    padding: 14px;
+  }
 }
 
 /* ---------- deployment (게임세팅) readability ---------- */
