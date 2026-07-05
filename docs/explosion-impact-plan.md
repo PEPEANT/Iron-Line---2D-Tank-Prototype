@@ -30,6 +30,7 @@
 - 화면 셰이크: 거리 감쇠 강화 (가까우면 지금의 1.5배, 멀면 0).
 - 고폭탄/RPG/드론/수류탄 모두 같은 함수, `splash` 크기로 스케일.
 - (선택) 플립북 슬롯 규격: `combat.explosion.flipbook` = { src, frames, fps, size } — 규격만 문서화, 렌더러 지원은 아트 생긴 뒤.
+- 2026-07-05 Codex 렌더 1차: `src/systems/renderer-explosions.js`가 기존 `game.effects.explosions` 데이터를 3층 렌더(초기 섬광/화구/후반 연기)로 그린다. 전투 피해, 폭발 생성, 드론 조작, 잔해 데칼은 아직 바꾸지 않았다.
 
 ### ③ 자폭드론 dumb-fire 전환
 `src/entities/suicide-drone.js` + `infantry-weapons.js` config:
