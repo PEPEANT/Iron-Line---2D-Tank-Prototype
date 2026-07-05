@@ -28,4 +28,8 @@ if (!humveeSource.includes("unit.takeDamage(options.damage, options.damageSource
   fail("Humvee bailout passenger damage must pass a source into takeDamage");
 }
 
+if (!source.includes("tank.takeDamage(game, 0.01, {") || !source.includes("cause: `${weapon.id || \"small-arms\"}_direct`")) {
+  fail("small-arms vehicle destruction must pass weapon source into takeDamage");
+}
+
 if (!process.exitCode) console.log("Combat source contract check passed");

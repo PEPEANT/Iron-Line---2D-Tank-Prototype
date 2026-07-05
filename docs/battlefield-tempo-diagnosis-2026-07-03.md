@@ -631,3 +631,22 @@ Judgment:
 - The fixed path is confirmed: the 38-damage `unknown` opening events now show as `humvee:vehicle_bailout`.
 - First-contact burst is not only direct vehicle fire. Humvee catastrophic bailout damage is a large opening-window damage source, and direct lethals often arrive after units have already been damaged.
 - Next behavior work should inspect Humvee destruction/bailout timing and passenger vulnerability before adding broad vehicle weapon delays.
+
+## Codex Humvee bailout timing diagnostics (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records Humvee emergency bailout events, total/opening bailout counts, passenger counts, cause counts, and first opening bailout detail.
+- Small-arms vehicle destruction now passes a weapon/cause label into vehicle `takeDamage()`, so future Humvee destruction events do not collapse to plain `destruction`.
+- Damage values, bailout damage values, weapon tuning, vehicle tuning, passenger rules, and AI decisions were not changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | First death after contact | Opening deaths | Opening damage sources | Bailouts total / opening | Opening bailout passengers | Bailout causes |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705145435/` | 5.3 | 0.08 | 8.6s | 3 | `humvee:machinegun` 36, `infantry:machinegun` 5, `tank:he-direct` 1 | 2 / 1 | 0 | `ap_direct` 1, `kamikazeDrone_blast` 1 |
+| 2 | `reports/playtests/battlefield-tempo-20260705145751/` | 5.9 | 0.10 | 7.5s | 2 | `tank:machinegun` 20, `humvee:machinegun` 6, `tank:he-direct` 3 | 3 / 1 | 0 | `ap_direct` 2, `he_blast` 1 |
+
+Judgment:
+- This sample weakens a simple "opening passenger bailout damage" diagnosis: both opening bailouts happened with zero passengers, even though total run 2 later had 2 bailout passengers.
+- The opening-window damage in these two runs is still vehicle-led, but by active weapons: Humvee MG, tank MG, and tank HE. The previous `humvee:vehicle_bailout` spike is real, but it is not a stable opening cause in every run.
+- Because deaths/min is below the 6-12 target in both runs and prone is at/below the target line, do not lower vehicle damage or add broad defensive behavior from this sample. The next behavior candidate should be a narrow first-contact vehicle weapon/targeting buffer, verified against both tempo and opening-source summaries.

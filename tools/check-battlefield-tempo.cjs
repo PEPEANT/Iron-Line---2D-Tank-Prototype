@@ -108,6 +108,7 @@ new Promise((resolve, reject) => {
     const prevAlive = new Set();
     const samples = [];
     const damageEvents = [];
+    const bailoutEvents = [];
     const lastDamageByUnit = new Map();
     const areaDamageByUnit = new Map();
     let firstBulletAt = null;
@@ -240,6 +241,34 @@ new Promise((resolve, reject) => {
       combat.damageRadius.__tempoDamageWrapped = true;
     }
 
+    const Humvee = window.IronLine?.Humvee;
+    const originalEmergencyBailout = Humvee?.prototype?.emergencyBailout;
+    if (originalEmergencyBailout && !originalEmergencyBailout.__tempoBailoutWrapped) {
+      Humvee.prototype.emergencyBailout = function tempoBailoutWrapped(gameArg, options = {}) {
+        const passengerCountBefore = (this.passengers || [])
+          .filter((unit) => unit?.alive && unit.inVehicle === this).length;
+        const event = {
+          id: this.callSign || this.id || "humvee",
+          team: this.team || "",
+          at: Math.round(((Date.now() - startWall) / 1000) * 10) / 10,
+          hp: Math.round((Number(this.hp) || 0) * 10) / 10,
+          maxHp: Math.round((Number(this.maxHp) || 0) * 10) / 10,
+          passengersBefore: passengerCountBefore,
+          catastrophic: Boolean(options.catastrophic),
+          weaponId: options.weaponId || "",
+          cause: options.cause || options.weaponId || "destruction"
+        };
+        const result = originalEmergencyBailout.call(this, gameArg, options);
+        event.passengers = Number(result?.passengers) || 0;
+        event.crew = Boolean(result?.crew);
+        event.player = Boolean(result?.player);
+        event.failed = Boolean(result?.failed);
+        if (bailoutEvents.length < 120) bailoutEvents.push(event);
+        return result;
+      };
+      Humvee.prototype.emergencyBailout.__tempoBailoutWrapped = true;
+    }
+
     const timer = setInterval(() => {
       const t = (Date.now() - startWall) / 1000;
       const infantry = game.infantry || [];
@@ -362,6 +391,7 @@ new Promise((resolve, reject) => {
           totalShots: shotCount,
           shotRanges,
           damageEvents,
+          bailoutEvents,
           initialB: samples[0]?.aliveB || 0,
           initialR: samples[0]?.aliveR || 0
         });
@@ -462,6 +492,7 @@ function summarize(r) {
     openingDeathSourceCounts[key] = (openingDeathSourceCounts[key] || 0) + 1;
   }
   const openingDamageEvents = (r.damageEvents || []).filter((event) => event.at >= contact && event.at < contact + OPENING_WINDOW_SECONDS);
+  const openingBailoutEvents = (r.bailoutEvents || []).filter((event) => event.at >= contact && event.at < contact + OPENING_WINDOW_SECONDS);
   const openingDamageSourceCounts = {};
   const openingDamageAmounts = {};
   const openingLethalDamageSourceCounts = {};
@@ -470,6 +501,20 @@ function summarize(r) {
     openingDamageSourceCounts[key] = (openingDamageSourceCounts[key] || 0) + 1;
     openingDamageAmounts[key] = +((openingDamageAmounts[key] || 0) + (Number(event.amount) || 0)).toFixed(1);
     if (event.lethal) openingLethalDamageSourceCounts[key] = (openingLethalDamageSourceCounts[key] || 0) + 1;
+  }
+  const bailoutCauseCounts = {};
+  const openingBailoutCauseCounts = {};
+  let bailoutPassengers = 0;
+  let openingBailoutPassengers = 0;
+  for (const event of r.bailoutEvents || []) {
+    const key = event.cause || event.weaponId || "destruction";
+    bailoutCauseCounts[key] = (bailoutCauseCounts[key] || 0) + 1;
+    bailoutPassengers += Number(event.passengers) || 0;
+  }
+  for (const event of openingBailoutEvents) {
+    const key = event.cause || event.weaponId || "destruction";
+    openingBailoutCauseCounts[key] = (openingBailoutCauseCounts[key] || 0) + 1;
+    openingBailoutPassengers += Number(event.passengers) || 0;
   }
   const openingHeavyOrVehicleDeaths = openingDeaths.filter((death) => {
     const kind = death.lastDamage?.source?.kind || "";
@@ -481,6 +526,7 @@ function summarize(r) {
   }).length;
   const firstDeath = (r.deaths || []).slice().sort((a, b) => a.at - b.at)[0] || null;
   const firstOpeningDamage = openingDamageEvents.slice().sort((a, b) => a.at - b.at)[0] || null;
+  const firstOpeningBailout = openingBailoutEvents.slice().sort((a, b) => a.at - b.at)[0] || null;
   const postContactClasses = sumCounts("classes");
   const postContactProneClasses = sumCounts("proneClasses");
   return {
@@ -506,6 +552,12 @@ function summarize(r) {
     openingDamageSourceCounts,
     openingDamageAmounts,
     openingLethalDamageSourceCounts,
+    bailoutEvents: (r.bailoutEvents || []).length,
+    bailoutPassengers,
+    bailoutCauseCounts,
+    openingBailouts: openingBailoutEvents.length,
+    openingBailoutPassengers,
+    openingBailoutCauseCounts,
     deathSourceCounts,
     firstDeathDetail: firstDeath ? {
       id: firstDeath.id,
@@ -523,6 +575,17 @@ function summarize(r) {
       amount: firstOpeningDamage.amount ?? null,
       hpBefore: firstOpeningDamage.hpBefore ?? null,
       lethal: Boolean(firstOpeningDamage.lethal)
+    } : null,
+    firstOpeningBailoutDetail: firstOpeningBailout ? {
+      id: firstOpeningBailout.id,
+      team: firstOpeningBailout.team,
+      at: +firstOpeningBailout.at.toFixed(1),
+      afterContactSeconds: contact ? +(firstOpeningBailout.at - contact).toFixed(1) : null,
+      passengersBefore: firstOpeningBailout.passengersBefore,
+      passengers: firstOpeningBailout.passengers,
+      catastrophic: Boolean(firstOpeningBailout.catastrophic),
+      weaponId: firstOpeningBailout.weaponId || "",
+      cause: firstOpeningBailout.cause || ""
     } : null,
     survivalAfterContactP25: +q(survival, 0.25).toFixed(0),
     survivalAfterContactP50: +q(survival, 0.5).toFixed(0),
@@ -567,6 +630,8 @@ function summaryMarkdown(m) {
     `| Opening heavy/vehicle deaths | ${m.openingHeavyOrVehicleDeaths} |`,
     `| Opening damage events | ${m.openingDamageEvents} |`,
     `| Opening heavy/vehicle damage events | ${m.openingHeavyOrVehicleDamageEvents} |`,
+    `| Opening Humvee bailouts | ${m.openingBailouts} |`,
+    `| Opening Humvee bailout passengers | ${m.openingBailoutPassengers} |`,
     `| Survival after contact p25/p50/p75 | ${m.survivalAfterContactP25}s / ${m.survivalAfterContactP50}s / ${m.survivalAfterContactP75}s |`,
     `| Shots/min post-contact | ${m.shotsPerMinutePostContact} |`,
     `| Shot range p50/p95 | ${m.shotRangeP50}px / ${m.shotRangeP95}px |`,
@@ -588,11 +653,19 @@ function summaryMarkdown(m) {
     JSON.stringify(m.firstOpeningDamageDetail, null, 2),
     "```",
     "",
+    "First opening Humvee bailout detail:",
+    "",
+    "```json",
+    JSON.stringify(m.firstOpeningBailoutDetail, null, 2),
+    "```",
+    "",
     `Death sources: ${JSON.stringify(m.deathSourceCounts)}`,
     `Opening death sources: ${JSON.stringify(m.openingDeathSourceCounts)}`,
     `Opening damage sources: ${JSON.stringify(m.openingDamageSourceCounts)}`,
     `Opening damage amounts: ${JSON.stringify(m.openingDamageAmounts)}`,
     `Opening lethal damage sources: ${JSON.stringify(m.openingLethalDamageSourceCounts)}`,
+    `Humvee bailout causes: ${JSON.stringify(m.bailoutCauseCounts)}`,
+    `Opening Humvee bailout causes: ${JSON.stringify(m.openingBailoutCauseCounts)}`,
     "",
     `Post-contact tactical modes: ${JSON.stringify(m.postContactModes)}`,
     `Post-contact infantry states: ${JSON.stringify(m.postContactStates)}`,

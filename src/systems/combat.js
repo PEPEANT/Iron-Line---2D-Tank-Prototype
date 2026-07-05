@@ -873,7 +873,7 @@
       maxLife: 0.13,
       color: friendly ? "rgba(210, 226, 232, 0.46)" : "rgba(255, 242, 168, 0.7)"
     });
-    if (!friendly && tank.hp <= 0 && tank.alive) tank.takeDamage(game, 0.01);
+    if (!friendly && tank.hp <= 0 && tank.alive) tank.takeDamage(game, 0.01, { weaponId: weapon.id || "small-arms", cause: `${weapon.id || "small-arms"}_direct` });
     recordKillIfDestroyed(game, shooter, tank, tankWasAlive, weapon.id || "small-arms");
     return true;
   }
