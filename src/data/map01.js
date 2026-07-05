@@ -435,5 +435,6 @@
   }
 
   expandBattlefield(world);
+  IronLine.normalizeMapObjects?.(world, { remigrate: true, source: "map01" });
   IronLine.map01 = world;
 })(window);

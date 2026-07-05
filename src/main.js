@@ -4331,6 +4331,7 @@
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
   IronLine.installSupplyCrates?.(Game);
+  IronLine.installMapObjects?.(Game);
   IronLine.installFogOfWar?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
   IronLine.installMobileCameraGestures?.(Game);

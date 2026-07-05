@@ -449,5 +449,6 @@
       ...item,
       baseHp: item.maxHp || item.hp || 1
     }));
+    IronLine.normalizeMapObjects?.(IronLine.map01, { remigrate: true, source: "map01-custom-layout" });
   }
 })(window);

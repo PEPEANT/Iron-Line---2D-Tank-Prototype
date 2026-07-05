@@ -1,6 +1,6 @@
 # 맵에디터 V2 설계도 — 지형 편집기에서 사물 편집기로 승급
 
-작성: 2026-07-04. 상태: **설계도만. 구현은 R1 게이트 완주 + 래칫(G0) 이후.**
+작성: 2026-07-04. 상태: **P1 1차 구현 완료(2026-07-05). P2 팔레트/배치 UI는 아직 미착수.**
 승급 선언: V1(현 map-editor.js) = 선과 사각형을 만지는 **개발자용 지형 도구**. V2 = 이름 있는 사물을 팔레트에서 집어 배치하는 **창작 도구**. 이 문서가 V2의 단일 기준이다.
 
 ## 0. 왜 승급인가 (한 문단)
@@ -174,3 +174,18 @@ P1+P2가 "승급"의 실체다. P1 없이 P2를 시작하는 것 금지 (v6이 �
 
 - **v6 코드 위치 확인** (사용자에게 질문 1회): 팔레트 UI, 건물 카탈로그, 가격표가 살아 있으면 P2 참고 자산. 없어도 스크린샷 기준으로 진행 가능.
 - 도감 첫 채움은 기존 것 재활용: scenery-catalog.js 항목(→장식/구조물), map01 obstacle kind 2종(→건물/구조물), v6 건물 6종(→건물). 실내 카테고리는 R3까지 빈 서랍으로 둔다.
+
+## 2026-07-05 P1 1차 구현 기록
+
+- 추가 파일: `src/data/object-catalog.js`, `src/data/map-schema.js`, `src/systems/map-objects.js`, `tools/check-map-schema.cjs`.
+- `object-catalog.js`는 기존 `scenery-catalog.js`를 읽어 건물/구조물/장식 도감 항목을 만든다. `supply-locker`와 현재 구현명 `supply-crate`도 구조물 항목으로 등록했다.
+- `map-schema.js`는 `migrateV0()`로 기존 `world.obstacles`를 `objects` 인스턴스로 변환하고, 런타임에서는 다시 `obstacles`를 재생성한다. 기존 AI/물리/렌더 경로는 그대로 유지한다.
+- 레거시 장애물은 크기가 제각각이므로 P1 변환에서는 `w/h`를 배치 크기(transform)로 보존한다. 충돌/엄폐/파괴 가능 같은 성질은 도감에서 읽는다.
+- `map01.js`와 `map01-custom-layout.js` 로딩 뒤 `normalizeMapObjects(..., { remigrate: true })`를 호출한다. 최종 커스텀 map01 기준 `objects` 36개와 runtime `obstacles` 36개가 일치한다.
+- `npm run map:schema`: `Map schema check passed: {"mapId":"map01","schemaVersion":1,"objects":36,"runtimeObstacles":36,"zones":4,"catalogEntries":14,"warnings":[]}`.
+- `npm run check`에 `tools/check-map-schema.cjs`를 추가했다.
+
+남은 것:
+
+- P1의 "게임이 objects 렌더"는 기존 `drawObstacles()` 경로를 보존하는 방식으로 닫았다. 별도 object 전용 렌더러와 P2 팔레트 UI는 아직 시작하지 않는다.
+- P2 착수 전 v6 코드 위치가 있으면 참고하고, 없으면 `docs/refs/reclaim-v6-palette.png` 기준으로 새 팔레트를 만든다.
