@@ -111,11 +111,47 @@
 
       ctx.save();
       if (lock) this.drawAttackDroneLockMarker(ctx, drone, lock, lockRadius, state);
-      if (state.controlled && !lock) this.drawAttackDroneLockOptions(game, drone, state);
+      if (state.controlled && !lock) this.drawAttackDroneDumbFireAim(game, drone, state);
       this.drawAttackDroneLockProgress(game, drone, state);
       this.drawAttackDroneFailure(drone, state);
       this.drawAttackDroneDetectedWarning(drone, state);
       ctx.restore();
+    },
+
+    drawAttackDroneDumbFireAim(game, drone, state) {
+      const mouse = game.input?.mouse;
+      if (!mouse) return;
+
+      const ctx = this.ctx;
+      const angle = drone.dumbFireActive && Number.isFinite(drone.dumbFireAngle)
+        ? drone.dumbFireAngle
+        : Math.atan2(mouse.worldY - drone.y, mouse.worldX - drone.x);
+      const lineLength = drone.dumbFireActive ? 240 : 170;
+      const tipX = drone.x + Math.cos(angle) * lineLength;
+      const tipY = drone.y + Math.sin(angle) * lineLength;
+      const wing = drone.dumbFireActive ? 13 : 10;
+
+      ctx.globalAlpha = drone.dumbFireActive ? 0.82 : 0.58;
+      ctx.strokeStyle = drone.dumbFireActive ? "rgba(255, 123, 72, 0.9)" : "rgba(255, 209, 102, 0.72)";
+      ctx.lineWidth = drone.dumbFireActive ? 2.4 : 1.8;
+      ctx.setLineDash(drone.dumbFireActive ? [] : [8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(drone.x, drone.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - Math.cos(angle - 0.52) * wing, tipY - Math.sin(angle - 0.52) * wing);
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - Math.cos(angle + 0.52) * wing, tipY - Math.sin(angle + 0.52) * wing);
+      ctx.stroke();
+
+      ctx.font = "800 10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = drone.dumbFireActive ? "rgba(255, 220, 184, 0.96)" : "rgba(255, 235, 172, 0.86)";
+      ctx.fillText(drone.dumbFireActive ? "STRIKE" : "DUMB FIRE", tipX, tipY - 18 - state.pulse * 3);
     },
 
     drawAttackDroneLockMarker(ctx, drone, lock, lockRadius, state) {

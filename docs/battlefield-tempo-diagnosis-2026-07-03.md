@@ -321,3 +321,24 @@ Checks:
 Judgment:
 - Commander presence behavior itself is verified by the targeted check.
 - Battlefield tempo remains variable: one run passed deaths/min + prone, one run missed both. This matches the existing D2/prone and early-contact variability noted above, so no broad combat retune was made in this patch.
+
+## Codex suicide drone dumb-fire tempo check (2026-07-05)
+
+Change scope:
+- Player-controlled suicide drone launch now uses dumb-fire direction instead of target/ground lock acquisition.
+- AI suicide drone lock-on/autopilot path and shared AI detonation radii were left unchanged.
+- Added obstacle/world-edge/lifetime detonation for player dumb-fire so missed shots can still explode on terrain.
+
+Checks:
+- `npm run drone:dumbfire` PASS.
+- `npm run check` PASS.
+
+`npm run tempo` result:
+
+| Run | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705104739/` | 5.6 | 92s | 4.52 | 0.05 | 14.0s | deaths/min slightly under 6, prone below target |
+
+Judgment:
+- The targeted dumb-fire contract passed and the changed path is player-controlled, not AI drone selection or infantry behavior.
+- The tempo miss matches the already documented D2/prone and early-contact variability, so no broad combat retune was made in this patch.

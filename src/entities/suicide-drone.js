@@ -3,7 +3,7 @@
 (function registerSuicideDrone(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
   const { TEAM } = IronLine.constants;
-  const { clamp, distXY, angleTo, rotateTowards, segmentDistanceToPoint, normalizeAngle } = IronLine.math;
+  const { clamp, distXY, angleTo, rotateTowards, segmentDistanceToPoint, normalizeAngle, circleRectCollision, expandedRect, lineIntersectsRect } = IronLine.math;
   const { hasLineOfSight } = IronLine.physics;
 
   class SuicideDrone extends IronLine.ReconDrone {
@@ -21,6 +21,7 @@
       this.minArmedDistance = weapon.minArmedDistance ?? 0;
       this.autoDetonateRadius = weapon.autoDetonateRadius || 34;
       this.diveAutoDetonateRadius = weapon.diveAutoDetonateRadius || 44;
+      this.dumbFireAutoDetonateRadius = weapon.dumbFireAutoDetonateRadius || 20;
       this.splash = weapon.splash || 132;
       this.lockedSplash = weapon.lockedSplash || Math.max(this.splash, 188);
       this.damage = weapon.damage || 94;
@@ -48,6 +49,8 @@
       this.terminalBoostSpeedMultiplier = weapon.terminalBoostSpeedMultiplier || 1.12;
       this.terminalDetectionBonus = weapon.terminalDetectionBonus || 90;
       this.diveTurnRate = weapon.diveTurnRate || 9.8;
+      this.dumbFireTurnRate = weapon.dumbFireTurnRate || 3.2;
+      this.dumbFireLife = weapon.dumbFireLife || 5.8;
       this.boostImpactWindow = weapon.boostImpactWindow || 0.36;
       this.boostImpactTimer = 0;
       this.boostDirectImpactPadding = weapon.boostDirectImpactPadding || 10;
@@ -68,6 +71,9 @@
       this.lockFailureReason = "";
       this.lockFailureTimer = 0;
       this.diveActive = false;
+      this.dumbFireActive = false;
+      this.dumbFireAngle = 0;
+      this.dumbFireTimer = 0;
       this.diveStartedAt = 0;
       this.terminalApproachActive = false;
       this.currentSpeed = this.speed;
@@ -104,7 +110,17 @@
       const originalControlled = this.controlled;
       this.currentSpeed = originalSpeed * (this.boosting ? this.boostSpeedMultiplier : 1);
       this.terminalApproachActive = false;
-      if (this.diveActive) {
+      if (this.diveActive && this.dumbFireActive) {
+        const lookAhead = Math.max(720, (this.lockAcquireRange || 760) * 1.4);
+        const dumbFireAngle = Number.isFinite(this.dumbFireAngle) ? this.dumbFireAngle : this.angle;
+        this.setWaypoint(
+          this.x + Math.cos(dumbFireAngle) * lookAhead,
+          this.y + Math.sin(dumbFireAngle) * lookAhead
+        );
+        this.currentSpeed = originalSpeed * this.diveSpeedMultiplier * (this.boosting ? this.boostSpeedMultiplier : 1);
+        this.speed = this.currentSpeed;
+        this.controlled = false;
+      } else if (this.diveActive) {
         const lock = this.lockPosition();
         if (lock) this.setWaypoint(lock.x, lock.y);
         const terminal = Boolean(lock && distXY(this.x, this.y, lock.x, lock.y) <= this.terminalApproachRange + this.radius);
@@ -123,6 +139,7 @@
       if (!this.alive) return;
 
       this.flightDistance += distXY(beforeX, beforeY, this.x, this.y);
+      if (this.updateDumbFireDetonation(game, dt, beforeX, beforeY)) return;
       this.checkImpactDetonation(game, beforeX, beforeY);
     }
 
@@ -211,7 +228,7 @@
       if (distance < 10) return;
 
       const desired = angleTo(this.x, this.y, x, y);
-      const turnRate = this.diveActive ? this.diveTurnRate : 5.8;
+      const turnRate = this.dumbFireActive ? this.dumbFireTurnRate : this.diveActive ? this.diveTurnRate : 5.8;
       this.angle = rotateTowards(this.angle, desired, turnRate * dt);
       const step = Math.min(distance, this.speed * dt);
       this.setPosition(
@@ -274,6 +291,7 @@
       this.lockTarget = target;
       this.lockPoint = null;
       this.diveActive = false;
+      this.clearDumbFire();
       this.clearLockAttempt();
       return true;
     }
@@ -283,6 +301,7 @@
       this.lockTarget = null;
       this.lockPoint = { x, y };
       this.diveActive = false;
+      this.clearDumbFire();
       this.setWaypoint(x, y);
       this.clearLockAttempt();
       return true;
@@ -292,7 +311,13 @@
       this.lockTarget = null;
       this.lockPoint = null;
       this.diveActive = false;
+      this.clearDumbFire();
       this.clearLockAttempt();
+    }
+
+    clearDumbFire() {
+      this.dumbFireActive = false;
+      this.dumbFireTimer = 0;
     }
 
     clearLockAttempt() {
@@ -348,6 +373,24 @@
       return true;
     }
 
+    startDumbFire(game, angle = this.angle) {
+      if (!this.hasLaunched?.()) return false;
+      if (!this.canDetonate()) return false;
+      this.lockTarget = null;
+      this.lockPoint = null;
+      this.clearLockAttempt();
+      this.dumbFireActive = true;
+      this.dumbFireAngle = Number.isFinite(angle) ? angle : this.angle;
+      this.dumbFireTimer = this.dumbFireLife;
+      this.diveActive = true;
+      this.diveStartedAt = game?.matchTime || this.age;
+      this.setWaypoint(
+        this.x + Math.cos(this.dumbFireAngle) * Math.max(720, (this.lockAcquireRange || 760) * 1.4),
+        this.y + Math.sin(this.dumbFireAngle) * Math.max(720, (this.lockAcquireRange || 760) * 1.4)
+      );
+      return true;
+    }
+
     detectionRange(observer = null) {
       const launchBlend = this.detectionGrace <= 0
         ? 1
@@ -400,6 +443,39 @@
       if (!this.canDetonate()) return false;
       this.detonate(game);
       return true;
+    }
+
+    updateDumbFireDetonation(game, dt, previousX = this.x, previousY = this.y) {
+      if (!this.dumbFireActive || !this.canDetonate()) return false;
+      this.dumbFireTimer = Math.max(0, (this.dumbFireTimer || 0) - dt);
+      if (this.dumbFireTimer <= 0) {
+        this.detonate(game);
+        return true;
+      }
+
+      const impactRadius = (this.radius || 0) + 2;
+      const world = game?.world;
+      if (world && (
+        this.x <= impactRadius ||
+        this.y <= impactRadius ||
+        this.x >= world.width - impactRadius ||
+        this.y >= world.height - impactRadius
+      )) {
+        this.detonate(game);
+        return true;
+      }
+
+      for (const obstacle of world?.obstacles || []) {
+        if (obstacle.destroyed) continue;
+        const expanded = expandedRect(obstacle, impactRadius);
+        const hitObstacle = circleRectCollision(this.x, this.y, impactRadius, obstacle) ||
+          lineIntersectsRect(previousX, previousY, this.x, this.y, expanded);
+        if (hitObstacle) {
+          this.detonate(game);
+          return true;
+        }
+      }
+      return false;
     }
 
     destroy(game) {
@@ -558,7 +634,7 @@
       }
 
       for (const target of targets) {
-        const triggerRadius = this.diveActive ? this.diveAutoDetonateRadius : this.autoDetonateRadius;
+        const triggerRadius = this.dumbFireActive ? this.dumbFireAutoDetonateRadius : this.diveActive ? this.diveAutoDetonateRadius : this.autoDetonateRadius;
         const requiredDistance = this.radius + (target.radius || 0) + triggerRadius;
         const directDistance = this.radius + (target.radius || 0) + this.boostDirectImpactPadding;
         const currentDistance = distXY(this.x, this.y, target.x, target.y);

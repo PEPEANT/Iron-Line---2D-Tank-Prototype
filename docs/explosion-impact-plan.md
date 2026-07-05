@@ -35,9 +35,10 @@
 ### ③ 자폭드론 dumb-fire 전환
 `src/entities/suicide-drone.js` + `infantry-weapons.js` config:
 - 락온 제거: lockAcquireTime 계열 무시(플레이어 조종 시), 조준 방향 직진 + 완만한 조향만.
-- 기폭 조건 단순화: **아무 충돌이든 즉시 폭발** (impactDetonate), 근접 자동기폭(autoDetonateRadius)은 유지하되 34→20으로 축소(스침 보너스 느낌만), 배터리 소진 시 그 자리에서 폭발.
+- 기폭 조건 단순화: **아무 충돌이든 즉시 폭발** (impactDetonate), 플레이어 dumb-fire 근접 자동기폭은 20으로 축소(스침 보너스 느낌만), 수명 종료 시 그 자리에서 폭발. AI용 기존 락온 반경/기폭 반경은 유지.
 - 빗나감 = 지나가서 벽/지면에 터짐. 폭발 이펙트는 ②를 그대로 사용.
 - AI 사용 드론은 기존 로직 유지 (밸런스 재작업 방지).
+- 2026-07-05 Codex dumb-fire v1: `src/systems/game-drone-system.js`의 플레이어 발사 경로가 더 이상 락온 후보를 찾지 않고 마우스 방향으로 `startDumbFire`를 호출한다. `src/entities/suicide-drone.js`는 `dumbFireActive` 동안 고정 방향으로 완만히 조향하며, 보병/차량 근접 20px, 장애물/월드 경계 충돌, 수명 종료 시 폭발한다. AI 드론의 `lockOn`/`startAttackDive` 경로와 기존 기폭 반경은 유지.
 
 ### ④ 폭발 잔해 (지면에 남는 흔적)
 설계 원칙: **시각 전용 데칼, 충돌·AI·온라인 동기화에 절대 안 얹음** (이미 scorch mark가 이 패턴 — 그대로 확장).

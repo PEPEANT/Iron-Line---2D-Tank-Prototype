@@ -416,19 +416,9 @@
         return false;
       }
 
-      const target = this.findSuicideDroneLockTarget(drone);
       const mouse = this.input.mouse;
-      let attackPoint = target ? null : { x: mouse.worldX, y: mouse.worldY };
-      if (!target) {
-        const range = drone.lockAcquireRange || 720;
-        if (distXY(drone.x, drone.y, attackPoint.x, attackPoint.y) > range) {
-          drone.failLock?.("\uAC70\uB9AC \uCD08\uACFC");
-          return false;
-        }
-      }
-
-      const locked = target ? drone.lockOn?.(target) : drone.lockGround?.(attackPoint.x, attackPoint.y);
-      if (!locked || !drone.startAttackDive?.(this)) return false;
+      const attackAngle = angleTo(drone.x, drone.y, mouse.worldX, mouse.worldY);
+      if (!drone.startDumbFire?.(this, attackAngle)) return false;
 
       this.addScreenShake(7.5, 14);
       this.effects.blastRings?.push({
@@ -441,7 +431,6 @@
         color: "rgba(255, 123, 72, 0.68)",
         width: 2.8
       });
-      this.emitSuicideDroneLockFeedback(drone, target);
       return true;
     },
     togglePlayerDroneControl() {
