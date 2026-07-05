@@ -1,6 +1,6 @@
 # 맵에디터 V2 설계도 — 지형 편집기에서 사물 편집기로 승급
 
-작성: 2026-07-04. 상태: **P1 1차 구현 완료(2026-07-05). P2 팔레트/배치 UI는 아직 미착수.**
+작성: 2026-07-04. 상태: **P2 1차 구현 완료(2026-07-05). P3 크기조절/회전/그룹/실행취소는 아직 미착수.**
 승급 선언: V1(현 map-editor.js) = 선과 사각형을 만지는 **개발자용 지형 도구**. V2 = 이름 있는 사물을 팔레트에서 집어 배치하는 **창작 도구**. 이 문서가 V2의 단일 기준이다.
 
 ## 0. 왜 승급인가 (한 문단)
@@ -185,7 +185,17 @@ P1+P2가 "승급"의 실체다. P1 없이 P2를 시작하는 것 금지 (v6이 �
 - `npm run map:schema`: `Map schema check passed: {"mapId":"map01","schemaVersion":1,"objects":36,"runtimeObstacles":36,"zones":4,"catalogEntries":14,"warnings":[]}`.
 - `npm run check`에 `tools/check-map-schema.cjs`를 추가했다.
 
+## 2026-07-05 P2 1차 구현 기록
+
+- 추가 파일: `src/tools/editor-objects.js`, `src/tools/editor-palette.js`, `styles/editor-palette.css`, `tools/check-editor-p2.cjs`.
+- `map-editor.js` 본체는 동결을 지켰다. 새 모듈이 기존 V1 장애물 편집 기능(배치 위치, 이동, 삭제, 크기 핸들)을 재사용한다.
+- `editor-objects.js`는 `object-catalog.js` 항목을 에디터용 obstacle kind로 브리지하고, 기존 JS 내보내기를 스키마 v1 JSON으로 변환한다.
+- `editor-palette.js`는 하단 팔레트 바(카테고리 탭 + 사물 카드)와 JSON 저장/불러오기 버튼을 붙인다.
+- JSON 불러오기는 schema v1을 V1 draft(localStorage)로 변환한 뒤 에디터를 다시 열어 적용한다. 안전지대/스폰 같은 V1 부가 배치는 JSON에 없으면 기존 map01 기준값을 유지한다.
+- `npm run map:editor`: `Editor P2 check passed`.
+- `npm run check`에 `tools/check-editor-p2.cjs`를 추가했다.
+
 남은 것:
 
-- P1의 "게임이 objects 렌더"는 기존 `drawObstacles()` 경로를 보존하는 방식으로 닫았다. 별도 object 전용 렌더러와 P2 팔레트 UI는 아직 시작하지 않는다.
-- P2 착수 전 v6 코드 위치가 있으면 참고하고, 없으면 `docs/refs/reclaim-v6-palette.png` 기준으로 새 팔레트를 만든다.
+- P3: 회전, 복제, 그룹, 실행취소/재실행 20회 왕복 검증은 아직 시작하지 않는다.
+- P2.5: 문/벽 충돌/지붕 투명화와 실내 프리팹은 아직 시작하지 않는다.
