@@ -107,6 +107,9 @@
   const baseUpdateInfantryWeapons = Hud.prototype.updateInfantryWeapons;
   Hud.prototype.updateInfantryWeapons = function updateInfantryWeaponsWithSlotbar(player, game = null) {
     const result = baseUpdateInfantryWeapons?.call(this, player, game);
+    for (const id of ["ap", "he", "mg"]) {
+      this.nodes?.slots?.[id]?.classList.add("hidden");
+    }
     updateSlotbar(this, player);
     return result;
   };
