@@ -222,3 +222,18 @@ Verification:
 Current conclusion:
 
 The state-labeling problem is resolved without weakening grenade behavior. The remaining tactical blocker is now less about state naming and more about doctrine balance: `hold-wall`, `fallback`, support/scout role allocation, and low rifle point-shot participation still decide whether the player feels a real assault line forming.
+
+## 2026-07-05 post tank-assault census recheck
+
+After the tank assault bug fix, Codex re-ran `npm run census` twice to check whether fire-move/support-fire had regressed.
+
+- Run 1: `reports/playtests/behavior-census-20260705092057/report.md`
+  - fireMoveOk 0, pointShots 0, teamworkRatio 0, grenade ok 1, proneEnter 12.
+  - This looked like a possible regression, but the event count was low and the battle flow was sparse.
+- Run 2: `reports/playtests/behavior-census-20260705092542/report.md`
+  - fireMoveOk 1075, fireMoveOkByState `assault-fire-move` 1075, fireMoveOkByWeapon `rifle` 1075.
+  - pointShots 8, suppressionShotRatio 0.028, teamworkRatio 0.007, grenade ok 1, proneEnter 29.
+
+Current conclusion:
+
+No clear fire-move state regression. The 0-success run is treated as run variance. The old unresolved problem remains: support/point-fire and teamwork are too rare to make the assault line feel reliably covered. Do not retune fire-move from a single zero run; use repeated census samples and focus next on support-fire trigger frequency or squad role composition.
