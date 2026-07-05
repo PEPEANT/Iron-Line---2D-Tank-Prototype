@@ -379,7 +379,12 @@ function summarize(r) {
   const OPENING_WINDOW_SECONDS = 15;
   const s = r.samples || [];
   const last = s[s.length - 1] || {};
-  const contact = r.firstBulletAt || 0;
+  const firstDamageAt = (r.damageEvents || [])
+    .map((event) => Number(event.at))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0];
+  const contactCandidates = [r.firstBulletAt, firstDamageAt].filter(Number.isFinite);
+  const contact = contactCandidates.length ? Math.min(...contactCandidates) : 0;
   const post = s.filter((x) => x.t >= contact);
   const pre = s.filter((x) => x.t < contact);
   const avg = (arr, k) => (arr.length ? +(arr.reduce((sum, x) => sum + x[k], 0) / arr.length).toFixed(2) : 0);
@@ -409,6 +414,8 @@ function summarize(r) {
   return {
     durationSeconds: last.t || 0,
     firstShotAt: r.firstBulletAt,
+    firstDamageAt,
+    firstContactAt: contact,
     firstDeathAt: r.firstDeathAt,
     firstDeathAfterContactSeconds: r.firstDeathAt !== null && r.firstBulletAt !== null
       ? +(r.firstDeathAt - r.firstBulletAt).toFixed(1)
@@ -453,6 +460,8 @@ function summaryMarkdown(m) {
     "| Metric | Value |",
     "| --- | ---: |",
     `| First shot at | ${m.firstShotAt}s |`,
+    `| First damage at | ${m.firstDamageAt}s |`,
+    `| First contact at | ${m.firstContactAt}s |`,
     `| First death after contact | ${m.firstDeathAfterContactSeconds}s |`,
     `| Deaths/min post-contact | ${m.deathsPerMinutePostContact} |`,
     `| Pre-contact deaths | ${m.preContactDeaths} |`,

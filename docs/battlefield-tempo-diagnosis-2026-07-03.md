@@ -478,3 +478,19 @@ Judgment:
 - Support suppression is intermittent, not absent. The zero point-shot run is now reproducible as a diagnosable low-signal sample rather than proof that the path is dead.
 - The dominant support-fire bottleneck is that support weapons in `advance` often have no direct/report/support point to suppress; grenade-launcher ownership and report rejection are secondary blockers.
 - Do not raise support-fire cadence blindly. The next behavior change, if any, should be a narrow way to give support weapons an explicit squad-shared suppression point during `advance`, then verify with census plus two tempo runs.
+
+## Codex discarded advance shared support experiment (2026-07-05)
+
+Experiment:
+- Temporarily allowed support weapons in `advance`/`pre-assault` to use a same-squad soft threat as a suppression point.
+- Also fixed `npm run tempo` contact timing to use the first damage event as a contact candidate, because direct AP damage can occur before the first tracer sample.
+
+Result:
+- `npm run census`: `reports/playtests/behavior-census-20260705131435/` had pointShots 45, suppressionShotRatio 0.103, fireMoveOk 2398, teamworkRatio 0.035.
+- `npm run tempo` run 1: `reports/playtests/battlefield-tempo-20260705132433/` had deaths/min 3.9, prone 0.01, first death 2.5s after contact, opening deaths 4.
+- `npm run tempo` run 2: `reports/playtests/battlefield-tempo-20260705132757/` had deaths/min 8.0, prone 0.14, first death 5.0s after contact, opening deaths 3.
+
+Judgment:
+- The behavior experiment was discarded before commit. It did not raise point shots enough to justify the unstable tempo sample.
+- The tempo contact timing fix is kept: reports now include `firstDamageAt` and `firstContactAt`, and first-death-after-contact no longer goes negative when direct projectile damage precedes tracer fire.
+- Next support-fire behavior work should not simply give `advance` a shared point. It needs a tighter trigger, probably requiring confirmed assault movement plus a non-vehicle infantry target and then a fresh 2-run tempo pass.
