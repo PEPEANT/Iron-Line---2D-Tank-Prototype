@@ -129,3 +129,19 @@
 ## 다음 세션에 맡길 첫 작업
 
 첫 구현 작업은 `침대전투 계측`이다. 폭발 발생 뒤 주변 AI가 `prone-only`로 끝나는지, 산개/엄폐/후퇴/반격으로 이어지는지를 숫자로 잡는다. 이 수치 없이 엎드림 계수부터 만지면 다시 감으로 튜닝하게 된다.
+
+## 2026-07-05 1단계 계측 구현 기록
+
+- `tools/check-bed-combat-census.cjs`와 `npm run bed:combat`을 추가했다.
+- 계측은 런타임 훅 전용이다. `damageRadius()`가 만든 폭발 뒤 10초 동안 보병 상태를 관찰하며 AI 행동, 피해량, 이동, 무기, 사거리, 의사결정 가중치는 바꾸지 않는다.
+- 집계 항목은 `blast:prone-only`, `blast:spread`, `blast:cover`, `blast:fallback`, `blast:rpg-response`, `blast:wounded`, `blast:no-response`다.
+- `blast:wounded`는 현재 AI wounded/downed 상태가 없으므로 HP 감소 또는 사망 관측값이다. 실제 후송/소생 행동 설계는 4단계 또는 보급/장비 C단계 이후로 남긴다.
+- 출력 위치는 `reports/playtests/bed-combat-census-*/report.md`와 `result.json`이다.
+
+### 2026-07-05 계측 실행 결과
+
+- 자연 15v15 120초 1차 실행에서는 `damageRadius()` 폭발 표본이 0개였다. 따라서 침대전투 계측은 자연전만으로는 샘플이 비는 문제가 확인됐다.
+- 프로브 전용 통제 폭발(`bed_probe_blast`)을 추가한 뒤 120초 실행: 폭발 8회, 폭발-유닛 반응창 63개.
+- 10초 반응창 집계: `blast:fallback` 40, `blast:prone-only` 23, `blast:wounded` 49. `blast:wounded`는 보조 플래그라 주 반응 카운트에서는 fallback/prone-only와 겹칠 수 있다.
+- `proneOnlyRatio`는 0.365, `noResponseRatio`는 0, 최초 반응 p50/p90은 0.27초/10.25초.
+- 해석: 현재 폭발 뒤 완전 무반응은 아니지만, 약 3분의 1은 산개/엄폐/RPG 반응 없이 엎드림만으로 끝난다. 다음 판단은 Fable 설계 또는 2단계에서 산개/엄폐 우선순위만 다루고, 설치류/보급/소생 구현으로 문제를 덮어 고치지 않는다.
