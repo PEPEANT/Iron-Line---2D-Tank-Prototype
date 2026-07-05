@@ -175,3 +175,11 @@
 - 주 반응 집계: `blast:cover` 24, `blast:fallback` 5, `blast:spread` 3, `blast:prone-only` 6.
 - `proneOnlyRatio`는 0.158, `noResponseRatio`는 0, 최초 반응 p50/p90은 0.25초/0.5초.
 - 판정: 계측 스크립트와 2단계 완화는 최신 코드에서도 정상 작동한다. 단일 실행 기준으로는 이전 0.291보다 더 낮지만, 폭발 반응창 수가 38개라 이후 침대전투/보급/소생 판단에는 반복 샘플을 계속 같이 본다.
+
+## 2026-07-05 시체/다운 표현 1차 구현 기록
+
+- `src/systems/renderer-corpse.js`를 추가해 `drawInfantryCorpse()`를 렌더 확장 모듈로 분리했다. `renderer.js` 본체 변경은 플레이어 다운 상태를 `{ wounded: true }`로 넘기는 호출 1줄뿐이다.
+- wounded/downed 표현은 노란 점선 링과 더 살아 있는 팀 색상 몸체로, dead 표현은 낮은 채도와 정적인 그림자로 구분한다.
+- 에셋팩 교체를 위해 `unit.death-pose` 스타일 슬롯을 먼저 읽고, 없으면 벡터 fallback을 쓴다.
+- `npm run corpse:render`: `Corpse renderer check passed`.
+- 범위 제한: 소생, E키 끌기, AI 안전지대 판단, wounded/dead 상태머신은 아직 구현하지 않았다.

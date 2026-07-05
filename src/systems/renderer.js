@@ -83,7 +83,7 @@
       for (const unit of game.infantry || []) this.drawInfantryUnit(game, unit);
       for (const crew of game.crews || []) this.drawCrewMember(game, crew);
       if (!game.adminObserverMode && !game.player.inTank && game.player.hp > 0) this.drawInfantry(game, game.player, { color: "#b6dcff" });
-      else if (!game.adminObserverMode && !game.player.inTank && (game.playerDowned || game.playerDeathActive)) this.drawInfantryCorpse(game.player);
+      else if (!game.adminObserverMode && !game.player.inTank && (game.playerDowned || game.playerDeathActive)) this.drawInfantryCorpse(game.player, { wounded: game.playerDowned && !game.playerDeathActive });
       this.drawRemoteHumanPlayers(game);
       if (!game.adminObserverMode) this.drawPlayerInfantryAim(game);
       for (const drone of game.drones || []) this.drawReconDrone(game, drone);
