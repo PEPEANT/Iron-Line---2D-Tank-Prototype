@@ -372,7 +372,9 @@
     bindResultControls() {
       this.nodes.deathRestartButton?.addEventListener("click", () => {
         const game = IronLine.game;
-        if (game) game.restartMatchAfterDeath();
+        if (!game) return;
+        if (game.matchConfig?.mode === "conquest" && game.matchStarted) game.restartMatchAfterDeath();
+        else game.returnToMainMenu();
       });
 
       this.nodes.resultMainButton?.addEventListener("click", () => {
@@ -882,12 +884,14 @@
       this.nodes.deathScreen?.classList.toggle("hidden", !visible);
       if (this.nodes.deathReason) {
         const respawn = game.matchConfig?.mode === "conquest" && Number.isFinite(game.playerRespawnTimer)
-          ? ` respawn ${Math.max(0, Math.ceil(game.playerRespawnTimer))}s`
+          ? ` · 리스폰 ${Math.max(0, Math.ceil(game.playerRespawnTimer))}초`
           : "";
-        this.nodes.deathReason.textContent = `${game.playerDeathReason || "전투 불능 상태입니다."}${respawn}`;
+        this.nodes.deathReason.textContent = `원인: ${game.playerDeathReason || "전투 불능"}${respawn}`;
       }
       if (this.nodes.deathRestartButton) {
-        this.nodes.deathRestartButton.textContent = game.matchConfig?.mode === "conquest" ? "즉시 리스폰" : "다시 시작";
+        this.nodes.deathRestartButton.textContent = game.matchConfig?.mode === "conquest" && game.matchStarted
+          ? "즉시 리스폰"
+          : "메인화면으로 가기";
       }
     }
 

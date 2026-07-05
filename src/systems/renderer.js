@@ -2350,10 +2350,7 @@
       ctx.fillText("\uC804\uD22C \uBD88\uB2A5", camera.width / 2, camera.height / 2 - 28);
       ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
       ctx.font = "800 15px Inter, sans-serif";
-      ctx.fillText(game.playerPendingDeathReason || "\uD53C\uACA9 \uC6D0\uC778 \uD655\uC778 \uC911", camera.width / 2, camera.height / 2 + 12, camera.width * 0.86);
-      ctx.fillStyle = "rgba(255, 209, 102, 0.88)";
-      ctx.font = "800 13px Inter, sans-serif";
-      ctx.fillText(`\uC0C1\uD669 \uD655\uC778 ${Math.max(0, game.playerDownedTimer || 0).toFixed(1)}s`, camera.width / 2, camera.height / 2 + 42);
+      ctx.fillText(`\uC6D0\uC778: ${game.playerPendingDeathReason || "\uD53C\uACA9"}`, camera.width / 2, camera.height / 2 + 12, camera.width * 0.86);
       ctx.restore();
     }
 

@@ -3006,7 +3006,7 @@
       this.playerDownedTimer = Math.max(0, this.playerDownedTimer - dt);
       this.playerDamageFlash = Math.max(this.playerDamageFlash, 0.18 + Math.sin(performance.now() * 0.008) * 0.06);
       if (this.playerDownedTimer <= 0) {
-        this.handlePlayerDeath(this.playerPendingDeathReason || "\uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uC785\uB2C8\uB2E4.", { fromDowned: true });
+        this.handlePlayerDeath(this.playerPendingDeathReason || "전투 불능", { fromDowned: true });
       }
     }
 
@@ -3086,7 +3086,7 @@
 
     updatePlayer(dt) {
       if (this.player.hp <= 0) {
-        this.beginPlayerDowned("\uC801 \uACF5\uACA9\uC73C\uB85C \uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uAC00 \uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+        this.beginPlayerDowned("적 공격");
         return;
       }
 
@@ -3137,7 +3137,7 @@
       }
     }
 
-    beginPlayerDowned(reason = "\uC804\uD22C \uBD88\uB2A5 \uC0C1\uD0DC\uC785\uB2C8\uB2E4.") {
+    beginPlayerDowned(reason = "전투 불능") {
       if (this.playerDeathActive || this.playerDowned || this.result) return;
       if (this.player.inTank) {
         this.player.inTank.playerControlled = false;
@@ -3158,7 +3158,7 @@
       this.hud?.toggleSettingsPanel?.(false);
     }
 
-    handlePlayerDeath(reason = "\uC0AC\uB9DD\uD588\uC2B5\uB2C8\uB2E4.", options = {}) {
+    handlePlayerDeath(reason = "사망", options = {}) {
       if (this.playerDeathActive || this.result) return;
       if (!options.fromDowned && !options.immediate && !this.playerDowned) {
         this.beginPlayerDowned(reason);
@@ -3189,9 +3189,9 @@
     }
 
     updateDeathRestartInput() {
-      if (this.input.consumePress("KeyR") || this.input.consumePress("Enter")) {
-        this.restartMatchAfterDeath();
-      }
+      const conquest = this.isConquestMode() && this.matchStarted;
+      if (this.input.consumePress("Enter")) return conquest ? this.restartMatchAfterDeath() : this.returnToMainMenu();
+      if (conquest && this.input.consumePress("KeyR")) this.restartMatchAfterDeath();
     }
 
     restartMatchAfterDeath() {

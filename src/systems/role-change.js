@@ -102,9 +102,7 @@
       if (!game?.matchStarted || game.result || game.matchConfig?.mode !== "conquest") {
         return { available: false, reason: "mode" };
       }
-      if (game.playerDeathActive || game.playerDowned) {
-        return { available: true, reason: "death" };
-      }
+      if (game.playerDeathActive || game.playerDowned) return { available: false, reason: "death" };
       if (!game.player || game.player.hp <= 0 || game.player.inTank) {
         return { available: false, reason: "unavailable" };
       }
@@ -133,6 +131,11 @@
       let button = document.getElementById("deathRoleChangeButton");
       const deathScreen = document.getElementById("deathScreen");
       if (!deathScreen) return;
+      if (state.reason !== "death" || !state.available) {
+        hint?.classList.add("hidden");
+        button?.classList.add("hidden");
+        return;
+      }
       if (!hint) {
         hint = document.createElement("small");
         hint.id = "deathRoleChangeHint";
