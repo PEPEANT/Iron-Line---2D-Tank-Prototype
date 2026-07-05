@@ -2,7 +2,7 @@
   "allowanceLines": 40,
   "files": {
     "src/ai/commander-ai.js": 1222,
-    "src/ai/infantry-ai.js": 2849,
+    "src/ai/infantry-ai.js": 2724,
     "src/entities/tank.js": 1099,
     "src/main.js": 4340,
     "src/systems/combat.js": 1599,

@@ -152,3 +152,11 @@
 - 섬멸전/일반 사망의 기본 버튼과 Enter 입력은 `메인화면으로 가기`로 바꿨다. 정복전 진행 중에는 기존 즉시 리스폰 흐름을 유지한다.
 - 사망 화면에 붙던 병과 변경 보조 버튼은 숨겼다. 병과/장비 개편은 `supply-loadout-blueprint.md`의 보급/장비 단계에서 따로 다룬다.
 - 전투불능 오버레이는 `상황 확인` 문구를 제거하고 원인 표시 중심으로 줄였다.
+
+## 2026-07-05 침대전투 선행 구조 분리 기록
+
+- `src/ai/infantry-ai.js`의 큰 `update()` 안에 있던 제압 반응, 수리, 수류탄, 접촉 교전, 보고 접촉, 기본 전진 처리를 `src/ai/infantry-ai-update-handlers.js`로 분리했다.
+- 목적은 행동 튜닝이 아니라 다음 침대전투 2단계(폭발 후 산개/엄폐 우선순위)를 넣을 수 있는 자리 만들기다. AI 가중치, 피해량, 무기 사거리, 엎드림 임계값은 바꾸지 않았다.
+- `npm run check` 통과. 래칫 기준은 `src/ai/infantry-ai.js` 2849줄에서 2724줄로 내려갔다.
+- `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705075449/` 기준 폭발 8회, 반응창 48개, `blast:fallback` 29, `blast:prone-only` 19, `proneOnlyRatio` 0.396, `noResponseRatio` 0.
+- 해석: 구조 분리 뒤에도 계측은 정상 작동한다. prone-only 비율은 기존 0.365와 같은 문제권이라, 다음 실제 행동 작업은 설치류/보급/소생으로 덮지 말고 폭발 후 산개/엄폐 전환만 좁게 다룬다.

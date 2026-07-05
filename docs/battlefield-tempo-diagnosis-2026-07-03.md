@@ -222,3 +222,23 @@ node tools/check-battlefield-tempo.cjs
 - S2 1차는 AI 루프를 바꾸지 않았지만, 검증상 이번 2회는 deaths/min 목표(6~12)와 prone ratio 목표(>0.10)를 모두 밑돌았다.
 - 생존 p50은 39s/22s로 한 번은 느슨하고 한 번은 목표권이다. 첫 사망 after contact는 여전히 1~1.5초라 차량/초기 접촉 문제가 유지된다.
 - 이번 세션에서는 보급 상자 기능을 고치기 위해 AI 사망 페이스를 즉석 튜닝하지 않는다. 다음 전투 작업은 D2(제압/엎드림 지속 편차)와 차량 선제킬을 별도 계측/수정으로 다룬다.
+
+## Codex InfantryAI update 분할 후 템포 확인 (2026-07-05)
+
+변경 범위:
+- `src/ai/infantry-ai.js`의 `update()` 내부 행동 블록을 `src/ai/infantry-ai-update-handlers.js`로 분리했다.
+- 전술 가중치, 무기 수치, 피해량, 엎드림/제압 임계값은 바꾸지 않았다.
+- `npm run bed:combat`도 함께 실행했다: `reports/playtests/bed-combat-census-20260705075449/` 기준 `proneOnlyRatio` 0.396, `noResponseRatio` 0.
+
+`npm run tempo` 2회 결과:
+
+| 런 | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | 판정 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705080132/` | 4.6 | 38s | 9.92 | 0.12 | -3.5s | 사망 페이스 미달, 차량/측정 선제 사망 패턴 재관측 |
+| 2 | `reports/playtests/battlefield-tempo-20260705080451/` | 8.1 | 57s | 8.74 | 0.12 | 1.5s | 사망 페이스 통과, 생존 p50 과장 |
+
+판정:
+- 구조 분리 자체는 `npm run check`와 계측 도구를 통과했다.
+- deaths/min은 4.6/8.1로 편차가 크다. 평균은 목표 하한 근처지만 1회는 미달이므로 이 커밋을 전투 밸런스 개선으로 판정하지 않는다.
+- prone ratio는 0.12/0.12로 R1 재측정 목표선(>0.10)은 넘지만, 이전 진단 목표(>0.15)에는 못 미친다. D2(제압/엎드림 지속 편차)는 유지.
+- 이번 변경은 행동 보존형 구조 작업이다. 다음 실제 전투 작업은 `bed-combat-and-downed-flow-plan.md`의 2단계처럼 폭발 후 산개/엄폐 전환만 좁게 다룬다.

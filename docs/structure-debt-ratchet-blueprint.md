@@ -30,6 +30,7 @@
 메서드 래칫 (2차, 선택): 220줄+ 메서드 목록도 baseline에 기록 — 현재 유일한 위반 `infantry-ai.js update()` 232줄. 새 220줄+ 메서드 등장 시 실패.
 
 구현 결과(2026-07-05): `tools/hotspot-baseline.json` + `tools/check-code-health.cjs` 래칫 검사. 게임플레이 코드 0줄.
+추가 적용(2026-07-05): 침대전투 후속 작업 선행으로 `infantry-ai.js update()` 일부를 `src/ai/infantry-ai-update-handlers.js`로 분리했고, `src/ai/infantry-ai.js` 래칫 기준선을 2849줄에서 2724줄로 낮췄다. 행동 튜닝은 하지 않았다.
 
 ## 3. 기능 → 선행 이사 지도 (R2 기능은 이 표 없이 착수 금지)
 
