@@ -650,3 +650,22 @@ Judgment:
 - This sample weakens a simple "opening passenger bailout damage" diagnosis: both opening bailouts happened with zero passengers, even though total run 2 later had 2 bailout passengers.
 - The opening-window damage in these two runs is still vehicle-led, but by active weapons: Humvee MG, tank MG, and tank HE. The previous `humvee:vehicle_bailout` spike is real, but it is not a stable opening cause in every run.
 - Because deaths/min is below the 6-12 target in both runs and prone is at/below the target line, do not lower vehicle damage or add broad defensive behavior from this sample. The next behavior candidate should be a narrow first-contact vehicle weapon/targeting buffer, verified against both tempo and opening-source summaries.
+
+## Codex active-posture tempo metric fix (2026-07-05)
+
+Change scope:
+- `npm run tempo` now excludes `unit.inVehicle` infantry from moving, suppression, prone, weapon, class, state, and tactical-decision posture metrics. Team alive counts and death tracking still include mounted infantry.
+- The report now prints average mounted infantry count after contact, so transport occupancy remains visible without polluting prone/suppression ratios.
+- This is diagnostics only. No gameplay, AI, vehicle, weapon, damage, or transport behavior changed.
+
+`npm run tempo` 2-run result with active-posture metrics:
+
+| Run | Report | Deaths/min | Active prone ratio | Mounted infantry avg | First death after contact | Opening damage sources | Opening bailouts / passengers |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |
+| 1 | `reports/playtests/battlefield-tempo-20260705150323/` | 4.3 | 0.03 | 1.82 | 2.0s | `humvee:vehicle_bailout` 4, `tank:machinegun` 11, `tank:he-direct` 3, `tank:ap-direct` 1 | 1 / 4 |
+| 2 | `reports/playtests/battlefield-tempo-20260705150637/` | 6.1 | 0.09 | 3.07 | 9.5s | `tank:machinegun` 12, `humvee:vehicle_bailout` 4, `tank:he-direct` 4 | 1 / 4 |
+
+Judgment:
+- Earlier prone ratios were slightly contaminated by mounted infantry. The visible/active posture signal is lower: 0.03/0.09 in this sample, so D2 is still not passing reliably.
+- The active-posture rerun re-confirms that a loaded Humvee can be destroyed by `ap_direct` at first contact, causing 4 passenger bailout damage events for 152 total opening damage. This is not every-run stable, but it is real enough to keep in the next behavior target.
+- Next behavior work should focus on Humvee transport exposure/unload timing or first-contact vehicle targeting rules before broad damage reductions. Lowering damage alone risks pushing deaths/min even further below target.

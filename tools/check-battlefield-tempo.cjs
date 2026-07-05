@@ -280,6 +280,7 @@ new Promise((resolve, reject) => {
       let aliveR = 0;
       let moving = 0;
       let aliveCount = 0;
+      let mountedInfantry = 0;
       let suppressionSum = 0;
       let proneCount = 0;
       const stateCounts = {};
@@ -302,8 +303,12 @@ new Promise((resolve, reject) => {
         if (!firstSeen.has(id)) firstSeen.set(id, t);
         if (alive) {
           aliveNow.add(id);
-          aliveCount += 1;
           if (unit.team === "blue") aliveB += 1; else aliveR += 1;
+          if (unit.inVehicle) {
+            mountedInfantry += 1;
+            continue;
+          }
+          aliveCount += 1;
           suppressionSum += Number(unit.suppression) || 0;
           if (unit.isProne) proneCount += 1;
           const state = unit.ai?.state || "unknown";
@@ -366,6 +371,7 @@ new Promise((resolve, reject) => {
         movingRatio: aliveCount ? Math.round(moving / aliveCount * 100) / 100 : 0,
         avgSuppression: aliveCount ? Math.round(suppressionSum / aliveCount * 10) / 10 : 0,
         proneRatio: aliveCount ? Math.round(proneCount / aliveCount * 100) / 100 : 0,
+        mountedInfantry,
         cohesion: cohesionCount ? Math.round(cohesionSum / cohesionCount) : 0,
         modes: modeCounts,
         states: stateCounts,
@@ -593,7 +599,7 @@ function summarize(r) {
     shotRangeP50: q(ranges, 0.5),
     shotRangeP95: q(ranges, 0.95),
     preContact: { movingRatio: avg(pre, "movingRatio"), avgSuppression: avg(pre, "avgSuppression"), proneRatio: avg(pre, "proneRatio"), cohesion: avg(pre, "cohesion") },
-    postContact: { movingRatio: avg(post, "movingRatio"), avgSuppression: avg(post, "avgSuppression"), proneRatio: avg(post, "proneRatio"), cohesion: avg(post, "cohesion") },
+    postContact: { movingRatio: avg(post, "movingRatio"), avgSuppression: avg(post, "avgSuppression"), proneRatio: avg(post, "proneRatio"), mountedInfantry: avg(post, "mountedInfantry"), cohesion: avg(post, "cohesion") },
     finalAlive: { blue: last.aliveB || 0, red: last.aliveR || 0, initialBlue: r.initialB, initialRed: r.initialR },
     postContactModes: modeTotals,
     postContactStates: sumCounts("states"),
@@ -637,6 +643,7 @@ function summaryMarkdown(m) {
     `| Shot range p50/p95 | ${m.shotRangeP50}px / ${m.shotRangeP95}px |`,
     `| Suppression avg post-contact | ${m.postContact.avgSuppression} |`,
     `| Prone ratio post-contact | ${m.postContact.proneRatio} |`,
+    `| Mounted infantry avg post-contact | ${m.postContact.mountedInfantry} |`,
     `| Cohesion avg post-contact | ${m.postContact.cohesion}px |`,
     `| Moving ratio pre/post | ${m.preContact.movingRatio} / ${m.postContact.movingRatio} |`,
     `| Final alive | B ${m.finalAlive.blue}/${m.finalAlive.initialBlue}, R ${m.finalAlive.red}/${m.finalAlive.initialRed} |`,
