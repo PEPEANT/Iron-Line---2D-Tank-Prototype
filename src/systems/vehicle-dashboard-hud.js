@@ -15,8 +15,8 @@
     meter.dataset.vehicleGauge = kind;
 
     const canvas = document.createElement("canvas");
-    canvas.width = 92;
-    canvas.height = 68;
+    canvas.width = 72;
+    canvas.height = 72;
     canvas.setAttribute("aria-hidden", "true");
 
     const caption = document.createElement("span");
@@ -101,39 +101,76 @@
   function drawGauge(canvas, ratio, options = {}) {
     const ctx = canvas?.getContext?.("2d");
     if (!ctx) return;
-    const width = canvas.width || 92;
-    const height = canvas.height || 68;
-    const centerX = width / 2;
-    const centerY = height * 0.78;
-    const radius = Math.min(width * 0.39, height * 0.62);
-    const start = Math.PI * 1.12;
-    const end = Math.PI * 1.88;
+    const width = canvas.width || 72;
+    const height = canvas.height || 72;
     const value = clamp(ratio || 0, 0, 1);
-    const needle = start + (end - start) * value;
+    const cx = width / 2;
+    const cy = height / 2;
+    const r = Math.min(width, height) / 2 - 2;
+    const start = Math.PI * 0.75;
+    const sweep = Math.PI * 1.5;
 
     ctx.clearRect(0, 0, width, height);
+
+    const bezel = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+    bezel.addColorStop(0, "#585e52");
+    bezel.addColorStop(1, "#1b1e17");
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = bezel;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#0e110d";
+    ctx.fill();
+
+    if (options.warn) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 6, start, start + sweep * 0.28);
+      ctx.strokeStyle = "rgba(224, 85, 69, 0.55)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    const ticks = 10;
+    for (let i = 0; i <= ticks; i += 1) {
+      const a = start + sweep * (i / ticks);
+      const major = i % 2 === 0;
+      const inner = r - (major ? 9 : 6);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      ctx.lineTo(cx + Math.cos(a) * (r - 3), cy + Math.sin(a) * (r - 3));
+      ctx.strokeStyle = major ? "#d7ddc8" : "#79816b";
+      ctx.lineWidth = major ? 1.6 : 1;
+      ctx.stroke();
+    }
+
+    if (options.warn) {
+      ctx.fillStyle = "#9aa488";
+      ctx.font = "700 8px Consolas, monospace";
+      ctx.textAlign = "center";
+      const la = start + sweep * 0.05;
+      const lb = start + sweep * 0.95;
+      ctx.fillText("E", cx + Math.cos(la) * (r - 14), cy + Math.sin(la) * (r - 14) + 3);
+      ctx.fillText("F", cx + Math.cos(lb) * (r - 14), cy + Math.sin(lb) * (r - 14) + 3);
+    }
+
+    const na = start + sweep * value;
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(na) * 5, cy - Math.sin(na) * 5);
+    ctx.lineTo(cx + Math.cos(na) * (r - 9), cy + Math.sin(na) * (r - 9));
+    ctx.strokeStyle = "#e8543a";
+    ctx.lineWidth = 2.2;
     ctx.lineCap = "round";
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "rgba(237, 244, 239, 0.15)";
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, start, end);
     ctx.stroke();
 
-    ctx.strokeStyle = options.warn && value < 0.32 ? "#ff817b" : "#ffd166";
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, start, needle);
-    ctx.stroke();
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#edf4ef";
+    ctx.arc(cx, cy, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = "#c8cdb9";
+    ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(centerX + Math.cos(needle) * (radius - 5), centerY + Math.sin(needle) * (radius - 5));
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#33382c";
     ctx.fill();
   }
 

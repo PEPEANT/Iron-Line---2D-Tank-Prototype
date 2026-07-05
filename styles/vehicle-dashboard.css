@@ -9,9 +9,9 @@
 
 .vehicle-dashboard {
   width: min(94vw, 680px);
-  min-height: 86px;
+  min-height: 96px;
   display: grid;
-  grid-template-columns: 86px minmax(190px, 1.35fr) minmax(86px, 0.7fr) minmax(76px, 0.55fr) 86px;
+  grid-template-columns: 92px minmax(190px, 1.35fr) minmax(86px, 0.7fr) minmax(76px, 0.55fr) 92px;
   align-items: stretch;
   gap: 7px;
   pointer-events: none;
@@ -24,34 +24,36 @@
 .vehicle-dashboard-meter,
 .vehicle-dashboard-cluster {
   min-width: 0;
-  min-height: 82px;
-  border: 1px solid rgba(237, 244, 239, 0.14);
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(237, 244, 239, 0.06), rgba(237, 244, 239, 0.02)),
-    rgba(7, 13, 12, 0.88);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.24), 0 14px 30px rgba(0, 0, 0, 0.28);
+  min-height: 92px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #454b40, #343931 30%, #23271f);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.3),
+    0 14px 30px rgba(0, 0, 0, 0.4);
 }
 
 .vehicle-dashboard-meter {
   display: grid;
-  grid-template-rows: 48px 12px 18px;
+  grid-template-rows: 62px 11px 15px;
   justify-items: center;
-  align-items: end;
-  padding: 5px 6px 6px;
+  align-items: center;
+  padding: 6px 6px 5px;
 }
 
 .vehicle-dashboard-meter canvas {
-  width: 82px;
-  height: 60px;
+  width: 62px;
+  height: 62px;
 }
 
 .vehicle-dashboard-meter span,
 .vehicle-dashboard-label,
 .vehicle-dashboard-cluster small {
-  color: rgba(237, 244, 239, 0.62);
+  color: #9aa488;
   font-size: 10px;
   font-weight: 900;
+  letter-spacing: 0.18em;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -60,13 +62,19 @@
 .vehicle-dashboard-cluster > strong,
 .vehicle-dashboard-ammo-grid strong {
   min-width: 0;
-  color: #edf4ef;
-  font-size: 17px;
+  color: #e6ecd6;
+  font-size: 16px;
   font-weight: 950;
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vehicle-dashboard-meter strong {
+  font-family: Consolas, "D2Coding", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
 }
 
 .vehicle-dashboard-cluster {
@@ -76,7 +84,7 @@
 }
 
 .vehicle-dashboard-main {
-  grid-template-rows: 12px 18px 24px 12px;
+  grid-template-rows: 12px 18px 26px 12px;
 }
 
 .vehicle-dashboard-ammo-grid {
@@ -91,15 +99,25 @@
   grid-template-columns: minmax(32px, auto) minmax(0, 1fr);
   align-items: center;
   gap: 5px;
-  padding: 4px 6px;
+  padding: 4px 7px;
   border-radius: 5px;
-  background: rgba(237, 244, 239, 0.055);
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  background: #0c0e0a;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
 }
 
 .vehicle-dashboard-ammo-grid b {
-  color: rgba(255, 209, 102, 0.86);
+  color: #9aa488;
   font-size: 10px;
   font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.vehicle-dashboard-ammo-grid strong {
+  font-family: Consolas, "D2Coding", monospace;
+  font-variant-numeric: tabular-nums;
+  color: #ffd166;
+  text-shadow: 0 0 6px rgba(255, 209, 102, 0.4);
 }
 
 .vehicle-dashboard-reload {
@@ -110,17 +128,18 @@
 }
 
 .vehicle-dashboard-reload span {
-  color: rgba(237, 244, 239, 0.72);
+  color: #c9d2a8;
   font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
 }
 
 .vehicle-dashboard-reload i {
-  height: 6px;
+  height: 7px;
   overflow: hidden;
-  border-radius: 999px;
-  background: rgba(237, 244, 239, 0.12);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .vehicle-dashboard-reload em {
@@ -128,7 +147,7 @@
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #ffd166, #78c6a3);
+  background: linear-gradient(90deg, #d8a93f, #ffd166);
 }
 
 .vehicle-dashboard-mg,
@@ -141,40 +160,58 @@
 
 .vehicle-dashboard-mg > strong {
   align-self: center;
-  font-family: Consolas, "Liberation Mono", monospace;
-  font-size: 22px;
-}
-
-.vehicle-dashboard-smoke {
-  border-color: rgba(237, 244, 239, 0.11);
+  min-width: 58px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  background: #0c0e0a;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+  font-family: Consolas, "D2Coding", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  color: #ffd166;
+  text-shadow: 0 0 6px rgba(255, 209, 102, 0.4);
 }
 
 .vehicle-dashboard-smoke > strong {
-  width: 44px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   align-self: center;
-  border-radius: 999px;
-  background: rgba(237, 244, 239, 0.08);
-  color: rgba(237, 244, 239, 0.78);
-  font-size: 15px;
+  border-radius: 50%;
+  border: 2px solid #101310;
+  background: radial-gradient(circle at 35% 30%, #6b7261, #454b40 60%, #23271f);
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.4);
+  color: #e6ecd6;
+  font-size: 13px;
+  font-weight: 950;
 }
 
 .vehicle-dashboard.smoke-ready .vehicle-dashboard-smoke > strong {
-  background: rgba(120, 198, 163, 0.18);
-  color: #78c6a3;
-  box-shadow: inset 0 0 0 1px rgba(120, 198, 163, 0.36);
+  background: radial-gradient(circle at 35% 30%, #b9f7b0, #79d476 55%, #2c5b2c);
+  color: #0e110d;
+  box-shadow: 0 0 10px rgba(121, 212, 118, 0.5), inset 0 -2px 3px rgba(0, 0, 0, 0.4);
 }
 
-.vehicle-dashboard.smoke-cooling .vehicle-dashboard-smoke > strong,
+.vehicle-dashboard.smoke-cooling .vehicle-dashboard-smoke > strong {
+  background: radial-gradient(circle at 35% 30%, #ffb1a0, #e05545 55%, #5b1f1c);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(224, 85, 69, 0.45), inset 0 -2px 3px rgba(0, 0, 0, 0.4);
+}
+
 .vehicle-dashboard.mg-active .vehicle-dashboard-mg {
-  border-color: rgba(255, 209, 102, 0.46);
+  border-color: rgba(255, 209, 102, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 209, 102, 0.14),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 209, 102, 0.25),
+    0 14px 30px rgba(0, 0, 0, 0.4);
 }
 
 .vehicle-dashboard.humvee {
-  grid-template-columns: 86px minmax(110px, 1fr) 86px;
-  width: min(94vw, 360px);
+  grid-template-columns: 92px minmax(110px, 1fr) 92px;
+  width: min(94vw, 380px);
 }
 
 .vehicle-dashboard.humvee .vehicle-dashboard-main,
@@ -184,13 +221,13 @@
 
 @media (max-width: 720px) {
   .vehicle-dashboard {
-    width: min(94vw, 420px);
+    width: min(94vw, 440px);
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .vehicle-dashboard-meter,
   .vehicle-dashboard-cluster {
-    min-height: 74px;
+    min-height: 84px;
   }
 
   .vehicle-dashboard-main {
@@ -206,23 +243,23 @@
 @media (max-height: 620px) and (orientation: landscape) {
   .vehicle-dashboard {
     width: min(90vw, 620px);
-    min-height: 70px;
-    grid-template-columns: 74px minmax(170px, 1.3fr) minmax(76px, 0.7fr) minmax(70px, 0.55fr) 74px;
+    min-height: 78px;
+    grid-template-columns: 80px minmax(170px, 1.3fr) minmax(76px, 0.7fr) minmax(70px, 0.55fr) 80px;
     gap: 5px;
   }
 
   .vehicle-dashboard-meter,
   .vehicle-dashboard-cluster {
-    min-height: 68px;
+    min-height: 76px;
     padding: 5px;
   }
 
   .vehicle-dashboard-meter {
-    grid-template-rows: 38px 10px 16px;
+    grid-template-rows: 50px 10px 14px;
   }
 
   .vehicle-dashboard-meter canvas {
-    width: 72px;
-    height: 52px;
+    width: 50px;
+    height: 50px;
   }
 }
