@@ -604,3 +604,30 @@ Judgment:
 - The source bug is fixed for the sampled path: the post-fix tempo runs did not report `direct-heavy-or-shell` or `unknown` death sources.
 - The fix is source attribution only. It does not solve tempo variance; both post-fix runs remain below the deaths/min target and prone remains low.
 - The next combat behavior task should use the now-clean source split to decide whether first-contact buffering belongs on vehicle HE/AP, Humvee MG, or infantry target acquisition.
+
+## Codex opening damage-event diagnostics and Humvee bailout source fix (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records all damage events during the first 15 seconds after contact: source counts, total damage amount by source, lethal damage source counts, and first opening damage detail.
+- Fixed Humvee passenger emergency bailout damage so it passes a `vehicle_bailout` source into infantry `takeDamage()`.
+- `npm run combat:source` now locks direct projectile, blast-radius infantry damage, and Humvee bailout passenger damage source passing.
+- Damage values, bailout damage values, weapon tuning, vehicle tuning, and AI decisions were not changed.
+
+Pre-fix probe:
+
+| Run | Report | Deaths/min | Prone ratio | Opening damage events | Opening damage sources | Opening damage amounts |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705143558/` | 11.8 | 0.23 | 21 | `humvee:machinegun` 8, `infantry:grenadeLauncher-direct` 6, `tank:machinegun` 4, `unknown` 1 | grenade launcher 222.4, humvee MG 39.6, unknown 38.0 |
+| 2 | `reports/playtests/battlefield-tempo-20260705143915/` | 4.6 | 0.02 | 16 | `tank:machinegun` 8, `unknown` 4, `infantry:machinegun` 3, `tank:ap-direct` 1 | unknown 152.0, AP 72.0, tank MG 37.1 |
+
+Post-fix verification:
+
+| Run | Report | Deaths/min | Prone ratio | Opening damage events | Opening damage sources | Opening damage amounts |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705144324/` | 5.5 | 0.09 | 18 | `tank:machinegun` 9, `humvee:vehicle_bailout` 5, `infantry:machinegun` 3, `tank:he-direct` 1 | vehicle bailout 190.0, HE 55.5, tank MG 44.8 |
+| 2 | `reports/playtests/battlefield-tempo-20260705144640/` | 6.4 | 0.07 | 17 | `tank:machinegun` 7, `humvee:vehicle_bailout` 4, `tank:he-direct` 3, `infantry:rifle` 3 | vehicle bailout 152.0, HE 50.5, tank MG 37.5 |
+
+Judgment:
+- The fixed path is confirmed: the 38-damage `unknown` opening events now show as `humvee:vehicle_bailout`.
+- First-contact burst is not only direct vehicle fire. Humvee catastrophic bailout damage is a large opening-window damage source, and direct lethals often arrive after units have already been damaged.
+- Next behavior work should inspect Humvee destruction/bailout timing and passenger vulnerability before adding broad vehicle weapon delays.

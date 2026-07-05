@@ -5,6 +5,7 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const source = fs.readFileSync(path.join(root, "src", "systems", "combat.js"), "utf8");
+const humveeSource = fs.readFileSync(path.join(root, "src", "entities", "humvee.js"), "utf8");
 
 function fail(message) {
   console.error(`Combat source contract check failed: ${message}`);
@@ -21,6 +22,10 @@ if (!source.includes("recordKillIfDestroyed(game, shell.owner || shell, hitInfan
 
 if (!source.includes("const blastSource = {") || !source.includes("unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale, blastSource);")) {
   fail("blast radius infantry damage must pass a blast source into takeDamage");
+}
+
+if (!humveeSource.includes("unit.takeDamage(options.damage, options.damageSource ||") || !humveeSource.includes("weaponId: \"vehicle_bailout\"")) {
+  fail("Humvee bailout passenger damage must pass a source into takeDamage");
 }
 
 if (!process.exitCode) console.log("Combat source contract check passed");

@@ -461,11 +461,26 @@ function summarize(r) {
     const key = death.lastDamage?.source?.kind || "unknown";
     openingDeathSourceCounts[key] = (openingDeathSourceCounts[key] || 0) + 1;
   }
+  const openingDamageEvents = (r.damageEvents || []).filter((event) => event.at >= contact && event.at < contact + OPENING_WINDOW_SECONDS);
+  const openingDamageSourceCounts = {};
+  const openingDamageAmounts = {};
+  const openingLethalDamageSourceCounts = {};
+  for (const event of openingDamageEvents) {
+    const key = event.source?.kind || "unknown";
+    openingDamageSourceCounts[key] = (openingDamageSourceCounts[key] || 0) + 1;
+    openingDamageAmounts[key] = +((openingDamageAmounts[key] || 0) + (Number(event.amount) || 0)).toFixed(1);
+    if (event.lethal) openingLethalDamageSourceCounts[key] = (openingLethalDamageSourceCounts[key] || 0) + 1;
+  }
   const openingHeavyOrVehicleDeaths = openingDeaths.filter((death) => {
     const kind = death.lastDamage?.source?.kind || "";
     return kind === "direct-heavy-or-shell" || kind.startsWith("tank:") || kind.startsWith("humvee:");
   }).length;
+  const openingHeavyOrVehicleDamageEvents = openingDamageEvents.filter((event) => {
+    const kind = event.source?.kind || "";
+    return kind === "direct-heavy-or-shell" || kind.startsWith("tank:") || kind.startsWith("humvee:");
+  }).length;
   const firstDeath = (r.deaths || []).slice().sort((a, b) => a.at - b.at)[0] || null;
+  const firstOpeningDamage = openingDamageEvents.slice().sort((a, b) => a.at - b.at)[0] || null;
   const postContactClasses = sumCounts("classes");
   const postContactProneClasses = sumCounts("proneClasses");
   return {
@@ -486,6 +501,11 @@ function summarize(r) {
     openingDeaths: openingDeaths.length,
     openingHeavyOrVehicleDeaths,
     openingDeathSourceCounts,
+    openingDamageEvents: openingDamageEvents.length,
+    openingHeavyOrVehicleDamageEvents,
+    openingDamageSourceCounts,
+    openingDamageAmounts,
+    openingLethalDamageSourceCounts,
     deathSourceCounts,
     firstDeathDetail: firstDeath ? {
       id: firstDeath.id,
@@ -494,6 +514,15 @@ function summarize(r) {
       source: firstDeath.lastDamage?.source || { kind: "unknown" },
       amount: firstDeath.lastDamage?.amount ?? null,
       hpBefore: firstDeath.lastDamage?.hpBefore ?? null
+    } : null,
+    firstOpeningDamageDetail: firstOpeningDamage ? {
+      unitId: firstOpeningDamage.unitId,
+      at: +firstOpeningDamage.at.toFixed(1),
+      afterContactSeconds: contact ? +(firstOpeningDamage.at - contact).toFixed(1) : null,
+      source: firstOpeningDamage.source || { kind: "unknown" },
+      amount: firstOpeningDamage.amount ?? null,
+      hpBefore: firstOpeningDamage.hpBefore ?? null,
+      lethal: Boolean(firstOpeningDamage.lethal)
     } : null,
     survivalAfterContactP25: +q(survival, 0.25).toFixed(0),
     survivalAfterContactP50: +q(survival, 0.5).toFixed(0),
@@ -536,6 +565,8 @@ function summaryMarkdown(m) {
     `| Pre-contact deaths | ${m.preContactDeaths} |`,
     `| Opening deaths 0-${m.openingWindowSeconds}s | ${m.openingDeaths} |`,
     `| Opening heavy/vehicle deaths | ${m.openingHeavyOrVehicleDeaths} |`,
+    `| Opening damage events | ${m.openingDamageEvents} |`,
+    `| Opening heavy/vehicle damage events | ${m.openingHeavyOrVehicleDamageEvents} |`,
     `| Survival after contact p25/p50/p75 | ${m.survivalAfterContactP25}s / ${m.survivalAfterContactP50}s / ${m.survivalAfterContactP75}s |`,
     `| Shots/min post-contact | ${m.shotsPerMinutePostContact} |`,
     `| Shot range p50/p95 | ${m.shotRangeP50}px / ${m.shotRangeP95}px |`,
@@ -551,8 +582,17 @@ function summaryMarkdown(m) {
     JSON.stringify(m.firstDeathDetail, null, 2),
     "```",
     "",
+    "First opening damage detail:",
+    "",
+    "```json",
+    JSON.stringify(m.firstOpeningDamageDetail, null, 2),
+    "```",
+    "",
     `Death sources: ${JSON.stringify(m.deathSourceCounts)}`,
     `Opening death sources: ${JSON.stringify(m.openingDeathSourceCounts)}`,
+    `Opening damage sources: ${JSON.stringify(m.openingDamageSourceCounts)}`,
+    `Opening damage amounts: ${JSON.stringify(m.openingDamageAmounts)}`,
+    `Opening lethal damage sources: ${JSON.stringify(m.openingLethalDamageSourceCounts)}`,
     "",
     `Post-contact tactical modes: ${JSON.stringify(m.postContactModes)}`,
     `Post-contact infantry states: ${JSON.stringify(m.postContactStates)}`,

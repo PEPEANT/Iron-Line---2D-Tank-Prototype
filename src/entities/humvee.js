@@ -289,7 +289,7 @@
       unit.speed = 0;
       unit.transportCooldown = options.emergency ? 1.2 : options.cooldown ?? 6.2;
       unit.suppress?.(options.emergency ? 32 : 10, { x: this.x, y: this.y, team: this.team });
-      if (options.damage) unit.takeDamage(options.damage);
+      if (options.damage) unit.takeDamage(options.damage, options.damageSource || { x: this.x, y: this.y, team: this.team, weaponId: "vehicle_bailout", sourceVehicle: this });
       return true;
     }
 
@@ -498,6 +498,7 @@
       result.passengers = this.dismountPassengers(game, {
         emergency: true,
         damage: options.catastrophic ? 38 : 30,
+        damageSource: { x: this.x, y: this.y, team: this.team, weaponId: "vehicle_bailout", cause: result.cause, sourceVehicle: this },
         cooldown: 1.2
       });
 
