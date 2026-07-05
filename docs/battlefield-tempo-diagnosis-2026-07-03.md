@@ -418,7 +418,8 @@ Verification run:
 | Report | Deaths/min | Pre-contact deaths | First death after contact | First death source | Death source counts |
 | --- | ---: | ---: | ---: | --- | --- |
 | `reports/playtests/battlefield-tempo-20260705121557/` | 5.4 | 0 | 3.0s | `humvee:machinegun` | `humvee:machinegun` 7, `tank:machinegun` 2, `infantry:machinegun` 2 |
+| `reports/playtests/battlefield-tempo-20260705122749/` | 6.9 | 0 | 16.0s | `direct-heavy-or-shell` | `humvee:machinegun` 8, `direct-heavy-or-shell` 2, `tank:machinegun` 2, `infantry:sniper` 2, `blast-or-area` 1 |
 
 Interpretation:
-- The repeated "vehicle/initial contact" suspicion now has a concrete next probe target: in this sample, the first death and most deaths came from vehicle machine guns, especially humvee MG.
+- The repeated "vehicle/initial contact" suspicion now has a concrete next probe target: one sample opened with humvee MG, and the post-fix verification still had humvee MG as the largest death source.
 - Do not tune this immediately from one run. The next bug pass should either collect another 2-run sample with this new source split or add a narrow vehicle-MG opening-window check before changing vehicle damage, aim, or target priority.
