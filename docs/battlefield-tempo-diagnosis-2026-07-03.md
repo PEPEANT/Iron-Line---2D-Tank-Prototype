@@ -423,3 +423,21 @@ Verification run:
 Interpretation:
 - The repeated "vehicle/initial contact" suspicion now has a concrete next probe target: one sample opened with humvee MG, and the post-fix verification still had humvee MG as the largest death source.
 - Do not tune this immediately from one run. The next bug pass should either collect another 2-run sample with this new source split or add a narrow vehicle-MG opening-window check before changing vehicle damage, aim, or target priority.
+
+## Codex direct shell damage source fix (2026-07-05)
+
+Change scope:
+- `src/systems/combat.js` direct projectile hits on infantry now pass the projectile `shell` into `hitInfantryUnit.takeDamage()`. Damage values, blast radius, accuracy, and kill scoring were not changed.
+- Reason: direct heavy hits previously reached kill scoring with the shell owner, but the damaged infantry unit itself did not receive the source. Tempo damage-source diagnostics could then fall back to stale `lastThreat` and mislabel direct shell deaths.
+- Added `npm run combat:source` and included it in `npm run check` to lock this source-tracking contract.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | First death after contact | First death source | Judgment |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705124045/` | 5.6 | 0.03 | 2.5s | `tank:ap-direct` | source split fixed, deaths/prone low |
+| 2 | `reports/playtests/battlefield-tempo-20260705124358/` | 6.6 | 0.05 | 5.5s | `tank:ap-direct` | deaths pass, prone low |
+
+Judgment:
+- The source fix worked: first direct shell deaths now show as `tank:ap-direct` instead of misleading stale infantry/vehicle threats.
+- This is not a tempo tuning patch. deaths/min still varies around the lower bound and prone ratio remains low in these two runs, so D2/vehicle-opening balance remains a separate task.

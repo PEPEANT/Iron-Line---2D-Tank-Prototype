@@ -167,20 +167,22 @@ new Promise((resolve, reject) => {
       if (!source && threat?.team && threat.team === unit?.team) {
         return { kind: "unknown", team: "" };
       }
-      const vehicle = threat?.sourceVehicle || (threat?.vehicleType ? threat : null);
+      const vehicle = threat?.sourceVehicle || (threat?.owner?.vehicleType ? threat.owner : null) || (threat?.vehicleType ? threat : null);
+      const weaponId = threat?.weaponId || threat?.ammo?.id || threat?.ammoId || "";
+      const directSuffix = threat?.ammo?.id ? "-direct" : "";
       if (vehicle) {
         return {
-          kind: (vehicle.vehicleType || "vehicle") + ":" + (threat?.weaponId || "weapon"),
+          kind: (vehicle.vehicleType || "vehicle") + ":" + (weaponId || "weapon") + directSuffix,
           team: vehicle.team || threat?.team || "",
           vehicleType: vehicle.vehicleType || "",
-          weaponId: threat?.weaponId || ""
+          weaponId
         };
       }
-      if (threat?.weaponId) {
+      if (weaponId) {
         return {
-          kind: "infantry:" + threat.weaponId,
+          kind: "infantry:" + weaponId + directSuffix,
           team: threat.team || "",
-          weaponId: threat.weaponId
+          weaponId
         };
       }
       if (threat && Number.isFinite(threat.x) && Number.isFinite(threat.y)) {

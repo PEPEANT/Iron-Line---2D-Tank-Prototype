@@ -1172,7 +1172,7 @@
     }
     if (hitInfantryUnit) {
       const unitWasAlive = targetScoreAlive(hitInfantryUnit);
-      hitInfantryUnit.takeDamage(ammo.infantryDamage || ammo.damage);
+      hitInfantryUnit.takeDamage(ammo.infantryDamage || ammo.damage, shell);
       recordKillIfDestroyed(game, shell.owner || shell, hitInfantryUnit, unitWasAlive, ammo.id);
     }
 
