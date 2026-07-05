@@ -669,3 +669,20 @@ Judgment:
 - Earlier prone ratios were slightly contaminated by mounted infantry. The visible/active posture signal is lower: 0.03/0.09 in this sample, so D2 is still not passing reliably.
 - The active-posture rerun re-confirms that a loaded Humvee can be destroyed by `ap_direct` at first contact, causing 4 passenger bailout damage events for 152 total opening damage. This is not every-run stable, but it is real enough to keep in the next behavior target.
 - Next behavior work should focus on Humvee transport exposure/unload timing or first-contact vehicle targeting rules before broad damage reductions. Lowering damage alone risks pushing deaths/min even further below target.
+
+## Codex discarded passenger armor-threat dismount experiment (2026-07-05)
+
+Experiment:
+- Temporarily made loaded Humvees dismount passengers when an enemy tank had line of sight within 760px, then evade. A narrower 500px-heavy-threat variant was also tried first and failed to catch the AP opening hit.
+- Goal: prevent first-contact AP destruction of a loaded Humvee from creating 4 passenger bailout damage events for 152 opening damage.
+
+Result from the final 760px variant:
+
+| Run | Report | Deaths/min | Active prone ratio | Opening bailout passengers | Opening deaths | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705151857/` | 3.3 | 0.02 | 0 | 0 | fixed opening bailout, killed tempo |
+| 2 | `reports/playtests/battlefield-tempo-20260705152211/` | 3.9 | 0.04 | 0 | 4 | fixed passenger bailout, deaths/min still failed |
+
+Judgment:
+- The experiment was discarded before commit. It solved the passenger-bailout opening spike, but pushed deaths/min well below the 6-12 target and left active prone low.
+- Do not solve this by unloading every transport under long tank line-of-sight. The next candidate needs a tighter trigger, such as route/dropoff timing around contested armor lanes or a post-dismount aggression rule that preserves tempo.
