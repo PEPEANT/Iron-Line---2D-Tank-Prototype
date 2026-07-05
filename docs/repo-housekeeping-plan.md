@@ -33,9 +33,11 @@
 
 ## H2. 루트 코드 파일 이사 (난이도 하~중, 1세션 — **R1 출시 후**, 래칫 G0와 같은 시기)
 
+상태(2026-07-05): 완료. 루트 CSS 20개를 `styles/`로 git mv했고 `index.html`/`admin.html`/`editor.html`/`home.html`의 `<link>` 경로를 갱신했다. `home.html`/`home.js`는 현재 `index.html` 진입 흐름에는 없지만 `src/systems/hud-admin-test-hub.js`의 세력 소개 링크로 사용 중이므로 유지하고, `home.css`만 `styles/home.css`로 이동했다.
+
 R1 전에 하지 않는 이유: index.html/admin.html의 링크 수정이 필요해서 출시 직전 화면 깨짐 위험을 만들 이유가 없다.
 
-1. 루트 CSS 15개+ → `styles/` 폴더로 git mv, html의 `<link>` 경로 일괄 갱신. (styles.css 본체는 래칫 감시 대상이므로 이사만, 내용 불변.)
+1. 루트 CSS 15개+ → `styles/` 폴더로 git mv, html의 `<link>` 경로 일괄 갱신. (`styles/styles.css` 본체는 래칫 감시 대상이므로 이사만, 내용 불변.)
 2. `home.html`/`home.js`/`home.css`: 현재 진입 흐름(index.html의 bootScreen→메인)에서 아직 쓰이는지 확인 → 미사용이면 아카이브, 사용 중이면 잔류 명시.
 3. 검증: PC/모바일 각 1회 화면 로드 + `npm run check`.
 
@@ -45,7 +47,7 @@ R1 전에 하지 않는 이유: index.html/admin.html의 링크 수정이 필요
 | --- | --- |
 | 설계도/계획/규칙 md | `docs/` + INDEX 등록 |
 | 게이트 완료 보고서 md | `docs/` 에 쓰되, 게이트가 닫히면 다음 세션에 `docs/archive/YYYY-MM-*/`로 |
-| 새 CSS | `styles/` (H2 후) — 루트 금지, styles.css 추가 금지(래칫) |
+| 새 CSS | `styles/` (H2 후) — 루트 금지, `styles/styles.css` 추가 금지(래칫) |
 | 참고 이미지/스크린샷 | `docs/refs/` |
 | 실험/프로브 결과 | `reports/` (gitignore — 수치는 md에 옮겨 적는다) |
 | 임시 파일 | `.tmp-*` (gitignore) |

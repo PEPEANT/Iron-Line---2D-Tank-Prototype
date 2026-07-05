@@ -1,6 +1,6 @@
 # Code Structure Rules
 
-Conclusion: new features should stop growing `main.js`, `hud.js`, `renderer.js`, and `styles.css` by default; those files now have code-health budgets enforced by `npm run check`.
+Conclusion: new features should stop growing `main.js`, `hud.js`, `renderer.js`, and `styles/styles.css` by default; those files now have code-health budgets enforced by `npm run check`.
 
 ## Purpose
 
@@ -15,7 +15,7 @@ Measured on 2026-05-20:
 - `src/main.js`: about 4550 lines
 - `src/systems/hud.js`: about 3200 lines
 - `src/systems/renderer.js`: about 2980 lines
-- `styles.css`: about 2990 lines
+- `styles/styles.css`: about 2990 lines
 - `src/ai/infantry-ai.js`: about 2780 lines
 - `src/tools/map-editor.js`: about 2310 lines
 
@@ -26,7 +26,7 @@ These files are allowed temporarily because they already exist, but they should 
 - `main.js` should coordinate game state, loop order, scene transitions, and system wiring. New feature logic should move into a focused module.
 - `hud.js` should not keep absorbing every new screen. New large UI surfaces should get a dedicated UI module or system module.
 - `renderer.js` should not regain debug, scenery, or specialized overlays that already have a split module path.
-- `styles.css` can hold global shared rules, but new labs or large screens should use clearly grouped sections and be candidates for split CSS.
+- `styles/styles.css` can hold global shared rules, but new labs or large screens should use separate files in `styles/` and be candidates for split CSS.
 - Admin-only tools should stay out of player-facing flow unless explicitly gated by `admin.html`, `?admin=1`, or observer mode.
 - AI behavior changes should be separated from AI observability. Logging and snapshots belong in observer modules; tactical decisions belong in AI modules.
 - A new feature body over roughly 100 lines needs a module boundary before it gets merged into a hotspot file.

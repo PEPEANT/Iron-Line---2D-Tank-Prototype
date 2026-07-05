@@ -13,6 +13,6 @@
     "src/systems/room-registry.js": 1596,
     "src/systems/session-flow.js": 1181,
     "src/tools/map-editor.js": 2263,
-    "styles.css": 2968
+    "styles/styles.css": 2968
   }
 }

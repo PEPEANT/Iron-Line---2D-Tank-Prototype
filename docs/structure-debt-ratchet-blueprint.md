@@ -26,7 +26,7 @@
 - 파일이 baseline보다 줄어든 채로 check가 돌면 baseline을 **자동 하향 갱신** (래칫). 상향 갱신 경로는 없다.
 - 상향이 정말 필요하면: baseline JSON을 손으로 고치되, 같은 커밋에 `code-structure-rules.md`에 사유 1줄 필수. (스크립트는 사유 없는 상향을 막을 수 없지만, diff에 드러난다.)
 
-감시 대상 (1차): 1,000줄 이상 전부 = main.js, infantry-ai.js, styles.css, renderer.js, map-editor.js, hud-admin-ui.js, combat.js, room-registry.js, hud.js, commander-ai.js, session-flow.js, tank.js, game-session-state.js.
+감시 대상 (1차): 1,000줄 이상 전부 = main.js, infantry-ai.js, styles/styles.css, renderer.js, map-editor.js, hud-admin-ui.js, combat.js, room-registry.js, hud.js, commander-ai.js, session-flow.js, tank.js, game-session-state.js.
 메서드 래칫 (2차, 선택): 220줄+ 메서드 목록도 baseline에 기록 — 현재 유일한 위반 `infantry-ai.js update()` 232줄. 새 220줄+ 메서드 등장 시 실패.
 
 구현 결과(2026-07-05): `tools/hotspot-baseline.json` + `tools/check-code-health.cjs` 래칫 검사. 게임플레이 코드 0줄.
@@ -40,7 +40,7 @@
 | 맵 사물 스키마 | `src/data/map-schema.js` (신설) | 이사 없음 — 신규 데이터 계층 |
 | 팔레트 에디터 | `src/tools/editor-palette.js` (신설) | map-editor.js는 읽기만, 본문 추가 금지 |
 | 스토리모드 씬 | `src/story/*` (신설 폴더) | main.js 수정 금지 — 씬 전환 훅 1개만 허용 |
-| 새 UI 화면 전부 | 화면별 신규 CSS 파일 (lobby-flow.css 선례) | styles.css 추가 금지 |
+| 새 UI 화면 전부 | 화면별 신규 CSS 파일 (`styles/` 아래, `styles/lobby-flow.css` 선례) | `styles/styles.css` 추가 금지 |
 
 규칙: **빅뱅 리팩터 금지.** 전체 구조 수술 세션을 따로 잡지 않는다 — 배금도시가 죽은 방식이다. 이사는 항상 기능 착수 직전에, 그 기능이 만질 범위만.
 

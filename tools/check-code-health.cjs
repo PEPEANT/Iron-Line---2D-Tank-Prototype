@@ -6,24 +6,18 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const hotspotBaselinePath = path.join(__dirname, "hotspot-baseline.json");
 
-const trackedRoots = ["src", "server", "tools"];
+const trackedRoots = ["src", "server", "tools", "styles"];
 const trackedTopLevelFiles = [
   "index.html",
   "admin.html",
-  "editor.html",
-  "styles.css",
-  "admin-observer.css",
-  "session-flow.css",
-  "chat.css",
-  "role-change.css",
-  "map-editor.css"
+  "editor.html"
 ];
 
 const lineBudgets = new Map([
   ["src/main.js", 4650],
   ["src/systems/hud.js", 3300],
   ["src/systems/renderer.js", 3050],
-  ["styles.css", 3100],
+  ["styles/styles.css", 3100],
   ["src/ai/infantry-ai.js", 2850],
   ["src/tools/map-editor.js", 2400],
   ["tools/check-behavior-census.cjs", 950]
