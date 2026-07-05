@@ -281,3 +281,22 @@ node tools/check-battlefield-tempo.cjs
 - 탱크 강습 버그는 전용 프로브 기준으로 재현 후 수정 완료. 정지 전차, 먼 슬롯 접근, 부착 시작, 전차 AI 반격 시나리오가 모두 진행률을 낸다.
 - 전장 tempo는 4.3/7.9로 1회는 목표 6~12 미달, 1회는 통과했다. prone ratio도 0.03/0.11로 같은 편차가 남아 있다.
 - 이번 세션은 탱크 강습 버그 수정 범위이므로 tempo 편차를 즉석 튜닝하지 않는다. deaths/min/prone 안정화는 기존 D2/차량 초기 접촉 과제로 유지한다.
+
+## Codex AI 드론 경로 겹침 수정 후 템포 확인 (2026-07-05)
+
+변경 범위:
+- `aiReconWaypoint()`의 정찰드론 대기점을 좌/우 2칸에서 7칸 부채꼴+거리 지터로 분산했다.
+- `ReconDrone.moveToward()`에 40px 이하 근접 시에만 같은 팀 드론 간 가벼운 분리 조향을 추가했다. 자폭드론은 자체 `moveToward()`를 쓰므로 이번 분리 조향 대상이 아니다.
+- 전용 프로브 `npm run drone:spacing` 추가. `reports/playtests/ai-drone-spacing-20260705093313/` 기준 7대 발진, waypoint 최소 72.06px, 2초 이후 드론 최소 42.74px, 최종 최소 69.43px.
+
+`npm run tempo` 2회 결과:
+
+| 런 | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | 판정 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705093642/` | 14.2 | 69s | 13.87 | 0.14 | 4.0s | 사망 페이스 과열, prone은 R1 목표선 통과 |
+| 2 | `reports/playtests/battlefield-tempo-20260705094015/` | 4.9 | 14s | 9.40 | 0.08 | 5.5s | 사망 페이스/엎드림 목표 미달 |
+
+판정:
+- 드론 겹침 버그는 전용 프로브 기준으로 수정 완료.
+- 전장 tempo는 14.2/4.9로 방향이 서로 갈렸다. 이번 수정은 정찰드론 경로 분산이며 피해량, 무기 수치, 보병 전술 가중치를 건드리지 않았으므로 이 결과만으로 전투 밸런스를 즉석 튜닝하지 않는다.
+- deaths/min/prone 안정화와 첫 사망 8초 목표는 기존 D2/차량 초기 접촉 과제로 유지한다.

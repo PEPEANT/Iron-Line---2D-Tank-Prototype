@@ -95,7 +95,7 @@
         this.targetY = this.roofLockPoint.y;
       }
 
-      if (!this.controlled) this.moveToward(this.targetX, this.targetY, dt);
+      if (!this.controlled) this.moveToward(this.targetX, this.targetY, dt, game);
       if (roofHold && distXY(this.x, this.y, this.roofLockPoint.x, this.roofLockPoint.y) <= 11) {
         this.setPosition(this.roofLockPoint.x, this.roofLockPoint.y, game);
       }
@@ -152,11 +152,41 @@
       });
     }
 
-    moveToward(x, y, dt) {
+    droneSeparationVector(game = null) {
+      const drones = game?.drones || IronLine.game?.drones || [];
+      let sx = 0;
+      let sy = 0;
+      let count = 0;
+      const minDistance = 40;
+
+      for (const other of drones) {
+        if (!other || other === this || !other.alive || other.team !== this.team) continue;
+        const distance = distXY(this.x, this.y, other.x, other.y);
+        if (distance > minDistance) continue;
+        const strength = (minDistance - distance) / minDistance;
+        if (distance > 0.001) {
+          sx += ((this.x - other.x) / distance) * strength;
+          sy += ((this.y - other.y) / distance) * strength;
+        } else {
+          const fallbackAngle = (this.rotorPhase || 0) + String(this.callSign || "").length * 0.73;
+          sx += Math.cos(fallbackAngle) * strength;
+          sy += Math.sin(fallbackAngle) * strength;
+        }
+        count += 1;
+      }
+
+      if (!count) return null;
+      return { x: sx / count, y: sy / count };
+    }
+
+    moveToward(x, y, dt, game = null) {
       const distance = distXY(this.x, this.y, x, y);
       if (distance < 10) return;
 
-      const desired = angleTo(this.x, this.y, x, y);
+      const separation = this.droneSeparationVector(game);
+      const steerX = separation ? x + separation.x * 90 : x;
+      const steerY = separation ? y + separation.y * 90 : y;
+      const desired = angleTo(this.x, this.y, steerX, steerY);
       this.angle = rotateTowards(this.angle, desired, 5.8 * dt);
       const step = Math.min(distance, this.speed * dt);
       this.setPosition(

@@ -453,11 +453,15 @@
       const weapon = INFANTRY_WEAPONS.reconDrone || {};
       const standoff = clamp((weapon.scanRange || 620) * 0.52, 260, 420);
       const fromTargetAngle = angleTo(target.x, target.y, this.unit.x, this.unit.y);
-      const side = (this.seed % 2 === 0 ? 1 : -1) * 0.42;
-      const angle = fromTargetAngle + side;
+      const lane = this.seed % 7;
+      const fan = (lane - 3) / 3;
+      const arc = fan * 0.64;
+      const fineJitter = (((Math.floor(this.seed / 7) % 5) - 2) * 0.035);
+      const rangeJitter = ((Math.floor(this.seed / 11) % 5) - 2) * 18;
+      const angle = fromTargetAngle + arc + fineJitter;
       return {
-        x: clamp(target.x + Math.cos(angle) * standoff, 20, this.game.world.width - 20),
-        y: clamp(target.y + Math.sin(angle) * standoff, 20, this.game.world.height - 20)
+        x: clamp(target.x + Math.cos(angle) * (standoff + rangeJitter), 20, this.game.world.width - 20),
+        y: clamp(target.y + Math.sin(angle) * (standoff + rangeJitter), 20, this.game.world.height - 20)
       };
     },
     launchAiReconDrone(target, order = null) {
