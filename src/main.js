@@ -4330,6 +4330,7 @@
   IronLine.installGameAdminMapActions?.(Game);
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
+  IronLine.installSupplyCrates?.(Game);
   IronLine.installFogOfWar?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
   IronLine.installMobileCameraGestures?.(Game);

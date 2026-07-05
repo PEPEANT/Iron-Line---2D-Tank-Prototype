@@ -176,7 +176,7 @@
       return distance <= maxDistance + (drone.radius || 0) + this.player.radius;
     },
     deployReconDrone(weapon, targetX, targetY) {
-      if (!this.matchStarted || this.player.inTank || this.player.classId !== "scout") return false;
+      if (!this.matchStarted || this.player.inTank) return false;
 
       const existing = this.activePlayerDrone();
       if (existing) {
@@ -216,7 +216,7 @@
       return true;
     },
     deploySuicideDrone(weapon, targetX, targetY) {
-      if (!this.matchStarted || this.player.inTank || this.player.classId !== "engineer") return false;
+      if (!this.matchStarted || this.player.inTank) return false;
 
       const existing = this.activePlayerDrone();
       if (existing) {

@@ -626,7 +626,7 @@
     isPlayerRpgAimMode() {
       if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
       const weapon = this.player.getWeapon?.();
-      return this.player.classId === "engineer" && weapon?.id === "rpg";
+      return weapon?.id === "rpg";
     },
     isPlayerMachineGunAimMode() {
       if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
