@@ -65,6 +65,7 @@ R1에서 제외 (R2+ 백로그):
   - 데이터 소스 (확인 완료): `tank.speed`(px/s, 바늘 = |speed|/maxSpeed), `tank.ammo{ap,he,mg,smoke}`, `tank.reload{active,progress,duration,ammoId}`, `tank.loadedAmmo`, `tank.weaponMode`, `tank.hp/maxHp`(기본 110), `tank.smokeCooldown`.
   - 구현 패턴: `src/systems/vehicle-dashboard-hud.js` 신설, infantry-slotbar-hud.js와 같은 Hud 프로토타입 래핑 방식(updateTankWeapons/updateHumveeWeapons 후킹, weapon-panel 숨김/복원). 스타일 `styles/vehicle-dashboard.css` 신설. 게이지는 소형 canvas(다이얼+바늘), 외부 이미지 없음.
   - 연결(마지막 단계): index.html 495행 부근 `infantry-slotbar-hud.js` 다음에 script 1줄 + link 1줄 — **코덱스 index.html 커밋 후에만** (충돌 방지).
+  - 2026-07-05 Codex 구현: `src/systems/vehicle-dashboard-hud.js`와 `styles/vehicle-dashboard.css`를 추가했다. 탑승 중 기존 보병 슬롯바/무기 패널을 숨기고, 전차는 속도계·주포/AP/HE·MG·연막·차체, 험비는 속도계·HMG·차체만 표시한다. 실존 값만 읽으며 기어/연료 같은 가짜 계기는 추가하지 않았다.
 - 부상병 E키 끌기 후송 + 시체 표현 재작업 — 상세는 bed-combat-and-downed-flow-plan.md 4단계 (2026-07-05 추가분).
 - 계정 시스템, 팩 선택 UI(창작마당 기반), 새 맵, 헬기, 보병 스프라이트
 - 커맨더 재공세 규칙(D3), 차량 선제킬 완화 — 게이트 G1 통과에 불필요하면 R2로
