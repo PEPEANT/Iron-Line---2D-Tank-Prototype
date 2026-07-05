@@ -185,3 +185,21 @@ node tools/check-battlefield-tempo.cjs
 - 참고: 프로브 첫 시도가 `Execution context was destroyed`로 1회 실패 후 2회 연속 성공. 재발 시 재실행 먼저, 그래도 실패하면 새 2단계 입장 흐름과 프로브의 버튼 클릭 시나리오(`#entryEnterButton`) 호환을 의심할 것.
 
 이 검증으로 07-04 교전거리 수정 건은 종결. 다음 체감 작업은 모바일 시야(FOV) 설계도(`mobile-fov-blueprint.md`) 순서.
+
+## Codex 보급/로드아웃 S1 후 템포 확인 (2026-07-05)
+
+변경 범위:
+- 전투 준비 화면 병과 선택 UI 제거, 플레이어 시작 로드아웃을 1번 소총 + 2~6 빈 슬롯으로 고정.
+- AI 편성/병과 데이터/온라인 슬롯 ID는 S1 범위 밖이라 유지. 템포 수치는 전투 AI를 고친 결과가 아니라, 보급 S1 후 기존 전투 페이스가 유지되는지 확인한 값이다.
+
+`npm run tempo` 2회 결과:
+
+| 런 | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | 판정 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705072332/` | 6.0 | 46s | 1.82 | 0.02 | 1.0s | 사망 페이스 하한 통과, prone 미달 |
+| 2 | `reports/playtests/battlefield-tempo-20260705072652/` | 7.7 | 44s | 10.19 | 0.13 | 0.5s | 사망 페이스 통과, prone 목표(>0.10) 통과 |
+
+판정:
+- 보급/로드아웃 S1 뒤에도 deaths/min은 2회 모두 목표 6~12 안에 있다.
+- prone ratio는 0.02/0.13으로 편차가 크다. 07-04에 기록된 D2(제압/엎드림 상태 지속 편차) 진단 유지.
+- 첫 사망 after contact는 여전히 0.5~1.0초로 낮다. 이번 세션은 AI 전투 수정 범위가 아니므로 S1 구현에서 고치지 않는다.

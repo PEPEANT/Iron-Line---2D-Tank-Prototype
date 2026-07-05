@@ -1,0 +1,155 @@
+.hud-bottom.infantry-weapons {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.hud-bottom.infantry-weapons.infantry-simple-weapons .weapon-panel {
+  display: none;
+}
+
+.infantry-slotbar {
+  width: min(94vw, 620px);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.infantry-slotbar.hidden {
+  display: none;
+}
+
+.infantry-slot {
+  min-width: 0;
+  height: 66px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-rows: 20px 18px 18px;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 6px;
+  border: 1px solid rgba(237, 244, 239, 0.14);
+  border-radius: 7px;
+  background: rgba(7, 13, 12, 0.82);
+  color: #edf4ef;
+  font: inherit;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+}
+
+.infantry-slot b {
+  grid-row: 1 / 4;
+  width: 22px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(237, 244, 239, 0.1);
+  color: #ffd166;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.infantry-slot-art {
+  min-width: 0;
+  height: 20px;
+  display: grid;
+  place-items: center;
+}
+
+.infantry-slot-art img {
+  max-width: 46px;
+  max-height: 20px;
+  object-fit: contain;
+}
+
+.infantry-slot-art img.missing {
+  display: none;
+}
+
+.infantry-slot-role,
+.infantry-slot-item {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.infantry-slot-role {
+  color: rgba(237, 244, 239, 0.58);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.infantry-slot-item {
+  color: #edf4ef;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.infantry-slot.active {
+  border-color: rgba(255, 209, 102, 0.86);
+  background: rgba(255, 209, 102, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.28), 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.infantry-slot.empty {
+  border-style: dashed;
+  background: rgba(7, 13, 12, 0.58);
+  color: rgba(237, 244, 239, 0.58);
+  cursor: default;
+}
+
+.infantry-slot.empty b {
+  color: rgba(237, 244, 239, 0.54);
+}
+
+.infantry-slot.empty .infantry-slot-item {
+  color: rgba(237, 244, 239, 0.42);
+}
+
+@media (max-width: 720px) {
+  .infantry-slotbar {
+    grid-template-columns: repeat(3, minmax(82px, 1fr));
+    width: min(94vw, 360px);
+  }
+
+  .infantry-slot {
+    height: 58px;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .hud-bottom.infantry-weapons {
+    gap: 5px;
+  }
+
+  .infantry-slotbar {
+    width: min(88vw, 560px);
+    grid-template-columns: repeat(6, minmax(62px, 1fr));
+    gap: 4px;
+  }
+
+  .infantry-slot {
+    height: 52px;
+    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-rows: 16px 14px 14px;
+    gap: 1px 4px;
+    padding: 5px;
+  }
+
+  .infantry-slot b {
+    width: 18px;
+    font-size: 10px;
+  }
+
+  .infantry-slot-role {
+    font-size: 9px;
+  }
+
+  .infantry-slot-item {
+    font-size: 10px;
+  }
+}

@@ -11,6 +11,12 @@
   function ammoForClass(classId) {
     const infantryClass = INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry;
     const ammo = {
+      rifle: 0,
+      smg: 0,
+      lmg: 0,
+      machinegun: 0,
+      pistol: 0,
+      sniper: 0,
       grenade: 0,
       grenadeLauncher: 0,
       rpg: 0,
@@ -32,7 +38,29 @@
     };
   }
 
+  function defaultPlayerInventory() {
+    return IronLine.playerDefaultLoadout?.weaponInventory?.() || ["rifle", "", "", "", "", ""];
+  }
+
+  function defaultPlayerAmmo() {
+    return IronLine.playerDefaultLoadout?.equipmentAmmo?.() || {
+      ...ammoForClass("infantry"),
+      grenade: 0,
+      grenadeLauncher: 0
+    };
+  }
+
+  function playerEquipmentForClass(classId) {
+    return classId === "infantry" ? defaultPlayerInventory() : equipmentForClass(classId);
+  }
+
+  function playerAmmoForClass(classId) {
+    return classId === "infantry" ? defaultPlayerAmmo() : ammoForClass(classId);
+  }
+
   function createPlayer(spawn) {
+    const defaultInventory = defaultPlayerInventory();
+    const defaultWeapon = IronLine.playerDefaultLoadout?.weaponId || defaultInventory[0] || "rifle";
     return {
       x: spawn.x,
       y: spawn.y,
@@ -59,14 +87,14 @@
       activeSlot: 0,
       activeDrone: null,
       controlledDrone: null,
-      weaponId: "machinegun",
+      weaponId: defaultWeapon,
       boostCharge: 1,
       boostRecoverDelay: 0,
       boosting: false,
-      weaponInventory: equipmentForClass("infantry"),
-      equipmentAmmo: ammoForClass("infantry"),
+      weaponInventory: defaultInventory,
+      equipmentAmmo: defaultPlayerAmmo(),
       getWeapon() {
-        return INFANTRY_WEAPONS[this.weaponId] || INFANTRY_WEAPONS.machinegun;
+        return INFANTRY_WEAPONS[this.weaponId] || INFANTRY_WEAPONS.rifle || INFANTRY_WEAPONS.machinegun;
       },
       setWeapon(weaponId) {
         if (!INFANTRY_WEAPONS[weaponId]) return false;
@@ -83,10 +111,10 @@
         const infantryClass = INFANTRY_CLASSES[classId];
         if (!infantryClass) return false;
         this.classId = classId;
-        this.weaponInventory = equipmentForClass(classId);
+        this.weaponInventory = playerEquipmentForClass(classId);
         this.activeSlot = 0;
-        this.weaponId = this.weaponInventory[0];
-        this.equipmentAmmo = ammoForClass(classId);
+        this.weaponId = this.weaponInventory[0] || "rifle";
+        this.equipmentAmmo = playerAmmoForClass(classId);
         return true;
       },
       alive: true

@@ -2,7 +2,7 @@
 
 (function registerGamePlayerControl(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const { TEAM, AMMO, INFANTRY_WEAPONS, PLAYER_CLASS_ORDER } = IronLine.constants;
+  const { TEAM, AMMO, INFANTRY_WEAPONS } = IronLine.constants;
   const {
     clamp,
     distXY,
@@ -247,14 +247,16 @@
     },
     cyclePlayerEquipment() {
       const inventory = this.player?.weaponInventory || [];
-      if (!inventory.length) return false;
+      const filledSlots = inventory
+        .map((weaponId, index) => ({ weaponId, index }))
+        .filter((slot) => slot.weaponId && INFANTRY_WEAPONS[slot.weaponId]);
+      if (filledSlots.length < 2) return false;
 
-      for (let step = 1; step <= inventory.length; step += 1) {
-        const nextSlot = (this.player.activeSlot + step) % inventory.length;
-        if (this.player.setEquipmentSlot(nextSlot)) {
-          this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
-          return true;
-        }
+      const current = filledSlots.findIndex((slot) => slot.index === this.player.activeSlot);
+      const next = filledSlots[(current + 1 + filledSlots.length) % filledSlots.length];
+      if (next && this.player.setEquipmentSlot(next.index)) {
+        this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);
+        return true;
       }
       return false;
     },
@@ -587,7 +589,9 @@
       this.player.angle = angleTo(this.player.x, this.player.y, mouse.worldX, mouse.worldY);
       this.player.interactPulse += dt;
 
-      const markerDesignatePressed = this.input.consumePress("KeyQ") || this.input.consumeMousePress(1);
+      const quickSwitchPressed = this.input.consumePress("KeyQ");
+      if (quickSwitchPressed && this.cyclePlayerEquipment()) return;
+      const markerDesignatePressed = this.input.consumeMousePress(1);
       if (markerDesignatePressed && this.tryDesignateReconDroneFromMarker()) return;
       if (wantsUse && this.player.rifleCooldown <= 0) {
         this.player.lastShotCooldownScale = 1;
@@ -638,17 +642,14 @@
       const keys = [
         ["Digit1", "Numpad1"],
         ["Digit2", "Numpad2"],
-        ["Digit3", "Numpad3"]
+        ["Digit3", "Numpad3"],
+        ["Digit4", "Numpad4"],
+        ["Digit5", "Numpad5"],
+        ["Digit6", "Numpad6"]
       ];
 
       for (let i = 0; i < keys.length; i += 1) {
         if (!keys[i].some((code) => this.input.consumePress(code))) continue;
-
-        if (!this.matchStarted && this.player.inSafeZone) {
-          const classId = PLAYER_CLASS_ORDER[i];
-          if (classId) this.applyFullPlayerClassLoadout?.(classId, { resetAmmo: true, clearDrones: true });
-          continue;
-        }
 
         if (this.player.setEquipmentSlot(i)) {
           this.player.rifleCooldown = Math.min(this.player.rifleCooldown, 0.12);

@@ -72,10 +72,12 @@
       if (!game.deploymentOpen || !mobileLayout) this.hud.deploymentMapOpen = false;
       this.hud.setDeploymentMapOpen?.(Boolean(game.deploymentOpen && mobileLayout && this.hud.deploymentMapOpen));
 
-      if (!this.hud.deploymentClassesBuilt) this.renderClassCards(game);
-      if (!game.deploymentOpen) this.hud.deploymentLoadoutOpen = false;
-      if (game.deploymentOpen && mobileLayout) this.hud.deploymentLoadoutOpen = true;
-      this.hud.setDeploymentLoadoutOpen(this.hud.deploymentLoadoutOpen && game.deploymentOpen);
+      const hasClassPicker = Boolean(ui.classButtons.length || ui.deploymentClassList || ui.deploymentLoadout);
+      if (!hasClassPicker) this.hud.deploymentClassesBuilt = true;
+      if (hasClassPicker && !this.hud.deploymentClassesBuilt) this.renderClassCards(game);
+      if (!game.deploymentOpen || !hasClassPicker) this.hud.deploymentLoadoutOpen = false;
+      if (hasClassPicker && game.deploymentOpen && mobileLayout) this.hud.deploymentLoadoutOpen = true;
+      this.hud.setDeploymentLoadoutOpen(this.hud.deploymentLoadoutOpen && game.deploymentOpen && hasClassPicker);
 
       if (!this.hud.deploymentMapBuilt) {
         this.hud.buildDeploymentMap(game);
@@ -83,10 +85,12 @@
       }
       this.ensureFactionSettingOptions();
 
-      ui.classButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.classId === game.player.classId);
-      });
-      this.updateLoadout(game);
+      if (hasClassPicker) {
+        ui.classButtons.forEach((button) => {
+          button.classList.toggle("active", button.dataset.classId === game.player.classId);
+        });
+        this.updateLoadout(game);
+      }
 
       ui.modeButtons.forEach((button) => {
         button.classList.toggle("active", button.dataset.modeId === game.matchConfig.mode);

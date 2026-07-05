@@ -98,6 +98,7 @@
 
     canChangeNow() {
       const game = this.game;
+      if (IronLine.playerDefaultLoadout) return { available: false, reason: "supply-loadout" };
       if (game?.adminObserverMode) return { available: false, reason: "admin" };
       if (!game?.matchStarted || game.result || game.matchConfig?.mode !== "conquest") {
         return { available: false, reason: "mode" };

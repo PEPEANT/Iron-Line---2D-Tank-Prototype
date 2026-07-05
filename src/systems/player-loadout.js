@@ -5,8 +5,21 @@
   const { INFANTRY_CLASSES, INFANTRY_WEAPONS } = IronLine.constants;
 
   function classAmmo(classId, equipment = null) {
+    if (
+      classId === "infantry" &&
+      IronLine.playerDefaultLoadout?.isDefaultInventory?.(equipment || [])
+    ) {
+      return IronLine.playerDefaultLoadout.equipmentAmmo();
+    }
+
     const infantryClass = INFANTRY_CLASSES[classId] || INFANTRY_CLASSES.infantry;
     const ammo = {
+      rifle: 0,
+      smg: 0,
+      lmg: 0,
+      machinegun: 0,
+      pistol: 0,
+      sniper: 0,
       grenade: 0,
       grenadeLauncher: 0,
       rpg: 0,
@@ -60,17 +73,24 @@
     return "infantry";
   }
 
+  function playerEquipmentForClass(game, classId) {
+    if (classId === "infantry" && IronLine.playerDefaultLoadout?.weaponInventory) {
+      return IronLine.playerDefaultLoadout.weaponInventory();
+    }
+    return game.deploymentEquipmentForClass?.(classId) ||
+      (INFANTRY_CLASSES[classId]?.equipment || INFANTRY_CLASSES.infantry.equipment).slice();
+  }
+
   function installPlayerLoadout(Game) {
     Object.assign(Game.prototype, {
       applyPlayerLoadoutOverrides(player = this.player, options = {}) {
         if (!player) return false;
         const classId = player.classId || "infantry";
-        player.weaponInventory = this.deploymentEquipmentForClass?.(classId) ||
-          (INFANTRY_CLASSES[classId]?.equipment || INFANTRY_CLASSES.infantry.equipment).slice();
+        player.weaponInventory = playerEquipmentForClass(this, classId);
         if (!Number.isInteger(player.activeSlot) || !player.weaponInventory[player.activeSlot]) {
           player.activeSlot = 0;
         }
-        player.weaponId = player.weaponInventory[player.activeSlot] || player.weaponInventory[0] || "machinegun";
+        player.weaponId = player.weaponInventory[player.activeSlot] || player.weaponInventory[0] || "rifle";
         const loadoutAmmo = classAmmo(classId, player.weaponInventory);
         if (options.resetAmmo) {
           player.equipmentAmmo = loadoutAmmo;

@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="styles/test-lab.css">
     <link rel="stylesheet" href="styles/lobby-flow.css">
     <link rel="stylesheet" href="styles/combat-hud.css?v=20260704-r1">
+    <link rel="stylesheet" href="styles/loadout-slotbar.css">
   </head>
   <body>
     <div class="boot-screen" id="bootScreen" aria-label="로딩 중">
@@ -60,9 +61,10 @@
             </div>
             <div class="control-help">
               <strong>PC</strong>
-              <p>WASD 이동 · F 탑승/하차 · E 역할/드론 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
+              <p>보병: WASD 이동 · 좌클릭 발사 · 우클릭 조준 · 1~6 장비 · Q 빠른 전환 · E 상호작용 · F 탑승/하차 · C 엎드리기 · Tab 전황판</p>
+              <p>차량: WASD 주행 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 기관총 · Q 연막 · F 하차</p>
               <strong>모바일</strong>
-              <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/탑승 버튼 · 탄약 버튼 · 병과 버튼</p>
+              <p>왼쪽 원형키 이동 · 오른쪽 원형키 조준 · 발사/조준/상호작용 버튼 · 무기 버튼 · 전황 버튼</p>
             </div>
           </details>
 
@@ -293,23 +295,6 @@
           </details>
           <details class="deployment-collapse deployment-pick-section">
             <summary class="deployment-collapse-summary">
-              <span class="deployment-section-label">병과</span>
-              <span class="deployment-collapse-value" data-deployment-summary="class">보병</span>
-            </summary>
-            <div class="deployment-class-list" id="deploymentClassList">
-              <button type="button" class="deployment-class" data-class-id="infantry">
-                <strong>보병</strong>
-              </button>
-              <button type="button" class="deployment-class" data-class-id="engineer">
-                <strong>공병</strong>
-              </button>
-              <button type="button" class="deployment-class" data-class-id="scout">
-                <strong>정찰</strong>
-              </button>
-            </div>
-          </details>
-          <details class="deployment-collapse deployment-pick-section">
-            <summary class="deployment-collapse-summary">
               <span class="deployment-section-label">전장 설정</span>
               <span class="deployment-collapse-value" data-deployment-summary="settings">대한민국군 vs 러시아군</span>
             </summary>
@@ -415,6 +400,7 @@
     <script src="src/core/build-info.js"></script>
     <script src="src/data/infantry-weapons.js"></script>
     <script src="src/data/infantry-classes.js"></script>
+    <script src="src/data/player-default-loadout.js"></script>
     <script src="src/data/player-skins.js"></script>
     <script src="src/systems/faction-visuals.js"></script>
     <script src="src/data/default-asset-pack.js"></script>
@@ -502,6 +488,7 @@
     <script src="src/systems/hud-spectator-panel.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/hud-readability-hook.js"></script>
+    <script src="src/systems/infantry-slotbar-hud.js"></script>
     <script src="src/systems/renderer.js?v=20260704-r1"></script>
     <script src="src/systems/renderer-vehicle.js"></script>
     <script src="src/systems/renderer-scenery.js"></script>
