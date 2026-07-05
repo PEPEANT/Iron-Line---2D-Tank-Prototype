@@ -686,3 +686,6 @@ Result from the final 760px variant:
 Judgment:
 - The experiment was discarded before commit. It solved the passenger-bailout opening spike, but pushed deaths/min well below the 6-12 target and left active prone low.
 - Do not solve this by unloading every transport under long tank line-of-sight. The next candidate needs a tighter trigger, such as route/dropoff timing around contested armor lanes or a post-dismount aggression rule that preserves tempo.
+
+Follow-up source-label guard:
+- `npm run tempo` now treats source-less damage with only a stale vehicle `lastThreat` and no weapon id as `unknown` instead of `tank:weapon`/`humvee:weapon`. This avoids mistaking old suppression threat memory for a real weapon source in future reports.

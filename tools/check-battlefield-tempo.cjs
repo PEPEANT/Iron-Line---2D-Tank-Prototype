@@ -165,9 +165,7 @@ new Promise((resolve, reject) => {
         return { kind: "direct-heavy-or-shell", team: "", weaponId: "" };
       }
       const threat = source || unit?.lastThreat || null;
-      if (!source && threat?.team && threat.team === unit?.team) {
-        return { kind: "unknown", team: "" };
-      }
+      if (!source && (threat?.team && threat.team === unit?.team || threat?.vehicleType && !(threat.weaponId || threat.ammo?.id || threat.ammoId))) return { kind: "unknown", team: "" };
       const vehicle = threat?.sourceVehicle || (threat?.owner?.vehicleType ? threat.owner : null) || (threat?.vehicleType ? threat : null);
       const weaponId = threat?.weaponId || threat?.ammo?.id || threat?.ammoId || "";
       const directSuffix = threat?.ammo?.id ? "-direct" : "";
