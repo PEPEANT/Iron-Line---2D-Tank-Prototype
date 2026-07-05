@@ -459,3 +459,22 @@ Judgment:
 - The immediate-opening vehicle/direct-shell kill hypothesis is weaker in this sample: both runs had zero deaths in the first 15 seconds after contact.
 - The current problem signal is lower-level tempo: first contact can arrive late, deaths/min is below the 6-12 target, suppression stays low, and prone ratio remains low.
 - Next D2 work should inspect contact timing, squad advance/hold modes, and sustained fire density before changing vehicle damage or AP behavior.
+
+## Codex support suppression bottleneck probe (2026-07-05)
+
+Change scope:
+- `npm run census` now records support suppression handled frames, point-selection failure reasons, and handled weapons.
+- This is diagnostics only. No squad mode, weapon, vehicle, suppression, grenade, or support-fire behavior changed.
+
+Verification:
+
+| Report | Point shots | Suppression shot ratio | Support handled | Fire-move ok | Teamwork ratio | Main support point blockers |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `reports/playtests/behavior-census-20260705125740/` | 0 | 0 | n/a | 730 | 0.001 | pre-diagnostic zero point-shot sample |
+| `reports/playtests/behavior-census-20260705130151/` | 43 | 0.261 | 68 | 12 | 0.022 | `no-direct-report-mode:advance` 5002, `report-rejected` 457 |
+| `reports/playtests/behavior-census-20260705130524/` | 42 | 0.123 | 184 | 1546 | 0.033 | `no-direct-report-mode:advance` 7768, `direct-grenade-launcher` 592, `report-rejected` 435 |
+
+Judgment:
+- Support suppression is intermittent, not absent. The zero point-shot run is now reproducible as a diagnosable low-signal sample rather than proof that the path is dead.
+- The dominant support-fire bottleneck is that support weapons in `advance` often have no direct/report/support point to suppress; grenade-launcher ownership and report rejection are secondary blockers.
+- Do not raise support-fire cadence blindly. The next behavior change, if any, should be a narrow way to give support weapons an explicit squad-shared suppression point during `advance`, then verify with census plus two tempo runs.

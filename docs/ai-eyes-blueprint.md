@@ -99,6 +99,13 @@ frames는 유닛 30명 × 360틱 ≈ 11k 레코드 — JSON 수 MB, 문제없음
 | prone 진입 / 평균 유지 | prone-enter 수, enter→exit 간격 평균 | 30회+ / 2초+ |
 결과 폴더: `reports/playtests/behavior-census-<stamp>/` (result.json + report.md).
 
+## 2026-07-05 Codex support suppression diagnostics
+
+- `tools/check-behavior-census.cjs` now records `Support Suppression Reasons`, `Support Suppression Point Reasons`, and handled weapons.
+- Verification `reports/playtests/behavior-census-20260705130524/`: pointShots 42, suppressionShotRatio 0.123, supportFireHandled 184.
+- Top support point blockers: `no-direct-report-mode:advance` 7768, `direct-grenade-launcher` 592, `report-rejected` 435, `direct-cadence` 371.
+- This is diagnostic-only; gameplay behavior was not changed.
+
 ## (B) tools/replay-viewer.html — 단일 HTML, 외부 의존성 0
 - `<input type="file">`로 result.json 로드 (file:// 로 열어도 동작해야 함 — fetch 금지, FileReader 사용).
 - 캔버스 1개: 프레임 units를 점으로 (blue/red 원, prone이면 납작, hp 비례 투명도, 클릭하면 해당 유닛 팔로우 + 우측 패널에 state/sup 표시).

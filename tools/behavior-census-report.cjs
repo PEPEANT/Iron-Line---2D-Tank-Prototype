@@ -33,6 +33,7 @@ function summaryMarkdown(summary, outDir) {
     `| Grenade try success rate | ${summary.grenadeSuccessRate} | >0.3 | ${passLabel(summary.grenadeSuccessRate, 0.3)} |`,
     `| Grenade actual evaluation null rate | ${summary.grenadeEvaluationNullRate} | <0.7 | ${summary.grenadeEvaluationNullRate < 0.7 ? "PASS" : "CHECK"} |`,
     `| Suppression/point shot ratio | ${summary.suppressionShotRatio} | 0.20-0.40 | ${passLabel(summary.suppressionShotRatio, 0.2, 0.4)} |`,
+    `| Support suppression handled rate | ${summary.supportFireHandledRate} | diagnostic | CHECK |`,
     `| Squad fire-move teamwork ratio | ${summary.teamworkRatio} | >0.30 | ${passLabel(summary.teamworkRatio, 0.3)} |`,
     `| Fire-move ok rate | ${summary.fireMoveOkRate} | diagnostic | CHECK |`,
     `| Prone enter count | ${summary.proneEnter} | 30+ | ${passLabel(summary.proneEnter, 30)} |`,
@@ -51,6 +52,9 @@ function summaryMarkdown(summary, outDir) {
     ...jsonBlock("Fire-Move Success States", summary.fireMoveOkByState),
     ...jsonBlock("Fire-Move Success Weapons", summary.fireMoveOkByWeapon),
     ...jsonBlock("Fire-Move Target Sources", summary.fireMoveTargetSourceCounts),
+    ...jsonBlock("Support Suppression Reasons", summary.supportFireReasonCounts),
+    ...jsonBlock("Support Suppression Point Reasons", summary.supportFirePointReasonCounts),
+    ...jsonBlock("Support Suppression Handled Weapons", summary.supportFireHandledByWeapon),
     ...jsonBlock("Raw Summary", summary),
     "## Notes",
     "",
@@ -59,6 +63,7 @@ function summaryMarkdown(summary, outDir) {
     "- Grenade budget calls are per-frame/cache-layer calls. Grenade evaluation calls are the actual `selectGrenadeTarget()` decision passes.",
     "- Grenade reason counts are diagnostic-only and do not change gameplay.",
     "- Fire-move reason counts are diagnostic-only and mirror the early returns inside `executeFireMoveAdvance()`.",
+    "- Support suppression handled counts include aiming/alignment frames as well as actual point shots; use `pointShots` for fired rounds.",
     ""
   ].join("\n");
 }

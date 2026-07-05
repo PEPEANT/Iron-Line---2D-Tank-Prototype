@@ -7,6 +7,7 @@ const { spawn } = require("child_process");
 const { WebSocket } = require("ws");
 const { summaryMarkdown } = require("./behavior-census-report.cjs");
 const { hookDiagnosticsScript } = require("./behavior-census-hook-diagnostics.cjs");
+const { supportDiagnosticsScript } = require("./behavior-census-support-diagnostics.cjs");
 
 const root = path.resolve(__dirname, "..");
 const appPort = Number(process.env.IRONLINE_CENSUS_PORT || 4210);
@@ -174,6 +175,9 @@ new Promise((resolve, reject) => {
         fireMoveOkByState: {},
         fireMoveOkByWeapon: {},
         fireMoveTargetSourceCounts: {},
+        supportFireCalls: 0, supportFireHandled: 0,
+        supportFireReasonCounts: {}, supportFirePointReasonCounts: {},
+        supportFireHandledByWeapon: {},
         teamworkEligibleTicks: 0,
         teamworkTicks: 0
       };
@@ -198,6 +202,7 @@ new Promise((resolve, reject) => {
         const distXY = math.distXY || ((x1, y1, x2, y2) => Math.hypot((x2 || 0) - (x1 || 0), (y2 || 0) - (y1 || 0)));
 
 ${hookDiagnosticsScript()}
+${supportDiagnosticsScript()}
 
         const diagnoseGrenadeTry = (ai, target, dt = 0.033) => {
           const weapon = target?.weapon || IronLine.constants?.INFANTRY_WEAPONS?.grenade;
@@ -867,6 +872,10 @@ function summarize(data) {
     fireMoveOkByState: stats.fireMoveOkByState || {},
     fireMoveOkByWeapon: stats.fireMoveOkByWeapon || {},
     fireMoveTargetSourceCounts: stats.fireMoveTargetSourceCounts || {},
+    supportFireCalls: stats.supportFireCalls || 0, supportFireHandled: stats.supportFireHandled || 0,
+    supportFireHandledRate: Number(((stats.supportFireHandled || 0) / Math.max(1, stats.supportFireCalls || 0)).toFixed(3)),
+    supportFireReasonCounts: stats.supportFireReasonCounts || {}, supportFirePointReasonCounts: stats.supportFirePointReasonCounts || {},
+    supportFireHandledByWeapon: stats.supportFireHandledByWeapon || {},
     teamworkTicks: stats.teamworkTicks || 0,
     teamworkEligibleTicks: stats.teamworkEligibleTicks || 0,
     teamworkRatio: Number(teamworkRatio.toFixed(3)),
