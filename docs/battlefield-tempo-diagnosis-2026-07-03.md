@@ -441,3 +441,21 @@ Change scope:
 Judgment:
 - The source fix worked: first direct shell deaths now show as `tank:ap-direct` instead of misleading stale infantry/vehicle threats.
 - This is not a tempo tuning patch. deaths/min still varies around the lower bound and prone ratio remains low in these two runs, so D2/vehicle-opening balance remains a separate task.
+
+## Codex opening-window death source probe (2026-07-05)
+
+Change scope:
+- `npm run tempo` now reports deaths during the first 15 seconds after first contact, opening-window death sources, and how many of those deaths were heavy/vehicle sourced.
+- This is diagnostics only. No AI, weapon, vehicle, map, damage, or suppression behavior changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | First shot | Deaths/min | Prone ratio | First death after contact | Opening deaths 0-15s | Opening heavy/vehicle deaths | Main death sources |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705124950/` | 73.0s | 4.5 | 0.04 | 34.0s | 0 | 0 | `tank:machinegun` 4, `infantry:sniper` 2 |
+| 2 | `reports/playtests/battlefield-tempo-20260705125303/` | 54.0s | 4.8 | 0.07 | 16.0s | 0 | 0 | `tank:machinegun` 3, `humvee:machinegun` 2, infantry 5 |
+
+Judgment:
+- The immediate-opening vehicle/direct-shell kill hypothesis is weaker in this sample: both runs had zero deaths in the first 15 seconds after contact.
+- The current problem signal is lower-level tempo: first contact can arrive late, deaths/min is below the 6-12 target, suppression stays low, and prone ratio remains low.
+- Next D2 work should inspect contact timing, squad advance/hold modes, and sustained fire density before changing vehicle damage or AP behavior.

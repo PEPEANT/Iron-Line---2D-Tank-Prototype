@@ -376,6 +376,7 @@ async function main() {
 }
 
 function summarize(r) {
+  const OPENING_WINDOW_SECONDS = 15;
   const s = r.samples || [];
   const last = s[s.length - 1] || {};
   const contact = r.firstBulletAt || 0;
@@ -394,6 +395,16 @@ function summarize(r) {
     deathSourceCounts[key] = (deathSourceCounts[key] || 0) + 1;
   }
   const preContactDeaths = r.deaths.filter((death) => death.at < contact);
+  const openingDeaths = r.deaths.filter((death) => death.at >= contact && death.at < contact + OPENING_WINDOW_SECONDS);
+  const openingDeathSourceCounts = {};
+  for (const death of openingDeaths) {
+    const key = death.lastDamage?.source?.kind || "unknown";
+    openingDeathSourceCounts[key] = (openingDeathSourceCounts[key] || 0) + 1;
+  }
+  const openingHeavyOrVehicleDeaths = openingDeaths.filter((death) => {
+    const kind = death.lastDamage?.source?.kind || "";
+    return kind === "direct-heavy-or-shell" || kind.startsWith("tank:") || kind.startsWith("humvee:");
+  }).length;
   const firstDeath = (r.deaths || []).slice().sort((a, b) => a.at - b.at)[0] || null;
   return {
     durationSeconds: last.t || 0,
@@ -407,6 +418,10 @@ function summarize(r) {
     deaths: r.deaths.length,
     deathsPerMinutePostContact: +(r.deaths.filter((d) => d.at >= contact).length / postMinutes).toFixed(1),
     preContactDeaths: preContactDeaths.length,
+    openingWindowSeconds: OPENING_WINDOW_SECONDS,
+    openingDeaths: openingDeaths.length,
+    openingHeavyOrVehicleDeaths,
+    openingDeathSourceCounts,
     deathSourceCounts,
     firstDeathDetail: firstDeath ? {
       id: firstDeath.id,
@@ -441,6 +456,8 @@ function summaryMarkdown(m) {
     `| First death after contact | ${m.firstDeathAfterContactSeconds}s |`,
     `| Deaths/min post-contact | ${m.deathsPerMinutePostContact} |`,
     `| Pre-contact deaths | ${m.preContactDeaths} |`,
+    `| Opening deaths 0-${m.openingWindowSeconds}s | ${m.openingDeaths} |`,
+    `| Opening heavy/vehicle deaths | ${m.openingHeavyOrVehicleDeaths} |`,
     `| Survival after contact p25/p50/p75 | ${m.survivalAfterContactP25}s / ${m.survivalAfterContactP50}s / ${m.survivalAfterContactP75}s |`,
     `| Shots/min post-contact | ${m.shotsPerMinutePostContact} |`,
     `| Shot range p50/p95 | ${m.shotRangeP50}px / ${m.shotRangeP95}px |`,
@@ -457,6 +474,7 @@ function summaryMarkdown(m) {
     "```",
     "",
     `Death sources: ${JSON.stringify(m.deathSourceCounts)}`,
+    `Opening death sources: ${JSON.stringify(m.openingDeathSourceCounts)}`,
     "",
     `Post-contact tactical modes: ${JSON.stringify(m.postContactModes)}`,
     "",
