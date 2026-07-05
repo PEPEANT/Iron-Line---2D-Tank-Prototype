@@ -135,46 +135,180 @@
     return object.interior?.mode || entry.interiorTemplate.mode || "open";
   }
 
-  function interiorWallObstaclesFromObject(object = {}, entry = null) {
+  function interiorWallObstaclesFromObject(object = {}, entry = null, context = {}) {
     if (interiorMode(object, entry) !== "open") return [];
     const template = entry?.interiorTemplate;
     if (!template?.walls?.length) return [];
     const size = objectRuntimeSize(object, entry);
-    return template.walls.map((wall, index) => {
+    const walls = [];
+    template.walls.forEach((wall, index) => {
       const rect = scaledTemplateRect(wall, object, entry, size);
-      return {
+      const segments = carveWallForConnections(rect, wall, object, context.connections || []);
+      segments.forEach((segment, segmentIndex) => walls.push({
         id: `${object.id || "object"}:wall:${wall.id || index}`,
         mapObjectId: object.id,
         parentObjectId: object.id,
         kind: wall.kind || "concrete",
         type: "interior-wall",
-        x: rect.x,
-        y: rect.y,
-        w: rect.w,
-        h: rect.h,
+        x: segment.x,
+        y: segment.y,
+        w: segment.w,
+        h: segment.h,
         angle: 0,
         rot: 0,
         cover: "heavy",
         collision: true,
         spriteSlot: "object.concrete",
         interior: true,
-        stopsProjectiles: true
-      };
+        stopsProjectiles: true,
+        connectionCut: segmentIndex > 0 || segments.length > 1 ? true : undefined
+      }));
     });
+    return walls;
   }
 
-  function runtimeObstaclesFromObject(object = {}, catalog = IronLine.objectCatalog) {
+  function connectionSideForObject(connection = {}, objectId = "") {
+    if (connection.from === objectId) return connection.wall;
+    if (connection.to === objectId) return connection.oppositeWall;
+    return "";
+  }
+
+  function wallMatchesSide(wallId = "", side = "") {
+    return side && (wallId === side || String(wallId).startsWith(`${side}-`));
+  }
+
+  function carveWallForConnections(rect = {}, wall = {}, object = {}, connections = []) {
+    let segments = [rect];
+    for (const connection of connections) {
+      const side = connectionSideForObject(connection, object.id);
+      if (!wallMatchesSide(wall.id, side)) continue;
+      segments = segments.flatMap((segment) => carveWallSegment(segment, connection));
+    }
+    return segments.filter((segment) => segment.w >= 2 && segment.h >= 2);
+  }
+
+  function carveWallSegment(rect = {}, connection = {}) {
+    const vertical = rect.h >= rect.w;
+    const span = Math.max(24, finiteNumber(connection.span, 58));
+    const center = vertical ? finiteNumber(connection.centerY) : finiteNumber(connection.centerX);
+    const openMin = center - span * 0.5;
+    const openMax = center + span * 0.5;
+    const start = vertical ? rect.y : rect.x;
+    const end = start + (vertical ? rect.h : rect.w);
+    const before = Math.max(start, Math.min(end, openMin));
+    const after = Math.max(start, Math.min(end, openMax));
+    if (after <= start || before >= end || after <= before) return [rect];
+
+    const pieces = [];
+    if (before > start + 1) {
+      pieces.push(vertical
+        ? { x: rect.x, y: rect.y, w: rect.w, h: Math.round(before - start) }
+        : { x: rect.x, y: rect.y, w: Math.round(before - start), h: rect.h });
+    }
+    if (after < end - 1) {
+      pieces.push(vertical
+        ? { x: rect.x, y: Math.round(after), w: rect.w, h: Math.round(end - after) }
+        : { x: Math.round(after), y: rect.y, w: Math.round(end - after), h: rect.h });
+    }
+    return pieces;
+  }
+
+  function runtimeObstaclesFromObject(object = {}, catalog = IronLine.objectCatalog, context = {}) {
     const entry = catalog?.get?.(object.type) || null;
     const base = runtimeObstacleFromObject(object, catalog);
     const obstacles = base.collision === false ? [] : [base];
-    obstacles.push(...interiorWallObstaclesFromObject(object, entry));
+    obstacles.push(...interiorWallObstaclesFromObject(object, entry, context));
     return obstacles;
   }
 
   function objectsToObstacles(objects = [], catalog = IronLine.objectCatalog) {
+    const connections = connectionsFromObjects(objects, catalog);
     return objects
-      .flatMap((object) => runtimeObstaclesFromObject(object, catalog))
+      .flatMap((object) => runtimeObstaclesFromObject(object, catalog, { connections }))
       .filter((obstacle) => obstacle.collision !== false);
+  }
+
+  function objectFootprintRect(object = {}, catalog = IronLine.objectCatalog) {
+    const entry = catalog?.get?.(object.type) || null;
+    const size = objectRuntimeSize(object, entry);
+    return {
+      id: object.id,
+      type: object.type,
+      x: Math.round(finiteNumber(object.x)),
+      y: Math.round(finiteNumber(object.y)),
+      w: size.w,
+      h: size.h,
+      entry
+    };
+  }
+
+  function canConnectInteriorObject(object = {}, catalog = IronLine.objectCatalog) {
+    const entry = catalog?.get?.(object.type) || null;
+    return interiorMode(object, entry) === "open";
+  }
+
+  function overlapRange(aStart, aEnd, bStart, bEnd) {
+    const start = Math.max(aStart, bStart);
+    const end = Math.min(aEnd, bEnd);
+    return { start, end, length: Math.max(0, end - start) };
+  }
+
+  function connectionCandidate(a, b, tolerance = 4) {
+    const minOverlap = 76;
+    const spanPad = 24;
+    const aRight = a.x + a.w;
+    const bRight = b.x + b.w;
+    const aBottom = a.y + a.h;
+    const bBottom = b.y + b.h;
+
+    if (Math.abs(aRight - b.x) <= tolerance) {
+      const overlap = overlapRange(a.y, aBottom, b.y, bBottom);
+      if (overlap.length >= minOverlap) return makeConnection(a, b, "east", "west", aRight, overlap, "vertical", spanPad);
+    }
+    if (Math.abs(bRight - a.x) <= tolerance) {
+      const overlap = overlapRange(a.y, aBottom, b.y, bBottom);
+      if (overlap.length >= minOverlap) return makeConnection(a, b, "west", "east", a.x, overlap, "vertical", spanPad);
+    }
+    if (Math.abs(aBottom - b.y) <= tolerance) {
+      const overlap = overlapRange(a.x, a.x + a.w, b.x, b.x + b.w);
+      if (overlap.length >= minOverlap) return makeConnection(a, b, "south", "north", aBottom, overlap, "horizontal", spanPad);
+    }
+    if (Math.abs(bBottom - a.y) <= tolerance) {
+      const overlap = overlapRange(a.x, a.x + a.w, b.x, b.x + b.w);
+      if (overlap.length >= minOverlap) return makeConnection(a, b, "north", "south", a.y, overlap, "horizontal", spanPad);
+    }
+    return null;
+  }
+
+  function makeConnection(a, b, wall, oppositeWall, fixedCoord, overlap, axis, spanPad) {
+    const span = Math.max(42, Math.min(72, overlap.length - spanPad));
+    const center = (overlap.start + overlap.end) * 0.5;
+    return {
+      id: `conn-${a.id}-${b.id}`,
+      from: a.id,
+      to: b.id,
+      wall,
+      oppositeWall,
+      axis,
+      offset: Math.round(axis === "vertical" ? center - a.y : center - a.x),
+      centerX: Math.round(axis === "vertical" ? fixedCoord : center),
+      centerY: Math.round(axis === "vertical" ? center : fixedCoord),
+      span: Math.round(span)
+    };
+  }
+
+  function connectionsFromObjects(objects = [], catalog = IronLine.objectCatalog) {
+    const rects = objects
+      .filter((object) => object?.id && canConnectInteriorObject(object, catalog))
+      .map((object) => objectFootprintRect(object, catalog));
+    const connections = [];
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        const candidate = connectionCandidate(rects[i], rects[j]);
+        if (candidate) connections.push(candidate);
+      }
+    }
+    return connections;
   }
 
   function roofFromObject(object = {}, catalog = IronLine.objectCatalog) {
@@ -216,7 +350,10 @@
       if (!Array.isArray(world.zones)) world.zones = (world.capturePoints || []).map(zoneFromCapturePoint);
     }
     const catalog = options.catalog || IronLine.objectCatalog;
-    world.obstacles = objectsToObstacles(world.objects, catalog);
+    world.mapObjectConnections = connectionsFromObjects(world.objects, catalog);
+    world.obstacles = world.objects
+      .flatMap((object) => runtimeObstaclesFromObject(object, catalog, { connections: world.mapObjectConnections }))
+      .filter((obstacle) => obstacle.collision !== false);
     world.mapObjectRoofs = roofsFromObjects(world.objects, catalog);
     return world;
   }
@@ -294,6 +431,7 @@
     runtimeObstacleFromObject,
     runtimeObstaclesFromObject,
     roofsFromObjects,
+    connectionsFromObjects,
     objectsToObstacles
   };
 })(typeof window !== "undefined" ? window : globalThis);
