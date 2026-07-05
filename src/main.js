@@ -3189,9 +3189,8 @@
     }
 
     updateDeathRestartInput() {
-      const conquest = this.isConquestMode() && this.matchStarted;
-      if (this.input.consumePress("Enter")) return conquest ? this.restartMatchAfterDeath() : this.returnToMainMenu();
-      if (conquest && this.input.consumePress("KeyR")) this.restartMatchAfterDeath();
+      if (this.input.consumePress("Enter")) return this.returnToMainMenu();
+      return false;
     }
 
     restartMatchAfterDeath() {

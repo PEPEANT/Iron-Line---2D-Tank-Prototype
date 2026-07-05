@@ -182,4 +182,10 @@
 - wounded/downed 표현은 노란 점선 링과 더 살아 있는 팀 색상 몸체로, dead 표현은 낮은 채도와 정적인 그림자로 구분한다.
 - 에셋팩 교체를 위해 `unit.death-pose` 스타일 슬롯을 먼저 읽고, 없으면 벡터 fallback을 쓴다.
 - `npm run corpse:render`: `Corpse renderer check passed`.
+
+## 2026-07-05 Codex death UI contract re-lock
+
+- 실제 코드에서 정복전 사망 버튼/Enter가 즉시 재출격으로 갈 수 있던 경로를 제거했다.
+- 사망 화면은 `사망` / `원인: ...` / `메인화면으로 가기`만 표시한다. 리스폰 카운트다운 문구와 `R` 재출격 단축키는 사망 화면 계약에서 제외했다.
+- `npm run death:ui`가 이 계약을 검사하며, `npm run check`에 포함된다.
 - 범위 제한: 소생, E키 끌기, AI 안전지대 판단, wounded/dead 상태머신은 아직 구현하지 않았다.
