@@ -1361,6 +1361,7 @@
   }
 
   function damageRadius(game, x, y, radius, damage, team, ammo = {}) {
+    const blastSource = { x, y, team, weaponId: ammo.sourceWeaponId || ammo.id || "blast", ammoId: ammo.id || ammo.sourceWeaponId || "blast", ammo, owner: ammo.owner || ammo.source || null, sourceVehicle: ammo.owner?.vehicleType ? ammo.owner : ammo.source?.vehicleType ? ammo.source : ammo.owner?.sourceVehicle || ammo.source?.sourceVehicle || null };
     for (const tank of vehicleTargets(game)) {
       if (tank === ammo.excludeTarget) continue;
       if (!tank.alive || tank.team === team) continue;
@@ -1406,7 +1407,7 @@
       );
       const proneScale = proneBlastDamageScale(unit, d, radius + unit.radius, ammo);
       const unitWasAlive = targetScoreAlive(unit);
-      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale);
+      unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale, blastSource);
       recordKillIfDestroyed(game, ammo.owner || ammo.source || { team }, unit, unitWasAlive, ammo.id || "blast");
     }
 

@@ -19,4 +19,8 @@ if (!source.includes("recordKillIfDestroyed(game, shell.owner || shell, hitInfan
   fail("direct projectile infantry kill must keep shell owner/source for scoring");
 }
 
+if (!source.includes("const blastSource = {") || !source.includes("unit.takeDamage(damage * (ammo.infantryDamageScale ?? 1) * falloff * exposure * proneScale, blastSource);")) {
+  fail("blast radius infantry damage must pass a blast source into takeDamage");
+}
+
 if (!process.exitCode) console.log("Combat source contract check passed");

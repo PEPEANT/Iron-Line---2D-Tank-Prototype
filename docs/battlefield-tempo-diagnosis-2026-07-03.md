@@ -582,3 +582,25 @@ Judgment:
 - When suppression density actually rises, the posture path works: `prone:suppression_prone` appears in volume and engineer/scout prone ratios can pass the target.
 - The prior low engineer/scout prone samples were not proof of a missing class-specific prone transition. They were low-contact/low-suppression samples where many units stayed in `advance`, `secure`, or recon movement.
 - The remaining unstable R1/D2 signal is the opening-contact burst: first death still arrives 0.1s/3.1s after contact in these two runs, and early heavy/vehicle/direct sources remain present. Next behavior work should address first-contact buffering or vehicle/direct-heavy source handling, not broad prone thresholds.
+
+## Codex blast infantry damage source fix (2026-07-05)
+
+Change scope:
+- `src/systems/combat.js` now passes a `blastSource` object into infantry `takeDamage()` inside `damageRadius()`.
+- `npm run combat:source` now locks both direct projectile infantry source passing and blast-radius infantry source passing.
+- Damage values, radius, falloff, exposure, suppression, vehicle damage, and kill scoring were not changed.
+
+Verification:
+- `npm run combat:source` passed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | First death after contact | Opening heavy/vehicle deaths | Main death sources |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705142619/` | 4.4 | 0.02 | 14.0s | 1 | `humvee:machinegun` 3, `tank:machinegun` 2, `infantry:grenade-direct` 2, `tank:he-direct` 1 |
+| 2 | `reports/playtests/battlefield-tempo-20260705142936/` | 5.0 | 0.07 | 3.2s | 2 | `humvee:machinegun` 4, `tank:he-direct` 2, `infantry:sniper` 2, `tank:ap-direct` 1 |
+
+Judgment:
+- The source bug is fixed for the sampled path: the post-fix tempo runs did not report `direct-heavy-or-shell` or `unknown` death sources.
+- The fix is source attribution only. It does not solve tempo variance; both post-fix runs remain below the deaths/min target and prone remains low.
+- The next combat behavior task should use the now-clean source split to decide whether first-contact buffering belongs on vehicle HE/AP, Humvee MG, or infantry target acquisition.
