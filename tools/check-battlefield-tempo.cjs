@@ -259,6 +259,8 @@ new Promise((resolve, reject) => {
       const proneWeaponCounts = {};
       const classCounts = {};
       const proneClassCounts = {};
+      const classStateCounts = {};
+      const proneClassStateCounts = {};
       const aliveNow = new Set();
 
       for (const unit of infantry) {
@@ -275,13 +277,16 @@ new Promise((resolve, reject) => {
           const state = unit.ai?.state || "unknown";
           const weapon = unit.weaponId || unit.ai?.weapon?.()?.id || "unknown";
           const classId = unit.classId || "unknown";
+          const classState = classId + ":" + state;
           stateCounts[state] = (stateCounts[state] || 0) + 1;
           weaponCounts[weapon] = (weaponCounts[weapon] || 0) + 1;
           classCounts[classId] = (classCounts[classId] || 0) + 1;
+          classStateCounts[classState] = (classStateCounts[classState] || 0) + 1;
           if (unit.isProne) {
             proneStateCounts[state] = (proneStateCounts[state] || 0) + 1;
             proneWeaponCounts[weapon] = (proneWeaponCounts[weapon] || 0) + 1;
             proneClassCounts[classId] = (proneClassCounts[classId] || 0) + 1;
+            proneClassStateCounts[classState] = (proneClassStateCounts[classState] || 0) + 1;
           }
           const prev = prevPos.get(id);
           if (prev && Math.hypot(unit.x - prev.x, unit.y - prev.y) > 9) moving += 1;
@@ -329,7 +334,9 @@ new Promise((resolve, reject) => {
         weapons: weaponCounts,
         proneWeapons: proneWeaponCounts,
         classes: classCounts,
-        proneClasses: proneClassCounts
+        proneClasses: proneClassCounts,
+        classStates: classStateCounts,
+        proneClassStates: proneClassStateCounts
       });
 
       if (Date.now() - startWall >= DURATION_MS) {
@@ -490,7 +497,9 @@ function summarize(r) {
     postContactProneWeapons: sumCounts("proneWeapons"),
     postContactClasses,
     postContactProneClasses,
-    postContactProneClassRatios: ratioCounts(postContactProneClasses, postContactClasses)
+    postContactProneClassRatios: ratioCounts(postContactProneClasses, postContactClasses),
+    postContactClassStates: sumCounts("classStates"),
+    postContactProneClassStates: sumCounts("proneClassStates")
   };
 }
 
@@ -537,6 +546,8 @@ function summaryMarkdown(m) {
     `Post-contact classes: ${JSON.stringify(m.postContactClasses)}`,
     `Post-contact prone classes: ${JSON.stringify(m.postContactProneClasses)}`,
     `Post-contact prone class ratios: ${JSON.stringify(m.postContactProneClassRatios)}`,
+    `Post-contact class states: ${JSON.stringify(m.postContactClassStates)}`,
+    `Post-contact prone class states: ${JSON.stringify(m.postContactProneClassStates)}`,
     "",
     "Targets (see docs/battlefield-tempo-diagnosis-2026-07-03.md): first death >8s after contact, survival p50 20-30s, suppression avg >15, prone ratio >0.15, deaths/min 6-12.",
     ""

@@ -546,3 +546,21 @@ Judgment:
 - The low-prone signal is now class-specific, not just weapon-specific. Infantry can reach the prone target in a good sample, scouts remain below target, and engineers are almost never prone.
 - The engineer signal is stronger than the earlier scout-only suspicion: engineer post-contact samples were high in both runs, but prone samples were 10/1506 and 0/1338.
 - Do not tune vehicle damage from this sample. The next behavior candidate should inspect engineer/scout posture transitions during `advance`, `secure`, `mounted-transport`, and vehicle/MG pressure, then verify with two tempo runs.
+
+## Codex tempo class-state diagnostics (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records post-contact class-state counts and prone class-state counts.
+- This is diagnostics only. No AI, weapon, vehicle, suppression, prone, or squad behavior changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | Scout prone | Engineer prone | Main engineer states | Main scout states |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705140946/` | 5.2 | 0.05 | 0/1020 | 0/1530 | `advance` 1260, `secure` 270 | `secure` 330, `recon-move` 293, `recon-drone` 182, `advance` 181 |
+| 2 | `reports/playtests/battlefield-tempo-20260705141259/` | 6.1 | 0.06 | 0/952 | 54/1288 | `advance` 1115, `secure` 112, `prone-fire` 54 | `recon-move` 271, `advance` 237, `secure` 217, `recon-drone` 162 |
+
+Judgment:
+- The engineer miss is mostly `advance`/`secure`, not `mounted-transport`; a small engineer `prone-fire` pocket appears in run 2.
+- Scout prone is zero in both runs because scout samples stay in recon/advance/secure states. `recon-snipe` exists but was tiny in this sample, so simply making `recon-snipe` prone would not solve the global prone ratio.
+- Current D2 bottleneck looks less like a missing "go prone" call and more like low contact/suppression pressure while units remain in `advance`, `secure`, and recon movement states. Next behavior work should target contact/suppression density or tactical-mode transitions before broad prone threshold changes.
