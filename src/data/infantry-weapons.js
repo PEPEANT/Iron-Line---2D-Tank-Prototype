@@ -13,6 +13,12 @@
       range: 575,
       desiredRange: 365,
       cooldown: 0.46,
+      fireModes: ["auto", "semi"],
+      defaultFireMode: "auto",
+      fireModeCooldownScale: {
+        auto: 0.54,
+        semi: 1
+      },
       ammoKey: "rifle",
       defaultAmmo: 96,
       damageMin: 9,

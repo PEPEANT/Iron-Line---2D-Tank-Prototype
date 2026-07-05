@@ -60,6 +60,21 @@ function checkSupplyCrateSource() {
   }
 }
 
+function checkPlayerFireModeSource() {
+  const source = read("src/systems/game-player-control.js");
+  const required = [
+    "this.input.consumePress(\"KeyB\")",
+    "cyclePlayerFireMode(weapon)",
+    "playerWantsWeaponUse(weapon",
+    "this.playerFireModeForWeapon(weapon) === \"semi\"",
+    "automaticFallback = [\"smg\", \"lmg\", \"machinegun\"].includes(weapon.id)",
+    "playerFireModeCooldownScale(weapon)"
+  ];
+  for (const needle of required) {
+    expect(source.includes(needle), `player fire mode contract missing ${needle}`);
+  }
+}
+
 function checkLoadoutRuntime() {
   const sandbox = {
     window: {},
@@ -67,10 +82,21 @@ function checkLoadoutRuntime() {
   };
   runBrowserScript(sandbox, "src/data/constants.js");
   runBrowserScript(sandbox, "src/data/infantry-weapons.js");
+  runBrowserScript(sandbox, "src/data/infantry-classes.js");
   runBrowserScript(sandbox, "src/data/player-default-loadout.js");
   runBrowserScript(sandbox, "src/data/supply-loadout-items.js");
+  runBrowserScript(sandbox, "src/entities/player.js");
 
   const IronLine = sandbox.window.IronLine;
+  const rifle = IronLine.constants.INFANTRY_WEAPONS.rifle;
+  expect(JSON.stringify(rifle.fireModes) === JSON.stringify(["auto", "semi"]), "rifle should expose auto/semi fire modes");
+  expect(rifle.defaultFireMode === "auto", "rifle should default to auto fire mode");
+  expect(rifle.fireModeCooldownScale?.auto > 0 && rifle.fireModeCooldownScale.auto < 1, "rifle auto mode should reduce player cooldown");
+
+  const defaultPlayer = IronLine.createPlayer({ x: 0, y: 0 });
+  expect(defaultPlayer.fireMode === "auto", "player should default to auto fire mode");
+  expect(defaultPlayer.fireModes?.rifle === "auto", "player should remember rifle auto mode");
+
   const slots = IronLine.playerDefaultLoadout.slots();
   expect(slots.length === 6, `default loadout should expose 6 slots, got ${slots.length}`);
   expect(JSON.stringify(slots.map((slot) => slot.key)) === JSON.stringify(["1", "2", "3", "4", "5", "6"]), "slot keys must be 1..6");
@@ -121,6 +147,7 @@ function checkLoadoutRuntime() {
 
 checkIndexOrder();
 checkSupplyCrateSource();
+checkPlayerFireModeSource();
 checkLoadoutRuntime();
 
 if (errors.length) {

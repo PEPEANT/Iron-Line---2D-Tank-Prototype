@@ -74,6 +74,8 @@
       rifleCooldown: 0,
       gunKick: 0,
       fireHoldTimer: 0,
+      fireMode: "auto",
+      fireModes: { rifle: "auto" },
       machineGunAim: false,
       isProne: false,
       proneTransitionTimer: 0,

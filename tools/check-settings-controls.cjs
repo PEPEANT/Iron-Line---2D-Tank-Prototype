@@ -40,8 +40,9 @@ for (const text of [
 ]) {
   mustInclude(html, text);
 }
+mustInclude(html, "발사 모드 전환", "fire mode toggle");
 
-for (const key of ["<kbd>1</kbd>", "<kbd>2</kbd>", "<kbd>3</kbd>", "<kbd>4</kbd>", "<kbd>5</kbd>", "<kbd>6</kbd>", "<kbd>Q</kbd>", "<kbd>G</kbd>", "<kbd>V</kbd>", "<kbd>E</kbd>", "<kbd>F</kbd>", "<kbd>R</kbd>", "<kbd>Tab</kbd>"]) {
+for (const key of ["<kbd>1</kbd>", "<kbd>2</kbd>", "<kbd>3</kbd>", "<kbd>4</kbd>", "<kbd>5</kbd>", "<kbd>6</kbd>", "<kbd>Q</kbd>", "<kbd>B</kbd>", "<kbd>G</kbd>", "<kbd>V</kbd>", "<kbd>E</kbd>", "<kbd>F</kbd>", "<kbd>R</kbd>", "<kbd>Tab</kbd>"]) {
   mustInclude(html, key, key.replace(/<[^>]+>/g, ""));
 }
 

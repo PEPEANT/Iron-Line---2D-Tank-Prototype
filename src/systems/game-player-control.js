@@ -553,8 +553,16 @@
       }
       const mouse = this.input.mouse;
       const weapon = this.player.getWeapon();
+      if (this.input.consumePress("KeyB")) {
+        this.cyclePlayerFireMode(weapon);
+      }
       const primaryPressed = this.input.consumeMousePress(0);
-      const wantsUse = mouse.leftDown || primaryPressed || this.input.keyDown("Space");
+      const spacePressed = this.input.consumePress("Space");
+      const wantsUse = this.playerWantsWeaponUse(weapon, {
+        primaryPressed,
+        spacePressed,
+        triggerHeld: mouse.leftDown || this.input.keyDown("Space")
+      });
       const fireHoldMode = this.updatePlayerFireHoldIntent(weapon, wantsUse);
       const scoutAimMode = this.isPlayerScoutAimMode();
       const rpgAimMode = this.isPlayerRpgAimMode();
@@ -597,11 +605,49 @@
         this.player.lastShotCooldownScale = 1;
         const fired = this.usePlayerEquipment(weapon, mouse.worldX, mouse.worldY);
         if (fired) {
-          const cooldownScale = this.player.lastShotCooldownScale || 1;
+          const cooldownScale = (this.player.lastShotCooldownScale || 1) * this.playerFireModeCooldownScale(weapon);
           this.player.rifleCooldown = (weapon?.cooldown || 0.35) * cooldownScale;
           this.player.lastShotCooldownScale = 1;
         }
       }
+    },
+    playerWantsWeaponUse(weapon, trigger = {}) {
+      if (weapon?.type === "gun" && this.playerFireModeForWeapon(weapon) === "semi") {
+        return Boolean(trigger.primaryPressed || trigger.spacePressed);
+      }
+      return Boolean(trigger.triggerHeld || trigger.primaryPressed || trigger.spacePressed);
+    },
+    playerFireModeOptions(weapon) {
+      if (!weapon || weapon.type !== "gun") return [];
+      const automaticFallback = ["smg", "lmg", "machinegun"].includes(weapon.id);
+      const modes = Array.isArray(weapon.fireModes)
+        ? weapon.fireModes
+        : [weapon.defaultFireMode || (automaticFallback ? "auto" : "semi")];
+      return modes.filter((mode) => mode === "auto" || mode === "semi");
+    },
+    playerFireModeForWeapon(weapon) {
+      const modes = this.playerFireModeOptions(weapon);
+      if (!modes.length) return "";
+      const stored = this.player?.fireModes?.[weapon.id] || this.player?.fireMode || weapon.defaultFireMode;
+      if (modes.includes(stored)) return stored;
+      if (modes.includes(weapon.defaultFireMode)) return weapon.defaultFireMode;
+      return modes[0];
+    },
+    playerFireModeCooldownScale(weapon) {
+      const mode = this.playerFireModeForWeapon(weapon);
+      const scale = weapon?.fireModeCooldownScale?.[mode];
+      return Number.isFinite(scale) && scale > 0 ? scale : 1;
+    },
+    cyclePlayerFireMode(weapon = this.player?.getWeapon?.()) {
+      const modes = this.playerFireModeOptions(weapon);
+      if (!this.player || !weapon || modes.length < 2) return false;
+      const current = this.playerFireModeForWeapon(weapon);
+      const next = modes[(Math.max(0, modes.indexOf(current)) + 1) % modes.length];
+      this.player.fireModes = this.player.fireModes || {};
+      this.player.fireModes[weapon.id] = next;
+      this.player.fireMode = next;
+      this.player.rifleCooldown = Math.min(this.player.rifleCooldown || 0, 0.08);
+      return true;
     },
     updatePlayerFireHoldIntent(weapon, wantsUse) {
       const player = this.player;

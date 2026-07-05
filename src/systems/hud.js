@@ -587,7 +587,11 @@
         kamikazeDrone: "FPV"
       };
       const ammo = this.weaponAmmoText(player, weapon);
-      return `${labels[weapon?.id] || "WPN"} ${ammo}`;
+      const fireMode = weapon?.type === "gun" && Array.isArray(weapon.fireModes) && weapon.fireModes.length > 1
+        ? player?.fireModes?.[weapon.id] || player?.fireMode || weapon.defaultFireMode || ""
+        : "";
+      const fireModeShort = fireMode === "auto" ? "A" : fireMode === "semi" ? "S" : "";
+      return `${labels[weapon?.id] || "WPN"} ${fireModeShort ? `${fireModeShort} ` : ""}${ammo}`;
     }
 
     updateTankWeapons(tank) {
@@ -799,6 +803,19 @@
         ? game?.reconDroneDesignationOptions?.() || []
         : [];
       const reconDroneReady = weapon?.id === "sniper" && Boolean(game?.activeReconDroneForSniper?.());
+      if (
+        weapon?.type === "gun" &&
+        Array.isArray(weapon.fireModes) &&
+        weapon.fireModes.length > 1 &&
+        !(ammo !== null && ammo <= 0)
+      ) {
+        this.setInfantryWeaponReadoutCompact(false);
+        const mode = game?.playerFireModeForWeapon?.(weapon) || player.fireModes?.[weapon.id] || player.fireMode || weapon.defaultFireMode || "";
+        const modeLabel = mode === "semi" ? "SEMI" : "AUTO";
+        ui.weaponState.textContent = `${modeLabel} ${this.weaponAmmoText(player, weapon)} · B`;
+        ui.reloadBar.style.width = `${readyPct * 100}%`;
+        return;
+      }
       if (!weapon) {
         this.clearStandardInfantryReadout();
       } else if (ammo !== null && ammo <= 0) {
