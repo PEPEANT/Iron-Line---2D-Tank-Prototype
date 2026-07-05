@@ -38,6 +38,8 @@ These files are allowed temporarily because they already exist, but they should 
 It currently:
 
 - fails when hotspot files exceed their line budget
+- fails when a ratcheted hotspot grows more than `tools/hotspot-baseline.json` + 40 lines
+- lowers that baseline automatically when a watched hotspot shrinks
 - fails when non-hotspot files exceed the default budget
 - warns on files above 1000 lines
 - warns on class methods over 220 lines

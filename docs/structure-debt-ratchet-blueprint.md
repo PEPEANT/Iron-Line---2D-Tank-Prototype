@@ -1,6 +1,6 @@
 # 구조 부채 래칫 설계도 (Structure Debt Ratchet Blueprint)
 
-작성: 2026-07-04. 상태: **설계도만. 구현 금지 — R1 게이트 완주 후, R2 첫 기능 착수 전에 구현한다 (R2 진입 조건 G0).**
+작성: 2026-07-04. 상태: **G0 구현 완료(2026-07-05). R2 기능 착수 전 안전장치로 적용됨.**
 목적: 심장부 파일 비대가 재발하지 않게, 경고를 **한 방향 잠금(래칫)** 으로 바꾼다. 파일은 줄어들 수는 있어도 다시 자랄 수는 없게.
 
 ## 1. 현황 (2026-07-04 실측, `npm run check` 출력 기준)
@@ -29,7 +29,7 @@
 감시 대상 (1차): 1,000줄 이상 전부 = main.js, infantry-ai.js, styles.css, renderer.js, map-editor.js, hud-admin-ui.js, combat.js, room-registry.js, hud.js, commander-ai.js, session-flow.js, tank.js, game-session-state.js.
 메서드 래칫 (2차, 선택): 220줄+ 메서드 목록도 baseline에 기록 — 현재 유일한 위반 `infantry-ai.js update()` 232줄. 새 220줄+ 메서드 등장 시 실패.
 
-구현 크기: 스크립트 ~80줄 + baseline JSON 1개. 예상 1세션(1~2시간). 게임플레이 코드 0줄 — 위험 없음.
+구현 결과(2026-07-05): `tools/hotspot-baseline.json` + `tools/check-code-health.cjs` 래칫 검사. 게임플레이 코드 0줄.
 
 ## 3. 기능 → 선행 이사 지도 (R2 기능은 이 표 없이 착수 금지)
 
@@ -53,6 +53,5 @@
 
 ## 5. 구현 시점과 검증
 
-- 구현: R1 게이트 G1~G4 전부 닫힌 직후 1세션. R2 어떤 기능보다 먼저 (= R2 게이트 G0).
-- 검증: (1) baseline 생성 후 `npm run check` 통과, (2) 핫스팟에 50줄 더미 추가 → check 실패 확인 → 되돌림, (3) 파일 줄인 뒤 check → baseline 자동 하향 확인.
-- 이 문서는 설계도이므로 지금 리포에 코드 변화 없음.
+- 구현: 2026-07-05 완료. R2 어떤 기능보다 먼저 적용한 G0 안전장치.
+- 검증: (1) baseline 생성 후 `npm run check` 통과, (2) 핫스팟에 50줄 더미 추가 → check 실패 확인 → 되돌림. 파일 하향 시 baseline 자동 하향 갱신은 `check-code-health.cjs`에 구현됨.

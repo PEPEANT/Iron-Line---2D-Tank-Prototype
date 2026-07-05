@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
+const hotspotBaselinePath = path.join(__dirname, "hotspot-baseline.json");
 
 const trackedRoots = ["src", "server", "tools"];
 const trackedTopLevelFiles = [
@@ -39,6 +40,7 @@ const warningLineThreshold = 1000;
 const warningByteThreshold = 100 * 1024;
 const methodWarningLines = 220;
 const maxMethodWarnings = 12;
+const defaultRatchetAllowanceLines = 40;
 const byteBudgets = new Map([
   ["src/main.js", 180 * 1024],
   ["src/systems/hud.js", 120 * 1024],
@@ -84,6 +86,31 @@ function lineCount(file) {
   const text = fs.readFileSync(file, "utf8");
   if (!text) return 0;
   return text.split(/\r?\n/).length;
+}
+
+function readHotspotBaseline() {
+  if (!fs.existsSync(hotspotBaselinePath)) {
+    return { allowanceLines: defaultRatchetAllowanceLines, files: {} };
+  }
+  const baseline = JSON.parse(fs.readFileSync(hotspotBaselinePath, "utf8"));
+  return {
+    allowanceLines: Number.isFinite(baseline.allowanceLines)
+      ? baseline.allowanceLines
+      : defaultRatchetAllowanceLines,
+    files: baseline.files && typeof baseline.files === "object" ? baseline.files : {}
+  };
+}
+
+function writeHotspotBaseline(baseline) {
+  const sortedFiles = {};
+  for (const file of Object.keys(baseline.files).sort()) {
+    sortedFiles[file] = baseline.files[file];
+  }
+  const payload = {
+    allowanceLines: baseline.allowanceLines,
+    files: sortedFiles
+  };
+  fs.writeFileSync(hotspotBaselinePath, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function braceDelta(line) {
@@ -144,6 +171,8 @@ function longMethods(file) {
 }
 
 const files = trackedFiles();
+const hotspotBaseline = readHotspotBaseline();
+let hotspotBaselineLowered = false;
 const errors = [];
 const warnings = [];
 const methodWarnings = [];
@@ -155,6 +184,18 @@ for (const file of files) {
   const bytes = fs.statSync(file).size;
   const budget = lineBudgets.get(rel) || defaultBudgets[ext];
   const byteBudget = byteBudgets.get(rel);
+  const ratchetBaseline = hotspotBaseline.files[rel];
+
+  if (Number.isFinite(ratchetBaseline)) {
+    const ratchetLimit = ratchetBaseline + hotspotBaseline.allowanceLines;
+    if (lines > ratchetLimit) {
+      errors.push(`${rel}: ${lines} lines exceeds ratchet ${ratchetBaseline} + ${hotspotBaseline.allowanceLines}. Move new code into a focused module.`);
+    } else if (lines < ratchetBaseline) {
+      hotspotBaseline.files[rel] = lines;
+      hotspotBaselineLowered = true;
+      warnings.push(`${rel}: ratchet lowered from ${ratchetBaseline} to ${lines} lines.`);
+    }
+  }
 
   if (lines > budget) {
     errors.push(`${rel}: ${lines} lines exceeds budget ${budget}. Move new code into a focused module.`);
@@ -184,6 +225,8 @@ if (methodWarnings.length) {
     console.warn(`- ... ${methodWarnings.length - maxMethodWarnings} more long methods`);
   }
 }
+
+if (hotspotBaselineLowered) writeHotspotBaseline(hotspotBaseline);
 
 if (errors.length) {
   console.error("Code health budget failures:");
