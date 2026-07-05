@@ -20,6 +20,7 @@
 - 슬롯: `assets/audio/<id>.ogg|mp3` — 파일명 규약: `explosion-he`, `explosion-drone`, `tank-fire`, `rifle-fire`, `mg-fire`, `hit-metal`. 파일 없으면 무음 (기존 무기 PNG와 같은 드롭인 규약).
 - 소스: Kenney.nl / freesound CC0에서 유저가 직접 받아서 폴더에 넣기. **AI가 파일을 만들 수 없으니 이 6개 파일은 유저 숙제.**
 - 호출 지점: `combat.js` resolveImpact/fireRifle/fireTankShell 부근 각 1줄.
+- 2026-07-05 Codex 구현: `src/systems/audio.js`를 추가하고 `index.html`에 연결했다. WebAudio unlock, 카메라 거리 감쇠, 동시 재생 8개 제한, `.ogg`→`.mp3` 순서 드롭인 로딩, 파일 없음 무음 폴백을 구현했다. 호출은 보병 화기, 전차 주포, 고폭/RPG/수류탄 폭발, 드론 폭발, 장갑 금속 피격 지점에만 얇게 추가했다. 실제 음원 파일은 아직 없다.
 
 ### ② 폭발 시각 업그레이드 (절차적, 에셋 불필요)
 `combat.js` 폭발 생성 + `renderer.js` drawExplosions 수정:

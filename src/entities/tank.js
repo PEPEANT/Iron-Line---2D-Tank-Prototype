@@ -833,6 +833,7 @@
         color: "rgba(255, 226, 160, 0.9)"
       });
       this.emitMuzzleBlast(game, muzzleX, muzzleY, shellAngle, ammo);
+      IronLine.audio?.play?.("tank-fire", { game, x: muzzleX, y: muzzleY, volume: ammo.id === "he" ? 0.95 : 0.82 });
 
       this.fireCooldown = 0.18;
       this.loadedAmmo = null;

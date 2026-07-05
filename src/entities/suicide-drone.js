@@ -614,6 +614,7 @@
         core: false,
         smoke: true
       });
+      IronLine.audio?.playExplosion?.(game, this, "drone");
       game.effects.scorchMarks?.push({
         x: this.x,
         y: this.y,

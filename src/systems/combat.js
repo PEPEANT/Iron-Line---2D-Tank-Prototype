@@ -266,7 +266,7 @@
   }
 
   function emitDirectArmorFeedback(game, tank, impactX, impactY, profile, ammo) {
-    if (!game?.effects || !tank || profile.zone === "light") return;
+    if (!game?.effects || !tank || profile.zone === "light") return; IronLine.audio?.playMetalHit?.(game, { x: impactX, y: impactY }, { volume: ammo?.id === "rpg" ? 0.62 : 0.46 });
 
     const sparks = game.effects.blastSparks || (game.effects.blastSparks = []);
     const rings = game.effects.blastRings || (game.effects.blastRings = []);
@@ -464,7 +464,7 @@
         life: 0.065,
         maxLife: 0.065,
         color: "rgba(255, 236, 170, 0.45)"
-      }, 180);
+      }, 180); if (options.tank && Math.random() < 0.38) IronLine.audio?.playMetalHit?.(game, { x, y }, { volume: heavy ? 0.34 : 0.24 });
       return;
     }
 
@@ -546,7 +546,7 @@
       color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.92)" : "rgba(255, 176, 171, 0.92)"),
       width: options.tracerWidth || weapon.visualWidth || 2,
       length: options.tracerLength || weapon.visualLength || 18
-    });
+    }); IronLine.audio?.playWeaponFire?.(game, shooter, weapon);
 
     awarenessSignals.notifyGunfireSuspicion?.(game, shooter, startX, startY, finalEndX, finalEndY, weapon, { hitTarget: hit && !firstBlock ? target : null });
     if (finalBodyBlock) applyLineSuppression(game, shooter, startX, startY, finalEndX, finalEndY, weapon, target.team ?? null);
@@ -613,7 +613,7 @@
       color: options.tracerColor || (shooter.team === TEAM.BLUE ? "rgba(177, 220, 255, 0.86)" : "rgba(255, 176, 171, 0.86)"),
       width: options.tracerWidth || weapon.visualWidth || 2,
       length: options.tracerLength || weapon.visualLength || 18
-    });
+    }); IronLine.audio?.playWeaponFire?.(game, shooter, weapon);
 
     if (impact.tank) {
       if (impact.wreck) applySmallArmsWreckHit(game, shooter, impact.tank, impact.x, impact.y, weapon);
@@ -1129,7 +1129,7 @@
       return;
     }
 
-    if (ammo.id === "he" || ammo.id === "grenade" || ammo.id === "rpg") {
+    if (ammo.id === "he" || ammo.id === "grenade" || ammo.id === "rpg") { IronLine.audio?.playExplosion?.(game, { x, y }, ammo.id);
       if ((ammo.id === "rpg" || ammo.id === "he") && hitTank && !friendlyVehicle) {
         const directBase = ammo.id === "he"
           ? ammo.directTankDamage || ammo.damage * 0.62

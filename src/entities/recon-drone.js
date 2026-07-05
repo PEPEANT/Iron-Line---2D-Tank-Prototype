@@ -297,6 +297,7 @@
         maxLife: 0.22,
         color: "rgba(155, 220, 255, 0.7)"
       });
+      IronLine.audio?.playExplosion?.(game, this, "drone", { volume: 0.42 });
 
       game.effects.blastSparks?.push({
         x: this.x,
