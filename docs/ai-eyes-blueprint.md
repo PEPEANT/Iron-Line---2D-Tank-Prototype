@@ -3,6 +3,14 @@
 작성: 2026-07-04, Fable 5. 배경: docs/ai-behavior-observability-plan.md. 이 문서는 그 계획의 **구현 지시서**다.
 산출물 3개: (A) 행동 인구조사 프로브 (B) 리플레이 뷰어 (C) npm 별칭. 순서대로 만들 것. A만 있어도 가치 있음.
 
+## 구현/검증 상태 (2026-07-05 Codex)
+
+- 산출물 A/B/C는 이미 존재 확인: `tools/check-behavior-census.cjs`, `tools/behavior-census-report.cjs`, `tools/replay-viewer.html`, `package.json`의 `npm run census`.
+- 설계도 보완점도 반영되어 있다: `fireRifleAtPoint`, `throwGrenade`, `tryThrowGrenade`, `enterProne`/`clearProne`, fire-move 진단, 2단계 로비(`#entryMainGuest`→`#entryEnterButton`→`#deploymentStart`) 진입을 모두 다룬다.
+- 검증 실행: `npm run census` → `reports/playtests/behavior-census-20260705092057/` 생성. 360 frames, 212 events, report/result 출력 확인.
+- 이번 계측 결과: point shot 0, fireMoveOk 0, teamworkRatio 0, grenade ok 1, proneEnter 12. 도구 실패가 아니라 현재 AI 행동 병목을 드러낸 값으로 본다.
+- 다음 작업은 census 구현이 아니라 결과 해석/행동 수정이다. 우선순위 후보: 지원사격 `fireRifleAtPoint` 실제 발동 조건, fire-move `no-support-source`, 수류탄 `no-ammo`/`no-visible-or-usable-report` 병목.
+
 ## 공통 원칙
 - 게임 코드는 **수정하지 않는다**. 모든 계측은 런타임 후킹(프로토타입 메서드 래핑)으로 한다. 전례: `tools/check-suppression-flow.cjs`가 이미 이 패턴 사용.
 - 하네스 골격은 `tools/check-battlefield-tempo.cjs`를 복사해서 시작 (정적 서버 스폰 → 헤드리스 크롬 스폰 → CDP Runtime.evaluate로 페이지 시나리오 주입 → JSON 회수 → reports/ 저장). 포트만 4210/9250으로 변경.
