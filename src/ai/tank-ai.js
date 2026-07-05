@@ -154,9 +154,12 @@
       this.targetPoint = null;
       this.targetTank = attacker;
       this.aimTurretAtPoint(attacker, dt, 0.9);
-      this.driveAwayFrom(dt, attacker.x, attacker.y, 0.82, { allowReverse: true });
-      this.updateMachineGun(dt);
-      this.navigation.recordMovement(dt, beforeX, beforeY, true);
+      const contact = this.tank.infantryAssaultContact?.(attacker, this.game, assault.slotIndex);
+      const attached = Boolean(assault.attached || contact?.attached || assault.progress > 0.2);
+      if (assault.progress >= 3) this.driveAwayFrom(dt, attacker.x, attacker.y, 0.82, { allowReverse: true });
+      else this.applyDrive(dt, 0, 0);
+      if (!attached) this.updateMachineGun(dt);
+      this.navigation.recordMovement(dt, beforeX, beforeY, attached);
       this.updateDebugState(null, { mode: "repel-assault", target: attacker }, attacker);
       return true;
     }

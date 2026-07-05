@@ -10,7 +10,17 @@
   const originalClearProne = InfantryAI.prototype.clearProne;
   const originalUpdate = InfantryAI.prototype.update;
   const supportState = new Set(["suppressed", "prone-fire", "support-fire", "support-suppress-report", "support-align"]);
-  const postureBlockedStates = new Set(["mounted-transport", "board-transport", "reboard-transport", "repair-tank", "grenade", "grenade-aim"]);
+  const postureBlockedStates = new Set([
+    "mounted-transport",
+    "board-transport",
+    "reboard-transport",
+    "repair-tank",
+    "grenade",
+    "grenade-aim",
+    "tank-assault-approach",
+    "tank-assault-climb",
+    "tank-assault-plant"
+  ]);
 
   function heldProneDuration(ai, options = {}) {
     const role = options.role || ai.squadRole?.() || "";

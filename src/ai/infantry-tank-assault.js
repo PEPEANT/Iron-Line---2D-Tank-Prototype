@@ -27,22 +27,24 @@
       }
 
       const assault = tank.infantryAssault;
-      const slot = tank.assaultSlotPoint?.(this.unit, this.game, assault.slotIndex);
+      const contact = tank.infantryAssaultContact?.(this.unit, this.game, assault.slotIndex);
+      const slot = contact?.slot || tank.assaultSlotPoint?.(this.unit, this.game, assault.slotIndex);
       if (!slot || !this.pointPassable(slot.x, slot.y, this.unit.radius + 3)) {
         tank.cancelInfantryAssault?.("blocked");
         this.tankAssaultTarget = null;
         return false;
       }
 
-      const distance = distXY(this.unit.x, this.unit.y, slot.x, slot.y);
+      const distance = contact?.distanceToSlot ?? distXY(this.unit.x, this.unit.y, slot.x, slot.y);
+      const attached = Boolean(contact?.attached || distance <= config("tankAssaultAttachRange", 24));
       this.clearProne(1.1, true);
-      this.state = distance <= config("tankAssaultAttachRange", 24)
+      this.state = attached
         ? assault.progress >= 3 ? "tank-assault-plant" : "tank-assault-climb"
         : "tank-assault-approach";
       this.target = tank;
       this.faceContact(tank, dt);
 
-      if (distance > config("tankAssaultAttachRange", 24)) {
+      if (!attached) {
         this.moveToAssaultSlot(dt, slot);
         this.recordMovement(dt, beforeX, beforeY, slot);
         this.updateDebug(slot);
@@ -76,7 +78,9 @@
 
     canContinueTankAssault(tank) {
       if (!tank?.alive || tank.team === this.unit.team || !this.unit.alive || this.unit.inVehicle) return false;
-      if (this.unit.suppression > 94) return false;
+      const assault = tank.infantryAssault;
+      const committedAssault = assault?.attacker === this.unit && (assault.attached || assault.progress > 0.2);
+      if (this.unit.suppression > 94 && !committedAssault) return false;
       return distXY(this.unit.x, this.unit.y, tank.x, tank.y) <= (tank.radius || 38) + 132;
     },
 

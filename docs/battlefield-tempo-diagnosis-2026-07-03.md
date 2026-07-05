@@ -262,3 +262,22 @@ node tools/check-battlefield-tempo.cjs
 - prone ratio는 0.20/0.11로 R1 재측정 목표선(>0.10)을 통과했다.
 - 첫 사망 after contact는 6.0s/4.5s로 여전히 8초 목표에는 못 미친다. 차량/초기 접촉 문제는 별도 과제로 유지한다.
 - 침대전투 prone-only는 줄었지만 0.291로 아직 남아 있다. 다음 단계에서 이 수치를 더 줄일 경우 전장 deaths/min이 다시 4 이하로 떨어질 수 있으므로, 더 강한 엄폐 이동보다 "반응 후 다시 사격/진격으로 돌아오는 조건"을 먼저 봐야 한다.
+
+## Codex 탱크 강습 버그 수정 후 템포 확인 (2026-07-05)
+
+변경 범위:
+- `npm run tank:assault` 전용 프로브를 추가해 전차 강습의 예약→접근→climb→plant 진행률을 계측했다.
+- 실패 원인은 정지 상태기가 아니라 전차 AI `repel-assault`, 제압 엎드림 래퍼, 부착 초기 기관총 사격이 강습 진행을 선점하는 조합이었다.
+- 수정 후 전용 프로브 `reports/playtests/tank-assault-20260705090812/`에서 `repel-ai` 시나리오도 maxProgress 7.8, progress3=39.39s, progress7=43.39s로 통과했다.
+
+`npm run tempo` 2회 결과:
+
+| 런 | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | 판정 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705091203/` | 4.3 | 36s | 2.80 | 0.03 | -4.5s | 사망/엎드림 목표 미달, 선제 사망 측정 편차 재발 |
+| 2 | `reports/playtests/battlefield-tempo-20260705091521/` | 7.9 | 69s | 11.50 | 0.11 | 6.0s | 사망/엎드림 목표 통과, 생존 p50은 긴 편 |
+
+판정:
+- 탱크 강습 버그는 전용 프로브 기준으로 재현 후 수정 완료. 정지 전차, 먼 슬롯 접근, 부착 시작, 전차 AI 반격 시나리오가 모두 진행률을 낸다.
+- 전장 tempo는 4.3/7.9로 1회는 목표 6~12 미달, 1회는 통과했다. prone ratio도 0.03/0.11로 같은 편차가 남아 있다.
+- 이번 세션은 탱크 강습 버그 수정 범위이므로 tempo 편차를 즉석 튜닝하지 않는다. deaths/min/prone 안정화는 기존 D2/차량 초기 접촉 과제로 유지한다.

@@ -352,6 +352,21 @@
       };
     }
 
+    infantryAssaultContact(attacker = null, game = null, slotIndex = null) {
+      const slot = this.assaultSlotPoint(attacker, game, slotIndex);
+      const distanceToSlot = distXY(attacker?.x || 0, attacker?.y || 0, slot.x, slot.y);
+      const distanceToTank = distXY(attacker?.x || 0, attacker?.y || 0, this.x, this.y);
+      const attachRange = 24;
+      const movingSlotRange = 44;
+      const hullContactRange = (this.radius || 38) + (attacker?.radius || 10) + 28;
+      return {
+        slot,
+        distanceToSlot,
+        distanceToTank,
+        attached: distanceToSlot <= attachRange || (distanceToSlot <= movingSlotRange && distanceToTank <= hullContactRange)
+      };
+    }
+
     canReserveInfantryAssault(attacker) {
       if (!this.alive || this.destructionPending || !attacker?.alive || attacker.inVehicle) return false;
       if (attacker.team === this.team) return false;
@@ -405,16 +420,17 @@
         return;
       }
 
-      const slot = this.assaultSlotPoint(attacker, game, state.slotIndex);
-      const distanceToSlot = distXY(attacker.x, attacker.y, slot.x, slot.y);
-      const distanceToTank = distXY(attacker.x, attacker.y, this.x, this.y);
-      if (distanceToTank > (this.radius || 38) + 130 || attacker.suppression > 96) {
+      const contact = this.infantryAssaultContact(attacker, game, state.slotIndex);
+      const distanceToSlot = contact.distanceToSlot;
+      const distanceToTank = contact.distanceToTank;
+      const committedAssault = state.attached || state.progress > 0.2;
+      if (distanceToTank > (this.radius || 38) + 130 || (!committedAssault && attacker.suppression > 96)) {
         this.cancelInfantryAssault("broken");
         return;
       }
 
       const shakenOff = Math.abs(this.speed || 0) > 78 || Math.abs(this.turnVelocity || 0) > 0.82;
-      if (distanceToSlot <= 24) {
+      if (contact.attached) {
         state.attached = true;
         state.phase = state.progress >= 7 ? "disabled" : state.progress >= 3 ? "planting" : "climbing";
         state.lastAttachedAt = game?.matchTime || state.lastAttachedAt;
@@ -425,7 +441,7 @@
         state.progress = Math.max(0, state.progress - dt * 0.9);
       }
 
-      if (shakenOff) state.progress = Math.max(0, state.progress - dt * 0.9);
+      if (shakenOff && !state.attached) state.progress = Math.max(0, state.progress - dt * 0.9);
       if (state.progress <= 0 && distanceToTank > (this.radius || 38) + 92) {
         this.cancelInfantryAssault("lost");
         return;
