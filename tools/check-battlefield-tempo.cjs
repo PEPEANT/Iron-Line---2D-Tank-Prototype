@@ -151,10 +151,22 @@ new Promise((resolve, reject) => {
       }
       return { kind: "blast:" + ammoId, team: team || "", weaponId: ammoId };
     };
-    const classifyDamageSource = (source, unit) => {
-      const area = areaDamageByUnit.get(idFor(unit));
-      if (!source && area) return area.source;
+    const classifyDamageSource = (source, unit, amount = 0) => {
+      const unitId = idFor(unit);
+      const area = areaDamageByUnit.get(unitId);
+      const at = Math.round(((Date.now() - startWall) / 1000) * 10) / 10;
+      if (!source && area && at - area.at <= 0.35) {
+        areaDamageByUnit.delete(unitId);
+        return area.source;
+      }
+      if (area && at - area.at > 0.35) areaDamageByUnit.delete(unitId);
+      if (!source && Number(amount) >= 40) {
+        return { kind: "direct-heavy-or-shell", team: "", weaponId: "" };
+      }
       const threat = source || unit?.lastThreat || null;
+      if (!source && threat?.team && threat.team === unit?.team) {
+        return { kind: "unknown", team: "" };
+      }
       const vehicle = threat?.sourceVehicle || (threat?.vehicleType ? threat : null);
       if (vehicle) {
         return {
@@ -187,7 +199,7 @@ new Promise((resolve, reject) => {
         const hpAfter = Number(this.hp) || 0;
         const unitId = idFor(this);
         if (unitId && aliveBefore && amount > 0) {
-          const sourceInfo = classifyDamageSource(source, this);
+          const sourceInfo = classifyDamageSource(source, this, amount);
           const event = {
             unitId,
             team: this.team || "",
