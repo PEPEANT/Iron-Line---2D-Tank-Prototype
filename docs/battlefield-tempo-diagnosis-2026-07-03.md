@@ -382,3 +382,27 @@ Result:
 Judgment:
 - Not stable enough to keep. Code was reverted before commit.
 - Next D2 work should not broadly unlock `hold-wall`. Use the new no-support breakdown and add narrower role/mode diagnostics before changing squad tactical modes.
+
+## Codex post-blast prone-fire escape (2026-07-05)
+
+Change scope:
+- Non-support `rifle` units that are already stuck in `prone-fire` after a recent blast get one late spread/cover retry within 3.2s of that blast.
+- This does not change support weapons, damage, suppression gain/recovery, vehicle behavior, or normal prone behavior outside recent blast windows.
+
+Bed-combat check:
+
+| Run | Report | Windows | Prone-only ratio | No-response ratio | First response p50/p90 | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Diagnostic before behavior change | `reports/playtests/bed-combat-census-20260705115206/` | 37 | 0.189 | 0 | 0.23s / 6.77s | prone-only was rifle prone-fire, long p90 |
+| After narrow escape rule | `reports/playtests/bed-combat-census-20260705115723/` | 37 | 0.162 | 0 | 0.25s / 0.27s | long stuck window reduced |
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705120040/` | 6.7 | 48s | 14.69 | 0.18 | 10.5s | deaths/prone pass |
+| 2 | `reports/playtests/battlefield-tempo-20260705120352/` | 5.9 | 38s | 10.46 | 0.12 | 2.0s | deaths borderline under 6 by 0.1, prone pass |
+
+Judgment:
+- Keep the narrow escape rule for now: it reduces the observed stuck-prone window without deleting prone or broadly buffing cover movement.
+- Residual risk remains in tempo variance. The second run is just under the 6 deaths/min target, so the next D2 change should avoid adding more defensive movement until another sample or manual play confirms the feel.

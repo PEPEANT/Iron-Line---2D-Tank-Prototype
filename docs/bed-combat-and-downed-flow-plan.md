@@ -197,3 +197,11 @@
 - Result: 8 controlled blasts, 37 blast-unit windows, `blast:cover` 22, `blast:fallback` 5, `blast:spread` 3, `blast:prone-only` 7. `proneOnlyRatio` = 0.189, `noResponseRatio` = 0.
 - Prone-only split: all 7 were `rifle`; classes were infantry 4 and engineer 3. State counts inside those windows were only `prone-fire` (176 samples), movement band was `0-12` for all 7, initial suppression was `50-75` for all 7, and final suppression was `50-75` for 4 / `75+` for 3.
 - Interpretation: the remaining issue is not missing blast recognition. The AI responds, but some rifle infantry/engineer units stay in `prone-fire` under medium-to-high suppression without transitioning to spread/cover/fallback inside the 10s window. Next behavior work should be a narrow prone-fire exit/transition rule for non-support rifle units, not a broad prone deletion or cover buff.
+
+## 2026-07-05 Post-blast prone-fire escape
+
+- `src/ai/infantry-blast-response.js` now keeps a short post-blast grace window for non-support `rifle` units that are already stuck in `prone-fire` with suppression >= 50. Those units get one late spread/cover retry within 3.2s of the blast, then the retry is spent.
+- Scope guard: support weapons, support-role units, vehicles, damage, suppression thresholds, and normal prone behavior outside recent blast windows were not changed.
+- Verification run: `reports/playtests/bed-combat-census-20260705115723/`.
+- Result: 8 controlled blasts, 37 blast-unit windows, `blast:cover` 28, `blast:fallback` 1, `blast:spread` 2, `blast:prone-only` 6. `proneOnlyRatio` = 0.162, `noResponseRatio` = 0, first response p50/p90 = 0.25s / 0.27s.
+- Interpretation: prone-only did not disappear, but the long stuck window improved. Prone-only state samples dropped from 176 to 53 in the comparable diagnostic split, so the remaining issue is smaller and still confined to rifle infantry/engineer under high suppression.

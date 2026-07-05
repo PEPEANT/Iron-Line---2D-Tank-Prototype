@@ -9,6 +9,8 @@
 
   const RESPONSE_SECONDS = 0.42;
   const THREAT_TTL_SECONDS = 0.9;
+  const POST_BLAST_PRONE_ESCAPE_SECONDS = 3.2;
+  const POST_BLAST_PRONE_ESCAPE_HOLD = 0.85;
 
   function nowFor(game) {
     if (Number.isFinite(game?.matchTime)) return game.matchTime;
@@ -57,8 +59,21 @@
       const threat = this.lastBlastThreat;
       if (!threat) return false;
       const at = nowFor(this.game);
-      if (at > (threat.expiresAt || 0)) return false;
+      if (at <= (this.blastProneEscapeSuppressUntil || 0)) return true;
+      if (at > (threat.expiresAt || 0)) return this.shouldPostBlastProneEscape?.(threat, at);
       return (threat.pressure || 0) >= 0.62 || Boolean(threat.repeated);
+    },
+
+    shouldPostBlastProneEscape(threat, at = nowFor(this.game)) {
+      if (!threat || threat.proneEscapeUsed) return false;
+      const threatAt = Number(threat.at) || 0;
+      if (!threatAt || at - threatAt > POST_BLAST_PRONE_ESCAPE_SECONDS) return false;
+      if (!this.unit?.alive || !this.unit.isProne || this.state !== "prone-fire") return false;
+      if ((Number(this.unit.suppression) || 0) < 50) return false;
+      const weapon = this.weapon?.();
+      const role = this.squadRole?.() || this.unit.squadRole || "";
+      if (weapon?.id !== "rifle" || role === "support" || this.isSupportWeapon?.(weapon)) return false;
+      return true;
     },
 
     noteBlastThreat(threat) {
@@ -78,25 +93,38 @@
       };
       this.blastResponseTarget = null;
       this.blastResponseUntil = 0;
+      this.blastProneEscapeSuppressUntil = 0;
     },
 
     handleBlastResponse(dt, order, contact, tankThreat, beforeX, beforeY) {
       const threat = this.lastBlastThreat;
       const at = nowFor(this.game);
-      if (!threat || at > (threat.expiresAt || 0)) {
+      const threatAge = at - (Number(threat?.at) || 0);
+      const activeThreat = threat && at <= (threat.expiresAt || 0);
+      const lateProneEscape = this.shouldPostBlastProneEscape?.(threat, at);
+      const continuingProneEscape = threat && at <= (this.blastProneEscapeSuppressUntil || 0);
+      if (!threat || (!activeThreat && !lateProneEscape && !continuingProneEscape && threatAge > POST_BLAST_PRONE_ESCAPE_SECONDS)) {
         this.lastBlastThreat = null;
         this.blastResponseTarget = null;
         this.blastResponseUntil = 0;
+        this.blastProneEscapeSuppressUntil = 0;
         return false;
       }
+      if (!activeThreat && !lateProneEscape && !continuingProneEscape) return false;
       if (!order?.point || !this.unit?.alive || this.unit.inVehicle || (this.unit.hitReactTimer || 0) > 0.18) return false;
 
       if (!this.blastResponseTarget || at > (this.blastResponseUntil || 0)) {
         const selected = this.selectBlastResponseTarget(threat, order, contact, tankThreat);
+        if (!selected?.target && lateProneEscape) threat.proneEscapeUsed = true;
         if (!selected?.target) return false;
         this.blastResponseKind = selected.kind;
         this.blastResponseTarget = selected.target;
-        this.blastResponseUntil = at + RESPONSE_SECONDS;
+        this.blastResponseUntil = at + (lateProneEscape ? POST_BLAST_PRONE_ESCAPE_HOLD : RESPONSE_SECONDS);
+        if (lateProneEscape) {
+          threat.proneEscapeUsed = true;
+          this.blastProneEscapeSuppressUntil = at + POST_BLAST_PRONE_ESCAPE_HOLD;
+          this.unit.proneHoldTimer = 0;
+        }
       }
 
       const moveTarget = this.blastResponseTarget;
