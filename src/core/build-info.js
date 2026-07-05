@@ -45,7 +45,8 @@
     badge.id = "buildInfoBadge";
     badge.className = "build-info-badge";
     badge.setAttribute("aria-label", "build information");
-    const settings = document.querySelector(".settings-details .settings-section.compact") ||
+    const settings = document.getElementById("settingsDeveloperSection") ||
+      document.querySelector(".settings-details .settings-section.compact") ||
       document.querySelector(".settings-list");
     const adminHead = document.querySelector(".admin-head > div");
     if (settings) settings.appendChild(badge);

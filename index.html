@@ -45,37 +45,19 @@
         <div class="settings-head">
           <div>
             <strong id="settingsTitle">설정</strong>
-            <span>플레이 중 필요한 항목만 빠르게 바꿉니다.</span>
           </div>
           <button type="button" id="settingsClose" aria-label="설정 닫기">&times;</button>
         </div>
         <div class="settings-list">
-          <div class="settings-section">
-            <span class="settings-section-title">기본</span>
-            <label class="settings-toggle">
-              <input type="checkbox" data-mobile-controls>
-              <span>모바일 조작 UI</span>
-              <small>터치</small>
-            </label>
-            <label class="settings-toggle">
-              <input type="checkbox" data-debug-option="tacticalMap">
-              <span>전술 지도</span>
-              <small>AI</small>
-            </label>
-            <label class="settings-toggle">
-              <input type="checkbox" data-debug-option="performance">
-              <span>성능 표시</span>
-              <small>P</small>
-            </label>
-          </div>
-
-          <div class="settings-actions">
-            <button type="button" class="settings-action" id="settingsFullscreen">전체화면 켜기</button>
-            <button type="button" class="settings-action secondary" id="settingsMainMenu">메인메뉴로 가기</button>
-          </div>
-
           <details class="settings-details">
-            <summary>조작법</summary>
+            <summary>조작</summary>
+            <div class="settings-section compact">
+              <label class="settings-toggle">
+                <input type="checkbox" data-mobile-controls>
+                <span>모바일 조작 UI</span>
+                <small>터치</small>
+              </label>
+            </div>
             <div class="control-help">
               <strong>PC</strong>
               <p>WASD 이동 · F 탑승/하차 · E 역할/드론 · 좌클릭 발사 · 우클릭 조준 · 1 철갑 · 2 고폭 · 3 연막 · Tab 점수판</p>
@@ -85,8 +67,31 @@
           </details>
 
           <details class="settings-details">
-            <summary>개발자 표시</summary>
+            <summary>그래픽</summary>
             <div class="settings-section compact">
+              <label class="settings-toggle">
+                <input type="checkbox" data-debug-option="tacticalMap">
+                <span>전술 지도</span>
+                <small>AI</small>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-debug-option="performance">
+                <span>성능 표시</span>
+                <small>P</small>
+              </label>
+            </div>
+          </details>
+
+          <details class="settings-details">
+            <summary>화면</summary>
+            <div class="settings-actions">
+              <button type="button" class="settings-action" id="settingsFullscreen">전체화면 켜기</button>
+            </div>
+          </details>
+
+          <details class="settings-details">
+            <summary>개발자</summary>
+            <div class="settings-section compact" id="settingsDeveloperSection">
               <label class="settings-toggle">
                 <input type="checkbox" data-debug-option="ai">
                 <span>AI 판단 표시</span>
@@ -99,6 +104,11 @@
               </label>
             </div>
           </details>
+
+          <div class="settings-actions settings-footer-actions">
+            <button type="button" class="settings-action secondary" id="settingsMainMenu">메인화면으로 가기</button>
+            <button type="button" class="settings-action secondary" id="settingsExit">종료하기</button>
+          </div>
         </div>
       </div>
     </section>
@@ -243,6 +253,30 @@
             <h1>전투 준비</h1>
           </div>
           <button type="button" class="deployment-map-toggle" id="deploymentMapToggle">작전 지도 보기</button>
+          <details class="deployment-collapse deployment-pick-section">
+            <summary class="deployment-collapse-summary">
+              <span class="deployment-section-label">맵 선택</span>
+              <span class="deployment-collapse-value" data-deployment-summary="map">폐허 교차로</span>
+            </summary>
+            <div class="deployment-map-select">
+              <button type="button" class="deployment-map-choice active" data-map-id="ruined-crossing">
+                <strong>폐허 교차로</strong>
+                <small>현재 맵</small>
+              </button>
+              <button type="button" class="deployment-map-choice" data-map-id="harbor-lockdown" disabled>
+                <strong>항구 봉쇄선</strong>
+                <small>준비중</small>
+              </button>
+              <button type="button" class="deployment-map-choice" data-map-id="city-ashes" disabled>
+                <strong>도심 잔해구</strong>
+                <small>준비중</small>
+              </button>
+              <button type="button" class="deployment-map-choice" data-map-id="village-checkpoint" disabled>
+                <strong>마을 검문소</strong>
+                <small>준비중</small>
+              </button>
+            </div>
+          </details>
           <details class="deployment-collapse deployment-mode-section">
             <summary class="deployment-collapse-summary">
               <span class="deployment-section-label">모드</span>

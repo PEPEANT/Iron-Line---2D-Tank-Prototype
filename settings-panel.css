@@ -86,7 +86,7 @@
 }
 
 .settings-list {
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
   padding: 14px 18px 18px;
   overflow-y: auto;
@@ -98,6 +98,7 @@
 }
 
 .settings-section.compact {
+  gap: 8px;
   padding-top: 8px;
 }
 
@@ -140,6 +141,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  padding-top: 8px;
 }
 
 .settings-action {
@@ -160,19 +162,21 @@
 }
 
 .settings-details {
-  border-top: 1px solid rgba(237, 244, 239, 0.1);
-  padding-top: 10px;
+  border: 1px solid rgba(237, 244, 239, 0.12);
+  border-radius: 7px;
+  background: rgba(237, 244, 239, 0.04);
+  padding: 0 12px;
 }
 
 .settings-details summary {
-  min-height: 34px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: rgba(237, 244, 239, 0.84);
-  font-size: 13px;
-  font-weight: 900;
+  color: #edf4ef;
+  font-size: 14px;
+  font-weight: 950;
   cursor: pointer;
   list-style: none;
 }
@@ -183,6 +187,12 @@
 
 .settings-details summary::after {
   content: "+";
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(237, 244, 239, 0.16);
+  border-radius: 999px;
   color: rgba(237, 244, 239, 0.5);
   font-size: 15px;
   font-weight: 900;
@@ -190,6 +200,12 @@
 
 .settings-details[open] summary::after {
   content: "-";
+}
+
+.settings-details[open] {
+  border-color: rgba(255, 209, 102, 0.28);
+  background: rgba(255, 209, 102, 0.055);
+  padding-bottom: 12px;
 }
 
 .settings-list .build-info-badge {

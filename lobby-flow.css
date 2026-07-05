@@ -113,7 +113,7 @@
 }
 
 .entry-screen.stage-main {
-  place-items: center start;
+  place-items: center;
   overflow: hidden;
   isolation: isolate;
   background: #060b09;
@@ -149,6 +149,10 @@
   z-index: 1;
 }
 
+.entry-screen.stage-main .entry-account-widget {
+  position: absolute;
+}
+
 .entry-screen.stage-main .entry-card {
   display: none;
 }
@@ -156,8 +160,9 @@
 .entry-screen.stage-main .entry-main {
   width: min(360px, calc(100vw - 40px));
   display: grid;
-  gap: 28px;
-  margin-left: clamp(18px, 8vw, 132px);
+  gap: 22px;
+  margin-left: 0;
+  transform: translateY(-2vh);
 }
 
 .entry-main-hero {
@@ -180,7 +185,7 @@
 .entry-main-hero h1 {
   margin: 0;
   color: #edf4ef;
-  font-size: clamp(76px, 11vw, 128px);
+  font-size: clamp(56px, 6.5vw, 82px);
   font-weight: 950;
   line-height: 0.96;
   letter-spacing: 0;
@@ -323,8 +328,8 @@
 
 .entry-account-icon {
   position: relative;
-  width: 23px;
-  height: 23px;
+  width: 24px;
+  height: 24px;
   display: block;
 }
 
@@ -338,17 +343,20 @@
 }
 
 .entry-account-icon::before {
-  top: 1px;
-  width: 8px;
-  height: 8px;
+  top: 0;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
 }
 
 .entry-account-icon::after {
-  bottom: 1px;
-  width: 18px;
-  height: 10px;
-  border-radius: 999px 999px 6px 6px;
+  bottom: 0;
+  width: 17px;
+  height: 9px;
+  border-top-left-radius: 999px;
+  border-top-right-radius: 999px;
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
 }
 
 .entry-account-panel {
@@ -484,6 +492,7 @@
   .entry-screen.stage-main .entry-main {
     width: min(420px, calc(100vw - 28px));
     margin-left: 0;
+    transform: none;
   }
 
   .entry-main-panel {
@@ -495,7 +504,8 @@
   .entry-screen.stage-main .entry-main {
     width: min(420px, calc(100vw - 24px));
     gap: 14px;
-    margin-left: clamp(8px, 5vw, 72px);
+    margin-left: 0;
+    transform: none;
   }
 
   .entry-main-hero h1 {
@@ -597,8 +607,51 @@
 .deployment-collapse > .deployment-mode-row,
 .deployment-collapse > .deployment-class-list,
 .deployment-collapse > .deployment-settings,
+.deployment-collapse > .deployment-map-select,
 .deployment-collapse > .deployment-loadout {
   margin-top: 0;
+}
+
+.deployment-map-select {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 7px;
+}
+
+.deployment-map-choice {
+  min-height: 58px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(237, 244, 239, 0.14);
+  border-radius: 7px;
+  background: rgba(237, 244, 239, 0.055);
+  color: #edf4ef;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.deployment-map-choice strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.deployment-map-choice small {
+  color: rgba(237, 244, 239, 0.58);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.deployment-map-choice.active {
+  border-color: rgba(107, 188, 255, 0.78);
+  background: rgba(107, 188, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(107, 188, 255, 0.22);
+}
+
+.deployment-map-choice:disabled {
+  cursor: default;
+  opacity: 0.52;
 }
 
 .deployment-class-list {

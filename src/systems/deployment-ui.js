@@ -7,6 +7,8 @@
   class DeploymentUI {
     constructor(hud) {
       this.hud = hud;
+      this.wasDeploymentOpen = false;
+      this.drawersBound = false;
     }
 
     get nodes() {
@@ -64,6 +66,9 @@
       const mobileLayout = this.isMobileDeploymentLayout();
       ui.deploymentScreen.classList.toggle("hidden", !game.deploymentOpen);
       ui.deploymentScreen.classList.toggle("mobile-deployment", Boolean(game.deploymentOpen && mobileLayout));
+      this.bindDeploymentDrawers();
+      if (game.deploymentOpen && !this.wasDeploymentOpen) this.closeDeploymentDrawers();
+      this.wasDeploymentOpen = Boolean(game.deploymentOpen);
       if (!game.deploymentOpen || !mobileLayout) this.hud.deploymentMapOpen = false;
       this.hud.setDeploymentMapOpen?.(Boolean(game.deploymentOpen && mobileLayout && this.hud.deploymentMapOpen));
 
@@ -105,11 +110,37 @@
       this.updateCollapsedSummaries(game);
     }
 
+    closeDeploymentDrawers() {
+      document.querySelectorAll(".deployment-collapse").forEach((section) => {
+        section.removeAttribute("open");
+      });
+      this.hud.deploymentLoadoutOpen = false;
+    }
+
+    bindDeploymentDrawers() {
+      if (this.drawersBound) return;
+      const sections = Array.from(document.querySelectorAll(".deployment-collapse"));
+      if (!sections.length) return;
+      this.drawersBound = true;
+      for (const section of sections) {
+        section.addEventListener("toggle", () => {
+          if (!section.open) return;
+          for (const other of sections) {
+            if (other !== section) other.removeAttribute("open");
+          }
+        });
+      }
+    }
+
     updateCollapsedSummaries(game) {
+      const mapSummary = document.querySelector('[data-deployment-summary="map"]');
       const modeSummary = document.querySelector('[data-deployment-summary="mode"]');
       const classSummary = document.querySelector('[data-deployment-summary="class"]');
       const settingsSummary = document.querySelector('[data-deployment-summary="settings"]');
 
+      if (mapSummary) {
+        mapSummary.textContent = "폐허 교차로";
+      }
       if (modeSummary) {
         modeSummary.textContent = game.matchConfig?.mode === "conquest" ? "점령전" : "섬멸전";
       }

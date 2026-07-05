@@ -27,6 +27,7 @@
         settingsClose: document.getElementById("settingsClose"),
         settingsFullscreen: document.getElementById("settingsFullscreen"),
         settingsMainMenu: document.getElementById("settingsMainMenu"),
+        settingsExit: document.getElementById("settingsExit"),
         adminButton: document.getElementById("adminButton"),
         adminPanel: document.getElementById("adminPanel"),
         adminClose: document.getElementById("adminClose"),
@@ -239,6 +240,13 @@
       this.nodes.settingsMainMenu?.addEventListener("click", () => {
         const game = IronLine.game;
         if (game) game.returnToMainMenu?.();
+      });
+      this.nodes.settingsExit?.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (!game) return;
+        game.exitAppFullscreen?.({ persist: true });
+        game.returnToMainMenu?.();
+        this.toggleSettingsPanel(false);
       });
     }
 
