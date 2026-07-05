@@ -300,3 +300,24 @@ node tools/check-battlefield-tempo.cjs
 - 드론 겹침 버그는 전용 프로브 기준으로 수정 완료.
 - 전장 tempo는 14.2/4.9로 방향이 서로 갈렸다. 이번 수정은 정찰드론 경로 분산이며 피해량, 무기 수치, 보병 전술 가중치를 건드리지 않았으므로 이 결과만으로 전투 밸런스를 즉석 튜닝하지 않는다.
 - deaths/min/prone 안정화와 첫 사망 8초 목표는 기존 D2/차량 초기 접촉 과제로 유지한다.
+
+## Codex commander presence tempo check (2026-07-05)
+
+Change scope:
+- Added commander radio visibility and a narrow reassault rule in `src/ai/commander-presence.js`.
+- Did not rewrite commander target selection, infantry weapon tuning, suppression tuning, vehicle tuning, or prone thresholds.
+
+Checks:
+- `npm run commander:presence` PASS.
+- `npm run check` PASS.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705101240/` | 7.5 | 40s | 19.92 | 0.24 | 9.5s | deaths/min and prone pass |
+| 2 | `reports/playtests/battlefield-tempo-20260705101555/` | 5.9 | 79s | 4.79 | 0.06 | 14.5s | deaths/min slightly under 6, prone below target |
+
+Judgment:
+- Commander presence behavior itself is verified by the targeted check.
+- Battlefield tempo remains variable: one run passed deaths/min + prone, one run missed both. This matches the existing D2/prone and early-contact variability noted above, so no broad combat retune was made in this patch.

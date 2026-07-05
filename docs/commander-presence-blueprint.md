@@ -38,3 +38,11 @@
 - 새 UI 패널 만들지 말 것 (기존 무전 채팅만 사용).
 - 휴먼 지휘관 롤 아님 (그건 R2, r1-release-gate.md 백로그).
 - 적팀 명령 노출 금지, 명령 로직 자체(할당 알고리즘) 변경 금지.
+
+## Codex implementation note (2026-07-05)
+
+- Implemented in `src/ai/commander-presence.js` as a prototype wrapper around the existing commander AI. `src/ai/commander-ai.js` command selection was not rewritten.
+- Radio visibility uses existing `battlefieldEvents.push()` and `commander_order` chat echo. Local allied orders are echoed, duplicate squad+target orders stay silent, and output is capped at 6 messages per minute per commander.
+- Red/enemy orders remain hidden from the default blue local player view.
+- Reassault check runs every 15 seconds after commander update. It requires friendly infantry alive >= enemy infantry alive * 1.4, no friendly infantry death in the last 10 seconds, at least one unowned objective, and one holding/hold-wall squad to reissue.
+- Verification added: `npm run commander:presence` covers allied echo, enemy suppression, duplicate suppression, 6/min cap, reassault issue, and recent-death block.
