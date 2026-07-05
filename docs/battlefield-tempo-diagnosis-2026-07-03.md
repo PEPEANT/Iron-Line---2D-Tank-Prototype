@@ -528,3 +528,21 @@ Judgment:
 - Low prone is not evenly distributed. Most prone samples come from `prone-fire` and a small number of suppression/pre-assault samples; large post-contact states such as `advance`, `secure`, and `mounted-transport` contribute little or no prone time.
 - Sniper/scout samples are numerous in both runs but almost never prone in these tempo samples, so scout behavior may be part of the "too upright" look.
 - Current D2 bottleneck is not just "more support fire." Next behavior work should examine when non-support rifle/scout units enter `prone-fire` or cover under early vehicle/MG pressure, and should preserve deaths/min while lifting prone ratio above 0.10.
+
+## Codex tempo class-prone diagnostics (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records post-contact infantry class counts, prone class counts, and per-class prone ratios.
+- This is diagnostics only. No AI, weapon, vehicle, suppression, prone, or squad behavior changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | First contact | First death after contact | Opening heavy/vehicle deaths | Class prone ratios |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705140045/` | 6.2 | 0.11 | 54.8s | 4.2s | 1 | engineer 0.01, infantry 0.18, scout 0.07 |
+| 2 | `reports/playtests/battlefield-tempo-20260705140357/` | 4.3 | 0.08 | 69.0s | 5.5s | 2 | engineer 0.00, infantry 0.11, scout 0.09 |
+
+Judgment:
+- The low-prone signal is now class-specific, not just weapon-specific. Infantry can reach the prone target in a good sample, scouts remain below target, and engineers are almost never prone.
+- The engineer signal is stronger than the earlier scout-only suspicion: engineer post-contact samples were high in both runs, but prone samples were 10/1506 and 0/1338.
+- Do not tune vehicle damage from this sample. The next behavior candidate should inspect engineer/scout posture transitions during `advance`, `secure`, `mounted-transport`, and vehicle/MG pressure, then verify with two tempo runs.

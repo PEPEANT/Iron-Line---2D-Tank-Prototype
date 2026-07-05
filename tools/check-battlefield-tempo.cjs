@@ -257,6 +257,8 @@ new Promise((resolve, reject) => {
       const proneStateCounts = {};
       const weaponCounts = {};
       const proneWeaponCounts = {};
+      const classCounts = {};
+      const proneClassCounts = {};
       const aliveNow = new Set();
 
       for (const unit of infantry) {
@@ -272,11 +274,14 @@ new Promise((resolve, reject) => {
           if (unit.isProne) proneCount += 1;
           const state = unit.ai?.state || "unknown";
           const weapon = unit.weaponId || unit.ai?.weapon?.()?.id || "unknown";
+          const classId = unit.classId || "unknown";
           stateCounts[state] = (stateCounts[state] || 0) + 1;
           weaponCounts[weapon] = (weaponCounts[weapon] || 0) + 1;
+          classCounts[classId] = (classCounts[classId] || 0) + 1;
           if (unit.isProne) {
             proneStateCounts[state] = (proneStateCounts[state] || 0) + 1;
             proneWeaponCounts[weapon] = (proneWeaponCounts[weapon] || 0) + 1;
+            proneClassCounts[classId] = (proneClassCounts[classId] || 0) + 1;
           }
           const prev = prevPos.get(id);
           if (prev && Math.hypot(unit.x - prev.x, unit.y - prev.y) > 9) moving += 1;
@@ -322,7 +327,9 @@ new Promise((resolve, reject) => {
         states: stateCounts,
         proneStates: proneStateCounts,
         weapons: weaponCounts,
-        proneWeapons: proneWeaponCounts
+        proneWeapons: proneWeaponCounts,
+        classes: classCounts,
+        proneClasses: proneClassCounts
       });
 
       if (Date.now() - startWall >= DURATION_MS) {
@@ -415,6 +422,13 @@ function summarize(r) {
     for (const x of post) for (const [key, count] of Object.entries(x[field] || {})) result[key] = (result[key] || 0) + count;
     return result;
   };
+  const ratioCounts = (part, whole) => {
+    const result = {};
+    for (const [key, count] of Object.entries(whole)) {
+      result[key] = count ? +((part[key] || 0) / count).toFixed(2) : 0;
+    }
+    return result;
+  };
   const deathSourceCounts = {};
   for (const death of r.deaths || []) {
     const key = death.lastDamage?.source?.kind || "unknown";
@@ -432,6 +446,8 @@ function summarize(r) {
     return kind === "direct-heavy-or-shell" || kind.startsWith("tank:") || kind.startsWith("humvee:");
   }).length;
   const firstDeath = (r.deaths || []).slice().sort((a, b) => a.at - b.at)[0] || null;
+  const postContactClasses = sumCounts("classes");
+  const postContactProneClasses = sumCounts("proneClasses");
   return {
     durationSeconds: last.t || 0,
     firstShotAt: r.firstBulletAt,
@@ -471,7 +487,10 @@ function summarize(r) {
     postContactStates: sumCounts("states"),
     postContactProneStates: sumCounts("proneStates"),
     postContactWeapons: sumCounts("weapons"),
-    postContactProneWeapons: sumCounts("proneWeapons")
+    postContactProneWeapons: sumCounts("proneWeapons"),
+    postContactClasses,
+    postContactProneClasses,
+    postContactProneClassRatios: ratioCounts(postContactProneClasses, postContactClasses)
   };
 }
 
@@ -515,6 +534,9 @@ function summaryMarkdown(m) {
     `Post-contact prone states: ${JSON.stringify(m.postContactProneStates)}`,
     `Post-contact weapons: ${JSON.stringify(m.postContactWeapons)}`,
     `Post-contact prone weapons: ${JSON.stringify(m.postContactProneWeapons)}`,
+    `Post-contact classes: ${JSON.stringify(m.postContactClasses)}`,
+    `Post-contact prone classes: ${JSON.stringify(m.postContactProneClasses)}`,
+    `Post-contact prone class ratios: ${JSON.stringify(m.postContactProneClassRatios)}`,
     "",
     "Targets (see docs/battlefield-tempo-diagnosis-2026-07-03.md): first death >8s after contact, survival p50 20-30s, suppression avg >15, prone ratio >0.15, deaths/min 6-12.",
     ""
