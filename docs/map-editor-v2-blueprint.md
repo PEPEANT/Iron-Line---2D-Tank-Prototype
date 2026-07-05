@@ -1,6 +1,6 @@
 # 맵에디터 V2 설계도 — 지형 편집기에서 사물 편집기로 승급
 
-작성: 2026-07-04. 상태: **P3 유기 연결 1차 구현 완료(2026-07-05). P3 그룹/실행취소는 아직 미착수.**
+작성: 2026-07-04. 상태: **P3 유기 연결 + 실행취소 1차 구현 완료(2026-07-05). P3 그룹/회전/복제는 아직 미착수.**
 승급 선언: V1(현 map-editor.js) = 선과 사각형을 만지는 **개발자용 지형 도구**. V2 = 이름 있는 사물을 팔레트에서 집어 배치하는 **창작 도구**. 이 문서가 V2의 단일 기준이다.
 
 ## 0. 왜 승급인가 (한 문단)
@@ -214,7 +214,15 @@ P1+P2가 "승급"의 실체다. P1 없이 P2를 시작하는 것 금지 (v6이 �
 - P3 1차 범위는 자동 연결만이다. 사용자가 연결 삭제/수정하는 overrides diff, 그룹 이동, 실행취소/재실행은 아직 미착수다.
 - `npm run map:connections`: `Map connection check passed: {"connections":1,"walls":16}`.
 
+## 2026-07-05 P3 실행취소 1차 구현 기록
+
+- 추가 파일: `src/tools/editor-history.js`, `tools/check-editor-history.cjs`.
+- `map-editor.js` 본체 동결을 지켰다. 히스토리 모듈은 `exportOutput`의 JS 내보내기 텍스트를 스냅샷으로 감시하고, 되돌릴 때 V1 draft(localStorage)로 복원한 뒤 에디터를 다시 연다.
+- 실행취소/다시실행 버튼은 하단 팔레트 액션 영역에 붙고, `Ctrl+Z` / `Ctrl+Y`도 같은 경로를 사용한다.
+- 히스토리 복원은 JS 내보내기의 전체 editor world를 draft로 되돌리므로 roads, obstacles뿐 아니라 safeZones, spawns, reconPoints, navGraph도 유지한다.
+- `npm run map:history`: `Editor history check passed`. 검사에서 20회 undo/redo 왕복과 부가 배치 보존을 확인한다.
+
 남은 것:
 
-- P3: 회전, 복제, 그룹, 실행취소/재실행 20회 왕복 검증은 아직 시작하지 않는다.
+- P3: 회전, 복제, 명시적 그룹 생성/해제는 아직 시작하지 않는다.
 - P3 수동 연결 편집: 연결 삭제/수정 overrides diff와 팔레트/핸들 UI는 아직 시작하지 않는다.

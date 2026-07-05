@@ -85,6 +85,30 @@
     };
   }
 
+  function editorDraftFromEditorWorld(world = {}) {
+    const obstacles = Array.isArray(world.obstacles) ? world.obstacles : [];
+    return {
+      width: Math.round(finiteNumber(world.width, 3400)),
+      height: Math.round(finiteNumber(world.height, 2200)),
+      roadWidth: Math.round(finiteNumber(world.roadWidth, 84)),
+      selectedRoad: 0,
+      selectedObstacle: obstacles.length ? 0 : null,
+      editMode: "obstacle",
+      roads: clonePlain(world.roads || []),
+      obstacles: clonePlain(obstacles),
+      capturePoints: clonePlain(world.capturePoints || []),
+      safeZones: clonePlain(world.safeZones || []),
+      baseExitPoints: clonePlain(world.baseExitPoints || {}),
+      spawns: clonePlain(world.spawns || {}),
+      reconPoints: clonePlain(world.reconPoints || {}),
+      navGraph: clonePlain(world.navGraph || { nodes: [] })
+    };
+  }
+
+  function editorDraftFromEditorScript(scriptText) {
+    return editorDraftFromEditorWorld(worldFromEditorScript(scriptText));
+  }
+
   function editorObstacleFromObject(object = {}) {
     const catalog = IronLine.objectCatalog;
     const entry = catalog?.get?.(object.type) || null;
@@ -165,6 +189,8 @@
     schemaFromEditorWorld,
     schemaFromEditorScript,
     editorObstacleFromObject,
+    editorDraftFromEditorWorld,
+    editorDraftFromEditorScript,
     editorDraftFromSchema
   };
 
