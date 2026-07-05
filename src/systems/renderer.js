@@ -87,6 +87,7 @@
       this.drawRemoteHumanPlayers(game);
       if (!game.adminObserverMode) this.drawPlayerInfantryAim(game);
       for (const drone of game.drones || []) this.drawReconDrone(game, drone);
+      this.drawMapObjectOverlays?.(game);
       this.drawCommandHighlights(game);
 
       this.drawProjectiles(game);

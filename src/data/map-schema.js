@@ -79,10 +79,7 @@
 
   function runtimeObstacleFromObject(object = {}, catalog = IronLine.objectCatalog) {
     const entry = catalog?.get?.(object.type) || null;
-    const footprint = entry?.footprint || { w: 160, h: 60 };
-    const scale = finiteNumber(object.scale, 1);
-    const w = Math.max(1, Math.round(finiteNumber(object.w, footprint.w * scale)));
-    const h = Math.max(1, Math.round(finiteNumber(object.h, footprint.h * scale)));
+    const size = objectRuntimeSize(object, entry);
     const kind = entry?.runtimeKind || object.type || "concrete";
     const obstacle = {
       id: object.id,
@@ -91,8 +88,8 @@
       type: entry?.runtimeType || kind,
       x: Math.round(finiteNumber(object.x)),
       y: Math.round(finiteNumber(object.y)),
-      w,
-      h,
+      w: size.w,
+      h: size.h,
       angle: finiteNumber(object.rot, 0),
       rot: finiteNumber(object.rot, 0),
       variant: object.variant || undefined,
@@ -111,10 +108,96 @@
     return obstacle;
   }
 
+  function objectRuntimeSize(object = {}, entry = null) {
+    const footprint = entry?.footprint || { w: 160, h: 60 };
+    const scale = finiteNumber(object.scale, 1);
+    return {
+      w: Math.max(1, Math.round(finiteNumber(object.w, footprint.w * scale))),
+      h: Math.max(1, Math.round(finiteNumber(object.h, footprint.h * scale)))
+    };
+  }
+
+  function scaledTemplateRect(rect = {}, object = {}, entry = null, size = null) {
+    const footprint = entry?.footprint || size || { w: 160, h: 60 };
+    const target = size || objectRuntimeSize(object, entry);
+    const sx = target.w / Math.max(1, finiteNumber(footprint.w, target.w));
+    const sy = target.h / Math.max(1, finiteNumber(footprint.h, target.h));
+    return {
+      x: Math.round(finiteNumber(object.x) + finiteNumber(rect.x) * sx),
+      y: Math.round(finiteNumber(object.y) + finiteNumber(rect.y) * sy),
+      w: Math.max(1, Math.round(finiteNumber(rect.w, 1) * sx)),
+      h: Math.max(1, Math.round(finiteNumber(rect.h, 1) * sy))
+    };
+  }
+
+  function interiorMode(object = {}, entry = null) {
+    if (!entry?.interiorTemplate) return "";
+    return object.interior?.mode || entry.interiorTemplate.mode || "open";
+  }
+
+  function interiorWallObstaclesFromObject(object = {}, entry = null) {
+    if (interiorMode(object, entry) !== "open") return [];
+    const template = entry?.interiorTemplate;
+    if (!template?.walls?.length) return [];
+    const size = objectRuntimeSize(object, entry);
+    return template.walls.map((wall, index) => {
+      const rect = scaledTemplateRect(wall, object, entry, size);
+      return {
+        id: `${object.id || "object"}:wall:${wall.id || index}`,
+        mapObjectId: object.id,
+        parentObjectId: object.id,
+        kind: wall.kind || "concrete",
+        type: "interior-wall",
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        angle: 0,
+        rot: 0,
+        cover: "heavy",
+        collision: true,
+        spriteSlot: "object.concrete",
+        interior: true,
+        stopsProjectiles: true
+      };
+    });
+  }
+
+  function runtimeObstaclesFromObject(object = {}, catalog = IronLine.objectCatalog) {
+    const entry = catalog?.get?.(object.type) || null;
+    const base = runtimeObstacleFromObject(object, catalog);
+    const obstacles = base.collision === false ? [] : [base];
+    obstacles.push(...interiorWallObstaclesFromObject(object, entry));
+    return obstacles;
+  }
+
   function objectsToObstacles(objects = [], catalog = IronLine.objectCatalog) {
     return objects
-      .map((object) => runtimeObstacleFromObject(object, catalog))
+      .flatMap((object) => runtimeObstaclesFromObject(object, catalog))
       .filter((obstacle) => obstacle.collision !== false);
+  }
+
+  function roofFromObject(object = {}, catalog = IronLine.objectCatalog) {
+    const entry = catalog?.get?.(object.type) || null;
+    if (interiorMode(object, entry) !== "open") return null;
+    const template = entry?.interiorTemplate;
+    if (!template?.roof) return null;
+    const size = objectRuntimeSize(object, entry);
+    return {
+      id: `${object.id || "object"}:roof`,
+      mapObjectId: object.id,
+      type: object.type,
+      x: Math.round(finiteNumber(object.x)),
+      y: Math.round(finiteNumber(object.y)),
+      w: size.w,
+      h: size.h,
+      floor: clonePlain(template.floor || null),
+      roof: clonePlain(template.roof || null)
+    };
+  }
+
+  function roofsFromObjects(objects = [], catalog = IronLine.objectCatalog) {
+    return objects.map((object) => roofFromObject(object, catalog)).filter(Boolean);
   }
 
   function normalizeWorld(world = {}, options = {}) {
@@ -132,7 +215,9 @@
       world.story = world.story ?? null;
       if (!Array.isArray(world.zones)) world.zones = (world.capturePoints || []).map(zoneFromCapturePoint);
     }
-    world.obstacles = objectsToObstacles(world.objects, options.catalog || IronLine.objectCatalog);
+    const catalog = options.catalog || IronLine.objectCatalog;
+    world.obstacles = objectsToObstacles(world.objects, catalog);
+    world.mapObjectRoofs = roofsFromObjects(world.objects, catalog);
     return world;
   }
 
@@ -207,6 +292,8 @@
     validateSchema,
     validateWorld,
     runtimeObstacleFromObject,
+    runtimeObstaclesFromObject,
+    roofsFromObjects,
     objectsToObstacles
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -25,6 +25,34 @@
       interactions: [],
       runtimeKind: "building"
     },
+    "house-small": {
+      id: "house-small",
+      name: "소형 주택",
+      category: CATEGORY.BUILDING,
+      footprint: { w: 260, h: 170 },
+      collision: false,
+      spriteSlot: "object.house-small",
+      hp: null,
+      cover: "heavy",
+      cost: 0,
+      interactions: [],
+      runtimeKind: "house-small",
+      interiorTemplate: {
+        id: "two-room-house",
+        mode: "open",
+        floor: { color: "rgba(79, 87, 76, 0.54)" },
+        roof: { colorA: "#5b645c", colorB: "#303833", trim: "#8e9a8f" },
+        walls: [
+          { id: "north", x: 0, y: 0, w: 260, h: 18 },
+          { id: "west", x: 0, y: 0, w: 18, h: 170 },
+          { id: "east", x: 242, y: 0, w: 18, h: 170 },
+          { id: "south-left", x: 0, y: 152, w: 101, h: 18 },
+          { id: "south-right", x: 159, y: 152, w: 101, h: 18 },
+          { id: "partition-north", x: 128, y: 18, w: 14, h: 55 },
+          { id: "partition-south", x: 128, y: 105, w: 14, h: 47 }
+        ]
+      }
+    },
     concrete: {
       id: "concrete",
       name: "콘크리트 벽",

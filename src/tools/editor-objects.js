@@ -68,11 +68,10 @@
   }
 
   function editorDraftFromSchema(schema = {}) {
-    const catalog = IronLine.objectCatalog;
     const width = finiteNumber(schema.world?.width ?? schema.width, 3400);
     const height = finiteNumber(schema.world?.height ?? schema.height, 2200);
     const objects = Array.isArray(schema.objects) ? schema.objects : [];
-    const obstacles = IronLine.MapSchema?.objectsToObstacles?.(objects, catalog) || [];
+    const obstacles = objects.map(editorObstacleFromObject);
     return {
       width: Math.round(width),
       height: Math.round(height),
@@ -83,6 +82,21 @@
       roads: clonePlain(schema.roads || []),
       obstacles: clonePlain(obstacles),
       capturePoints: (schema.zones || []).filter((zone) => zone.kind === "capture").map(zoneToCapturePoint)
+    };
+  }
+
+  function editorObstacleFromObject(object = {}) {
+    const catalog = IronLine.objectCatalog;
+    const entry = catalog?.get?.(object.type) || null;
+    const footprint = entry?.footprint || { w: 160, h: 60 };
+    const scale = finiteNumber(object.scale, 1);
+    return {
+      x: Math.round(finiteNumber(object.x)),
+      y: Math.round(finiteNumber(object.y)),
+      w: Math.max(1, Math.round(finiteNumber(object.w, footprint.w * scale))),
+      h: Math.max(1, Math.round(finiteNumber(object.h, footprint.h * scale))),
+      kind: object.type || "concrete",
+      variant: object.variant || undefined
     };
   }
 
@@ -150,6 +164,7 @@
     worldFromEditorScript,
     schemaFromEditorWorld,
     schemaFromEditorScript,
+    editorObstacleFromObject,
     editorDraftFromSchema
   };
 

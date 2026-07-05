@@ -1,6 +1,6 @@
 # 맵에디터 V2 설계도 — 지형 편집기에서 사물 편집기로 승급
 
-작성: 2026-07-04. 상태: **P2 1차 구현 완료(2026-07-05). P3 크기조절/회전/그룹/실행취소는 아직 미착수.**
+작성: 2026-07-04. 상태: **P2.5 1차 구현 완료(2026-07-05). P3 크기조절/회전/그룹/실행취소는 아직 미착수.**
 승급 선언: V1(현 map-editor.js) = 선과 사각형을 만지는 **개발자용 지형 도구**. V2 = 이름 있는 사물을 팔레트에서 집어 배치하는 **창작 도구**. 이 문서가 V2의 단일 기준이다.
 
 ## 0. 왜 승급인가 (한 문단)
@@ -195,7 +195,18 @@ P1+P2가 "승급"의 실체다. P1 없이 P2를 시작하는 것 금지 (v6이 �
 - `npm run map:editor`: `Editor P2 check passed`.
 - `npm run check`에 `tools/check-editor-p2.cjs`를 추가했다.
 
+## 2026-07-05 P2.5 1차 구현 기록
+
+- 추가 파일: `src/systems/renderer-map-objects.js`, `tools/check-map-interiors.cjs`.
+- `object-catalog.js`에 `house-small` 1종을 추가했다. 기존 map01의 `building`은 통짜 장애물 그대로 유지하고, 새 `house-small`만 실내 프리팹으로 풀린다.
+- `house-small`은 팔레트/JSON에서는 하나의 사물이고, 런타임에서는 문틈이 있는 외벽/칸막이 벽 7조각과 컷어웨이 지붕 1개로 변환된다.
+- `map-schema.js`는 `objectsToObstacles()`에서 실내 벽을 생성하고 `mapObjectRoofs`를 런타임 전용 필드로 붙인다. 스키마 v1 JSON에는 지붕 파생물을 저장하지 않는다.
+- `renderer-map-objects.js`는 바닥 패스를 기존 장애물 렌더 앞에, 지붕 패스를 보병/드론 위에 그린다. `renderer.js` 본체 추가는 `drawMapObjectOverlays?.(game)` 호출 1줄뿐이다.
+- 지붕 투명화는 footprint 안 점 판정으로 열린다. 플레이어 또는 AI 보병이 집 안에 있으면 지붕이 반투명으로 내려간다.
+- `editor-objects.js`의 JSON 불러오기는 실내 프리팹을 벽 조각으로 분해하지 않고 `house-small` 배치물 1개로 유지한다.
+- `npm run map:interiors`: `Map interior check passed: {"walls":7,"roofs":1}`.
+
 남은 것:
 
 - P3: 회전, 복제, 그룹, 실행취소/재실행 20회 왕복 검증은 아직 시작하지 않는다.
-- P2.5: 문/벽 충돌/지붕 투명화와 실내 프리팹은 아직 시작하지 않는다.
+- P3 유기 연결: 건물끼리 맞닿을 때 공유 벽 통로를 제안/생성하는 단계는 아직 시작하지 않는다.
