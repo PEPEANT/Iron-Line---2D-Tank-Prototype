@@ -168,3 +168,10 @@
 - 너무 강한 엄폐 이동은 전장 deaths/min을 4 이하로 눌러 폐기했다. 최종값은 아주 가까운 폭발(`pressure >= 0.62`) 또는 반복 폭발에서만 선제 엎드림 홀드를 양보하고, 반응 시간은 0.42초로 제한한다.
 - `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705084828/` 기준 폭발 8회, 반응창 55개, `blast:cover` 5, `blast:spread` 14, `blast:fallback` 19, `blast:prone-only` 16, `proneOnlyRatio` 0.291, `noResponseRatio` 0.
 - 해석: 완전 해결은 아니지만 구조 분리 직후 0.396보다 낮다. 전장 템포를 깨지 않는 선에서 "누워 있기만 함"을 일부 산개/엄폐/후퇴로 돌린 첫 완화로 본다.
+
+### 2026-07-05 재검증
+
+- `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705092940/` 기준 폭발 8회, 반응창 38개.
+- 주 반응 집계: `blast:cover` 24, `blast:fallback` 5, `blast:spread` 3, `blast:prone-only` 6.
+- `proneOnlyRatio`는 0.158, `noResponseRatio`는 0, 최초 반응 p50/p90은 0.25초/0.5초.
+- 판정: 계측 스크립트와 2단계 완화는 최신 코드에서도 정상 작동한다. 단일 실행 기준으로는 이전 0.291보다 더 낮지만, 폭발 반응창 수가 38개라 이후 침대전투/보급/소생 판단에는 반복 샘플을 계속 같이 본다.
