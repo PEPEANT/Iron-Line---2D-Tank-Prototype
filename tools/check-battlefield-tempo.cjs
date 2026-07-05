@@ -253,6 +253,10 @@ new Promise((resolve, reject) => {
       let aliveCount = 0;
       let suppressionSum = 0;
       let proneCount = 0;
+      const stateCounts = {};
+      const proneStateCounts = {};
+      const weaponCounts = {};
+      const proneWeaponCounts = {};
       const aliveNow = new Set();
 
       for (const unit of infantry) {
@@ -266,6 +270,14 @@ new Promise((resolve, reject) => {
           if (unit.team === "blue") aliveB += 1; else aliveR += 1;
           suppressionSum += Number(unit.suppression) || 0;
           if (unit.isProne) proneCount += 1;
+          const state = unit.ai?.state || "unknown";
+          const weapon = unit.weaponId || unit.ai?.weapon?.()?.id || "unknown";
+          stateCounts[state] = (stateCounts[state] || 0) + 1;
+          weaponCounts[weapon] = (weaponCounts[weapon] || 0) + 1;
+          if (unit.isProne) {
+            proneStateCounts[state] = (proneStateCounts[state] || 0) + 1;
+            proneWeaponCounts[weapon] = (proneWeaponCounts[weapon] || 0) + 1;
+          }
           const prev = prevPos.get(id);
           if (prev && Math.hypot(unit.x - prev.x, unit.y - prev.y) > 9) moving += 1;
           prevPos.set(id, { x: unit.x, y: unit.y });
@@ -306,7 +318,11 @@ new Promise((resolve, reject) => {
         avgSuppression: aliveCount ? Math.round(suppressionSum / aliveCount * 10) / 10 : 0,
         proneRatio: aliveCount ? Math.round(proneCount / aliveCount * 100) / 100 : 0,
         cohesion: cohesionCount ? Math.round(cohesionSum / cohesionCount) : 0,
-        modes: modeCounts
+        modes: modeCounts,
+        states: stateCounts,
+        proneStates: proneStateCounts,
+        weapons: weaponCounts,
+        proneWeapons: proneWeaponCounts
       });
 
       if (Date.now() - startWall >= DURATION_MS) {
@@ -394,6 +410,11 @@ function summarize(r) {
   const ranges = (r.shotRanges || []).sort((a, b) => a - b);
   const modeTotals = {};
   for (const x of post) for (const [m, c] of Object.entries(x.modes || {})) modeTotals[m] = (modeTotals[m] || 0) + c;
+  const sumCounts = (field) => {
+    const result = {};
+    for (const x of post) for (const [key, count] of Object.entries(x[field] || {})) result[key] = (result[key] || 0) + count;
+    return result;
+  };
   const deathSourceCounts = {};
   for (const death of r.deaths || []) {
     const key = death.lastDamage?.source?.kind || "unknown";
@@ -417,8 +438,8 @@ function summarize(r) {
     firstDamageAt,
     firstContactAt: contact,
     firstDeathAt: r.firstDeathAt,
-    firstDeathAfterContactSeconds: r.firstDeathAt !== null && r.firstBulletAt !== null
-      ? +(r.firstDeathAt - r.firstBulletAt).toFixed(1)
+    firstDeathAfterContactSeconds: r.firstDeathAt !== null
+      ? +(r.firstDeathAt - contact).toFixed(1)
       : null,
     totalShots: r.totalShots,
     shotsPerMinutePostContact: +(r.totalShots / postMinutes).toFixed(0),
@@ -446,7 +467,11 @@ function summarize(r) {
     preContact: { movingRatio: avg(pre, "movingRatio"), avgSuppression: avg(pre, "avgSuppression"), proneRatio: avg(pre, "proneRatio"), cohesion: avg(pre, "cohesion") },
     postContact: { movingRatio: avg(post, "movingRatio"), avgSuppression: avg(post, "avgSuppression"), proneRatio: avg(post, "proneRatio"), cohesion: avg(post, "cohesion") },
     finalAlive: { blue: last.aliveB || 0, red: last.aliveR || 0, initialBlue: r.initialB, initialRed: r.initialR },
-    postContactModes: modeTotals
+    postContactModes: modeTotals,
+    postContactStates: sumCounts("states"),
+    postContactProneStates: sumCounts("proneStates"),
+    postContactWeapons: sumCounts("weapons"),
+    postContactProneWeapons: sumCounts("proneWeapons")
   };
 }
 
@@ -486,6 +511,10 @@ function summaryMarkdown(m) {
     `Opening death sources: ${JSON.stringify(m.openingDeathSourceCounts)}`,
     "",
     `Post-contact tactical modes: ${JSON.stringify(m.postContactModes)}`,
+    `Post-contact infantry states: ${JSON.stringify(m.postContactStates)}`,
+    `Post-contact prone states: ${JSON.stringify(m.postContactProneStates)}`,
+    `Post-contact weapons: ${JSON.stringify(m.postContactWeapons)}`,
+    `Post-contact prone weapons: ${JSON.stringify(m.postContactProneWeapons)}`,
     "",
     "Targets (see docs/battlefield-tempo-diagnosis-2026-07-03.md): first death >8s after contact, survival p50 20-30s, suppression avg >15, prone ratio >0.15, deaths/min 6-12.",
     ""

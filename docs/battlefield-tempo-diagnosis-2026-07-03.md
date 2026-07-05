@@ -509,3 +509,22 @@ Result:
 Judgment:
 - The behavior experiment was discarded before commit. Deaths/min stayed in range, but prone ratio failed both runs, so the change made the fight too upright/fragile for D2.
 - The useful result is negative knowledge: do not solve support-fire by adding more `advance` point fire alone. The next candidate should first recover prone/cover behavior or separate support-fire assistance from suppression posture.
+
+## Codex tempo prone state diagnostics (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records post-contact infantry state counts, prone state counts, weapon counts, and prone weapon counts.
+- Fixed the summary `firstDeathAfterContactSeconds` field to use `firstContactAt` instead of `firstShotAt`; direct damage before tracer fire no longer produces a negative headline metric.
+- This is diagnostics only. No AI, weapon, vehicle, suppression, prone, or squad behavior changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | First contact | First death after contact | Opening heavy/vehicle deaths | Main prone states | Main prone weapons |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705135156/` | 5.4 | 0.07 | 68.5s | 4.0s | 5 | `prone-fire` 330, `suppressed` 16 | machinegun 189, rifle 166 |
+| 2 | `reports/playtests/battlefield-tempo-20260705135508/` | 4.2 | 0.02 | 64.5s | 10.0s | 2 | `prone-fire` 90, `pre-assault` 14 | rifle 64, machinegun 61 |
+
+Judgment:
+- Low prone is not evenly distributed. Most prone samples come from `prone-fire` and a small number of suppression/pre-assault samples; large post-contact states such as `advance`, `secure`, and `mounted-transport` contribute little or no prone time.
+- Sniper/scout samples are numerous in both runs but almost never prone in these tempo samples, so scout behavior may be part of the "too upright" look.
+- Current D2 bottleneck is not just "more support fire." Next behavior work should examine when non-support rifle/scout units enter `prone-fire` or cover under early vehicle/MG pressure, and should preserve deaths/min while lifting prone ratio above 0.10.
