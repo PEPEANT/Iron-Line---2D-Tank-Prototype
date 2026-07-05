@@ -564,3 +564,21 @@ Judgment:
 - The engineer miss is mostly `advance`/`secure`, not `mounted-transport`; a small engineer `prone-fire` pocket appears in run 2.
 - Scout prone is zero in both runs because scout samples stay in recon/advance/secure states. `recon-snipe` exists but was tiny in this sample, so simply making `recon-snipe` prone would not solve the global prone ratio.
 - Current D2 bottleneck looks less like a missing "go prone" call and more like low contact/suppression pressure while units remain in `advance`, `secure`, and recon movement states. Next behavior work should target contact/suppression density or tactical-mode transitions before broad prone threshold changes.
+
+## Codex tempo tactical-decision diagnostics (2026-07-05)
+
+Change scope:
+- `npm run tempo` now records post-contact tactical decision counts, decision reasons, and class-decision counts from `unit.ai.tacticalDecision`.
+- This is diagnostics only. No AI, weapon, vehicle, suppression, prone, or squad behavior changed.
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Prone ratio | Suppression avg | First death after contact | Main decisions | Class prone ratios |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705141809/` | 11.0 | 0.15 | 12.83 | 0.1s | `hold_position` 1645, `advance` 944, `prone` 308 | engineer 0.01, infantry 0.25, scout 0.29 |
+| 2 | `reports/playtests/battlefield-tempo-20260705142125/` | 10.5 | 0.33 | 23.49 | 3.1s | `hold_position` 1912, `advance` 1117, `prone` 767 | engineer 0.22, infantry 0.36, scout 0.16 |
+
+Judgment:
+- When suppression density actually rises, the posture path works: `prone:suppression_prone` appears in volume and engineer/scout prone ratios can pass the target.
+- The prior low engineer/scout prone samples were not proof of a missing class-specific prone transition. They were low-contact/low-suppression samples where many units stayed in `advance`, `secure`, or recon movement.
+- The remaining unstable R1/D2 signal is the opening-contact burst: first death still arrives 0.1s/3.1s after contact in these two runs, and early heavy/vehicle/direct sources remain present. Next behavior work should address first-contact buffering or vehicle/direct-heavy source handling, not broad prone thresholds.
