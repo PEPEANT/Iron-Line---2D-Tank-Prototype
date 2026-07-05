@@ -57,7 +57,11 @@ R1에서 제외 (R2+ 백로그):
 
 - **[버그 고정 2026-07-05] 탱크 강습 실패**: 보병 유닛이 전차 강습 시 제대로 공격하지 못하고 붙어만 있는 현상. 전용 모듈 `src/ai/infantry-tank-assault.js`가 이미 존재 (attach→climb→plant 상태기, `tank.infantryAssault` 계약) — "붙어만 있음"은 climb→plant 진행 조건 또는 슬롯 점유 로직 의심. 침대전투 계측과 같은 방식으로 수치 먼저.
 - 차량 내부 구현 (전차/험비 내부 시점·좌석·상호작용) — 매우 어려움, R3+ 희망 항목. 건물 실내(맵에디터 P2.5 컷어웨이)가 검증된 뒤에만 검토.
-- **차량 계기판 HUD (2026-07-05 사용자 결정)**: 탑승 시 보병 슬롯바 대신 아날로그 계기판 표시 (참고: 사용자 제공 레퍼런스 — 속도계/스위치/무기패널 스타일). **철칙: 실존 상태만 계기화** — v1 = 속도계, 포탄 잔량+장전 게이지, 기관총 탄약, 연막 쿨다운(Q), 차체 HP. 기어 제외(사용자), 연료/예열 등 없는 시스템의 가짜 계기 금지. 새 모듈 `src/systems/vehicle-dashboard-hud.js`, 기존 weapon-panel 대체. 난이도 중(캔버스/CSS 게이지 렌더).
+- **차량 계기판 HUD (2026-07-05 사용자 결정, 침대전투 2단계 종료 후 착수 — Fable 담당)**: 탑승 시 보병 슬롯바 대신 아날로그 계기판. **철칙: 실존 상태만 계기화** — 연료/예열 등 없는 시스템의 가짜 계기 금지, 기어 제외(사용자).
+  - 레이아웃(전차): `[속도계 바늘] [주포 클러스터: 철갑12·고폭8 + 장전 게이지 + 탄종 표시] [MG 잔탄 LCD] [연막 램프+Q] [차체 상태 바늘]`. 험비 = 속도계+HMG+차체만.
+  - 데이터 소스 (확인 완료): `tank.speed`(px/s, 바늘 = |speed|/maxSpeed), `tank.ammo{ap,he,mg,smoke}`, `tank.reload{active,progress,duration,ammoId}`, `tank.loadedAmmo`, `tank.weaponMode`, `tank.hp/maxHp`(기본 110), `tank.smokeCooldown`.
+  - 구현 패턴: `src/systems/vehicle-dashboard-hud.js` 신설, infantry-slotbar-hud.js와 같은 Hud 프로토타입 래핑 방식(updateTankWeapons/updateHumveeWeapons 후킹, weapon-panel 숨김/복원). 스타일 `styles/vehicle-dashboard.css` 신설. 게이지는 소형 canvas(다이얼+바늘), 외부 이미지 없음.
+  - 연결(마지막 단계): index.html 495행 부근 `infantry-slotbar-hud.js` 다음에 script 1줄 + link 1줄 — **코덱스 index.html 커밋 후에만** (충돌 방지).
 - 부상병 E키 끌기 후송 + 시체 표현 재작업 — 상세는 bed-combat-and-downed-flow-plan.md 4단계 (2026-07-05 추가분).
 - 계정 시스템, 팩 선택 UI(창작마당 기반), 새 맵, 헬기, 보병 스프라이트
 - 커맨더 재공세 규칙(D3), 차량 선제킬 완화 — 게이트 G1 통과에 불필요하면 R2로
