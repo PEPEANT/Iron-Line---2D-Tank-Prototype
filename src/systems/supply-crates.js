@@ -279,7 +279,7 @@
             button.innerHTML = `
               <span class="supply-crate-item-art"><img src="assets/weapons/${item.weaponId}.png" alt=""></span>
               <strong>${weapon.name || weapon.shortName || item.weaponId}</strong>
-              <b>x${stock}</b>
+              <b>${stock}</b>
             `;
             button.addEventListener("click", () => this.takeSupplyItem(crate, item.id));
             items.append(button);
