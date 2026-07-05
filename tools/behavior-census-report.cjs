@@ -43,6 +43,8 @@ function summaryMarkdown(summary, outDir) {
     ...jsonBlock("Grenade Try Fail Reasons", summary.grenadeTryFailReasons),
     ...jsonBlock("Fire-Move Reasons", summary.fireMoveReasonCounts),
     ...jsonBlock("Fire-Move Blocked Modes", summary.fireMoveBlockedModeCounts),
+    ...jsonBlock("Fire-Move Blocked Mode Roles", summary.fireMoveBlockedModeRoleCounts),
+    ...jsonBlock("Fire-Move Blocked Mode Weapons", summary.fireMoveBlockedModeWeaponCounts),
     ...jsonBlock("Fire-Move No Support Reasons", summary.fireMoveNoSupportCounts),
     ...jsonBlock("Fire-Move Reasons By State", summary.fireMoveReasonByStateCounts),
     ...jsonBlock("Fire-Move Reasons By Weapon", summary.fireMoveReasonByWeaponCounts),

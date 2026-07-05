@@ -166,6 +166,8 @@ new Promise((resolve, reject) => {
         fireMoveOk: 0,
         fireMoveReasonCounts: {},
         fireMoveBlockedModeCounts: {},
+        fireMoveBlockedModeRoleCounts: {},
+        fireMoveBlockedModeWeaponCounts: {},
         fireMoveNoSupportCounts: {},
         fireMoveReasonByStateCounts: {},
         fireMoveReasonByWeaponCounts: {},
@@ -564,7 +566,11 @@ ${hookDiagnosticsScript()}
               inc(stats.fireMoveReasonCounts, reason);
               inc(stats.fireMoveReasonByStateCounts, reason + ":" + state);
               inc(stats.fireMoveReasonByWeaponCounts, reason + ":" + weaponId);
-              if (diagnosis.reason === "blocked-mode") inc(stats.fireMoveBlockedModeCounts, diagnosis.mode || "unknown");
+              if (diagnosis.reason === "blocked-mode") {
+                inc(stats.fireMoveBlockedModeCounts, diagnosis.mode || "unknown");
+                inc(stats.fireMoveBlockedModeRoleCounts, (diagnosis.mode || "unknown") + ":" + (diagnosis.role || "unknown"));
+                inc(stats.fireMoveBlockedModeWeaponCounts, (diagnosis.mode || "unknown") + ":" + weaponId);
+              }
               if (diagnosis.reason === "no-support-source") inc(stats.fireMoveNoSupportCounts, diagnoseNoSupportSource(this, diagnosis.target || reportedContact || contact));
               if (diagnosis.targetSource) inc(stats.fireMoveTargetSourceCounts, diagnosis.targetSource);
             }
@@ -853,6 +859,8 @@ function summarize(data) {
     fireMoveOkRate: Number(((stats.fireMoveOk || 0) / Math.max(1, stats.fireMoveCalls || 0)).toFixed(3)),
     fireMoveReasonCounts: stats.fireMoveReasonCounts || {},
     fireMoveBlockedModeCounts: stats.fireMoveBlockedModeCounts || {},
+    fireMoveBlockedModeRoleCounts: stats.fireMoveBlockedModeRoleCounts || {},
+    fireMoveBlockedModeWeaponCounts: stats.fireMoveBlockedModeWeaponCounts || {},
     fireMoveNoSupportCounts: stats.fireMoveNoSupportCounts || {},
     fireMoveReasonByStateCounts: stats.fireMoveReasonByStateCounts || {},
     fireMoveReasonByWeaponCounts: stats.fireMoveReasonByWeaponCounts || {},

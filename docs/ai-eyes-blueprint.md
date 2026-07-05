@@ -13,6 +13,7 @@
 - 2026-07-05 Codex 지원사격 1차: `src/ai/infantry-support-fire.js`에서 지원/경계 임무 중인 지원화기가 직접 표적을 볼 때도 일부 사격을 `fireRifleAtPoint`로 전환한다. `reports/playtests/behavior-census-20260705105455/` 기준 point shot 13, suppressionShotRatio 0.049, teamworkRatio 0.015였고, 최종 `reports/playtests/behavior-census-20260705111016/` 기준 point shot 76, suppressionShotRatio 0.129, teamworkRatio 0.058까지 올랐다. 목표 0.20~0.40에는 아직 미달. cadence 없는 전환은 tempo가 흔들려 폐기했고, 현재 값은 `supportTask ? 2 : 3` cadence로 제한한다.
 - 2026-07-05 Codex 계측 보강: `tools/check-behavior-census.cjs`가 `no-support-source`를 `no-support-weapon` / `support-suppressed` / `support-state-not-ready` 등으로 다시 쪼개 `Fire-Move No Support Reasons`에 기록한다. 120초 검증 `reports/playtests/behavior-census-20260705112120/` 기준 `no-support-weapon 109`, `support-suppressed 77`, `support-state-not-ready 6`. 다음 D2 행동 수정은 지원사격 cadence 추가 상향이 아니라 분대 내 지원화기 부재/제압으로 fire-move가 끊기는 구조를 봐야 한다.
 - 2026-07-05 Codex 폐기 실험: `hold-wall` 돌격조 fire-move 개방은 `reports/playtests/behavior-census-20260705113008/`에서 fireMoveOk 0으로 흔들렸고 tempo 1회차 prone 0.08/첫 사망 0.5초가 나와 커밋 전 되돌렸다. 다음은 `hold-wall` 광역 개방이 아니라 역할/모드별 차단 진단을 더 좁혀야 한다.
+- 2026-07-05 Codex 계측 보강 2: `blocked-mode`를 모드뿐 아니라 `mode:role`, `mode:weapon`으로도 출력해 `hold-wall`/`fallback` 차단이 돌격조 문제인지 지원/정찰/무기 구성 문제인지 분리한다. 60초 검증 `reports/playtests/behavior-census-20260705114311/` 기준 `hold-wall:support 276`, `hold-wall:security 184`, `hold-wall:rifle 460`으로, 방금 폐기한 "돌격조 hold-wall 개방"이 핵심이 아님을 확인했다.
 
 ## 공통 원칙
 - 게임 코드는 **수정하지 않는다**. 모든 계측은 런타임 후킹(프로토타입 메서드 래핑)으로 한다. 전례: `tools/check-suppression-flow.cjs`가 이미 이 패턴 사용.
