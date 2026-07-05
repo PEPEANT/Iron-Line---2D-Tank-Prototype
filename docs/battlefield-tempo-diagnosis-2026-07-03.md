@@ -406,3 +406,19 @@ Bed-combat check:
 Judgment:
 - Keep the narrow escape rule for now: it reduces the observed stuck-prone window without deleting prone or broadly buffing cover movement.
 - Residual risk remains in tempo variance. The second run is just under the 6 deaths/min target, so the next D2 change should avoid adding more defensive movement until another sample or manual play confirms the feel.
+
+## Codex tempo damage-source diagnostics (2026-07-05)
+
+Change scope:
+- `tools/check-battlefield-tempo.cjs` now records infantry damage events, last lethal damage source per death, pre-contact death count, death source counts, and a `firstDeathDetail` object in both JSON and report.md.
+- This is diagnostics only. No AI, weapon, damage, vehicle, or map behavior changed.
+
+Verification run:
+
+| Report | Deaths/min | Pre-contact deaths | First death after contact | First death source | Death source counts |
+| --- | ---: | ---: | ---: | --- | --- |
+| `reports/playtests/battlefield-tempo-20260705121557/` | 5.4 | 0 | 3.0s | `humvee:machinegun` | `humvee:machinegun` 7, `tank:machinegun` 2, `infantry:machinegun` 2 |
+
+Interpretation:
+- The repeated "vehicle/initial contact" suspicion now has a concrete next probe target: in this sample, the first death and most deaths came from vehicle machine guns, especially humvee MG.
+- Do not tune this immediately from one run. The next bug pass should either collect another 2-run sample with this new source split or add a narrow vehicle-MG opening-window check before changing vehicle damage, aim, or target priority.

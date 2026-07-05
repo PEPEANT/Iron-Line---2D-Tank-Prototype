@@ -107,6 +107,9 @@ new Promise((resolve, reject) => {
     const prevPos = new Map();
     const prevAlive = new Set();
     const samples = [];
+    const damageEvents = [];
+    const lastDamageByUnit = new Map();
+    const areaDamageByUnit = new Map();
     let firstBulletAt = null;
     let firstDeathAt = null;
 
@@ -125,6 +128,103 @@ new Promise((resolve, reject) => {
       return Array.prototype.push.apply(this, args);
     };
     let lastShotCount = 0;
+
+    const idFor = (unit) => unit?.callSign || unit?.id || "";
+    const classifyAreaSource = (ammo, team) => {
+      const owner = ammo?.owner || ammo?.source || null;
+      const vehicle = owner?.sourceVehicle || (owner?.vehicleType ? owner : null);
+      const ammoId = ammo?.id || "area";
+      if (vehicle) {
+        return {
+          kind: (vehicle.vehicleType || "vehicle") + ":" + ammoId + "-blast",
+          team: vehicle.team || team || "",
+          vehicleType: vehicle.vehicleType || "",
+          weaponId: ammoId
+        };
+      }
+      if (owner?.weaponId) {
+        return {
+          kind: "infantry:" + owner.weaponId + "-blast",
+          team: owner.team || team || "",
+          weaponId: ammoId
+        };
+      }
+      return { kind: "blast:" + ammoId, team: team || "", weaponId: ammoId };
+    };
+    const classifyDamageSource = (source, unit) => {
+      const area = areaDamageByUnit.get(idFor(unit));
+      if (!source && area) return area.source;
+      const threat = source || unit?.lastThreat || null;
+      const vehicle = threat?.sourceVehicle || (threat?.vehicleType ? threat : null);
+      if (vehicle) {
+        return {
+          kind: (vehicle.vehicleType || "vehicle") + ":" + (threat?.weaponId || "weapon"),
+          team: vehicle.team || threat?.team || "",
+          vehicleType: vehicle.vehicleType || "",
+          weaponId: threat?.weaponId || ""
+        };
+      }
+      if (threat?.weaponId) {
+        return {
+          kind: "infantry:" + threat.weaponId,
+          team: threat.team || "",
+          weaponId: threat.weaponId
+        };
+      }
+      if (threat && Number.isFinite(threat.x) && Number.isFinite(threat.y)) {
+        return { kind: "blast-or-area", team: threat.team || "" };
+      }
+      return { kind: "unknown", team: "" };
+    };
+
+    const InfantryUnit = window.IronLine?.InfantryUnit;
+    const originalTakeDamage = InfantryUnit?.prototype?.takeDamage;
+    if (originalTakeDamage && !originalTakeDamage.__tempoDamageWrapped) {
+      InfantryUnit.prototype.takeDamage = function tempoDamageWrapped(amount, source = null) {
+        const hpBefore = Number(this.hp) || 0;
+        const aliveBefore = this.alive !== false && hpBefore > 0;
+        const result = originalTakeDamage.call(this, amount, source);
+        const hpAfter = Number(this.hp) || 0;
+        const unitId = idFor(this);
+        if (unitId && aliveBefore && amount > 0) {
+          const sourceInfo = classifyDamageSource(source, this);
+          const event = {
+            unitId,
+            team: this.team || "",
+            at: Math.round(((Date.now() - startWall) / 1000) * 10) / 10,
+            amount: Math.round((Number(amount) || 0) * 10) / 10,
+            hpBefore: Math.round(hpBefore * 10) / 10,
+            hpAfter: Math.round(hpAfter * 10) / 10,
+            lethal: this.alive === false || hpAfter <= 0,
+            source: sourceInfo
+          };
+          lastDamageByUnit.set(unitId, event);
+          if (damageEvents.length < 2400) damageEvents.push(event);
+        }
+        return result;
+      };
+      InfantryUnit.prototype.takeDamage.__tempoDamageWrapped = true;
+    }
+
+    const combat = window.IronLine?.combat;
+    const originalDamageRadius = combat?.damageRadius;
+    if (originalDamageRadius && !originalDamageRadius.__tempoDamageWrapped) {
+      combat.damageRadius = function tempoDamageRadiusWrapped(gameArg, x, y, radius, damage, team, ammo = {}) {
+        const sourceInfo = classifyAreaSource(ammo, team);
+        for (const unit of gameArg?.infantry || []) {
+          if (!unit?.alive || unit.inVehicle || unit.team === team) continue;
+          const distance = Math.hypot((unit.x || 0) - (x || 0), (unit.y || 0) - (y || 0));
+          if (distance <= radius + (unit.radius || 0)) {
+            areaDamageByUnit.set(idFor(unit), {
+              at: Math.round(((Date.now() - startWall) / 1000) * 10) / 10,
+              source: sourceInfo
+            });
+          }
+        }
+        return originalDamageRadius.call(this, gameArg, x, y, radius, damage, team, ammo);
+      };
+      combat.damageRadius.__tempoDamageWrapped = true;
+    }
 
     const timer = setInterval(() => {
       const t = (Date.now() - startWall) / 1000;
@@ -159,7 +259,7 @@ new Promise((resolve, reject) => {
       }
       for (const id of prevAlive) {
         if (!aliveNow.has(id)) {
-          deaths.push({ id, at: t, lifetime: t - (firstSeen.get(id) || 0) });
+          deaths.push({ id, at: t, lifetime: t - (firstSeen.get(id) || 0), lastDamage: lastDamageByUnit.get(id) || null });
           if (firstDeathAt === null) firstDeathAt = t;
         }
       }
@@ -204,6 +304,7 @@ new Promise((resolve, reject) => {
           firstDeathAt,
           totalShots: shotCount,
           shotRanges,
+          damageEvents,
           initialB: samples[0]?.aliveB || 0,
           initialR: samples[0]?.aliveR || 0
         });
@@ -273,6 +374,13 @@ function summarize(r) {
   const ranges = (r.shotRanges || []).sort((a, b) => a - b);
   const modeTotals = {};
   for (const x of post) for (const [m, c] of Object.entries(x.modes || {})) modeTotals[m] = (modeTotals[m] || 0) + c;
+  const deathSourceCounts = {};
+  for (const death of r.deaths || []) {
+    const key = death.lastDamage?.source?.kind || "unknown";
+    deathSourceCounts[key] = (deathSourceCounts[key] || 0) + 1;
+  }
+  const preContactDeaths = r.deaths.filter((death) => death.at < contact);
+  const firstDeath = (r.deaths || []).slice().sort((a, b) => a.at - b.at)[0] || null;
   return {
     durationSeconds: last.t || 0,
     firstShotAt: r.firstBulletAt,
@@ -284,6 +392,16 @@ function summarize(r) {
     shotsPerMinutePostContact: +(r.totalShots / postMinutes).toFixed(0),
     deaths: r.deaths.length,
     deathsPerMinutePostContact: +(r.deaths.filter((d) => d.at >= contact).length / postMinutes).toFixed(1),
+    preContactDeaths: preContactDeaths.length,
+    deathSourceCounts,
+    firstDeathDetail: firstDeath ? {
+      id: firstDeath.id,
+      at: +firstDeath.at.toFixed(1),
+      afterContactSeconds: contact ? +(firstDeath.at - contact).toFixed(1) : null,
+      source: firstDeath.lastDamage?.source || { kind: "unknown" },
+      amount: firstDeath.lastDamage?.amount ?? null,
+      hpBefore: firstDeath.lastDamage?.hpBefore ?? null
+    } : null,
     survivalAfterContactP25: +q(survival, 0.25).toFixed(0),
     survivalAfterContactP50: +q(survival, 0.5).toFixed(0),
     survivalAfterContactP75: +q(survival, 0.75).toFixed(0),
@@ -308,6 +426,7 @@ function summaryMarkdown(m) {
     `| First shot at | ${m.firstShotAt}s |`,
     `| First death after contact | ${m.firstDeathAfterContactSeconds}s |`,
     `| Deaths/min post-contact | ${m.deathsPerMinutePostContact} |`,
+    `| Pre-contact deaths | ${m.preContactDeaths} |`,
     `| Survival after contact p25/p50/p75 | ${m.survivalAfterContactP25}s / ${m.survivalAfterContactP50}s / ${m.survivalAfterContactP75}s |`,
     `| Shots/min post-contact | ${m.shotsPerMinutePostContact} |`,
     `| Shot range p50/p95 | ${m.shotRangeP50}px / ${m.shotRangeP95}px |`,
@@ -316,6 +435,14 @@ function summaryMarkdown(m) {
     `| Cohesion avg post-contact | ${m.postContact.cohesion}px |`,
     `| Moving ratio pre/post | ${m.preContact.movingRatio} / ${m.postContact.movingRatio} |`,
     `| Final alive | B ${m.finalAlive.blue}/${m.finalAlive.initialBlue}, R ${m.finalAlive.red}/${m.finalAlive.initialRed} |`,
+    "",
+    "First death detail:",
+    "",
+    "```json",
+    JSON.stringify(m.firstDeathDetail, null, 2),
+    "```",
+    "",
+    `Death sources: ${JSON.stringify(m.deathSourceCounts)}`,
     "",
     `Post-contact tactical modes: ${JSON.stringify(m.postContactModes)}`,
     "",
