@@ -13,7 +13,15 @@ Iron Line 2D Tank Prototype의 현재 구조, 운영 설계, AI 설계, 코드 �
 - [배포 전 준비](production-prep.md): 로컬 실행, 문법 검사, 시작 화면/플레이 검증 기준.
 - [Iron Line core doctrine](iron-line-core-doctrine.md): 2026-07-03 현재 대화에서 도달한 핵심 판단. V1-V5 방향표, 모바일 첫 체감, AI 전장 템포, 에셋 기반, 로비 디자인, 공개 푸시를 본질 보존 관점에서 정리.
 - [R1 출시 게이트](r1-release-gate.md): 2026-07-04 ALPHA R1.0 범위, G1~G4 체크리스트, R2 백로그를 한 곳에 잠근 출시 기준.
+- [소프트웨어 기반 / 대규모 전장 / 맵에디터 계획](software-foundation-scale-editor-plan.md): 최대 병력 렉, 성능 예산, AI LOD, 맵에디터/도감/스토리모드 확장 기준을 묶은 상위 계획.
 - [AI 행동 관측 계획](ai-behavior-observability-plan.md): 수류탄, 제압사격, 엎드림, 사격-기동 분업을 숫자와 리플레이로 검증하는 "AI의 눈" 상위 계획.
+- [침대전투 버그 / 전투불능 흐름 계획](bed-combat-and-downed-flow-plan.md): 폭발 뒤 AI가 누워 있기만 하는 `침대전투 버그 현상`, 산개/엄폐/후송/소생 방향, 사망 UI 재설계 기준.
+- [스토리모드 × 온라인 융합 진단](story-mode-online-convergence-diagnosis-2026-07-04.md): 배금도시 v3 폰/장면 엔진, 특이점레이스 Durable Object 권위 서버 실사 결과와 R2 온라인 재설계 / R3 스토리모드 순서·게이트.
+- [구조 부채 래칫 설계도](structure-debt-ratchet-blueprint.md): 핫스팟 파일 비대 재발 방지 — 줄 수 baseline 한 방향 잠금(래칫) 검사, R2 기능→선행 이사 지도, 빅뱅 리팩터 금지. 구현은 R2 진입 조건 G0.
+- [맵에디터 V2 설계도](map-editor-v2-blueprint.md): 지형 편집기→사물 편집기 승급 — 맵 스키마 v1(objects/도감 분리), v6 팔레트 계승, AI 초안→사람 재배치→템포 검증 파이프라인, P1~P5 단계 게이트. 구현은 R1+래칫 이후.
+- [리포 대청소 계획](repo-housekeeping-plan.md): docs 아카이브 이사(닫힌 게이트 보고서 ~70개), 루트 CSS/HTML 정리, gitignore 보강, 새 파일 위치 규칙. H1=문서(즉시 가능), H2=코드 파일(R1 후).
+- [보급/장비 시스템 설계도](supply-loadout-blueprint.md): 병과 3단계 이행(S1 UI 숨김→S2 보급상자→S3 슬롯 개편), 상자 스펙, E키 줍기 모션(코드 포즈), 6키 슬롯바, AI 사용 규칙. [Codex]/[난제] 분업 태그 포함.
+- 루트 `AGENTS.md`: 모든 AI 작업자의 계약 — 읽기 순서, 절대 규칙(불일치 시 중단, 검증 필수, 핫스팟 금지), [Codex]/[난제] 분업 규칙.
 - [AI의 눈 구현 설계도](ai-eyes-blueprint.md): `check-behavior-census.cjs`, 리플레이 뷰어, npm 별칭을 다른 AI에게 위임할 수 있게 정리한 구현 지시서.
 - [모바일 시야 확보 설계도](mobile-fov-blueprint.md): 모바일 기본 줌, 핀치 줌, 시야 토글을 좁은 화면 첫 체감 개선으로 묶은 지시서.
 - [지휘관 존재감 설계도](commander-presence-blueprint.md): 기존 지휘관 AI 명령을 무전으로 보이게 하고 정체 구간 재공세를 여는 최소 패치 지시서.
