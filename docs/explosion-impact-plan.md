@@ -1,6 +1,6 @@
 # 폭발·타격 체감 계획 (고폭탄 / 자폭드론 / 발사 효과)
 
-작성: 2026-07-04. 상태: 계획만, 코드 미수정. R1 게이트 G3(표면 품질)에 속함.
+작성: 2026-07-04. 상태: ①~④ 1차 구현 완료(2026-07-05). 실제 음원 파일은 아직 사용자가 드롭인해야 함.
 
 ## 진단 (코드 근거)
 
@@ -30,7 +30,7 @@
 - 화면 셰이크: 거리 감쇠 강화 (가까우면 지금의 1.5배, 멀면 0).
 - 고폭탄/RPG/드론/수류탄 모두 같은 함수, `splash` 크기로 스케일.
 - (선택) 플립북 슬롯 규격: `combat.explosion.flipbook` = { src, frames, fps, size } — 규격만 문서화, 렌더러 지원은 아트 생긴 뒤.
-- 2026-07-05 Codex 렌더 1차: `src/systems/renderer-explosions.js`가 기존 `game.effects.explosions` 데이터를 3층 렌더(초기 섬광/화구/후반 연기)로 그린다. 전투 피해, 폭발 생성, 드론 조작, 잔해 데칼은 아직 바꾸지 않았다.
+- 2026-07-05 Codex 렌더 1차: `src/systems/renderer-explosions.js`가 기존 `game.effects.explosions` 데이터를 3층 렌더(초기 섬광/화구/후반 연기)로 그린다. 전투 피해/폭발 생성은 유지했고, 플레이어 드론 dumb-fire와 잔해 데칼은 ③/④에서 별도 처리했다.
 
 ### ③ 자폭드론 dumb-fire 전환
 `src/entities/suicide-drone.js` + `infantry-weapons.js` config:
