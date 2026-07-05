@@ -47,3 +47,9 @@ Codex 안의 `collisionFootprint`, `coverValue`는 이미 게임 데이터(scene
 
 ## 검증
 `npm run check` 통과 + 테스트랩 진입 → 도감 탭에서 세력 6/무기 12/전차 파츠가 보이고, 진영 토글과 크기 오버레이가 동작하면 완료. 이때 "에이브럼스/군인/건물 추가"는 파일 드롭 → 도감에서 크기 확인 → manifest 수치 조정 루프가 된다.
+
+## 구현 상태 (2026-07-05 Codex)
+
+- v1 도감은 `src/systems/test-lab-asset-preview.js`의 테스트랩 스킨 탭 하단 `Asset Catalog v1` 섹션으로 구현됐다.
+- 현재 표시 범위는 세력, 보병 무기 이미지, 전차 팩 슬롯, scenery 오브젝트 런타임 뷰다. 새 JSON 카탈로그는 만들지 않았고, `future3d`/`modelPath`/`collisionFootprint`/`coverValue` 같은 복제 필드도 추가하지 않았다.
+- `npm run asset:catalog`가 도감 섹션과 금지 필드 부재를 검사하며, `npm run check`에 포함됐다.
