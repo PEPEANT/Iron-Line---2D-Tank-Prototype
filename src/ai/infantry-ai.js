@@ -399,6 +399,7 @@
       if (this.continueGrenadeAim?.(dt, contact, tankThreat)) return;
       if (this.executeFireMoveAdvance?.(dt, order, contact, tankThreat, reportedContact, beforeX, beforeY)) return;
 
+      if (this.handleBlastResponse?.(dt, order, contact, tankThreat, beforeX, beforeY)) return;
       if (this.executeTacticalSpread?.(dt, this.tacticalDecision, tankThreat || pressureThreat, beforeX, beforeY)) return;
 
       if (this.handlePressureThreat(dt, contact, tankThreat, pressureThreat, beforeX, beforeY)) return;

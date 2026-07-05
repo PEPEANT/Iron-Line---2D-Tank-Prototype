@@ -242,3 +242,23 @@ node tools/check-battlefield-tempo.cjs
 - deaths/min은 4.6/8.1로 편차가 크다. 평균은 목표 하한 근처지만 1회는 미달이므로 이 커밋을 전투 밸런스 개선으로 판정하지 않는다.
 - prone ratio는 0.12/0.12로 R1 재측정 목표선(>0.10)은 넘지만, 이전 진단 목표(>0.15)에는 못 미친다. D2(제압/엎드림 지속 편차)는 유지.
 - 이번 변경은 행동 보존형 구조 작업이다. 다음 실제 전투 작업은 `bed-combat-and-downed-flow-plan.md`의 2단계처럼 폭발 후 산개/엄폐 전환만 좁게 다룬다.
+
+## Codex 침대전투 2단계 최소 완화 후 템포 확인 (2026-07-05)
+
+변경 범위:
+- `src/ai/infantry-blast-response.js`가 폭발 반경 안 보병에게 짧은 폭발 위협을 기록하고, 아주 가까운 폭발 또는 반복 폭발에서는 선제 `prone-fire` 홀드보다 산개/엄폐 후보를 먼저 보게 한다.
+- 피해량, 무기 수치, 소생/설치류/보급 판단은 바꾸지 않았다.
+- `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705084828/` 기준 `proneOnlyRatio` 0.291, `noResponseRatio` 0. 최종값은 전장 페이스를 지키기 위해 보수적으로 잡았다.
+
+`npm run tempo` 2회 결과:
+
+| 런 | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | 판정 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705085142/` | 10.5 | 42s | 15.69 | 0.20 | 6.0s | 사망/엎드림 목표 통과, 첫 사망은 목표 8s 미달 |
+| 2 | `reports/playtests/battlefield-tempo-20260705085457/` | 7.1 | 22s | 8.19 | 0.11 | 4.5s | 사망/엎드림 목표 통과, 생존 p50 목표권 |
+
+판정:
+- deaths/min은 10.5/7.1로 목표 6~12 안에 복귀했다.
+- prone ratio는 0.20/0.11로 R1 재측정 목표선(>0.10)을 통과했다.
+- 첫 사망 after contact는 6.0s/4.5s로 여전히 8초 목표에는 못 미친다. 차량/초기 접촉 문제는 별도 과제로 유지한다.
+- 침대전투 prone-only는 줄었지만 0.291로 아직 남아 있다. 다음 단계에서 이 수치를 더 줄일 경우 전장 deaths/min이 다시 4 이하로 떨어질 수 있으므로, 더 강한 엄폐 이동보다 "반응 후 다시 사격/진격으로 돌아오는 조건"을 먼저 봐야 한다.

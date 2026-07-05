@@ -160,3 +160,11 @@
 - `npm run check` 통과. 래칫 기준은 `src/ai/infantry-ai.js` 2849줄에서 2724줄로 내려갔다.
 - `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705075449/` 기준 폭발 8회, 반응창 48개, `blast:fallback` 29, `blast:prone-only` 19, `proneOnlyRatio` 0.396, `noResponseRatio` 0.
 - 해석: 구조 분리 뒤에도 계측은 정상 작동한다. prone-only 비율은 기존 0.365와 같은 문제권이라, 다음 실제 행동 작업은 설치류/보급/소생으로 덮지 말고 폭발 후 산개/엄폐 전환만 좁게 다룬다.
+
+## 2026-07-05 침대전투 2단계 최소 완화 기록
+
+- `src/ai/infantry-blast-response.js`를 추가했다. 본편 `damageRadius()`를 감싸 폭발 반경 안의 적 보병에게 짧은 `lastBlastThreat`를 기록하고, `InfantryAI.update()`가 제압/엎드림 분기 전에 `handleBlastResponse()`를 먼저 확인한다.
+- 새 행동 후보는 기존 `tacticalSpreadTarget()`과 `resolveCoverTarget()`만 재사용한다. 새 피해량, 새 무기, 새 설치류, 새 소생 행동은 추가하지 않았다.
+- 너무 강한 엄폐 이동은 전장 deaths/min을 4 이하로 눌러 폐기했다. 최종값은 아주 가까운 폭발(`pressure >= 0.62`) 또는 반복 폭발에서만 선제 엎드림 홀드를 양보하고, 반응 시간은 0.42초로 제한한다.
+- `npm run bed:combat`: `reports/playtests/bed-combat-census-20260705084828/` 기준 폭발 8회, 반응창 55개, `blast:cover` 5, `blast:spread` 14, `blast:fallback` 19, `blast:prone-only` 16, `proneOnlyRatio` 0.291, `noResponseRatio` 0.
+- 해석: 완전 해결은 아니지만 구조 분리 직후 0.396보다 낮다. 전장 템포를 깨지 않는 선에서 "누워 있기만 함"을 일부 산개/엄폐/후퇴로 돌린 첫 완화로 본다.
