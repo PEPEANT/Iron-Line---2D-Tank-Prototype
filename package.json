@@ -5,7 +5,7 @@
   "description": "Static 2D tank and infantry prototype.",
   "scripts": {
     "start": "node tools/static-server.cjs",
-    "check": "node tools/check-syntax.cjs && node tools/check-duplicates.cjs && node tools/check-code-health.cjs && node tools/check-map-schema.cjs && node tools/check-editor-p2.cjs && node tools/check-editor-history.cjs && node tools/check-map-interiors.cjs && node tools/check-map-connections.cjs && node tools/check-corpse-renderer.cjs && node tools/check-commander-presence.cjs && node tools/check-settings-controls.cjs && node tools/check-vehicle-dashboard.cjs && node tools/check-asset-catalog.cjs && node tools/check-audio-system.cjs && node tools/check-explosion-renderer.cjs && node tools/check-asset-pack.cjs",
+    "check": "node tools/check-syntax.cjs && node tools/check-duplicates.cjs && node tools/check-code-health.cjs && node tools/check-map-schema.cjs && node tools/check-editor-p2.cjs && node tools/check-editor-history.cjs && node tools/check-map-interiors.cjs && node tools/check-map-connections.cjs && node tools/check-corpse-renderer.cjs && node tools/check-commander-presence.cjs && node tools/check-settings-controls.cjs && node tools/check-vehicle-dashboard.cjs && node tools/check-asset-catalog.cjs && node tools/check-audio-system.cjs && node tools/check-explosion-renderer.cjs && node tools/check-explosion-debris.cjs && node tools/check-asset-pack.cjs",
     "check:online": "node tools/check-online-smoke.cjs",
     "census": "node tools/check-behavior-census.cjs",
     "bed:combat": "node tools/check-bed-combat-census.cjs",
@@ -25,6 +25,7 @@
     "asset:catalog": "node tools/check-asset-catalog.cjs",
     "audio:system": "node tools/check-audio-system.cjs",
     "explosion:render": "node tools/check-explosion-renderer.cjs",
+    "explosion:debris": "node tools/check-explosion-debris.cjs",
     "heal": "npm run check && npm run health"
   },
   "engines": {

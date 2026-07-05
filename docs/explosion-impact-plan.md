@@ -46,6 +46,7 @@
 - 렌더: `renderer.js` drawScorchMarks 직후 같은 패스(유닛 아래)에서 그림. 카메라 밖 컬링.
 - 스타일 슬롯: `combat.debris.decal` (색·알파) — 나중에 이미지 잔해로 교체 가능하게 기존 슬롯 패턴 유지.
 - 전차 잔해(wreck-cover, 엄폐 제공)와 역할 구분: 그건 게임플레이 오브젝트, 이건 순수 그림. 섞지 말 것.
+- 2026-07-05 Codex debris v1: `src/systems/explosion-debris.js`가 기존 폭발 객체를 감지해 `game.effects.debris`를 생성/갱신하고, `drawScorchMarks` 뒤에서 지면 데칼로 렌더한다. 상한 120개, 수명 60초, 충돌·AI·온라인 동기화 없음.
 
 ## 검증
 - 관리자 패널 → 스폰 탭에서 드론/전차 스폰 → 눈+귀로 확인. 템포 프로브로 deaths/min 6~12 유지 확인 (드론 명중률 하락로 자연 너프됨 — 의도).
