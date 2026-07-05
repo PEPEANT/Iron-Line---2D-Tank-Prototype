@@ -494,3 +494,18 @@ Judgment:
 - The behavior experiment was discarded before commit. It did not raise point shots enough to justify the unstable tempo sample.
 - The tempo contact timing fix is kept: reports now include `firstDamageAt` and `firstContactAt`, and first-death-after-contact no longer goes negative when direct projectile damage precedes tracer fire.
 - Next support-fire behavior work should not simply give `advance` a shared point. It needs a tighter trigger, probably requiring confirmed assault movement plus a non-vehicle infantry target and then a fresh 2-run tempo pass.
+
+## Codex discarded active-assault support experiment (2026-07-05)
+
+Experiment:
+- Temporarily allowed support/security machineguns in `advance`/`pre-assault` to borrow a same-squad target only when another squad member was actively in `fire-move`, `assault-fire-move`, or `grenade-approach`.
+- Scope was narrower than the previous shared-support experiment: non-vehicle infantry target only, same squad only, grenade-launcher holders excluded, existing cadence preserved.
+
+Result:
+- `npm run census`: `reports/playtests/behavior-census-20260705133346/` had pointShots 65, suppressionShotRatio 0.164, fireMoveOk 1420, teamworkRatio 0.048. This improved support signal but still missed the 0.20 suppression-ratio target.
+- `npm run tempo` run 1: `reports/playtests/battlefield-tempo-20260705133713/` had deaths/min 6.4, prone 0.05, first death 4.0s after contact.
+- `npm run tempo` run 2: `reports/playtests/battlefield-tempo-20260705134025/` had deaths/min 6.8, prone 0.05, first death 7.5s after contact.
+
+Judgment:
+- The behavior experiment was discarded before commit. Deaths/min stayed in range, but prone ratio failed both runs, so the change made the fight too upright/fragile for D2.
+- The useful result is negative knowledge: do not solve support-fire by adding more `advance` point fire alone. The next candidate should first recover prone/cover behavior or separate support-fire assistance from suppression posture.
