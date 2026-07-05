@@ -357,11 +357,41 @@ function inc(bucket, key, amount = 1) {
   bucket[safeKey] = (bucket[safeKey] || 0) + amount;
 }
 
+function incNested(bucket, outer, inner, amount = 1) {
+  const safeOuter = outer || "unknown";
+  bucket[safeOuter] = bucket[safeOuter] || {};
+  inc(bucket[safeOuter], inner, amount);
+}
+
+function movementBand(distance) {
+  const value = Number(distance) || 0;
+  if (value < 12) return "0-12";
+  if (value < 24) return "12-24";
+  if (value < 48) return "24-48";
+  return "48+";
+}
+
+function suppressionBand(value) {
+  const amount = Number(value) || 0;
+  if (amount < 25) return "0-25";
+  if (amount < 50) return "25-50";
+  if (amount < 75) return "50-75";
+  return "75+";
+}
+
 function summarize(data) {
   const windows = data.unitWindows || [];
   const categoryCounts = {};
   const primaryCounts = {};
   const byAmmo = {};
+  const primaryByWeapon = {};
+  const primaryByClass = {};
+  const proneOnlyByWeapon = {};
+  const proneOnlyByClass = {};
+  const proneOnlyStateCounts = {};
+  const proneOnlyMovementBands = {};
+  const proneOnlyInitialSuppressionBands = {};
+  const proneOnlyFinalSuppressionBands = {};
   const firstResponseSeconds = [];
   const primaryOrder = [
     "blast:rpg-response",
@@ -382,6 +412,18 @@ function summarize(data) {
     inc(primaryCounts, primary);
     byAmmo[item.ammoId] = byAmmo[item.ammoId] || {};
     inc(byAmmo[item.ammoId], primary);
+    incNested(primaryByWeapon, item.weaponId, primary);
+    incNested(primaryByClass, item.classId, primary);
+    if (primary === "blast:prone-only") {
+      inc(proneOnlyByWeapon, item.weaponId);
+      inc(proneOnlyByClass, item.classId);
+      inc(proneOnlyMovementBands, movementBand(item.maxMoveDistance));
+      inc(proneOnlyInitialSuppressionBands, suppressionBand(item.initialSuppression));
+      inc(proneOnlyFinalSuppressionBands, suppressionBand(item.finalSuppression));
+      for (const [state, count] of Object.entries(item.states || {})) {
+        inc(proneOnlyStateCounts, state, count);
+      }
+    }
   }
 
   const sortedFirst = firstResponseSeconds.sort((a, b) => a - b);
@@ -395,6 +437,14 @@ function summarize(data) {
     categoryCounts,
     primaryCounts,
     byAmmo,
+    primaryByWeapon,
+    primaryByClass,
+    proneOnlyByWeapon,
+    proneOnlyByClass,
+    proneOnlyStateCounts,
+    proneOnlyMovementBands,
+    proneOnlyInitialSuppressionBands,
+    proneOnlyFinalSuppressionBands,
     proneOnlyRatio: Number(((categoryCounts["blast:prone-only"] || 0) / totalWindows).toFixed(3)),
     noResponseRatio: Number(((categoryCounts["blast:no-response"] || 0) / totalWindows).toFixed(3)),
     firstResponseP50: Number(quantile(sortedFirst, 0.5).toFixed(2)),
@@ -429,6 +479,14 @@ function markdown(summary, outDir) {
     ...jsonBlock("Category Counts", summary.categoryCounts),
     ...jsonBlock("Primary Counts", summary.primaryCounts),
     ...jsonBlock("Primary Counts By Ammo", summary.byAmmo),
+    ...jsonBlock("Primary Counts By Weapon", summary.primaryByWeapon),
+    ...jsonBlock("Primary Counts By Class", summary.primaryByClass),
+    ...jsonBlock("Prone-Only By Weapon", summary.proneOnlyByWeapon),
+    ...jsonBlock("Prone-Only By Class", summary.proneOnlyByClass),
+    ...jsonBlock("Prone-Only State Counts", summary.proneOnlyStateCounts),
+    ...jsonBlock("Prone-Only Movement Bands", summary.proneOnlyMovementBands),
+    ...jsonBlock("Prone-Only Initial Suppression Bands", summary.proneOnlyInitialSuppressionBands),
+    ...jsonBlock("Prone-Only Final Suppression Bands", summary.proneOnlyFinalSuppressionBands),
     ...jsonBlock("Raw Summary", summary),
     "## Notes",
     "",

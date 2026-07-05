@@ -189,3 +189,11 @@
 - 사망 화면은 `사망` / `원인: ...` / `메인화면으로 가기`만 표시한다. 리스폰 카운트다운 문구와 `R` 재출격 단축키는 사망 화면 계약에서 제외했다.
 - `npm run death:ui`가 이 계약을 검사하며, `npm run check`에 포함된다.
 - 범위 제한: 소생, E키 끌기, AI 안전지대 판단, wounded/dead 상태머신은 아직 구현하지 않았다.
+
+## 2026-07-05 Bed combat prone-only diagnostics
+
+- `tools/check-bed-combat-census.cjs` now breaks blast-window primary responses down by weapon, class, prone-only state counts, movement bands, and initial/final suppression bands. Behavior logic was not changed.
+- Verification run: `reports/playtests/bed-combat-census-20260705115206/`.
+- Result: 8 controlled blasts, 37 blast-unit windows, `blast:cover` 22, `blast:fallback` 5, `blast:spread` 3, `blast:prone-only` 7. `proneOnlyRatio` = 0.189, `noResponseRatio` = 0.
+- Prone-only split: all 7 were `rifle`; classes were infantry 4 and engineer 3. State counts inside those windows were only `prone-fire` (176 samples), movement band was `0-12` for all 7, initial suppression was `50-75` for all 7, and final suppression was `50-75` for 4 / `75+` for 3.
+- Interpretation: the remaining issue is not missing blast recognition. The AI responds, but some rifle infantry/engineer units stay in `prone-fire` under medium-to-high suppression without transitioning to spread/cover/fallback inside the 10s window. Next behavior work should be a narrow prone-fire exit/transition rule for non-support rifle units, not a broad prone deletion or cover buff.
