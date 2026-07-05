@@ -368,3 +368,17 @@ Judgment:
 - The support-fire change improves the observable support-fire/teamwork signal without a broad combat rewrite.
 - It is not a full D2 finish: suppressionShotRatio remains below target and survival p50 is still long. A stronger no-cadence version was tested and discarded because it pushed tempo out of bounds.
 - Next D2 work should inspect why many fire-move attempts are blocked by `hold-wall`/`fallback`/`no-support-source` instead of increasing support fire cadence again.
+
+## Codex hold-wall fire-move experiment discarded (2026-07-05)
+
+Experiment:
+- Temporarily allowed assault-role riflemen in `hold-wall` to enter fire-move when they had direct or squad-shared infantry contact, while keeping `fallback`/`regroup`/`rally-with-tank` blocked.
+
+Result:
+- `npm run census` 180s: `reports/playtests/behavior-census-20260705113008/` had fireMoveOk 0, suppressionShotRatio 0.004, teamworkRatio 0.004.
+- Follow-up 120s: `reports/playtests/behavior-census-20260705113239/` recovered to fireMoveOk 967 and suppressionShotRatio 0.116, but teamworkRatio stayed 0.015.
+- `npm run tempo` 2 runs: `reports/playtests/battlefield-tempo-20260705113555/` was deaths/min 6.7, prone 0.08, first death after contact 0.5s; `reports/playtests/battlefield-tempo-20260705113909/` was deaths/min 6.0, prone 0.13, first death after contact 15.5s.
+
+Judgment:
+- Not stable enough to keep. Code was reverted before commit.
+- Next D2 work should not broadly unlock `hold-wall`. Use the new no-support breakdown and add narrower role/mode diagnostics before changing squad tactical modes.
