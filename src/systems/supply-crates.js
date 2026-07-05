@@ -255,25 +255,37 @@
         const grid = panel.querySelector("[data-supply-grid]");
         if (!grid) return;
         grid.textContent = "";
+        const bySlot = new Map();
         for (const item of IronLine.supplyLoadout?.itemList?.() || []) {
-          const weapon = IronLine.constants?.INFANTRY_WEAPONS?.[item.weaponId];
-          if (!weapon) continue;
-          const stock = Math.max(0, Number(crate.stock?.[item.stockKey]) || 0);
-          const slotRole = IronLine.supplyLoadout?.slotRole?.(item.slotIndex) || "";
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "supply-crate-item";
-          button.dataset.supplyItem = item.id;
-          button.disabled = stock <= 0;
-          button.innerHTML = `
-            <span class="supply-crate-item-key">${item.slotIndex + 1}</span>
-            <span class="supply-crate-item-art"><img src="assets/weapons/${item.weaponId}.png" alt=""></span>
-            <strong>${weapon.shortName || weapon.name || item.weaponId}</strong>
-            <small>${slotRole}</small>
-            <b>x${stock}</b>
-          `;
-          button.addEventListener("click", () => this.takeSupplyItem(crate, item.id));
-          grid.append(button);
+          if (!IronLine.constants?.INFANTRY_WEAPONS?.[item.weaponId]) continue;
+          if (!bySlot.has(item.slotIndex)) bySlot.set(item.slotIndex, []);
+          bySlot.get(item.slotIndex).push(item);
+        }
+        for (const slotIndex of [...bySlot.keys()].sort((a, b) => a - b)) {
+          const section = document.createElement("div");
+          section.className = "supply-crate-cat";
+          const label = document.createElement("h4");
+          label.innerHTML = `<span>${slotIndex + 1}</span>${IronLine.supplyLoadout?.slotRole?.(slotIndex) || ""}`;
+          const items = document.createElement("div");
+          items.className = "supply-crate-cat-grid";
+          for (const item of bySlot.get(slotIndex)) {
+            const weapon = IronLine.constants.INFANTRY_WEAPONS[item.weaponId];
+            const stock = Math.max(0, Number(crate.stock?.[item.stockKey]) || 0);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "supply-crate-item";
+            button.dataset.supplyItem = item.id;
+            button.disabled = stock <= 0;
+            button.innerHTML = `
+              <span class="supply-crate-item-art"><img src="assets/weapons/${item.weaponId}.png" alt=""></span>
+              <strong>${weapon.name || weapon.shortName || item.weaponId}</strong>
+              <b>x${stock}</b>
+            `;
+            button.addEventListener("click", () => this.takeSupplyItem(crate, item.id));
+            items.append(button);
+          }
+          section.append(label, items);
+          grid.append(section);
         }
       },
 

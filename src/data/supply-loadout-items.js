@@ -5,6 +5,24 @@
   IronLine.constants = IronLine.constants || {};
 
   const SUPPLY_LOADOUT_ITEMS = {
+    machinegun: {
+      id: "machinegun",
+      weaponId: "machinegun",
+      slotIndex: 0,
+      stockKey: "machinegun"
+    },
+    sniper: {
+      id: "sniper",
+      weaponId: "sniper",
+      slotIndex: 0,
+      stockKey: "sniper"
+    },
+    smg: {
+      id: "smg",
+      weaponId: "smg",
+      slotIndex: 0,
+      stockKey: "smg"
+    },
     pistol: {
       id: "pistol",
       weaponId: "pistol",
@@ -40,6 +58,9 @@
   };
 
   const DEFAULT_SUPPLY_STOCK = {
+    machinegun: 2,
+    sniper: 2,
+    smg: 3,
     pistol: 4,
     rpg: 2,
     reconDrone: 2,
