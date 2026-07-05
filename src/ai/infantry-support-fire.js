@@ -60,18 +60,22 @@
     supportSuppressionPoint(order = this.order) {
       const profile = this.supportWeaponProfile?.();
       if (!profile) return null;
+      const mode = order?.tacticalMode || order?.role || "";
+      const role = order?.squadRole || this.unit?.squadRole || this.squadRole?.() || "";
       const direct = this.selectTarget?.();
       if (direct) {
-        if (!this.squadHasFireMoveAssault?.()) return null;
+        const assaultTask = this.squadHasFireMoveAssault?.();
+        const supportTask = mode === "support-fire" || role === "support" || role === "security" && mode === "hold-wall";
+        if (!assaultTask && !supportTask) return null;
         if (this.hasGrenade?.("grenadeLauncher")) return null;
-        if (((Math.floor((this.game.matchTime || 0) * 3) + (this.seed % 7)) % 5) !== 0) return null;
+        const cadence = supportTask ? 2 : 3;
+        if (((Math.floor((this.game.matchTime || 0) * 3) + (this.seed % 7)) % cadence) !== 0) return null;
         return { x: direct.x, y: direct.y, target: direct, direct: true };
       }
 
       const report = this.selectReportedSoftContact?.();
       if (report && this.canUseSupportFireReport(report, profile.reportRange)) return report;
 
-      const mode = order?.tacticalMode || order?.role || "";
       if (mode !== "support-fire") return null;
       const point = order.supportPoint || order.squadStatus?.lastThreat || order.point;
       if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;

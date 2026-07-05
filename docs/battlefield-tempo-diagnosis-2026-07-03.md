@@ -342,3 +342,29 @@ Checks:
 Judgment:
 - The targeted dumb-fire contract passed and the changed path is player-controlled, not AI drone selection or infantry behavior.
 - The tempo miss matches the already documented D2/prone and early-contact variability, so no broad combat retune was made in this patch.
+
+## Codex support-fire direct point-fire check (2026-07-05)
+
+Change scope:
+- Support weapons in support/security tasks can now convert some direct visible-target fire into `fireRifleAtPoint` suppression fire.
+- This is a narrow D2/teamwork adjustment: no weapon damage, range, squad role assignment, grenade thresholds, or vehicle behavior changed.
+- Added `npm run support:fire` contract check.
+
+Behavior census:
+
+| Run | Report | Point shots | Suppression shot ratio | Fire-move ok | Teamwork ratio | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Baseline | `reports/playtests/behavior-census-20260705105455/` | 13 | 0.049 | 419 | 0.015 | support fire underused |
+| Final | `reports/playtests/behavior-census-20260705111016/` | 76 | 0.129 | 1961 | 0.058 | partial improvement, still below 0.20 suppression-ratio target |
+
+`npm run tempo` 2-run result:
+
+| Run | Report | Deaths/min | Survival p50 | Suppression avg | Prone ratio | First death after contact | Judgment |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `reports/playtests/battlefield-tempo-20260705111341/` | 10.2 | 35s | 14.12 | 0.18 | 19.5s | deaths/prone pass |
+| 2 | `reports/playtests/battlefield-tempo-20260705111655/` | 5.7 | 45s | 9.97 | 0.12 | 9.5s | deaths slightly under 6, prone/first death pass |
+
+Judgment:
+- The support-fire change improves the observable support-fire/teamwork signal without a broad combat rewrite.
+- It is not a full D2 finish: suppressionShotRatio remains below target and survival p50 is still long. A stronger no-cadence version was tested and discarded because it pushed tempo out of bounds.
+- Next D2 work should inspect why many fire-move attempts are blocked by `hold-wall`/`fallback`/`no-support-source` instead of increasing support fire cadence again.

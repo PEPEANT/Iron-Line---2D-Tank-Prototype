@@ -10,6 +10,7 @@
 - 검증 실행 1: `npm run census` → `reports/playtests/behavior-census-20260705092057/` 생성. 360 frames, 212 events, report/result 출력 확인. point shot 0, fireMoveOk 0, teamworkRatio 0, grenade ok 1, proneEnter 12.
 - 검증 실행 2: `npm run census` → `reports/playtests/behavior-census-20260705092542/` 생성. fireMoveOk 1075, `assault-fire-move`/rifle 성공 재확인, point shot 8, teamworkRatio 0.007, grenade ok 1, proneEnter 29.
 - 판정: 1회차 fireMoveOk 0은 런 편차로 보고, 도구/상태 split 회귀는 아님. 다음 작업은 census 구현이 아니라 결과 해석/행동 수정이다. 우선순위 후보: 지원사격 `fireRifleAtPoint` 실제 발동률, 낮은 teamworkRatio, 수류탄 `no-ammo`/`no-visible-or-usable-report` 병목.
+- 2026-07-05 Codex 지원사격 1차: `src/ai/infantry-support-fire.js`에서 지원/경계 임무 중인 지원화기가 직접 표적을 볼 때도 일부 사격을 `fireRifleAtPoint`로 전환한다. `reports/playtests/behavior-census-20260705105455/` 기준 point shot 13, suppressionShotRatio 0.049, teamworkRatio 0.015였고, 최종 `reports/playtests/behavior-census-20260705111016/` 기준 point shot 76, suppressionShotRatio 0.129, teamworkRatio 0.058까지 올랐다. 목표 0.20~0.40에는 아직 미달. cadence 없는 전환은 tempo가 흔들려 폐기했고, 현재 값은 `supportTask ? 2 : 3` cadence로 제한한다.
 
 ## 공통 원칙
 - 게임 코드는 **수정하지 않는다**. 모든 계측은 런타임 후킹(프로토타입 메서드 래핑)으로 한다. 전례: `tools/check-suppression-flow.cjs`가 이미 이 패턴 사용.
