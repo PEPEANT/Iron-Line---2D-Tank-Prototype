@@ -6,6 +6,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { WebSocket } = require("ws");
 const { summaryMarkdown } = require("./behavior-census-report.cjs");
+const { hookDiagnosticsScript } = require("./behavior-census-hook-diagnostics.cjs");
 
 const root = path.resolve(__dirname, "..");
 const appPort = Number(process.env.IRONLINE_CENSUS_PORT || 4210);
@@ -165,6 +166,7 @@ new Promise((resolve, reject) => {
         fireMoveOk: 0,
         fireMoveReasonCounts: {},
         fireMoveBlockedModeCounts: {},
+        fireMoveNoSupportCounts: {},
         fireMoveReasonByStateCounts: {},
         fireMoveReasonByWeaponCounts: {},
         fireMoveOkByState: {},
@@ -193,28 +195,7 @@ new Promise((resolve, reject) => {
         const config = IronLine.InfantryAIConfig || {};
         const distXY = math.distXY || ((x1, y1, x2, y2) => Math.hypot((x2 || 0) - (x1 || 0), (y2 || 0) - (y1 || 0)));
 
-        const reportedRejectReason = (ai, report, weapon, options = {}) => {
-          if (!report || !report.target) return "reported-missing";
-          if (report.sourceType === "objective") return "reported-objective";
-          if (!ai.isAliveEnemy?.(report.target)) return "reported-dead";
-
-          const age = Math.max(0, (ai.game.matchTime || 0) - Number(report.lastSeenAt || 0));
-          const confidence = Number(report.confidence || 0);
-          const source = report.sourceType || "";
-          const confirmed = report.certainty === "confirmed" || source === "scout" || source === "recon_drone";
-          const launcher = weapon?.id === "grenadeLauncher";
-          const aimGrace = options.aimGrace ? config.grenadeReportAimGrace ?? 0.55 : 0;
-          const combatMaxAge = (launcher ? 1.05 : 0.82) + aimGrace;
-          const reportMaxAge = (launcher ? 1.9 : 1.35) + aimGrace;
-          const minConfidence = launcher ? 0.74 : 0.82;
-          const combatFresh = source === "combat" && age <= combatMaxAge && confidence >= 0.64;
-          if (combatFresh) return "";
-          const maxAge = reportMaxAge;
-          if (age > maxAge) return "reported-too-old";
-          if (confidence < minConfidence) return "reported-low-confidence";
-          if (!(confirmed || (launcher && source === "attack_drone"))) return "reported-unconfirmed";
-          return "";
-        };
+${hookDiagnosticsScript()}
 
         const diagnoseGrenadeTry = (ai, target, dt = 0.033) => {
           const weapon = target?.weapon || IronLine.constants?.INFANTRY_WEAPONS?.grenade;
@@ -584,6 +565,7 @@ new Promise((resolve, reject) => {
               inc(stats.fireMoveReasonByStateCounts, reason + ":" + state);
               inc(stats.fireMoveReasonByWeaponCounts, reason + ":" + weaponId);
               if (diagnosis.reason === "blocked-mode") inc(stats.fireMoveBlockedModeCounts, diagnosis.mode || "unknown");
+              if (diagnosis.reason === "no-support-source") inc(stats.fireMoveNoSupportCounts, diagnoseNoSupportSource(this, diagnosis.target || reportedContact || contact));
               if (diagnosis.targetSource) inc(stats.fireMoveTargetSourceCounts, diagnosis.targetSource);
             }
             return result;
@@ -871,6 +853,7 @@ function summarize(data) {
     fireMoveOkRate: Number(((stats.fireMoveOk || 0) / Math.max(1, stats.fireMoveCalls || 0)).toFixed(3)),
     fireMoveReasonCounts: stats.fireMoveReasonCounts || {},
     fireMoveBlockedModeCounts: stats.fireMoveBlockedModeCounts || {},
+    fireMoveNoSupportCounts: stats.fireMoveNoSupportCounts || {},
     fireMoveReasonByStateCounts: stats.fireMoveReasonByStateCounts || {},
     fireMoveReasonByWeaponCounts: stats.fireMoveReasonByWeaponCounts || {},
     fireMoveOkByState: stats.fireMoveOkByState || {},
