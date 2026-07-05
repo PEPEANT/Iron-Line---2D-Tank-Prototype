@@ -1,6 +1,6 @@
 # 수복 (Iron Line) — AI 작업자 계약
 
-이 리포에서 작업하는 모든 AI(Codex, GPT, Claude 등)는 이 문서를 규칙으로 삼는다. 이 문서는 낡은 `AGENT_HANDOFF.md`를 대체한다.
+이 리포에서 작업하는 모든 AI(Codex, GPT, Claude 등)는 이 문서를 규칙으로 삼는다. 이 문서는 낡은 `docs/archive/AGENT_HANDOFF.md`를 대체한다.
 
 ## 먼저 읽기 (순서대로)
 
