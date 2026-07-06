@@ -198,7 +198,9 @@ class RoomRegistry {
     room.hostId = nextHostId;
     if (room.worldState) {
       const currentHostId = String(room.worldState.hostId || "");
-      if (currentHostId !== nextHostId) {
+      const currentHostPresent = Array.from(room.players?.values?.() || [])
+        .some((player) => String(player?.playerId || player?.id || "") === currentHostId);
+      if (currentHostId !== nextHostId && (!currentHostId || !currentHostPresent)) {
         room.worldState = {
           ...room.worldState,
           hostId: nextHostId

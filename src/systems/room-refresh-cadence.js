@@ -101,7 +101,8 @@
       const selectedId = registry.selectedRoomId();
       const detailId = selectedId && summaryRooms.some((room) => room.id === selectedId) ? selectedId : summaryRooms[0]?.id || "";
       const previousDetail = detailId ? localById.get(detailId) || null : null;
-      const detailRoom = detailId && !registry.deletedRemoteRoomIds.has(detailId) ? await registry.fetchRemoteRoomDetail(detailId, previousDetail) : null;
+      const shouldFetchDetail = detailId && (!refreshPlan.activeRoomId || refreshPlan.detailDue || detailId !== refreshPlan.activeRoomId);
+      const detailRoom = shouldFetchDetail && !registry.deletedRemoteRoomIds.has(detailId) ? await registry.fetchRemoteRoomDetail(detailId, previousDetail) : null;
       if (detailRoom) registry.lastRemoteDetailRefreshAt = now;
       const detailById = new Map(detailRoom ? [[detailRoom.id, detailRoom]] : []);
       const serverRooms = summaryRooms

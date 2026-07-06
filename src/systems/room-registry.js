@@ -111,7 +111,7 @@
       for (const room of this.readLocalRooms()) roomsById.set(room.id, room);
       for (const room of this.remoteRooms || []) {
         const previous = roomsById.get(room.id);
-        if (!previous || Number(room.updatedAt) >= Number(previous.updatedAt)) roomsById.set(room.id, room);
+        roomsById.set(room.id, !previous || this.roomUpdatedAt(room) >= this.roomUpdatedAt(previous) ? this.withFreshWorldState(room, previous) : this.withFreshWorldState(previous, room));
       }
       return Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
     }
@@ -226,11 +226,11 @@
 
     mergeRoomDetailDelta(previous = null, delta = null, cursors = null) {
       if (!previous || !delta?.detailDelta) return this.normalizeRoom(delta);
-      const merged = this.normalizeRoom({ ...previous, ...delta,
+      const merged = this.preserveFreshWorldState(this.normalizeRoom({ ...previous, ...delta,
         chat: this.mergeRecordWindow(previous.chat, delta.chat, 120), events: this.mergeRecordWindow(previous.events, delta.events, 80),
         commands: this.mergeCommandRecords(previous.commands || [], delta.commands || [], 120),
-        combatEvents: this.mergeCombatEventWindow(previous.combatEvents, delta.combatEvents), worldState: delta.worldState || previous.worldState,
-        combatServerSeq: Math.max(Number(previous.combatServerSeq) || 0, Number(delta.combatServerSeq) || 0, Number(cursors?.combatServerSeq) || 0) });
+        combatEvents: this.mergeCombatEventWindow(previous.combatEvents, delta.combatEvents), worldState: delta.worldState && this.worldStateUpdatedAt(delta) > this.worldStateUpdatedAt(previous) ? delta.worldState : previous.worldState,
+        combatServerSeq: Math.max(Number(previous.combatServerSeq) || 0, Number(delta.combatServerSeq) || 0, Number(cursors?.combatServerSeq) || 0) }));
       if (merged) this.remoteDetailCursors.set(merged.id, this.roomDetailCursor(merged));
       return merged;
     }
@@ -383,9 +383,10 @@
     upsertRemoteRoom(room, options = {}) {
       if (!room?.id) return;
       const roomTime = this.roomUpdatedAt(room);
-      const current = this.remoteRooms?.find?.((item) => item.id === room.id) || this.readLocalRooms().find((item) => item.id === room.id);
+      const localCurrent = this.readLocalRooms().find((item) => item.id === room.id);
+      const current = this.remoteRooms?.find?.((item) => item.id === room.id) || localCurrent;
       if (current && this.roomUpdatedAt(current) > roomTime) return;
-      if ((Number(current?.worldState?.updatedAt) || 0) > (Number(room.worldState?.updatedAt) || 0)) room = { ...room, worldState: current.worldState };
+      room = this.withFreshWorldState(this.withFreshWorldState(room, current), localCurrent);
       const nextRooms = (this.remoteRooms || []).filter((item) => item.id !== room.id);
       nextRooms.push(room);
       this.remoteRooms = nextRooms.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
@@ -399,9 +400,11 @@
       const parsed = Date.parse(room?.updatedAt || "");
       return Number.isFinite(parsed) ? parsed : 0;
     }
-    preserveFreshWorldState(room = null) {
-      const current = room?.id ? this.getRoom(room.id) : null;
-      return (Number(current?.worldState?.updatedAt) || 0) > (Number(room?.worldState?.updatedAt) || 0) ? { ...room, worldState: current.worldState } : room;
+    worldStateUpdatedAt(room = null) { return Math.max(0, Math.floor(Number(room?.worldState?.updatedAt) || 0)); }
+    withFreshWorldState(room = null, source = null) { return room && source?.worldState && this.worldStateUpdatedAt(source) > this.worldStateUpdatedAt(room) ? { ...room, worldState: source.worldState } : room; }
+    preserveFreshWorldState(room = null) { if (!room?.id) return room;
+      const remoteCurrent = this.remoteRooms?.find?.((item) => item.id === room.id) || null, localCurrent = this.readLocalRooms().find((item) => item.id === room.id) || null;
+      return this.withFreshWorldState(this.withFreshWorldState(room, remoteCurrent), localCurrent);
     }
     deleteRemoteRoom(id) {
       if (!this.canUseRemoteApi() || !id) return Promise.resolve(false);
@@ -1068,7 +1071,7 @@
       if (index >= 0) rooms[index] = next;
       else rooms.push(next);
       if (this.canUseRemoteApi() && base.phase === "playing") {
-        this.upsertRemoteRoom(next, { persist: false });
+        this.upsertRemoteRoom(this.preserveFreshWorldState(next), { persist: false });
       } else {
         this.saveRooms(rooms);
       }

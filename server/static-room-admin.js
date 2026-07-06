@@ -28,10 +28,15 @@ function reconcileRoomAuthority(room) {
   if (!room) return room;
   room.hostId = resolveRoomHostId(room);
   if (room.worldState) {
-    room.worldState = {
-      ...room.worldState,
-      hostId: room.hostId || ""
-    };
+    const currentHostId = String(room.worldState.hostId || "");
+    const currentHostPresent = Array.from(room.players?.values?.() || [])
+      .some((player) => String(player?.playerId || player?.id || "") === currentHostId);
+    if (!currentHostId || !currentHostPresent) {
+      room.worldState = {
+        ...room.worldState,
+        hostId: room.hostId || ""
+      };
+    }
   }
   return room;
 }
@@ -132,6 +137,7 @@ function upsertParticipantToServer(onlineRegistry, roomId = "", input = {}, deps
   deps.importParticipants?.(room, [participant], type);
   deps.enforceUniquePlayerSlots?.(room);
   updateRoomSlotsFromPlayers(room);
+  reconcileRoomAuthority(room);
   room.updatedAt = new Date().toISOString();
   return room;
 }

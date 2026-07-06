@@ -2695,6 +2695,7 @@
       const buffered = Boolean(options.buffered);
       const unitBlend = buffered ? .045 : .035;
       const vehicleBlend = buffered ? .045 : .035;
+      const capBlend = (blend, distance) => Math.min(blend, 30 / Math.max(1, distance));
       const vehicleById = new Map(
         [...(this.tanks || []), ...(this.humvees || [])]
           .map((vehicle) => [vehicle.callSign || vehicle.id || "", vehicle])
@@ -2726,11 +2727,11 @@
           vehicle.playerControlled = Boolean(snap.controllerId);
           continue;
         }
-        const followBlend = buffered ? vehicleBlend : this.onlineWorldCatchUpBlend(vehicleBlend, targetDistance, {
+        const followBlend = capBlend(buffered ? vehicleBlend : this.onlineWorldCatchUpBlend(vehicleBlend, targetDistance, {
           start: 160,
           full: 420,
-          max: .045
-        });
+          max: .16
+        }), targetDistance);
         vehicle.x = lerp(vehicle.x, targetX, followBlend);
         vehicle.y = lerp(vehicle.y, targetY, followBlend);
         vehicle.angle = normalizeAngle(lerp(vehicle.angle, Number(snap.angle) || vehicle.angle, Math.min(0.45, followBlend * 1.35)));
@@ -2781,11 +2782,11 @@
           if (snap.state && !unit.inTank && !unit.inVehicle) unit.state = snap.state;
           continue;
         }
-        const followBlend = buffered ? unitBlend : this.onlineWorldCatchUpBlend(unitBlend, targetDistance, {
+        const followBlend = capBlend(buffered ? unitBlend : this.onlineWorldCatchUpBlend(unitBlend, targetDistance, {
           start: 64,
           full: 240,
-          max: .045
-        });
+          max: .16
+        }), targetDistance);
         unit.x = lerp(unit.x, targetX, followBlend);
         unit.y = lerp(unit.y, targetY, followBlend);
         unit.angle = normalizeAngle(lerp(unit.angle, Number(snap.angle) || unit.angle, Math.min(0.42, followBlend * 1.35)));
@@ -2827,12 +2828,6 @@
         crew.state = snap.state || "idle";
       }
       return crew;
-    }
-
-    onlineWorldInterpolationBlend(dt = 0, halfLifeSeconds = 0.2) {
-      const seconds = Math.max(1 / 120, Math.min(0.12, Number(dt) || 1 / 60));
-      const halfLife = Math.max(0.05, Number(halfLifeSeconds) || 0.2);
-      return Math.max(0.035, Math.min(0.28, 1 - Math.pow(0.5, seconds / halfLife)));
     }
 
     onlineWorldCatchUpBlend(baseBlend = 0.05, distance = 0, options = {}) {

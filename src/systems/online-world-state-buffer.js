@@ -23,7 +23,7 @@
         const buffer = this.onlineWorldStateBuffer || [];
         if (buffer.length < 2) return null;
         const newest = buffer[buffer.length - 1];
-        const delay = Math.max(320, Math.min(760, (this.onlineWorldStateGapMs || 320) * 1.25));
+        const delay = Math.max(160, Math.min(360, (this.onlineWorldStateGapMs || 320) * .65));
         const estimatedHostNow = newest.updatedAt + Math.max(0, Date.now() - newest.receivedAt);
         const renderAt = estimatedHostNow - delay;
         let older = null;

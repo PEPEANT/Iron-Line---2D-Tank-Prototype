@@ -4,7 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const { cleanupStaleServerParticipants, createRoomDeleteTombstones, removeParticipantFromRoom, updateRoomSlotsFromPlayers, upsertParticipantToServer } = require("../server/static-room-admin");
+const { cleanupStaleServerParticipants, createRoomDeleteTombstones, reconcileRoomAuthority, removeParticipantFromRoom, updateRoomSlotsFromPlayers, upsertParticipantToServer } = require("../server/static-room-admin");
 const combatOnlyRecovery = require("../server/combat-only-recovery");
 const { createRoomDetailExporters } = require("../server/room-detail-response");
 const { handleWorldStatePost } = require("../server/world-state-endpoint");
@@ -434,6 +434,7 @@ function applyClientRoomToServer(body = {}) {
   } else {
     room.worldState = room.worldState || null;
   }
+  reconcileRoomAuthority(room);
   const activeCombatOnly = P0_COMBAT_ONLY_RECOVERY && combatOnlyRecovery.isActiveMatchRoom(room);
   room.moderation = !activeCombatOnly && Array.isArray(body.moderation) ? body.moderation.slice(-80) : (room.moderation || []);
   room.commandAuthorities = !activeCombatOnly && Array.isArray(body.commandAuthorities) ? body.commandAuthorities.slice(-16) : (room.commandAuthorities || []);

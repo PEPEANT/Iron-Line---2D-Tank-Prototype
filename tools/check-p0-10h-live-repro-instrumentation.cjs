@@ -381,6 +381,8 @@ async function collectPage(page) {
       detailFetchStale: (probe.detailFetches || []).filter((item) => item.staleResult).length,
       detailMergeStale: (probe.detailMerges || []).filter((item) => item.staleDelta || item.resultRegression).length,
       upsertStale: (probe.roomUpserts || []).filter((item) => item.staleIncoming).length,
+      detailHostChanges: (probe.detailMerges || []).filter((item) => item.hostChanged).length,
+      upsertHostChanges: (probe.roomUpserts || []).filter((item) => item.hostChanged).length,
       hostChanges: (probe.detailMerges || []).filter((item) => item.hostChanged).length + (probe.roomUpserts || []).filter((item) => item.hostChanged).length
     },
     storage: { count: (probe.storage || []).length, bytes: stat((probe.storage || []).map((item) => item.bytes || 0)) },
