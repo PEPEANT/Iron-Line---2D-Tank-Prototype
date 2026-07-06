@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>차량 계기판 목업 — 전차 · 험비</title>
+<style>
+  :root {
+    --bg: #0b0f0d;
+    --amber: #ffd166;
+    --amber-soft: #ffe8a8;
+    --green: #9fff8a;
+    --red: #ff6b5e;
+    --text: #edf4ef;
+    --dim: rgba(237, 244, 239, 0.45);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 80px;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(60, 80, 60, 0.16), transparent 50%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  h2 {
+    margin: 44px 0 14px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: rgba(237, 244, 239, 0.5);
+    text-transform: uppercase;
+  }
+  .note { font-size: 12px; color: var(--dim); margin: 0 0 8px; line-height: 1.6; }
+
+  /* ============ 계기판 패널 섀시 ============ */
+  .dash {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 16px 18px 20px;
+    border: 2px solid rgba(14, 18, 10, 0.98);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
+      linear-gradient(150deg, #3d4834 0%, #262f1e 50%, #171d12 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -14px 20px rgba(0, 0, 0, 0.35),
+      0 18px 40px rgba(0, 0, 0, 0.5);
+  }
+  /* 브러시드 상판 스트립 */
+  .dash::before {
+    content: "";
+    position: absolute;
+    left: 10px; right: 10px; top: 6px;
+    height: 5px;
+    border-radius: 3px;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 4px),
+      rgba(0, 0, 0, 0.3);
+  }
+  /* 하단 러버 트림 */
+  .dash::after {
+    content: "";
+    position: absolute;
+    left: 8px; right: 8px; bottom: 6px;
+    height: 7px;
+    border-radius: 4px;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.4) 0 6px, rgba(255,255,255,0.03) 6px 12px),
+      #11150c;
+  }
+  .screw {
+    position: absolute;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3), transparent 40%),
+      linear-gradient(145deg, #4b574b, #151b17);
+    border: 1px solid rgba(4, 9, 7, 0.9);
+  }
+  .screw::after {
+    content: "";
+    position: absolute;
+    left: 1px; top: 3.2px;
+    width: 5px; height: 1.4px;
+    background: rgba(0, 0, 0, 0.6);
+    transform: rotate(38deg);
+  }
+
+  /* 계기 웰 (음각 자리) */
+  .well {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    background: linear-gradient(180deg, #0d110b, #12170e);
+    box-shadow:
+      inset 0 3px 8px rgba(0, 0, 0, 0.6),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  }
+  .well .wlabel {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: rgba(237, 244, 239, 0.38);
+  }
+
+  /* ============ 다이얼 ============ */
+  .dial-box svg { display: block; }
+  .dial-value {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--amber-soft);
+    text-shadow: 0 0 8px rgba(255, 209, 102, 0.3);
+  }
+
+  /* ============ 주포 클러스터 ============ */
+  .gun-cluster { min-width: 210px; gap: 8px; }
+  .ammo-row { display: flex; gap: 8px; }
+  .ammo-chip {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(237, 244, 239, 0.1);
+    background: #0a0e08;
+    cursor: pointer;
+  }
+  .ammo-chip .lamp {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(237, 244, 239, 0.12);
+  }
+  .ammo-chip.active { border-color: rgba(255, 209, 102, 0.5); }
+  .ammo-chip.active .lamp {
+    background: var(--amber);
+    box-shadow: 0 0 8px rgba(255, 209, 102, 0.8);
+  }
+  .ammo-chip b {
+    font-size: 11px;
+    font-weight: 900;
+    color: rgba(237, 244, 239, 0.55);
+  }
+  .ammo-chip.active b { color: var(--amber-soft); }
+
+  /* 기계식 플립 카운터 */
+  .counters { display: flex; gap: 14px; }
+  .counter { display: grid; justify-items: center; gap: 3px; }
+  .counter .flap {
+    position: relative;
+    min-width: 44px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.8);
+    background: linear-gradient(180deg, #171713 49%, #0c0c09 51%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 19px;
+    font-weight: 800;
+    color: #e8e4d8;
+    text-align: center;
+    letter-spacing: 2px;
+  }
+  .flap::after {
+    content: "";
+    position: absolute;
+    left: 2px; right: 2px; top: 50%;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.75);
+  }
+  .counter small {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    color: rgba(237, 244, 239, 0.35);
+  }
+
+  /* 장전 게이지 */
+  .reload-slot {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .reload-track {
+    height: 7px;
+    border-radius: 4px;
+    background: #060906;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+  }
+  .reload-track span {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, rgba(255, 209, 102, 0.5), var(--amber));
+    box-shadow: 0 0 8px rgba(255, 209, 102, 0.5);
+    transition: none;
+  }
+  .ready-lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9.5px;
+    font-weight: 900;
+    color: rgba(237, 244, 239, 0.35);
+  }
+  .ready-lamp i {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(237, 244, 239, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.6);
+  }
+  .ready-lamp.on { color: var(--green); }
+  .ready-lamp.on i {
+    background: var(--green);
+    box-shadow: 0 0 9px rgba(159, 255, 138, 0.7);
+  }
+
+  /* ============ 7세그 LCD (MG) ============ */
+  .seg-box { min-width: 96px; }
+  .seg-glass {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.85);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+      #0a0b06;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+  }
+  .seg-glass b {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 26px;
+    font-weight: 800;
+    font-style: italic;
+    letter-spacing: 3px;
+    color: var(--amber);
+    text-shadow: 0 0 10px rgba(255, 209, 102, 0.55);
+  }
+  .seg-sub {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: rgba(237, 244, 239, 0.35);
+    font-family: ui-monospace, Consolas, monospace;
+  }
+
+  /* ============ 연막 경고등 램프 ============ */
+  .lamp-box { min-width: 86px; }
+  .dome-wrap { position: relative; width: 46px; height: 46px; }
+  .dome {
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.5), transparent 34%),
+      radial-gradient(circle at 50% 55%, #22c55e 0%, #14532d 70%, #052e16 100%);
+    border: 2px solid rgba(0, 0, 0, 0.75);
+    box-shadow:
+      inset 0 -4px 8px rgba(0, 0, 0, 0.5),
+      0 0 16px rgba(34, 197, 94, 0.45);
+    transition: filter 0.2s, box-shadow 0.2s;
+  }
+  /* 렌즈 리지 */
+  .dome::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: repeating-radial-gradient(circle, transparent 0 3px, rgba(0, 0, 0, 0.14) 3px 4px);
+  }
+  .dome-wrap.cooldown .dome {
+    filter: grayscale(0.85) brightness(0.55);
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.5);
+  }
+  .dome-wrap svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .dome-wrap circle.cd {
+    fill: none;
+    stroke: var(--amber);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 138;
+    stroke-dashoffset: 138;
+    opacity: 0;
+  }
+  .dome-wrap.cooldown circle.cd { opacity: 0.9; }
+  .smoke-count {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(237, 244, 239, 0.75);
+  }
+  .keycap {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 1px solid rgba(237, 244, 239, 0.22);
+    background: rgba(237, 244, 239, 0.06);
+    box-shadow: inset 0 -2.5px 0 rgba(0, 0, 0, 0.5);
+    font-size: 10px;
+    font-weight: 900;
+    color: rgba(237, 244, 239, 0.6);
+  }
+
+  /* ============ 데모 컨트롤 ============ */
+  .demo-controls {
+    margin-top: 16px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .demo-controls label { font-size: 11px; color: var(--dim); display: flex; gap: 6px; align-items: center; }
+  .demo-controls button {
+    padding: 6px 12px;
+    border: 1px solid rgba(237, 244, 239, 0.2);
+    border-radius: 7px;
+    background: rgba(237, 244, 239, 0.06);
+    color: rgba(237, 244, 239, 0.7);
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .demo-controls button:hover { background: rgba(237, 244, 239, 0.14); }
+</style>
+</head>
+<body>
+
+<h1>차량 계기판 목업 (P5.7)</h1>
+<p class="note">
+  원칙: <b>실존 상태만 계기화</b> — 속도(tank.speed), 탄약(tank.ammo), 장전(tank.reload), 차체(tank.hp), 연막(tank.smokeCooldown). 가짜 계기 없음.<br>
+  재질 언어 = 무전기·드론 조종기 v3와 동일 (올리브드랍 · 다크 트림 · 앰버). 아래 컨트롤로 상태를 움직여보세요.
+</p>
+
+<!-- ============================================ -->
+<h2>1 · 전차 계기판</h2>
+<div class="dash" id="tankDash">
+  <span class="screw" style="left:7px; top:7px"></span>
+  <span class="screw" style="right:7px; top:7px"></span>
+  <span class="screw" style="left:7px; bottom:7px"></span>
+  <span class="screw" style="right:7px; bottom:7px"></span>
+
+  <div class="well dial-box">
+    <span class="wlabel">속도</span>
+    <div id="tankSpeedDial"></div>
+    <span class="dial-value" id="tankSpeedValue">0</span>
+  </div>
+
+  <div class="well gun-cluster">
+    <span class="wlabel">주포</span>
+    <div class="ammo-row">
+      <div class="ammo-chip active" id="chipAp" onclick="setAmmo('ap')"><span class="lamp"></span><b>철갑 AP</b></div>
+      <div class="ammo-chip" id="chipHe" onclick="setAmmo('he')"><span class="lamp"></span><b>고폭 HE</b></div>
+    </div>
+    <div class="counters">
+      <div class="counter"><div class="flap" id="flapAp">12</div><small>AP</small></div>
+      <div class="counter"><div class="flap" id="flapHe">8</div><small>HE</small></div>
+    </div>
+    <div class="reload-slot">
+      <div class="reload-track"><span id="reloadFill"></span></div>
+      <span class="ready-lamp on" id="readyLamp"><i></i>준비</span>
+    </div>
+  </div>
+
+  <div class="well seg-box">
+    <span class="wlabel">MG</span>
+    <div class="seg-glass"><b id="mgSeg">120</b></div>
+    <span class="seg-sub">예비 <span id="mgReserve">3</span></span>
+  </div>
+
+  <div class="well lamp-box">
+    <span class="wlabel">연막</span>
+    <div class="dome-wrap" id="smokeWrap">
+      <div class="dome"></div>
+      <svg viewBox="0 0 46 46"><circle class="cd" id="smokeCd" cx="23" cy="23" r="22"/></svg>
+    </div>
+    <span class="smoke-count"><span id="smokeCount">1</span> · <span class="keycap">Q</span></span>
+  </div>
+
+  <div class="well dial-box">
+    <span class="wlabel">차체</span>
+    <div id="tankHullDial"></div>
+    <span class="dial-value" id="tankHullValue">100%</span>
+  </div>
+</div>
+
+<div class="demo-controls">
+  <label>속도 <input type="range" id="ctrlSpeed" min="0" max="100" value="0"></label>
+  <label>차체 <input type="range" id="ctrlHull" min="0" max="100" value="100"></label>
+  <button onclick="fireGun()">주포 발사 (장전 3초)</button>
+  <button onclick="fireMg()">MG 점사 (-12)</button>
+  <button onclick="fireSmoke()">연막 Q (쿨다운 4초)</button>
+</div>
+
+<!-- ============================================ -->
+<h2>2 · 험비 계기판 (속도 · HMG · 차체만)</h2>
+<div class="dash" id="humveeDash">
+  <span class="screw" style="left:7px; top:7px"></span>
+  <span class="screw" style="right:7px; top:7px"></span>
+  <span class="screw" style="left:7px; bottom:7px"></span>
+  <span class="screw" style="right:7px; bottom:7px"></span>
+
+  <div class="well dial-box">
+    <span class="wlabel">속도</span>
+    <div id="hmvSpeedDial"></div>
+    <span class="dial-value" id="hmvSpeedValue">0</span>
+  </div>
+
+  <div class="well seg-box">
+    <span class="wlabel">HMG</span>
+    <div class="seg-glass"><b id="hmgSeg">200</b></div>
+    <span class="seg-sub">.50 CAL</span>
+  </div>
+
+  <div class="well dial-box">
+    <span class="wlabel">차체</span>
+    <div id="hmvHullDial"></div>
+    <span class="dial-value" id="hmvHullValue">100%</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ============ 아날로그 다이얼 (SVG 생성) ============
+// 눈금 + 숫자 각인 + 레드존 + 바늘 + 축 캡 + 유리 광택
+function polar(cx, cy, r, deg) {
+  const rad = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+function arcPath(cx, cy, r, fromDeg, toDeg) {
+  const [x1, y1] = polar(cx, cy, r, fromDeg);
+  const [x2, y2] = polar(cx, cy, r, toDeg);
+  const large = toDeg - fromDeg > 180 ? 1 : 0;
+  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}
+
+const START = -210;
+const SWEEP = 240;
+
+function makeDial(mountId, options) {
+  const { redzone, labels } = options; // redzone: [vFrom, vTo]
+  const cx = 55, cy = 58;
+  let ticks = "";
+  for (let i = 0; i <= 20; i += 1) {
+    const v = i / 20;
+    const deg = START + SWEEP * v;
+    const major = i % 4 === 0;
+    const [x1, y1] = polar(cx, cy, major ? 34 : 37, deg);
+    const [x2, y2] = polar(cx, cy, 41, deg);
+    const inRed = v >= redzone[0] && v <= redzone[1];
+    ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+      stroke="${inRed ? "rgba(255,107,94,0.85)" : "rgba(230,238,224,0.7)"}" stroke-width="${major ? 2 : 1}"/>`;
+  }
+  let numerals = "";
+  labels.forEach((label, index) => {
+    const v = index / (labels.length - 1);
+    const [x, y] = polar(cx, cy, 26, START + SWEEP * v);
+    numerals += `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle"
+      font-family="ui-monospace, Consolas, monospace" font-size="8" font-weight="800"
+      fill="rgba(230,238,224,0.55)">${label}</text>`;
+  });
+
+  const mount = document.getElementById(mountId);
+  mount.innerHTML = `
+  <svg width="110" height="112" viewBox="0 0 110 112">
+    <defs>
+      <radialGradient id="bezel-${mountId}" cx="0.35" cy="0.3" r="1">
+        <stop offset="0" stop-color="#525e4c"/>
+        <stop offset="0.55" stop-color="#242c1d"/>
+        <stop offset="1" stop-color="#12160d"/>
+      </radialGradient>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="52" fill="url(#bezel-${mountId})" stroke="#080b06" stroke-width="2"/>
+    <circle cx="${cx}" cy="${cy}" r="46" fill="#0d120c" stroke="rgba(0,0,0,0.8)" stroke-width="1.5"/>
+    <path d="${arcPath(cx, cy, 40, START + SWEEP * redzone[0], START + SWEEP * redzone[1])}"
+      fill="none" stroke="rgba(255,107,94,0.5)" stroke-width="4"/>
+    ${ticks}
+    ${numerals}
+    <g id="${mountId}-needle">
+      <polygon points="${cx - 7},${cy - 2.2} ${cx - 7},${cy + 2.2} ${cx + 30},${cy + 0.9} ${cx + 35},${cy} ${cx + 30},${cy - 0.9}"
+        fill="#ffb84d" stroke="rgba(120,60,10,0.6)" stroke-width="0.6"/>
+    </g>
+    <circle cx="${cx}" cy="${cy}" r="5.5" fill="url(#bezel-${mountId})" stroke="#080b06" stroke-width="1.4"/>
+    <circle cx="${cx - 1.4}" cy="${cy - 1.6}" r="1.4" fill="rgba(255,255,255,0.35)"/>
+    <path d="${arcPath(cx, cy, 43, -200, -60)}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="7" stroke-linecap="round"/>
+  </svg>`;
+
+  return (value01) => {
+    const needle = document.getElementById(`${mountId}-needle`);
+    const deg = START + SWEEP * Math.max(0, Math.min(1, value01));
+    needle.setAttribute("transform", `rotate(${deg.toFixed(1)} ${cx} ${cy})`);
+  };
+}
+
+// ============ 계기 인스턴스 ============
+const speedLabels = ["0", "20", "40", "60", "80", "100"];
+const hullLabels = ["0", "25", "50", "75", "100"];
+
+const setTankSpeed = makeDial("tankSpeedDial", { redzone: [0.86, 1], labels: speedLabels });
+const setTankHull = makeDial("tankHullDial", { redzone: [0, 0.25], labels: hullLabels });
+const setHmvSpeed = makeDial("hmvSpeedDial", { redzone: [0.86, 1], labels: speedLabels });
+const setHmvHull = makeDial("hmvHullDial", { redzone: [0, 0.25], labels: hullLabels });
+
+setTankSpeed(0); setTankHull(1); setHmvSpeed(0); setHmvHull(1);
+
+// ============ 데모 상태 ============
+const state = { ap: 12, he: 8, mg: 120, mgReserve: 3, smoke: 1, loaded: "ap", reloading: false, smokeCd: false };
+
+document.getElementById("ctrlSpeed").addEventListener("input", (event) => {
+  const v = Number(event.target.value) / 100;
+  setTankSpeed(v); setHmvSpeed(v);
+  document.getElementById("tankSpeedValue").textContent = Math.round(v * 100);
+  document.getElementById("hmvSpeedValue").textContent = Math.round(v * 100);
+});
+
+document.getElementById("ctrlHull").addEventListener("input", (event) => {
+  const v = Number(event.target.value) / 100;
+  setTankHull(v); setHmvHull(v);
+  document.getElementById("tankHullValue").textContent = `${Math.round(v * 100)}%`;
+  document.getElementById("hmvHullValue").textContent = `${Math.round(v * 100)}%`;
+});
+
+function setAmmo(kind) {
+  state.loaded = kind;
+  document.getElementById("chipAp").classList.toggle("active", kind === "ap");
+  document.getElementById("chipHe").classList.toggle("active", kind === "he");
+}
+
+function fireGun() {
+  if (state.reloading || state[state.loaded] <= 0) return;
+  state[state.loaded] -= 1;
+  document.getElementById(state.loaded === "ap" ? "flapAp" : "flapHe").textContent = state[state.loaded];
+  state.reloading = true;
+  const fill = document.getElementById("reloadFill");
+  const lamp = document.getElementById("readyLamp");
+  lamp.classList.remove("on");
+  fill.style.transition = "none";
+  fill.style.width = "0%";
+  requestAnimationFrame(() => {
+    fill.style.transition = "width 3s linear";
+    fill.style.width = "100%";
+  });
+  setTimeout(() => {
+    state.reloading = false;
+    lamp.classList.add("on");
+  }, 3000);
+}
+
+function fireMg() {
+  state.mg = Math.max(0, state.mg - 12);
+  if (state.mg === 0 && state.mgReserve > 0) {
+    state.mgReserve -= 1;
+    state.mg = 120;
+    document.getElementById("mgReserve").textContent = state.mgReserve;
+  }
+  document.getElementById("mgSeg").textContent = state.mg;
+}
+
+function fireSmoke() {
+  if (state.smokeCd || state.smoke <= 0) return;
+  state.smokeCd = true;
+  const wrap = document.getElementById("smokeWrap");
+  const ring = document.getElementById("smokeCd");
+  wrap.classList.add("cooldown");
+  ring.style.transition = "none";
+  ring.style.strokeDashoffset = "138";
+  requestAnimationFrame(() => {
+    ring.style.transition = "stroke-dashoffset 4s linear";
+    ring.style.strokeDashoffset = "0";
+  });
+  setTimeout(() => {
+    wrap.classList.remove("cooldown");
+    state.smokeCd = false;
+  }, 4000);
+}
+</script>
+
+</body>
+</html>

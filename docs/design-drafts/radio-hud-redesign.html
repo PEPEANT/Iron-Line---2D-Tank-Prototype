@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>무전기 · 드론 조종기 리디자인 초안 v3</title>
+<style>
+  :root {
+    --bg: #0b0f0d;
+    --amber: #ffd166;
+    --amber-soft: #ffe8a8;
+    --lcd-green: #d8f4c7;
+    --lcd-glow: rgba(149, 255, 136, 0.18);
+    --red: #ff6b5e;
+    --blue: #8ed8ff;
+    --green: #9fff8a;
+    --text: #edf4ef;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 32px 24px 80px;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(60, 80, 60, 0.16), transparent 50%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+  }
+
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  h2 {
+    margin: 44px 0 14px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: rgba(237, 244, 239, 0.5);
+    text-transform: uppercase;
+  }
+  .note { font-size: 12px; color: rgba(237, 244, 239, 0.45); margin: 0 0 8px; line-height: 1.6; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 36px; align-items: flex-start; }
+  .demo-slot { display: grid; gap: 10px; justify-items: center; }
+  .demo-slot small { font-size: 11px; color: rgba(237, 244, 239, 0.4); }
+
+  .demo-controls { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .demo-controls button {
+    padding: 5px 10px;
+    border: 1px solid rgba(237, 244, 239, 0.2);
+    border-radius: 7px;
+    background: rgba(237, 244, 239, 0.06);
+    color: rgba(237, 244, 239, 0.7);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .demo-controls button:hover { background: rgba(237, 244, 239, 0.14); }
+
+  @keyframes led-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* ============================================================
+     1. 드론 조종기 — 러기드 야전 노트북 (SVG 정밀 묘사)
+     ============================================================ */
+  .fieldbook {
+    width: 292px;
+    border: 0;
+    background: transparent;
+  }
+  .fieldbook svg {
+    display: block;
+    width: 100%;
+    filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.55));
+  }
+
+  .fieldbook[data-state="standby"]   { --c: var(--amber); }
+  .fieldbook[data-state="piloting"]  { --c: var(--blue); }
+  .fieldbook[data-state="target"]    { --c: var(--green); }
+  .fieldbook[data-state="attack"]    { --c: var(--red); }
+  .fieldbook[data-state="returning"] { --c: #8fdecf; }
+
+  .fieldbook .fb-icon { stroke: var(--c); }
+  .fieldbook .fb-label {
+    fill: var(--c);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .fieldbook .fb-sub {
+    fill: rgba(208, 240, 192, 0.55);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .fieldbook .fb-led { fill: var(--c); }
+  .fieldbook[data-state="standby"] .fb-led { animation: led-blink 1.8s infinite; }
+  .fieldbook[data-state="attack"] .fb-led { animation: led-blink 0.6s infinite; }
+  .fieldbook .fb-meter-fill { fill: var(--c); transition: width 0.3s; }
+
+  /* ============================================================
+     2. 무전기 — 실물 군용 핸드헬드 (SVG 정밀 묘사)
+     ============================================================ */
+  .mil-radio {
+    position: relative;
+    width: 132px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.1s ease;
+  }
+  .mil-radio:hover { transform: translateY(-2px); }
+  .mil-radio:active { transform: scale(0.97); }
+  .mil-radio svg { display: block; width: 100%; filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.55)); }
+
+  .mil-radio .led-lamp { fill: #252b20; }
+  .mil-radio.transmitting .led-lamp {
+    fill: var(--amber);
+    animation: led-blink 0.4s infinite;
+  }
+  .mil-radio.cooldown .led-lamp { fill: #4d3a2a; }
+
+  .mil-radio .grill-sweep { opacity: 0; }
+  .mil-radio.transmitting .grill-sweep {
+    opacity: 1;
+    animation: sweep-x 0.55s linear infinite;
+  }
+  @keyframes sweep-x {
+    from { transform: translateX(-70px); }
+    to   { transform: translateX(70px); }
+  }
+
+  .mil-radio .ptt-btn { transition: transform 0.08s; }
+  .mil-radio.transmitting .ptt-btn { transform: translateX(2.5px); }
+
+  .mil-radio .lcd-text {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    fill: rgba(216, 244, 199, 0.88);
+  }
+  .mil-radio.transmitting .lcd-text { fill: var(--amber-soft); }
+  .mil-radio .lcd-bar-fill { transition: none; }
+  .mil-radio.cooldown .lcd-bar-fill { transition: width 4s linear; }
+
+  .rally-feedback {
+    min-height: 20px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--amber-soft);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  .rally-feedback.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>무전기 · 드론 조종기 리디자인 초안 v3</h1>
+<p class="note">
+  두 기기 모두 실물 묘사 (SVG): 무전기 = 군용 핸드헬드, 드론 조종기 = 러기드 야전 노트북(GCS).<br>
+  무전기 기능은 하나 — <b>누르면 주변 아군 집결.</b> 드론 화면은 색+한 단어로 상태 표시.
+</p>
+
+<!-- ============================================ -->
+<h2>1 · 드론 조종기 — 러기드 야전 노트북</h2>
+<p class="note">코너 러버 범퍼 / 베젤 나사 / 안테나 스터브 / 힌지 실린더 / 키보드·터치패드·조종 스틱. 아래 버튼으로 상태 전환.</p>
+<div class="row">
+  <div class="demo-slot">
+    <div class="fieldbook" data-state="standby" id="fieldbook">
+      <svg viewBox="0 0 280 232" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="fbBody" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#46523a"/>
+            <stop offset="0.5" stop-color="#2c3625"/>
+            <stop offset="1" stop-color="#1a2115"/>
+          </linearGradient>
+          <linearGradient id="fbDeck" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#39442e"/>
+            <stop offset="0.6" stop-color="#242d1b"/>
+            <stop offset="1" stop-color="#161c10"/>
+          </linearGradient>
+          <linearGradient id="fbLcd" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1c2b1f"/>
+            <stop offset="1" stop-color="#0f1c13"/>
+          </linearGradient>
+          <linearGradient id="fbHinge" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#3c4630"/>
+            <stop offset="0.5" stop-color="#1b2213"/>
+            <stop offset="1" stop-color="#2c3521"/>
+          </linearGradient>
+          <radialGradient id="fbStick" cx="0.36" cy="0.3" r="1">
+            <stop offset="0" stop-color="#59654c"/>
+            <stop offset="0.55" stop-color="#333d29"/>
+            <stop offset="1" stop-color="#161b10"/>
+          </radialGradient>
+        </defs>
+
+        <!-- ===== 안테나 스터브 (상판 위) ===== -->
+        <rect x="212" y="2" width="9" height="18" rx="4.5" fill="#1a2013" stroke="#0a0d08" stroke-width="1.4"/>
+        <circle cx="216.5" cy="3.5" r="3" fill="#12160d" stroke="#0a0d08" stroke-width="1.2"/>
+        <line x1="214.5" y1="6" x2="214.5" y2="17" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+        <!-- ===== 상판 코너 러버 범퍼 ===== -->
+        <rect x="22" y="10" width="30" height="30" rx="11" fill="#1a2013" stroke="#0b0e08" stroke-width="1.6"/>
+        <rect x="228" y="10" width="30" height="30" rx="11" fill="#1a2013" stroke="#0b0e08" stroke-width="1.6"/>
+
+        <!-- ===== 상판 (뚜껑) ===== -->
+        <rect x="28" y="14" width="224" height="112" rx="12" fill="url(#fbBody)" stroke="#0e120a" stroke-width="2.4"/>
+        <path d="M34 24 Q31 70 34 118" stroke="rgba(255,255,255,0.09)" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- 래치 -->
+        <rect x="130" y="12" width="20" height="6" rx="2.5" fill="#12160d" stroke="#0a0d08" stroke-width="1.2"/>
+
+        <!-- 베젤 -->
+        <rect x="40" y="26" width="200" height="90" rx="7" fill="#0c100a" stroke="#070a05" stroke-width="1.6"/>
+        <!-- 베젤 나사 4개 -->
+        <g fill="#1a1f14" stroke="#0a0d08" stroke-width="1">
+          <circle cx="47" cy="33" r="2.4"/><circle cx="233" cy="33" r="2.4"/>
+          <circle cx="47" cy="109" r="2.4"/><circle cx="233" cy="109" r="2.4"/>
+        </g>
+        <g stroke="rgba(255,255,255,0.2)" stroke-width="0.9">
+          <line x1="45.5" y1="31.5" x2="48.5" y2="34.5"/><line x1="231.5" y1="31.5" x2="234.5" y2="34.5"/>
+          <line x1="45.5" y1="107.5" x2="48.5" y2="110.5"/><line x1="231.5" y1="107.5" x2="234.5" y2="110.5"/>
+        </g>
+        <!-- 웹캠 -->
+        <circle cx="140" cy="30" r="1.8" fill="#060906"/>
+
+        <!-- ===== 화면 (LCD) ===== -->
+        <rect x="50" y="38" width="180" height="70" rx="4" fill="url(#fbLcd)"/>
+        <rect x="50" y="38" width="180" height="70" rx="4" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="1.4"/>
+        <!-- 화면 상단 광택 -->
+        <rect x="50" y="38" width="180" height="16" rx="4" fill="rgba(255,255,255,0.035)"/>
+
+        <!-- 화면 내용: 드론 아이콘 -->
+        <g class="fb-icon" transform="translate(70, 60)" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="-3.5" y="-3.5" width="7" height="7" rx="1.6"/>
+          <path d="M-3.5 -3.5 L-8 -8 M3.5 -3.5 L8 -8 M-3.5 3.5 L-8 8 M3.5 3.5 L8 8"/>
+          <circle cx="-9.5" cy="-9.5" r="2.4"/>
+          <circle cx="9.5" cy="-9.5" r="2.4"/>
+          <circle cx="-9.5" cy="9.5" r="2.4"/>
+          <circle cx="9.5" cy="9.5" r="2.4"/>
+        </g>
+        <!-- 상태 단어 -->
+        <text class="fb-label" id="fbLabel" x="90" y="66">대기</text>
+        <!-- 상태 LED -->
+        <circle class="fb-led" cx="217" cy="50" r="3.4"/>
+
+        <!-- 신호 바 3개 -->
+        <g id="fbSig" fill="rgba(216, 244, 199, 0.8)">
+          <rect x="60" y="86" width="3.4" height="5" rx="1"/>
+          <rect x="65.5" y="83" width="3.4" height="8" rx="1"/>
+          <rect x="71" y="80" width="3.4" height="11" rx="1"/>
+        </g>
+        <!-- 배터리/게이지 -->
+        <rect x="84" y="84" width="112" height="4.4" rx="2.2" fill="rgba(0,0,0,0.5)"/>
+        <rect class="fb-meter-fill" id="fbMeter" x="84" y="84" width="112" height="4.4" rx="2.2"/>
+        <!-- 서브 텍스트 -->
+        <text class="fb-sub" id="fbSub" x="60" y="102">이륙 준비 완료</text>
+
+        <!-- ===== 힌지 ===== -->
+        <rect x="48" y="128" width="184" height="8" rx="4" fill="#10140c"/>
+        <g fill="url(#fbHinge)" stroke="#0a0d08" stroke-width="1.5">
+          <rect x="58" y="126" width="46" height="12" rx="6"/>
+          <rect x="176" y="126" width="46" height="12" rx="6"/>
+        </g>
+        <circle cx="81" cy="132" r="2.2" fill="#0d110a" stroke="rgba(255,255,255,0.14)" stroke-width="0.8"/>
+        <circle cx="199" cy="132" r="2.2" fill="#0d110a" stroke="rgba(255,255,255,0.14)" stroke-width="0.8"/>
+
+        <!-- ===== 하판 코너 러버 범퍼 ===== -->
+        <rect x="12" y="192" width="30" height="32" rx="11" fill="#1a2013" stroke="#0b0e08" stroke-width="1.6"/>
+        <rect x="238" y="192" width="30" height="32" rx="11" fill="#1a2013" stroke="#0b0e08" stroke-width="1.6"/>
+
+        <!-- ===== 하판 (덱, 원근 사다리꼴) ===== -->
+        <path d="M38 140 H242 Q246 140 247 144 L260 204 Q262 218 246 220 H34 Q18 218 20 204 L33 144 Q34 140 38 140 Z"
+              fill="url(#fbDeck)" stroke="#0e120a" stroke-width="2.4"/>
+        <!-- 덱 앞면 두께 표현 -->
+        <path d="M22 208 Q21 216 34 218 H246 Q259 216 258 208" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="2.4"/>
+
+        <!-- 키보드 웰 -->
+        <path d="M48 146 H232 L239 178 H41 Z" fill="#10150c" stroke="#080b06" stroke-width="1.4" stroke-linejoin="round"/>
+        <!-- 키들은 JS로 생성 (#fbKeys) -->
+        <g id="fbKeys"></g>
+
+        <!-- 터치패드 -->
+        <rect x="112" y="184" width="58" height="24" rx="4" fill="#151b0f" stroke="rgba(0,0,0,0.6)" stroke-width="1.3"/>
+        <line x1="114" y1="185.5" x2="168" y2="185.5" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+
+        <!-- 조종 스틱 (우측) -->
+        <circle cx="212" cy="196" r="14" fill="#11160c" stroke="#080b06" stroke-width="1.5"/>
+        <circle cx="212" cy="196" r="13" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+        <circle cx="211" cy="194" r="7.5" fill="url(#fbStick)" stroke="#0a0d08" stroke-width="1.4"/>
+        <circle cx="208.5" cy="191.5" r="2.2" fill="rgba(255,255,255,0.14)"/>
+
+        <!-- 스피커 도트 (좌측) -->
+        <g fill="rgba(0,0,0,0.55)">
+          <circle cx="62" cy="190" r="1.6"/><circle cx="69" cy="190" r="1.6"/><circle cx="76" cy="190" r="1.6"/>
+          <circle cx="62" cy="196" r="1.6"/><circle cx="69" cy="196" r="1.6"/><circle cx="76" cy="196" r="1.6"/>
+          <circle cx="62" cy="202" r="1.6"/><circle cx="69" cy="202" r="1.6"/><circle cx="76" cy="202" r="1.6"/>
+        </g>
+
+        <!-- 전원 LED -->
+        <circle cx="44" cy="143" r="1.9" fill="rgba(159, 255, 138, 0.65)"/>
+      </svg>
+    </div>
+
+    <div class="demo-controls">
+      <button onclick="setFb('standby')">대기</button>
+      <button onclick="setFb('piloting')">조종 중</button>
+      <button onclick="setFb('target')">표적</button>
+      <button onclick="setFb('attack')">자폭 준비</button>
+      <button onclick="setFb('returning')">복귀 중</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<h2>2 · 무전기 — 실물 묘사, 버튼 하나</h2>
+<p class="note">눌러보세요: 측면 PTT가 눌리고 → LED 점멸 + 그릴 파동 + LCD "TX 집결" (1.2초) → LCD 쿨다운 바 (4초) → 대기.</p>
+<div class="row">
+  <div class="demo-slot">
+    <button class="mil-radio" id="milRadio" aria-label="집결 무전">
+      <svg viewBox="0 0 132 224" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#46523a"/>
+            <stop offset="0.45" stop-color="#2c3625"/>
+            <stop offset="1" stop-color="#181f13"/>
+          </linearGradient>
+          <linearGradient id="antGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#0b0e09"/>
+            <stop offset="0.45" stop-color="#3d443a"/>
+            <stop offset="1" stop-color="#12150f"/>
+          </linearGradient>
+          <radialGradient id="knobGrad" cx="0.36" cy="0.3" r="1">
+            <stop offset="0" stop-color="#59654c"/>
+            <stop offset="0.5" stop-color="#333d29"/>
+            <stop offset="1" stop-color="#161b10"/>
+          </radialGradient>
+          <linearGradient id="lcdGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1d2d20"/>
+            <stop offset="1" stop-color="#101d14"/>
+          </linearGradient>
+          <linearGradient id="pttGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#39442e"/>
+            <stop offset="1" stop-color="#141a0e"/>
+          </linearGradient>
+          <linearGradient id="sweepGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="rgba(255,209,102,0)"/>
+            <stop offset="0.5" stop-color="rgba(255,209,102,0.34)"/>
+            <stop offset="1" stop-color="rgba(255,209,102,0)"/>
+          </linearGradient>
+          <clipPath id="grillClip">
+            <rect x="24" y="76" width="84" height="50" rx="9"/>
+          </clipPath>
+        </defs>
+
+        <!-- ===== 안테나 ===== -->
+        <rect x="20" y="4" width="11" height="46" rx="5.5" fill="url(#antGrad)" stroke="#0a0d08" stroke-width="1.4"/>
+        <line x1="21" y1="12" x2="30" y2="12" stroke="#0a0d08" stroke-width="1.6"/>
+        <line x1="21" y1="19" x2="30" y2="19" stroke="#0a0d08" stroke-width="1.6"/>
+        <line x1="21" y1="26" x2="30" y2="26" stroke="#0a0d08" stroke-width="1.6"/>
+        <line x1="21" y1="33" x2="30" y2="33" stroke="#0a0d08" stroke-width="1.6"/>
+        <line x1="22" y1="7.5" x2="22" y2="46" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+        <rect x="15" y="46" width="21" height="11" rx="3" fill="#1c2115" stroke="#0a0d08" stroke-width="1.4"/>
+        <line x1="18" y1="49.5" x2="33" y2="49.5" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="18" y1="53" x2="33" y2="53" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>
+
+        <!-- ===== 상단 데크 + 노브 ===== -->
+        <rect x="40" y="40" width="80" height="18" rx="5" fill="#161b10" stroke="#0a0d08" stroke-width="1.4"/>
+        <g transform="translate(62, 40)">
+          <circle r="12" fill="url(#knobGrad)" stroke="#0a0d08" stroke-width="1.6"/>
+          <g stroke="rgba(0,0,0,0.55)" stroke-width="1.6">
+            <line x1="0" y1="-12" x2="0" y2="-8.5"/><line x1="8.5" y1="-8.5" x2="6" y2="-6"/>
+            <line x1="12" y1="0" x2="8.5" y2="0"/><line x1="8.5" y1="8.5" x2="6" y2="6"/>
+            <line x1="0" y1="12" x2="0" y2="8.5"/><line x1="-8.5" y1="8.5" x2="-6" y2="6"/>
+            <line x1="-12" y1="0" x2="-8.5" y2="0"/><line x1="-8.5" y1="-8.5" x2="-6" y2="-6"/>
+          </g>
+          <circle r="4.5" fill="#20261a" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+          <line x1="0" y1="-4.5" x2="0" y2="-9.5" stroke="#ffd166" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+        <g transform="translate(92, 40)">
+          <circle r="8.5" fill="url(#knobGrad)" stroke="#0a0d08" stroke-width="1.5"/>
+          <g stroke="rgba(0,0,0,0.5)" stroke-width="1.4">
+            <line x1="0" y1="-8.5" x2="0" y2="-5.8"/><line x1="8.5" y1="0" x2="5.8" y2="0"/>
+            <line x1="0" y1="8.5" x2="0" y2="5.8"/><line x1="-8.5" y1="0" x2="-5.8" y2="0"/>
+          </g>
+          <line x1="0" y1="-3" x2="0" y2="-6.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-linecap="round"/>
+        </g>
+        <circle class="led-lamp" cx="112" cy="40" r="3.6" stroke="#0a0d08" stroke-width="1.2"/>
+
+        <!-- ===== 본체 ===== -->
+        <rect x="10" y="56" width="112" height="162" rx="15" fill="url(#bodyGrad)" stroke="#0e120a" stroke-width="2.6"/>
+        <path d="M16 68 Q13 140 16 206" stroke="rgba(255,255,255,0.09)" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+        <path d="M117 70 Q119 140 116 204" stroke="rgba(0,0,0,0.4)" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <g fill="#1a1f14" stroke="#0a0d08" stroke-width="1.1">
+          <circle cx="22" cy="67" r="3"/><circle cx="110" cy="67" r="3"/>
+          <circle cx="22" cy="207" r="3"/><circle cx="110" cy="207" r="3"/>
+        </g>
+        <g stroke="rgba(255,255,255,0.22)" stroke-width="1">
+          <line x1="20" y1="65" x2="24" y2="69"/><line x1="108" y1="65" x2="112" y2="69"/>
+          <line x1="20" y1="205" x2="24" y2="209"/><line x1="108" y1="205" x2="112" y2="209"/>
+        </g>
+
+        <!-- ===== 스피커 그릴 ===== -->
+        <rect x="24" y="76" width="84" height="50" rx="9" fill="#0e130b" stroke="#080b06" stroke-width="1.6"/>
+        <g fill="#040603">
+          <rect x="31" y="83"  width="70" height="4.6" rx="2.3"/>
+          <rect x="31" y="91"  width="70" height="4.6" rx="2.3"/>
+          <rect x="31" y="99"  width="70" height="4.6" rx="2.3"/>
+          <rect x="31" y="107" width="70" height="4.6" rx="2.3"/>
+          <rect x="31" y="115" width="70" height="4.6" rx="2.3"/>
+        </g>
+        <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+          <line x1="31" y1="88.5"  x2="101" y2="88.5"/>
+          <line x1="31" y1="96.5"  x2="101" y2="96.5"/>
+          <line x1="31" y1="104.5" x2="101" y2="104.5"/>
+          <line x1="31" y1="112.5" x2="101" y2="112.5"/>
+        </g>
+        <g clip-path="url(#grillClip)">
+          <rect class="grill-sweep" x="24" y="76" width="60" height="50" fill="url(#sweepGrad)"/>
+        </g>
+
+        <!-- ===== LCD 채널창 ===== -->
+        <rect x="27" y="136" width="78" height="27" rx="5" fill="#0a0e08" stroke="#080b06" stroke-width="1.6"/>
+        <rect x="30" y="139" width="72" height="21" rx="3.5" fill="url(#lcdGrad)"/>
+        <text class="lcd-text" id="lcdText" x="37" y="153.5">CH 01</text>
+        <g fill="rgba(216,244,199,0.75)">
+          <rect x="86" y="149" width="3" height="5" rx="1"/>
+          <rect x="91" y="146" width="3" height="8" rx="1"/>
+          <rect x="96" y="143" width="3" height="11" rx="1" fill="rgba(216,244,199,0.25)"/>
+        </g>
+        <rect x="37" y="156" width="60" height="2.4" rx="1.2" fill="rgba(0,0,0,0.55)"/>
+        <rect class="lcd-bar-fill" id="lcdBar" x="37" y="156" width="60" height="2.4" rx="1.2" fill="rgba(255,209,102,0.85)"/>
+
+        <!-- ===== 하단 그립 립 ===== -->
+        <g>
+          <rect x="26" y="176" width="80" height="4" rx="2" fill="rgba(0,0,0,0.38)"/>
+          <rect x="26" y="184" width="80" height="4" rx="2" fill="rgba(0,0,0,0.38)"/>
+          <rect x="26" y="192" width="80" height="4" rx="2" fill="rgba(0,0,0,0.38)"/>
+          <rect x="26" y="200" width="80" height="4" rx="2" fill="rgba(0,0,0,0.38)"/>
+        </g>
+        <g stroke="rgba(255,255,255,0.06)" stroke-width="1">
+          <line x1="26" y1="175.5" x2="106" y2="175.5"/>
+          <line x1="26" y1="183.5" x2="106" y2="183.5"/>
+          <line x1="26" y1="191.5" x2="106" y2="191.5"/>
+          <line x1="26" y1="199.5" x2="106" y2="199.5"/>
+        </g>
+        <circle cx="66" cy="212" r="1.8" fill="#060906"/>
+
+        <!-- ===== 측면 PTT 버튼 ===== -->
+        <g class="ptt-btn">
+          <rect x="2" y="96" width="10" height="46" rx="5" fill="url(#pttGrad)" stroke="#0a0d08" stroke-width="1.6"/>
+          <line x1="4.5" y1="106" x2="9.5" y2="106" stroke="rgba(0,0,0,0.55)" stroke-width="1.6"/>
+          <line x1="4.5" y1="115" x2="9.5" y2="115" stroke="rgba(0,0,0,0.55)" stroke-width="1.6"/>
+          <line x1="4.5" y1="124" x2="9.5" y2="124" stroke="rgba(0,0,0,0.55)" stroke-width="1.6"/>
+          <line x1="4.5" y1="133" x2="9.5" y2="133" stroke="rgba(0,0,0,0.55)" stroke-width="1.6"/>
+          <line x1="4" y1="100" x2="4" y2="138" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+        </g>
+
+        <!-- ===== 벨트 클립 (우측) ===== -->
+        <rect x="120" y="88" width="6" height="58" rx="3" fill="#141a0e" stroke="#0a0d08" stroke-width="1.3"/>
+        <line x1="122" y1="92" x2="122" y2="142" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+      </svg>
+    </button>
+    <div class="rally-feedback" id="rallyFeedback">주변 아군 집결 중…</div>
+    <small>탭 = 집결 신호 · 그 외 기능 없음</small>
+  </div>
+</div>
+
+<script>
+  // ---- 노트북 키보드 키 생성 (원근 사다리꼴 배열) ----
+  (function buildKeys() {
+    const group = document.getElementById("fbKeys");
+    const ns = "http://www.w3.org/2000/svg";
+    const rows = [
+      { y: 149, startX: 51, keyWidth: 13.2, count: 12 },
+      { y: 159, startX: 48.5, keyWidth: 13.8, count: 12 },
+      { y: 169, startX: 46, keyWidth: 14.4, count: 12 }
+    ];
+    for (const row of rows) {
+      for (let i = 0; i < row.count; i += 1) {
+        const key = document.createElementNS(ns, "rect");
+        key.setAttribute("x", (row.startX + i * (row.keyWidth + 1.7)).toFixed(1));
+        key.setAttribute("y", row.y);
+        key.setAttribute("width", row.keyWidth);
+        key.setAttribute("height", 7.6);
+        key.setAttribute("rx", 1.6);
+        key.setAttribute("fill", "#1e2716");
+        key.setAttribute("stroke", "rgba(0,0,0,0.5)");
+        key.setAttribute("stroke-width", "0.7");
+        group.append(key);
+      }
+    }
+  })();
+
+  // ---- 드론 조종기 상태 데모 ----
+  const fbStates = {
+    standby:   { label: "대기",     sub: "이륙 준비 완료",   meter: 100, sig: 2 },
+    piloting:  { label: "조종 중",  sub: "우클릭 표적 지정", meter: 74,  sig: 3 },
+    target:    { label: "표적 3",   sub: "지도 마커 클릭",   meter: 74,  sig: 3 },
+    attack:    { label: "자폭 준비", sub: "좌클릭 공격",      meter: 88,  sig: 3 },
+    returning: { label: "복귀 중",  sub: "자동 귀환",        meter: 41,  sig: 1 }
+  };
+
+  function setFb(state) {
+    const fb = document.getElementById("fieldbook");
+    const cfg = fbStates[state];
+    fb.dataset.state = state;
+    document.getElementById("fbLabel").textContent = cfg.label;
+    document.getElementById("fbSub").textContent = cfg.sub;
+    document.getElementById("fbMeter").setAttribute("width", (cfg.meter / 100) * 112);
+    const bars = document.querySelectorAll("#fbSig rect");
+    bars.forEach((bar, index) => bar.setAttribute("fill-opacity", index < cfg.sig ? "1" : "0.22"));
+  }
+
+  // ---- 무전기 원버튼 데모 ----
+  const radio = document.getElementById("milRadio");
+  const feedback = document.getElementById("rallyFeedback");
+  const lcdText = document.getElementById("lcdText");
+  const lcdBar = document.getElementById("lcdBar");
+  let busy = false;
+
+  radio.addEventListener("click", () => {
+    if (busy) return;
+    busy = true;
+
+    radio.classList.add("transmitting");
+    lcdText.textContent = "TX 집결";
+    feedback.classList.add("show");
+    feedback.textContent = "집결 신호 송신…";
+
+    setTimeout(() => {
+      radio.classList.remove("transmitting");
+      lcdText.textContent = "재송신 대기";
+      lcdBar.setAttribute("width", "0");
+      feedback.textContent = "주변 아군 집결 중…";
+      requestAnimationFrame(() => {
+        radio.classList.add("cooldown");
+        requestAnimationFrame(() => lcdBar.setAttribute("width", "60"));
+      });
+
+      setTimeout(() => {
+        radio.classList.remove("cooldown");
+        lcdText.textContent = "CH 01";
+        feedback.classList.remove("show");
+        busy = false;
+      }, 4000);
+    }, 1200);
+  });
+
+  // 초기 신호 바 상태 반영
+  setFb("standby");
+</script>
+
+</body>
+</html>
