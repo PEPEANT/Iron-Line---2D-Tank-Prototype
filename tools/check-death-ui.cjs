@@ -25,6 +25,7 @@ function mustNotInclude(source, needle, label = needle) {
 const html = read("index.html");
 const hud = read("src/systems/hud.js");
 const main = read("src/main.js");
+const revive = read("src/systems/player-downed-revive.js");
 const deathHandler = hud.slice(
   hud.indexOf("this.nodes.deathRestartButton?.addEventListener"),
   hud.indexOf("this.nodes.resultMainButton?.addEventListener")
@@ -47,5 +48,13 @@ mustInclude(deathInput, "return this.returnToMainMenu();", "Enter returns to mai
 mustNotInclude(deathInput, "KeyR", "death KeyR restart shortcut");
 mustInclude(deathScreenUpdate, '"메인화면으로 가기"', "fixed main-menu button label");
 mustNotInclude(deathScreenUpdate, "playerRespawnTimer", "respawn countdown in death reason");
+mustInclude(html, "src/systems/player-downed-revive.js", "downed revive module script");
+mustInclude(main, "IronLine.installPlayerDownedRevive?.(Game);", "downed revive installer");
+mustInclude(main, "this.playerDownedDuration = 18", "extended downed timer");
+mustInclude(revive, "updatePlayerDownedRevive(dt)", "downed revive update");
+mustInclude(revive, "reviveDownedPlayer(options = {})", "revive handler");
+mustInclude(revive, "this.input.keyDown(\"KeyE\")", "hold E self revive");
+mustInclude(revive, "respawnPointForTeamWithBaseSpawn", "base spawn respawn override");
+mustInclude(main, "this.recordLocalPlayerDeath(this.playerPendingDeathSource", "death counted after downed expiry");
 
 if (!process.exitCode) console.log("Death UI check passed");

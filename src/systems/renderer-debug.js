@@ -9,15 +9,22 @@
 
   Object.assign(proto, {
     drawDebugOverlay(game) {
-      if (!game.debug?.ai) return;
+      const showAi = Boolean(game.debug?.ai);
+      const showNavGraph = Boolean(game.debug?.navGraph);
+      const showTacticalMap = Boolean(game.debug?.tacticalMap);
+      if (!showAi && !showNavGraph && !showTacticalMap) return;
 
       const ctx = this.ctx;
       ctx.save();
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      if (game.debug.navGraph) this.drawNavGraph(game);
-      if (game.debug.tacticalMap) this.drawTacticalMapDebug(game);
+      if (showNavGraph) this.drawNavGraph(game);
+      if (showTacticalMap) this.drawTacticalMapDebug(game);
+      if (!showAi) {
+        ctx.restore();
+        return;
+      }
 
       for (const tank of game.tanks) {
         if (!tank.ai || !tank.alive || !tank.isOperational()) continue;

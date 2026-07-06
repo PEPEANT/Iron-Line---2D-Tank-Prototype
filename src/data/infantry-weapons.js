@@ -234,8 +234,8 @@
     repairKit: {
       id: "repairKit",
       type: "repair",
-      name: "수리킷",
-      shortName: "수리",
+      name: "\uC758\uB8CC/\uC218\uB9AC\uD0A4\uD2B8",
+      shortName: "\uD0A4\uD2B8",
       range: 72,
       desiredRange: 44,
       cooldown: 1.1,

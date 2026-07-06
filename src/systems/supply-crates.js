@@ -18,15 +18,11 @@
 
   function anchorPoint(world, team) {
     const key = team === TEAM?.RED ? "red" : "blue";
-    return world?.baseExitPoints?.[key] ||
+    const safeZone = (world?.safeZones || []).find((zone) => zone.team === (team === TEAM?.RED ? TEAM?.RED : TEAM?.BLUE));
+    return safeZone ||
       (team === TEAM?.RED ? world?.spawns?.red?.[0] : world?.spawns?.player) ||
+      world?.baseExitPoints?.[key] ||
       { x: world?.width ? world.width * 0.5 : 0, y: world?.height ? world.height * 0.5 : 0 };
-  }
-
-  function objectiveAnchor(world) {
-    const points = world?.capturePoints || [];
-    if (!points.length) return { x: world?.width ? world.width * 0.5 : 0, y: world?.height ? world.height * 0.5 : 0 };
-    return points[Math.floor(points.length / 2)] || points[0];
   }
 
   function crateRect(id, team, point, dx, dy) {
@@ -40,10 +36,10 @@
       w: CRATE_SIZE.w,
       h: CRATE_SIZE.h,
       interactionRadius: CRATE_RADIUS,
-      collision: true,
-      cover: "light",
-      blocksMovement: true,
-      stopsProjectiles: true,
+      collision: false,
+      cover: "none",
+      blocksMovement: false,
+      stopsProjectiles: false,
       stock: IronLine.supplyLoadout?.cloneStock?.(),
       systemGeneratedSupplyCrate: true,
       destroyed: false,
@@ -56,13 +52,11 @@
   function defaultSupplyCrates(world) {
     const blue = anchorPoint(world, TEAM?.BLUE || "blue");
     const red = anchorPoint(world, TEAM?.RED || "red");
-    const mid = objectiveAnchor(world);
     const maxX = Math.max(CRATE_SIZE.w, (world?.width || 0) - CRATE_SIZE.w);
     const maxY = Math.max(CRATE_SIZE.h, (world?.height || 0) - CRATE_SIZE.h);
     return [
-      crateRect("supply-blue-base", TEAM?.BLUE || "blue", blue, -78, -64),
-      crateRect("supply-red-base", TEAM?.RED || "red", red, 78, 64),
-      crateRect("supply-mid-field", TEAM?.NEUTRAL || "neutral", mid, 0, -118)
+      crateRect("supply-blue-base", TEAM?.BLUE || "blue", blue, 180, -118),
+      crateRect("supply-red-base", TEAM?.RED || "red", red, -180, 118)
     ].map((crate) => ({
       ...crate,
       x: clamp ? clamp(crate.x, 12, maxX) : crate.x,

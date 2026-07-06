@@ -1627,8 +1627,15 @@
     resetPlayerFeedbackState() {
       this.playerDowned = false;
       this.playerDownedTimer = 0;
-      this.playerDeathRevealDelay = 2.15;
+      this.playerDownedDuration = 18;
+      this.playerDeathRevealDelay = this.playerDownedDuration;
+      this.playerDownedReviveHold = 0;
+      this.playerDownedReviveRequired = 1.25;
+      this.playerDownedReviveMedic = null;
       this.playerPendingDeathReason = "";
+      this.playerPendingDeathSource = null;
+      this.playerPendingDeathKind = "";
+      this.playerDeathRecorded = false;
       this.playerDamageFlash = 0;
       this.lastPlayerDamage = null;
       this.playerHitConfirmations = [];
@@ -2770,7 +2777,8 @@
       this.addScreenShake(clamp(2.8 + damage * 0.16, 3, 12));
 
       if (this.player.hp <= 0) {
-        this.recordLocalPlayerDeath(source, kind);
+        this.playerPendingDeathSource = source;
+        this.playerPendingDeathKind = kind;
         this.beginPlayerDowned(options.deathReason || this.playerDeathReasonFor(label));
       }
       return true;
@@ -2837,6 +2845,8 @@
         if (this.playerDangerWarnings[i].ttl <= 0) this.playerDangerWarnings.splice(i, 1);
       }
 
+      if (!this.playerDowned || this.playerDeathActive) return;
+      this.updatePlayerDownedRevive(dt);
       if (!this.playerDowned || this.playerDeathActive) return;
       this.playerDownedTimer = Math.max(0, this.playerDownedTimer - dt);
       this.playerDamageFlash = Math.max(this.playerDamageFlash, 0.18 + Math.sin(performance.now() * 0.008) * 0.06);
@@ -2985,7 +2995,10 @@
       this.player.deathTime = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
       this.player.deathPoseAngle = this.player.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.42;
       this.playerDowned = true;
-      this.playerDownedTimer = this.playerDeathRevealDelay;
+      this.playerDownedTimer = this.playerDownedDuration || this.playerDeathRevealDelay || 18;
+      this.playerDownedReviveHold = 0;
+      this.playerDownedReviveMedic = null;
+      this.playerDeathRecorded = false;
       this.playerPendingDeathReason = reason;
       this.playerDamageFlash = Math.max(this.playerDamageFlash || 0, 0.58);
       this.addScreenShake(10, 16);
@@ -3013,6 +3026,10 @@
       this.playerDowned = false;
       this.playerDeathActive = true;
       this.playerDeathReason = reason;
+      if (!options.skipRecord && !this.playerDeathRecorded) {
+        this.recordLocalPlayerDeath(this.playerPendingDeathSource, this.playerPendingDeathKind || "death");
+        this.playerDeathRecorded = true;
+      }
       if (this.isConquestMode() && this.matchStarted) {
         this.playerRespawnTimer = this.conquest.respawnDelay.player;
       } else if (this.isRoundSpectatorMode?.()) {
@@ -4164,6 +4181,7 @@
   IronLine.installGameAdminMapActions?.(Game);
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
+  IronLine.installPlayerDownedRevive?.(Game);
   IronLine.installSupplyCrates?.(Game);
   IronLine.installMapObjects?.(Game);
   IronLine.installFogOfWar?.(Game);

@@ -18,11 +18,11 @@
 
   const gamePlayerControlMethods = {
     updateDebugToggles() {
-      if (this.input.consumePress("KeyG")) {
+      if (this.input.consumePress("Comma")) {
         this.debug.ai = !this.debug.ai;
       }
 
-      if (this.input.consumePress("KeyN")) {
+      if (this.input.consumePress("Period")) {
         this.debug.navGraph = !this.debug.navGraph;
       }
 
@@ -259,6 +259,27 @@
         return true;
       }
       return false;
+    },
+    quickThrowableSlot() {
+      const inventory = this.player?.weaponInventory || [];
+      return inventory
+        .map((weaponId, index) => ({ weapon: INFANTRY_WEAPONS[weaponId], weaponId, index }))
+        .find((slot) => (
+          slot.weapon?.type === "grenade" &&
+          (this.player.equipmentAmmo?.[slot.weapon.ammoKey] || 0) > 0
+        )) || null;
+    },
+    quickUsePlayerThrowable(targetX = this.input.mouse.worldX, targetY = this.input.mouse.worldY) {
+      const slot = this.quickThrowableSlot();
+      if (!slot?.weapon) return false;
+      if (this.player.activeSlot !== slot.index) this.player.setEquipmentSlot(slot.index);
+      if (this.player.rifleCooldown > 0) return false;
+      const fired = this.usePlayerEquipment(slot.weapon, targetX, targetY);
+      if (!fired) return false;
+      const cooldownScale = (this.player.lastShotCooldownScale || 1) * this.playerFireModeCooldownScale(slot.weapon);
+      this.player.rifleCooldown = (slot.weapon.cooldown || 0.35) * cooldownScale;
+      this.player.lastShotCooldownScale = 1;
+      return true;
     },
     clearTankFireOrder(tank) {
       if (tank) tank.fireOrder = null;
@@ -556,6 +577,7 @@
       if (this.input.consumePress("KeyB")) {
         this.cyclePlayerFireMode(weapon);
       }
+      if (this.input.consumePress("KeyG") && this.quickUsePlayerThrowable(mouse.worldX, mouse.worldY)) return;
       const primaryPressed = this.input.consumeMousePress(0);
       const spacePressed = this.input.consumePress("Space");
       const wantsUse = this.playerWantsWeaponUse(weapon, {

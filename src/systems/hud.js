@@ -582,7 +582,7 @@
         grenade: "GR",
         grenadeLauncher: "GL",
         rpg: "RPG",
-        repairKit: "FIX",
+        repairKit: "KIT",
         reconDrone: "UAV",
         kamikazeDrone: "FPV"
       };

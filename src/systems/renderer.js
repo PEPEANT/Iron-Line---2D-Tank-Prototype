@@ -2350,6 +2350,23 @@
       ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
       ctx.font = "800 15px Inter, sans-serif";
       ctx.fillText(`\uC6D0\uC778: ${game.playerPendingDeathReason || "\uD53C\uACA9"}`, camera.width / 2, camera.height / 2 + 12, camera.width * 0.86);
+      const seconds = Math.max(0, Math.ceil(game.playerDownedTimer || 0));
+      const selfRevive = Boolean(game.playerCanSelfRevive?.());
+      const medic = game.playerDownedReviveMedic || null;
+      const holdRatio = selfRevive
+        ? Math.min(1, (game.playerDownedReviveHold || 0) / Math.max(0.1, game.playerDownedReviveRequired || 1.25))
+        : 0;
+      ctx.fillStyle = selfRevive || medic ? "rgba(143, 232, 166, 0.94)" : "rgba(237, 244, 239, 0.72)";
+      ctx.font = "900 14px Inter, sans-serif";
+      const reviveText = selfRevive
+        ? `E \uC758\uB8CC\uD0A4\uD2B8 \uC18C\uC0DD ${Math.round(holdRatio * 100)}%`
+        : medic
+          ? `${medic.callSign || "\uC544\uAD70"} \uC18C\uC0DD \uC911`
+          : "\uC758\uB8CC\uD0A4\uD2B8 \uB610\uB294 \uC544\uAD70 \uC5D4\uC9C0\uB2C8\uC5B4\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4";
+      ctx.fillText(reviveText, camera.width / 2, camera.height / 2 + 42, camera.width * 0.86);
+      ctx.fillStyle = "rgba(255, 210, 198, 0.78)";
+      ctx.font = "800 12px Inter, sans-serif";
+      ctx.fillText(`\uC0AC\uB9DD \uD655\uC815\uAE4C\uC9C0 ${seconds}\uCD08`, camera.width / 2, camera.height / 2 + 68);
       ctx.restore();
     }
 
