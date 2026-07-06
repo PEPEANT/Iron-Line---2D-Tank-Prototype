@@ -586,7 +586,8 @@
         this.emergencyBailout(game || { world: { width: Infinity, height: Infinity, obstacles: [] } }, {
           catastrophic,
           weaponId: options.weaponId,
-          cause: options.cause
+          cause: options.cause,
+          sourceVehicle: options.sourceVehicle || null
         });
         if (game?.effects) {
           game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 38, alpha: 0.34 });

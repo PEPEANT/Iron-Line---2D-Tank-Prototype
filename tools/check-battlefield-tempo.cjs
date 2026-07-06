@@ -254,7 +254,7 @@ new Promise((resolve, reject) => {
           passengersBefore: passengerCountBefore,
           catastrophic: Boolean(options.catastrophic),
           weaponId: options.weaponId || "",
-          cause: options.cause || options.weaponId || "destruction",
+          cause: options.cause || options.weaponId || "destruction", sourceVehicle: options.sourceVehicle ? { id: options.sourceVehicle.callSign || options.sourceVehicle.id || "", team: options.sourceVehicle.team || "", vehicleType: options.sourceVehicle.vehicleType || "", distance: Math.round(Math.hypot((options.sourceVehicle.x || 0) - (this.x || 0), (options.sourceVehicle.y || 0) - (this.y || 0))) } : null,
           ai: this.ai ? { state: this.ai.state || "", orderRole: this.ai.currentOrder?.role || "", orderStance: this.ai.currentOrder?.stance || "", goal: this.ai.currentOrder?.objectiveName || "", position: { x: Math.round(this.x || 0), y: Math.round(this.y || 0) }, speed: Math.round((Number(this.speed) || 0) * 10) / 10, passengers: passengerCountBefore, moveTarget: this.ai.debug?.moveTarget ? { x: Math.round(this.ai.debug.moveTarget.x || 0), y: Math.round(this.ai.debug.moveTarget.y || 0) } : null, armorThreat: (() => { const item = (gameArg?.tanks || []).filter((tank) => tank?.alive && tank.team !== this.team).map((tank) => ({ tank, distance: Math.hypot((tank.x || 0) - (this.x || 0), (tank.y || 0) - (this.y || 0)) })).sort((a, b) => a.distance - b.distance)[0]; return item ? { id: item.tank.callSign || item.tank.id || "", distance: Math.round(item.distance), los: Boolean(window.IronLine?.physics?.hasLineOfSight?.(gameArg, item.tank, this, { padding: 6 })) } : null; })() } : null
         };
         const result = originalEmergencyBailout.call(this, gameArg, options);
@@ -590,7 +590,7 @@ function summarize(r) {
       passengers: firstOpeningBailout.passengers,
       catastrophic: Boolean(firstOpeningBailout.catastrophic),
       weaponId: firstOpeningBailout.weaponId || "",
-      cause: firstOpeningBailout.cause || "",
+      cause: firstOpeningBailout.cause || "", sourceVehicle: firstOpeningBailout.sourceVehicle || null,
       ai: firstOpeningBailout.ai || null
     } : null,
     survivalAfterContactP25: +q(survival, 0.25).toFixed(0),
