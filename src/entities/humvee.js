@@ -562,6 +562,7 @@
       const game = maybeAmount === null ? null : gameOrAmount;
       const amount = maybeAmount === null ? gameOrAmount : maybeAmount;
       const options = maybeAmount === null ? {} : maybeOptions;
+      const impactSpeed = this.speed;
       this.hp -= amount;
       this.impactShake = Math.max(this.impactShake, 0.26);
       if (game?.effects) {
@@ -587,7 +588,8 @@
           catastrophic,
           weaponId: options.weaponId,
           cause: options.cause,
-          sourceVehicle: options.sourceVehicle || null
+          sourceVehicle: options.sourceVehicle || null,
+          impactSpeed
         });
         if (game?.effects) {
           game.effects.scorchMarks.push({ x: this.x, y: this.y, radius: 38, alpha: 0.34 });

@@ -735,9 +735,19 @@ Diagnostic verification:
 | `reports/playtests/battlefield-tempo-20260706062728/` | 6.3 | 8 | `R-HMV-1` was `transport-run`, passengers 4, position `(5467,984)`, speed 0, moveTarget `(5286,1046)` |
 | `reports/playtests/battlefield-tempo-20260706063216/` | 5.4 | 7 | `B-HMV-1` was `transport-run`, passengers 3, position `(4129,1736)`, speed 0, moveTarget `(4156,1644)`, nearest alive tank `R-05` at 1058px with LOS false |
 | `reports/playtests/battlefield-tempo-20260706063733/` | 5.5 | 4 | `B-HMV-2` was hit by source tank `R-18` at 1013px while `transport-run`, passengers 4, position `(4174,1750)`, speed 0, moveTarget `(4165,1591)` |
+| `reports/playtests/battlefield-tempo-20260706065628/` | 4.3 | 3 | after `impactSpeed` fix, `B-HMV-1` still had pre-destruction speed 0, source tank `R-05` at 1009px, moveTarget `(4156,1644)` |
+
+Discarded target/evasion experiment:
+
+| Report | Experiment | Deaths/min | Opening bailout passengers | Judgment |
+| --- | --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706064348/` | clamp loaded-Humvee contact range to AP desired range | 6.1 | 0 | stopped this sample bailout, but did not address close-range cases and exposed a Humvee MG opening spike |
+| `reports/playtests/battlefield-tempo-20260706064700/` | same contact-range clamp | 7.5 | 8 | missed close source tank at 559px |
+| `reports/playtests/battlefield-tempo-20260706065130/` | contact-range clamp plus loaded transport heavy-threat range 640px | 4.0 | 4 | still missed source tank at 651px and killed tempo |
 
 Judgment:
 - The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
 - Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
 - Projectile/source vehicle context now confirms the AP shooter can be about 1000px away while the transport is stationary or nearly stationary near its movement target.
-- Next behavior work should inspect loaded Humvee traffic/stuck/route staging around confirmed AP source lines before adding another dismount rule.
+- `impactSpeed` now confirms at least one loaded transport was truly stopped before destruction, not just zeroed by the destruction handler.
+- Do not continue with simple tank target range clamps or slightly larger heavy-threat radii. Next behavior work should inspect loaded transport braking at intermediate move targets/path nodes before adding another dismount rule.
