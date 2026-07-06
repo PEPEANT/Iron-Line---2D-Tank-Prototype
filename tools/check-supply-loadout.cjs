@@ -146,11 +146,15 @@ function checkLoadoutRuntime() {
 
   const expectedItems = {
     machinegun: 0,
+    lmg: 0,
     sniper: 0,
     smg: 0,
     pistol: 1,
     rpg: 2,
+    grenadeLauncher: 2,
     reconDrone: 3,
+    repairKit: 3,
+    kamikazeDrone: 3,
     grenade: 4
   };
   for (const [itemId, slotIndex] of Object.entries(expectedItems)) {
@@ -174,9 +178,13 @@ function checkLoadoutRuntime() {
   const checks = [
     ["pistol", 1, "pistol", 36],
     ["rpg", 2, "rpg", 2],
+    ["grenadeLauncher", 2, "grenadeLauncher", 3],
     ["reconDrone", 3, "reconDrone", 1],
+    ["repairKit", 3, "repairKit", 2],
+    ["kamikazeDrone", 3, "kamikazeDrone", 1],
     ["grenade", 4, "grenade", 3],
-    ["machinegun", 0, "machinegun", 120]
+    ["machinegun", 0, "machinegun", 120],
+    ["lmg", 0, "lmg", 150]
   ];
   for (const [itemId, slotIndex, ammoKey, minAmmo] of checks) {
     const result = IronLine.supplyLoadout.applyItemToPlayer(player, itemId);

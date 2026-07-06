@@ -11,6 +11,12 @@
       slotIndex: 0,
       stockKey: "machinegun"
     },
+    lmg: {
+      id: "lmg",
+      weaponId: "lmg",
+      slotIndex: 0,
+      stockKey: "lmg"
+    },
     sniper: {
       id: "sniper",
       weaponId: "sniper",
@@ -39,11 +45,35 @@
       grantAmmo: 2,
       maxAmmo: 4
     },
+    grenadeLauncher: {
+      id: "grenadeLauncher",
+      weaponId: "grenadeLauncher",
+      slotIndex: 2,
+      stockKey: "grenadeLauncher",
+      grantAmmo: 3,
+      maxAmmo: 6
+    },
     reconDrone: {
       id: "reconDrone",
       weaponId: "reconDrone",
       slotIndex: 3,
       stockKey: "reconDrone",
+      grantAmmo: 1,
+      maxAmmo: 2
+    },
+    repairKit: {
+      id: "repairKit",
+      weaponId: "repairKit",
+      slotIndex: 3,
+      stockKey: "repairKit",
+      grantAmmo: 2,
+      maxAmmo: 4
+    },
+    kamikazeDrone: {
+      id: "kamikazeDrone",
+      weaponId: "kamikazeDrone",
+      slotIndex: 3,
+      stockKey: "kamikazeDrone",
       grantAmmo: 1,
       maxAmmo: 2
     },
@@ -59,11 +89,15 @@
 
   const DEFAULT_SUPPLY_STOCK = {
     machinegun: 2,
+    lmg: 2,
     sniper: 2,
     smg: 3,
     pistol: 4,
     rpg: 2,
+    grenadeLauncher: 3,
     reconDrone: 2,
+    repairKit: 3,
+    kamikazeDrone: 2,
     grenade: 6
   };
 
