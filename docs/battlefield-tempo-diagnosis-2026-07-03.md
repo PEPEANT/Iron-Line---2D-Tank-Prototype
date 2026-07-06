@@ -745,9 +745,16 @@ Discarded target/evasion experiment:
 | `reports/playtests/battlefield-tempo-20260706064700/` | same contact-range clamp | 7.5 | 8 | missed close source tank at 559px |
 | `reports/playtests/battlefield-tempo-20260706065130/` | contact-range clamp plus loaded transport heavy-threat range 640px | 4.0 | 4 | still missed source tank at 651px and killed tempo |
 
+Discarded intermediate-node braking experiment:
+
+| Report | Experiment | Deaths/min | Opening bailout passengers | Judgment |
+| --- | --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706070157/` | loaded delivery drives through non-final move targets with stop distance 46 | 5.3 | 0 | stopped the sample bailout, but pushed tempo below target |
+| `reports/playtests/battlefield-tempo-20260706070525/` | same non-final stop-distance tightening | 4.8 | 3 | still allowed a loaded AP bailout 0.6s after contact; first death arrived 2.5s after contact |
+
 Judgment:
 - The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
 - Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
 - Projectile/source vehicle context now confirms the AP shooter can be about 1000px away while the transport is stationary or nearly stationary near its movement target.
 - `impactSpeed` now confirms at least one loaded transport was truly stopped before destruction, not just zeroed by the destruction handler.
-- Do not continue with simple tank target range clamps or slightly larger heavy-threat radii. Next behavior work should inspect loaded transport braking at intermediate move targets/path nodes before adding another dismount rule.
+- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, or blanket non-final path stop-distance tightening. Next behavior work should inspect loaded transport route/dropoff selection around armor lanes before adding another dismount rule.
