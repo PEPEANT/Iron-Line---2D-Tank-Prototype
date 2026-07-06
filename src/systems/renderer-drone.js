@@ -48,24 +48,24 @@
       const { attackDrone, controlled, weakSignal, criticalSignal } = state;
 
       ctx.save();
-      ctx.globalAlpha = controlled ? 0.13 : attackDrone ? 0.1 : 0.055;
-      ctx.strokeStyle = attackDrone
-        ? "rgba(186, 108, 61, 0.5)"
-        : controlled ? "rgba(100, 154, 151, 0.4)" : "rgba(180, 194, 181, 0.18)";
-      ctx.lineWidth = controlled ? 2 : 1;
-      ctx.setLineDash([14, 18]);
-      ctx.beginPath();
-      ctx.arc(drone.x, drone.y, attackDrone ? drone.splash || 120 : drone.scanRange, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // 점선 정책 (visual-overhaul-plan.md P4): 사거리 원은 조종 중에만 표시
+      if (controlled) {
+        ctx.globalAlpha = 0.13;
+        ctx.strokeStyle = attackDrone ? "rgba(186, 108, 61, 0.5)" : "rgba(100, 154, 151, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([14, 18]);
+        ctx.beginPath();
+        ctx.arc(drone.x, drone.y, attackDrone ? drone.splash || 120 : drone.scanRange, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
-      if (drone.owner && drone.owner.hp > 0) {
-        ctx.globalAlpha = controlled ? weakSignal ? 0.38 : 0.24 : 0.1;
-        ctx.strokeStyle = weakSignal
-          ? criticalSignal ? "rgba(226, 93, 74, 0.62)" : "rgba(255, 209, 102, 0.58)"
-          : attackDrone ? "rgba(173, 124, 73, 0.48)" : "rgba(91, 137, 134, 0.5)";
+      // 소유자 링크선은 신호 경고(약함/위험)일 때만
+      if (weakSignal && drone.owner && drone.owner.hp > 0) {
+        ctx.globalAlpha = controlled ? 0.38 : 0.16;
+        ctx.strokeStyle = criticalSignal ? "rgba(226, 93, 74, 0.62)" : "rgba(255, 209, 102, 0.58)";
         ctx.lineWidth = 1.2;
-        if (weakSignal) ctx.setLineDash([7, 9]);
+        ctx.setLineDash([7, 9]);
         ctx.beginPath();
         ctx.moveTo(drone.owner.x, drone.owner.y);
         ctx.lineTo(drone.x, drone.y);
