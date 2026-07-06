@@ -1,3 +1,6 @@
+/* 차량 계기판 — visual-overhaul-plan.md P5.7 (2026-07-06)
+   재질 언어: 올리브드랍 섀시 + 음각 계기 웰 + 앰버 발광 (무전기/조종기 목업과 동일) */
+
 .hud-bottom.vehicle-dashboard-active {
   display: grid;
   justify-items: center;
@@ -7,139 +10,212 @@
   display: none;
 }
 
+/* ===== 섀시 ===== */
 .vehicle-dashboard {
-  width: min(94vw, 680px);
-  min-height: 96px;
+  position: relative;
+  width: min(94vw, 700px);
   display: grid;
-  grid-template-columns: 92px minmax(190px, 1.35fr) minmax(86px, 0.7fr) minmax(76px, 0.55fr) 92px;
+  grid-template-columns: 104px minmax(190px, 1.35fr) minmax(92px, 0.7fr) minmax(80px, 0.55fr) 104px;
   align-items: stretch;
-  gap: 7px;
+  gap: 8px;
+  padding: 13px 12px 15px;
+  border: 2px solid rgba(14, 18, 10, 0.98);
+  border-radius: 15px;
+  background:
+    /* 모서리 나사 4개 */
+    radial-gradient(circle 4px at 11px 11px, #4b574b 0 2px, #151b17 2.6px, transparent 4.6px),
+    radial-gradient(circle 4px at calc(100% - 11px) 11px, #4b574b 0 2px, #151b17 2.6px, transparent 4.6px),
+    radial-gradient(circle 4px at 11px calc(100% - 11px), #4b574b 0 2px, #151b17 2.6px, transparent 4.6px),
+    radial-gradient(circle 4px at calc(100% - 11px) calc(100% - 11px), #4b574b 0 2px, #151b17 2.6px, transparent 4.6px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
+    linear-gradient(150deg, #3d4834 0%, #262f1e 50%, #171d12 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -12px 18px rgba(0, 0, 0, 0.35),
+    0 16px 36px rgba(0, 0, 0, 0.5);
   pointer-events: none;
+}
+
+/* 브러시드 상판 스트립 */
+.vehicle-dashboard::before {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 4px),
+    rgba(0, 0, 0, 0.3);
+}
+
+/* 하단 러버 트림 */
+.vehicle-dashboard::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 4px;
+  height: 6px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.4) 0 6px, rgba(255, 255, 255, 0.03) 6px 12px),
+    #11150c;
 }
 
 .vehicle-dashboard.hidden {
   display: none;
 }
 
+/* ===== 계기 웰 (음각) ===== */
 .vehicle-dashboard-meter,
 .vehicle-dashboard-cluster {
   min-width: 0;
-  min-height: 92px;
-  border: 1px solid rgba(0, 0, 0, 0.6);
-  border-radius: 8px;
-  background: linear-gradient(180deg, #454b40, #343931 30%, #23271f);
+  min-height: 104px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0d110b, #12170e);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -8px 16px rgba(0, 0, 0, 0.3),
-    0 14px 30px rgba(0, 0, 0, 0.4);
+    inset 0 3px 8px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .vehicle-dashboard-meter {
   display: grid;
-  grid-template-rows: 62px 11px 15px;
+  grid-template-rows: 12px 1fr 14px;
   justify-items: center;
   align-items: center;
-  padding: 6px 6px 5px;
+  padding: 7px 6px 6px;
 }
 
 .vehicle-dashboard-meter canvas {
-  width: 62px;
-  height: 62px;
+  width: 76px;
+  height: 76px;
 }
 
 .vehicle-dashboard-meter span,
 .vehicle-dashboard-label,
 .vehicle-dashboard-cluster small {
-  color: #9aa488;
-  font-size: 10px;
+  color: rgba(237, 244, 239, 0.35);
+  font-size: 9.5px;
   font-weight: 900;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   line-height: 1.1;
   text-transform: uppercase;
-}
-
-.vehicle-dashboard-meter strong,
-.vehicle-dashboard-cluster > strong,
-.vehicle-dashboard-ammo-grid strong {
-  min-width: 0;
-  color: #e6ecd6;
-  font-size: 16px;
-  font-weight: 950;
-  line-height: 1.05;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .vehicle-dashboard-meter strong {
   font-family: Consolas, "D2Coding", monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #ffe8a8;
+  text-shadow: 0 0 8px rgba(255, 209, 102, 0.3);
 }
 
 .vehicle-dashboard-cluster {
   display: grid;
-  gap: 6px;
-  padding: 8px;
+  gap: 7px;
+  padding: 9px 10px;
 }
 
+/* ===== 주포 클러스터 ===== */
 .vehicle-dashboard-main {
-  grid-template-rows: 12px 18px 26px 12px;
+  grid-template-rows: 12px auto auto 13px;
+  justify-items: stretch;
 }
 
-.vehicle-dashboard-ammo-grid {
+.vd-chip-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
+  gap: 6px;
 }
 
-.vehicle-dashboard-ammo-grid span {
+/* 탄종 칩: 램프 + 라벨 + 플립 카운터 */
+.vd-chip {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(32px, auto) minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 4px 7px;
-  border-radius: 5px;
-  border: 1px solid rgba(0, 0, 0, 0.55);
-  background: #0c0e0a;
-  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+  border-radius: 7px;
+  border: 1px solid rgba(237, 244, 239, 0.09);
+  background: #0a0e08;
 }
 
-.vehicle-dashboard-ammo-grid b {
-  color: #9aa488;
+.vd-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(237, 244, 239, 0.12);
+}
+
+.vd-chip.active {
+  border-color: rgba(255, 209, 102, 0.5);
+}
+
+.vd-chip.active i {
+  background: #ffd166;
+  box-shadow: 0 0 7px rgba(255, 209, 102, 0.8);
+}
+
+.vd-chip b {
+  color: rgba(237, 244, 239, 0.45);
   font-size: 10px;
   font-weight: 950;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
-.vehicle-dashboard-ammo-grid strong {
+.vd-chip.active b {
+  color: #ffe8a8;
+}
+
+/* 기계식 플립 카운터 */
+.vd-chip strong {
+  position: relative;
+  justify-self: end;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.8);
+  background: linear-gradient(180deg, #171713 49%, #0c0c09 51%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 3px rgba(0, 0, 0, 0.6);
+  color: #e8e4d8;
   font-family: Consolas, "D2Coding", monospace;
   font-variant-numeric: tabular-nums;
-  color: #ffd166;
-  text-shadow: 0 0 6px rgba(255, 209, 102, 0.4);
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 1px;
 }
 
+.vd-chip strong::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* 장전 게이지 + 준비 램프 */
 .vehicle-dashboard-reload {
   display: grid;
-  grid-template-columns: minmax(48px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-}
-
-.vehicle-dashboard-reload span {
-  color: #c9d2a8;
-  font-size: 10px;
-  font-weight: 900;
-  white-space: nowrap;
+  gap: 8px;
 }
 
 .vehicle-dashboard-reload i {
   height: 7px;
   overflow: hidden;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.6);
-  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.7);
+  background: #060906;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .vehicle-dashboard-reload em {
@@ -147,9 +223,49 @@
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #d8a93f, #ffd166);
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.5), #ffd166);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.5);
 }
 
+.vd-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(237, 244, 239, 0.38);
+  font-size: 9.5px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.vd-ready u {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: rgba(237, 244, 239, 0.1);
+  text-decoration: none;
+}
+
+.vehicle-dashboard.gun-ready .vd-ready {
+  color: #9fff8a;
+}
+
+.vehicle-dashboard.gun-ready .vd-ready u {
+  background: #9fff8a;
+  box-shadow: 0 0 8px rgba(159, 255, 138, 0.7);
+}
+
+.vd-main-state {
+  overflow: hidden;
+  color: rgba(237, 244, 239, 0.5);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== MG 7세그 ===== */
 .vehicle-dashboard-mg,
 .vehicle-dashboard-smoke {
   grid-template-rows: 12px 1fr 14px;
@@ -160,58 +276,78 @@
 
 .vehicle-dashboard-mg > strong {
   align-self: center;
-  min-width: 58px;
-  padding: 3px 8px;
+  min-width: 64px;
+  padding: 4px 10px;
   border-radius: 5px;
-  border: 1px solid rgba(0, 0, 0, 0.55);
-  background: #0c0e0a;
-  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.85);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    #0a0b06;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
   font-family: Consolas, "D2Coding", monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 20px;
+  font-size: 21px;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 2px;
   color: #ffd166;
-  text-shadow: 0 0 6px rgba(255, 209, 102, 0.4);
+  text-shadow: 0 0 10px rgba(255, 209, 102, 0.55);
 }
 
+/* ===== 연막 경고등 돔 ===== */
 .vehicle-dashboard-smoke > strong {
-  width: 30px;
-  height: 30px;
+  position: relative;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   align-self: center;
   border-radius: 50%;
-  border: 2px solid #101310;
-  background: radial-gradient(circle at 35% 30%, #6b7261, #454b40 60%, #23271f);
-  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(0, 0, 0, 0.75);
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.35), transparent 36%),
+    radial-gradient(circle at 50% 55%, #565e4c 0%, #2c3324 65%, #171c12 100%);
+  box-shadow: inset 0 -4px 7px rgba(0, 0, 0, 0.5);
   color: #e6ecd6;
   font-size: 13px;
   font-weight: 950;
 }
 
+/* 렌즈 리지 */
+.vehicle-dashboard-smoke > strong::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 3px, rgba(0, 0, 0, 0.14) 3px 4px);
+}
+
 .vehicle-dashboard.smoke-ready .vehicle-dashboard-smoke > strong {
-  background: radial-gradient(circle at 35% 30%, #b9f7b0, #79d476 55%, #2c5b2c);
-  color: #0e110d;
-  box-shadow: 0 0 10px rgba(121, 212, 118, 0.5), inset 0 -2px 3px rgba(0, 0, 0, 0.4);
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.5), transparent 34%),
+    radial-gradient(circle at 50% 55%, #22c55e 0%, #14532d 70%, #052e16 100%);
+  color: #eafff0;
+  box-shadow: inset 0 -4px 7px rgba(0, 0, 0, 0.5), 0 0 15px rgba(34, 197, 94, 0.45);
 }
 
 .vehicle-dashboard.smoke-cooling .vehicle-dashboard-smoke > strong {
-  background: radial-gradient(circle at 35% 30%, #ffb1a0, #e05545 55%, #5b1f1c);
-  color: #fff;
-  box-shadow: 0 0 10px rgba(224, 85, 69, 0.45), inset 0 -2px 3px rgba(0, 0, 0, 0.4);
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.35), transparent 36%),
+    radial-gradient(circle at 50% 55%, #b45348 0%, #6b2620 70%, #2e0f0c 100%);
+  color: #ffd9d3;
+  box-shadow: inset 0 -4px 7px rgba(0, 0, 0, 0.5), 0 0 12px rgba(224, 85, 69, 0.35);
 }
 
 .vehicle-dashboard.mg-active .vehicle-dashboard-mg {
-  border-color: rgba(255, 209, 102, 0.55);
   box-shadow:
-    inset 0 1px 0 rgba(255, 209, 102, 0.14),
-    inset 0 -8px 16px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 209, 102, 0.25),
-    0 14px 30px rgba(0, 0, 0, 0.4);
+    inset 0 3px 8px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 209, 102, 0.35);
 }
 
+/* ===== 험비 ===== */
 .vehicle-dashboard.humvee {
-  grid-template-columns: 92px minmax(110px, 1fr) 92px;
-  width: min(94vw, 380px);
+  grid-template-columns: 104px minmax(110px, 1fr) 104px;
+  width: min(94vw, 400px);
 }
 
 .vehicle-dashboard.humvee .vehicle-dashboard-main,
@@ -219,15 +355,16 @@
   display: none;
 }
 
+/* ===== 반응형 ===== */
 @media (max-width: 720px) {
   .vehicle-dashboard {
-    width: min(94vw, 440px);
+    width: min(94vw, 460px);
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .vehicle-dashboard-meter,
   .vehicle-dashboard-cluster {
-    min-height: 84px;
+    min-height: 92px;
   }
 
   .vehicle-dashboard-main {
@@ -242,24 +379,20 @@
 
 @media (max-height: 620px) and (orientation: landscape) {
   .vehicle-dashboard {
-    width: min(90vw, 620px);
-    min-height: 78px;
-    grid-template-columns: 80px minmax(170px, 1.3fr) minmax(76px, 0.7fr) minmax(70px, 0.55fr) 80px;
-    gap: 5px;
+    width: min(90vw, 640px);
+    grid-template-columns: 88px minmax(170px, 1.3fr) minmax(80px, 0.7fr) minmax(72px, 0.55fr) 88px;
+    gap: 6px;
+    padding: 10px 10px 12px;
   }
 
   .vehicle-dashboard-meter,
   .vehicle-dashboard-cluster {
-    min-height: 76px;
+    min-height: 84px;
     padding: 5px;
   }
 
-  .vehicle-dashboard-meter {
-    grid-template-rows: 50px 10px 14px;
-  }
-
   .vehicle-dashboard-meter canvas {
-    width: 50px;
-    height: 50px;
+    width: 58px;
+    height: 58px;
   }
 }
