@@ -143,6 +143,18 @@ function handleClientMessage({ ws, registry, clients, client, message, combatOnl
     return;
   }
 
+  if (message.type === "world_state") {
+    if (!client.playerId) return send(ws, "error", { reason: "not_joined" });
+    if (client.participantType && client.participantType !== "player") return send(ws, "error", { reason: "not_player" });
+    const result = applyWorldStatePacket(registry, client, message);
+    if (!result.ok) return send(ws, "error", { reason: result.reason || "invalid_world_state" });
+    broadcastRoomExcept(clients, client.roomId, client.clientId, "world_state", {
+      roomId: client.roomId,
+      worldState: result.worldState
+    });
+    return;
+  }
+
   if (message.type === "admin_snapshot") {
     if (combatOnly) return send(ws, "error", { reason: "combat_only_admin_snapshot_disabled" });
     return send(ws, "admin_snapshot", createAdminSnapshot(registry, { roomId: client.roomId }));
@@ -191,6 +203,69 @@ function finiteNumber(value, fallback = 0) {
 function clampNumber(value, min, max, fallback = min) {
   const numeric = finiteNumber(value, fallback);
   return Math.max(min, Math.min(max, numeric));
+}
+
+function roundCoord(value) {
+  return Math.round(finiteNumber(value, 0));
+}
+
+function normalizeWorldStatePacket(client, message = {}) {
+  const source = message.worldState || message.state || {};
+  if (!source || typeof source !== "object") return null;
+  const vehicleSnapshot = (item) => ({
+    id: String(item?.id || item?.callSign || "").slice(0, 36),
+    type: String(item?.type || item?.vehicleType || "tank").slice(0, 18),
+    team: item?.team === "red" ? "red" : "blue",
+    x: roundCoord(item?.x),
+    y: roundCoord(item?.y),
+    angle: finiteNumber(item?.angle, 0),
+    turretAngle: finiteNumber(item?.turretAngle, 0),
+    machineGunAngle: finiteNumber(item?.machineGunAngle, 0),
+    hp: clampNumber(item?.hp, 0, 999, 0),
+    maxHp: clampNumber(item?.maxHp, 0, 999, 1),
+    alive: item?.alive !== false,
+    controllerId: String(item?.controllerId || "").slice(0, 48)
+  });
+  const unitSnapshot = (item) => ({
+    id: String(item?.id || item?.callSign || "").slice(0, 42),
+    team: item?.team === "red" ? "red" : "blue",
+    x: roundCoord(item?.x),
+    y: roundCoord(item?.y),
+    angle: finiteNumber(item?.angle, 0),
+    hp: clampNumber(item?.hp, 0, 999, 0),
+    maxHp: clampNumber(item?.maxHp, 0, 999, 1),
+    alive: item?.alive !== false,
+    inVehicle: Boolean(item?.inVehicle)
+  });
+  const captureSnapshot = (item) => ({
+    id: String(item?.id || item?.name || "").slice(0, 16),
+    owner: item?.owner === "red" ? "red" : item?.owner === "blue" ? "blue" : "",
+    progress: clampNumber(item?.progress, -1, 1, 0),
+    contested: Boolean(item?.contested)
+  });
+  return {
+    roomId: client.roomId,
+    hostId: client.playerId,
+    tick: Math.max(0, Math.floor(Number(source.tick) || 0)),
+    updatedAt: Date.now(),
+    vehicles: Array.isArray(source.vehicles) ? source.vehicles.map(vehicleSnapshot).filter((item) => item.id).slice(0, 64) : [],
+    units: Array.isArray(source.units) ? source.units.map(unitSnapshot).filter((item) => item.id).slice(0, 96) : [],
+    capturePoints: Array.isArray(source.capturePoints) ? source.capturePoints.map(captureSnapshot).filter((item) => item.id).slice(0, 12) : []
+  };
+}
+
+function applyWorldStatePacket(registry, client, message = {}) {
+  const room = registry?.rooms?.get?.(client.roomId) || null;
+  if (!room) return { ok: false, reason: "room_not_found" };
+  registry.reconcileRoomAuthority?.(room);
+  if (room.hostId && room.hostId !== client.playerId) return { ok: false, reason: "not_world_host" };
+  const worldState = normalizeWorldStatePacket(client, message);
+  if (!worldState) return { ok: false, reason: "invalid_world_state" };
+  const currentAt = Number(room.worldState?.updatedAt) || 0;
+  if (currentAt && worldState.updatedAt < currentAt) return { ok: true, worldState: room.worldState };
+  room.worldState = worldState;
+  room.updatedAt = new Date(worldState.updatedAt).toISOString();
+  return { ok: true, worldState };
 }
 
 function normalizePlayerStatePacket(client, message = {}) {
@@ -248,6 +323,12 @@ function normalizePlayerStatePacket(client, message = {}) {
 function broadcastRoom(clients, roomId, type, payload) {
   for (const { ws, client } of clients.values()) {
     if (client.roomId === roomId) send(ws, type, payload);
+  }
+}
+
+function broadcastRoomExcept(clients, roomId, excludedClientId, type, payload) {
+  for (const { ws, client } of clients.values()) {
+    if (client.clientId !== excludedClientId && client.roomId === roomId) send(ws, type, payload);
   }
 }
 

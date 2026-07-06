@@ -280,6 +280,12 @@ async function main() {
         performance: {
           fps: perf.fps,
           frameMs: perf.frameMs,
+          frameP95Ms: perf.frameP95Ms,
+          frameP99Ms: perf.frameP99Ms,
+          frameMaxMs: perf.frameMaxMs,
+          longFrames50: perf.longFrames50,
+          frameSamples: perf.frameSamples,
+          lastLoopError: perf.lastLoopError,
           updateMs: perf.updateMs,
           aiMs: perf.aiMs,
           pathfindingAndMovementMs: perf.pathfindingAndMovementMs,
@@ -307,6 +313,9 @@ async function main() {
         .filter((value) => Number.isFinite(value));
       const fps = numbers((item) => item.performance.fps);
       const frame = numbers((item) => item.performance.frameMs);
+      const frameP99 = numbers((item) => item.performance.frameP99Ms);
+      const frameMax = numbers((item) => item.performance.frameMaxMs);
+      const longFrames = numbers((item) => item.performance.longFrames50);
       const ai = numbers((item) => item.performance.aiMs);
       const pathMove = numbers((item) => item.performance.pathfindingAndMovementMs);
       const snapshotBytes = numbers((item) => item.performance.networkSnapshotBytes);
@@ -317,6 +326,9 @@ async function main() {
         failRuns: runs.filter((item) => !item.pass).length,
         minFps: fps.length ? Math.min(...fps) : null,
         maxFrameMs: frame.length ? Math.max(...frame) : null,
+        maxFrameP99Ms: frameP99.length ? Math.max(...frameP99) : null,
+        maxWorstFrameMs: frameMax.length ? Math.max(...frameMax) : null,
+        maxLongFrames50: longFrames.length ? Math.max(...longFrames) : null,
         maxAiMs: ai.length ? Math.max(...ai) : null,
         maxPathfindingAndMovementMs: pathMove.length ? Math.max(...pathMove) : null,
         maxNetworkSnapshotBytes: snapshotBytes.length ? Math.max(...snapshotBytes) : null,

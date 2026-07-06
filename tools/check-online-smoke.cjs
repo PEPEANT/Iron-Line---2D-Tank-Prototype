@@ -4,6 +4,7 @@ const { spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
 const { createOnlineSmokeWsHelpers } = require("./online-smoke-ws.cjs");
+const { createWorldStateWsSmoke } = require("./online-smoke-worldstate-ws.cjs");
 
 const root = path.resolve(__dirname, "..");
 const port = Number(process.env.IRONLINE_SMOKE_PORT || 4191);
@@ -93,6 +94,7 @@ const { wsSmoke, wsCommandSmoke, wsLobbyGuardSmoke, wsPlayerStateSmoke, wsPlayer
   requestJson,
   fetchRoomById
 });
+const wsWorldStateSmoke = createWorldStateWsSmoke({ port, roomId, fetchRoomById });
 
 async function runSmoke() {
   const baseRoom = {
@@ -423,6 +425,10 @@ async function runSmoke() {
   if (!wsPlayerState.payload?.blue?.state || wsPlayerState.payload.blue.playerId !== "p-blue") {
     throw new Error("WebSocket player_state relay failed.");
   }
+  const wsWorldState = await wsWorldStateSmoke();
+  if (!wsWorldState.relayed || wsWorldState.hostId !== "world-host" || wsWorldState.tick !== 42) {
+    throw new Error("WebSocket world_state relay failed.");
+  }
   const wsPlayerState3pSameTeam = await wsPlayerStateThreePlayerSameTeamSmoke();
   if (wsPlayerState3pSameTeam.correctedTeam !== "blue" || wsPlayerState3pSameTeam.correctedSlotId !== "blue-engineer") {
     throw new Error("WebSocket 3-player same-team relay failed.");
@@ -432,7 +438,7 @@ async function runSmoke() {
     throw new Error(`WebSocket 4v4 smoke failed: players=${ws4v4.playerCount}, ready=${ws4v4.readyCount}`);
   }
 
-  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast, wsLobbyGuards=not_joined/locked, wsPlayerState=relay, wsPlayerState3pSameTeam=${wsPlayerState3pSameTeam.relayedPlayers}p, ws4v4=${ws4v4.playerCount}p/${ws4v4.readyCount}ready`);
+  console.log(`Online smoke passed: ${roomId}, players=${room.players.length}, combat=${room.combatEvents.length}, commands=${commandRoom.commands.length}, ws=${ws.events.join("/")}, wsCommand=ack/broadcast, wsLobbyGuards=not_joined/locked, wsPlayerState=relay, wsWorldState=relay, wsPlayerState3pSameTeam=${wsPlayerState3pSameTeam.relayedPlayers}p, ws4v4=${ws4v4.playerCount}p/${ws4v4.readyCount}ready`);
 }
 
 const server = spawn(process.execPath, ["tools/static-server.cjs", String(port)], {

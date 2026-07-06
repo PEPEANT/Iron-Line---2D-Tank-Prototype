@@ -139,7 +139,7 @@
       const x = camera.width - panelW - 16;
       const y = camera.height - panelH - 18;
       const mounted = player.inTank || player.inVehicle || null;
-      const healthSource = mounted?.alive !== false ? mounted : player;
+      const healthSource = mounted && mounted.alive !== false ? mounted : player;
       const hpMax = Math.max(1, Math.round(healthSource.maxHp || player.maxHp || 100));
       const hpNow = Math.max(0, Math.round(healthSource.hp ?? hpMax));
       const hpPct = Math.max(0, Math.min(1, hpNow / hpMax));

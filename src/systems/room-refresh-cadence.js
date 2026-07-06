@@ -4,7 +4,7 @@
   const IronLine = global.IronLine || (global.IronLine = {});
   const ACTIVE_MATCH_SUMMARY_REFRESH_MS = 6000;
   const ACTIVE_MATCH_DETAIL_REFRESH_MS = 6000;
-  const ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS = 650;
+  const ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS = 300;
   const ACTIVE_MATCH_SOCKET_REFRESH_MS = 30000;
 
   function realtimeSocketActive() {
@@ -38,7 +38,9 @@
       IronLine.game?.onlineSession?.roomId === activeRoomId &&
       !IronLine.game?.isOnlineWorldHost?.(activeRoom)
     );
-    const refreshMs = followsWorld ? ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS : (realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_DETAIL_REFRESH_MS);
+    const refreshMs = followsWorld
+      ? (realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS)
+      : (realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_DETAIL_REFRESH_MS);
     return {
       activeRoomId,
       summaryDue: !hasActiveRoom || now - registry.lastRemoteSummaryRefreshAt >= ACTIVE_MATCH_SUMMARY_REFRESH_MS,

@@ -582,11 +582,27 @@
       }, { game, queueIfNeeded: false });
     }
 
+    publishWorldStateRelay(game, roomId = "", worldState = null, now = Date.now()) {
+      if ((game?.onlineSession?.participantType || "player") !== "player") return false;
+      if (!roomId || !worldState) return false;
+      return this.sendPlayerStateSocketMessage({
+        type: "world_state",
+        roomId,
+        playerId: game.onlineSession.playerId,
+        worldState,
+        sentAt: now
+      }, { game, queueIfNeeded: false });
+    }
+
     handlePlayerStateSocketMessage(raw) {
       let message = null;
       try { message = JSON.parse(String(raw || "{}")); } catch (_error) { return; }
       if (message?.type === "player_state") {
         this.applyRemotePlayerState(message.payload || {});
+        return;
+      }
+      if (message?.type === "world_state") {
+        this.applyWorldStateSocketMessage(message.payload || {});
         return;
       }
       if (message?.type === "observer_snapshot") {
@@ -604,6 +620,29 @@
       if (message?.type === "join_result") {
         this.handleSocketJoinResult(message.payload || {});
       }
+    }
+
+    applyWorldStateSocketMessage(payload = {}, game = this.game()) {
+      const incoming = payload.worldState || payload.state || payload;
+      const roomId = String(payload.roomId || incoming?.roomId || "");
+      if (!game || !roomId || roomId !== game.onlineSession?.roomId) return false;
+      if (!incoming || incoming.hostId === game.onlineSession?.playerId) return false;
+      const worldState = this.registry?.normalizeWorldState?.(incoming) || incoming;
+      const updatedAt = Number(worldState?.updatedAt) || 0;
+      if (!updatedAt) return false;
+      const current = this.registry?.getRoom?.(roomId) || null;
+      const currentAt = Number(current?.worldState?.updatedAt) || 0;
+      if (updatedAt <= currentAt && current?.worldState) return false;
+      if (current && this.registry?.normalizeRoom && this.registry?.upsertRemoteRoom) {
+        const next = this.registry.normalizeRoom({
+          ...current,
+          worldState,
+          updatedAt: Date.now()
+        });
+        if (next) this.registry.upsertRemoteRoom(next, { persist: false });
+      }
+      game.applyOnlineWorldState?.(worldState, 0);
+      return true;
     }
 
     socketSnapshotPhase(phase = "") {

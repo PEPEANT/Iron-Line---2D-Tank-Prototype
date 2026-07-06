@@ -11,7 +11,7 @@
       stage: 1,
       eventOnly: false,
       config: { blueInfantry: 8, redInfantry: 8, blueAiTanks: 1, redTanks: 1 },
-      budget: { fpsMin: 45, frameMsMax: 26, aiMsMax: 12, tacticalMapMsMax: 16, renderMsMax: 18, snapshotBytesMax: 220000 }
+      budget: { fpsMin: 45, frameMsMax: 26, frameP99MsMax: 48, frameMaxMsMax: 120, aiMsMax: 12, tacticalMapMsMax: 16, renderMsMax: 18, snapshotBytesMax: 220000 }
     },
     {
       id: "ai-15v15",
@@ -19,7 +19,7 @@
       stage: 2,
       eventOnly: false,
       config: { blueInfantry: 15, redInfantry: 15, blueAiTanks: 2, redTanks: 2 },
-      budget: { fpsMin: 42, frameMsMax: 30, aiMsMax: 16, tacticalMapMsMax: 18, renderMsMax: 20, snapshotBytesMax: 280000 }
+      budget: { fpsMin: 42, frameMsMax: 30, frameP99MsMax: 55, frameMaxMsMax: 140, aiMsMax: 16, tacticalMapMsMax: 18, renderMsMax: 20, snapshotBytesMax: 280000 }
     },
     {
       id: "ai-25v25",
@@ -27,7 +27,7 @@
       stage: 3,
       eventOnly: false,
       config: { blueInfantry: 25, redInfantry: 25, blueAiTanks: 3, redTanks: 3 },
-      budget: { fpsMin: 36, frameMsMax: 34, aiMsMax: 22, tacticalMapMsMax: 24, renderMsMax: 24, snapshotBytesMax: 360000 }
+      budget: { fpsMin: 36, frameMsMax: 34, frameP99MsMax: 68, frameMaxMsMax: 170, aiMsMax: 22, tacticalMapMsMax: 24, renderMsMax: 24, snapshotBytesMax: 360000 }
     },
     {
       id: "ai-50v50-event",
@@ -35,7 +35,7 @@
       stage: 4,
       eventOnly: true,
       config: { blueInfantry: 50, redInfantry: 50, blueAiTanks: 5, redTanks: 5 },
-      budget: { fpsMin: 30, frameMsMax: 40, aiMsMax: 32, tacticalMapMsMax: 34, renderMsMax: 30, snapshotBytesMax: 520000 }
+      budget: { fpsMin: 30, frameMsMax: 40, frameP99MsMax: 84, frameMaxMsMax: 220, aiMsMax: 32, tacticalMapMsMax: 34, renderMsMax: 30, snapshotBytesMax: 520000 }
     }
   ];
 
@@ -100,6 +100,7 @@
         : AIScaleReadiness.estimateObserverSnapshotBytes(game);
       const tacticalMapMs = sample("ai.tacticalMap");
       const observerMs = sample("ai.observer");
+      const frameStats = game?.perfMonitor?.frameStats?.() || {};
       const aiMs = sample("ai.commanders") + sample("ai.squads") + sample("ai.infantry") +
         sample("vehicles") + sample("drones");
       const structuralAiMs = tacticalMapMs + observerMs;
@@ -112,6 +113,12 @@
         performance: {
           fps: sample("fps"),
           frameMs: sample("frame"),
+          frameP95Ms: frameStats.p95 || 0,
+          frameP99Ms: frameStats.p99 || 0,
+          frameMaxMs: frameStats.max || 0,
+          longFrames50: frameStats.long50 || 0,
+          frameSamples: game?.perfMonitor?.frameHistory?.length || 0,
+          lastLoopError: game?.lastLoopErrorMessage || "",
           updateMs: sample("update"),
           aiMs,
           structuralAiMs,
@@ -145,6 +152,8 @@
       const checks = [
         { key: "fps", label: "FPS", value: perf.fps, pass: !budget.fpsMin || perf.fps >= budget.fpsMin, budget: `>=${budget.fpsMin}` },
         { key: "frameMs", label: "Frame time", value: perf.frameMs, pass: !budget.frameMsMax || perf.frameMs <= budget.frameMsMax, budget: `<=${budget.frameMsMax}ms` },
+        { key: "frameP99Ms", label: "P99 frame time", value: perf.frameP99Ms, pass: !budget.frameP99MsMax || perf.frameP99Ms <= budget.frameP99MsMax, budget: `<=${budget.frameP99MsMax}ms` },
+        { key: "frameMaxMs", label: "Worst frame time", value: perf.frameMaxMs, pass: !budget.frameMaxMsMax || perf.frameMaxMs <= budget.frameMaxMsMax, budget: `<=${budget.frameMaxMsMax}ms` },
         { key: "aiMs", label: "Active AI update time", value: perf.aiMs, pass: !budget.aiMsMax || perf.aiMs <= budget.aiMsMax, budget: `<=${budget.aiMsMax}ms` },
         { key: "tacticalMapMs", label: "Tactical map structural time", value: perf.tacticalMapMs, pass: !budget.tacticalMapMsMax || perf.tacticalMapMs <= budget.tacticalMapMsMax, budget: `<=${budget.tacticalMapMsMax}ms` },
         { key: "renderMs", label: "Render time", value: perf.renderMs, pass: !budget.renderMsMax || perf.renderMs <= budget.renderMsMax, budget: `<=${budget.renderMsMax}ms` },
