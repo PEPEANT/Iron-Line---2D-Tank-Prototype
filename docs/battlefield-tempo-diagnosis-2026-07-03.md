@@ -765,6 +765,7 @@ Discarded route/contact experiments:
 | `reports/playtests/battlefield-tempo-20260706073502/` | broad loaded-transport armor-contact dismount, slow transports scan to 1080px | 3.3 | 0 | killed tempo and left mounted infantry high |
 | `reports/playtests/battlefield-tempo-20260706073845/` | narrow full-transport dismount inside 600px armor threat | 5.7 | 0 | near pass, but still below deaths/min target |
 | `reports/playtests/battlefield-tempo-20260706074201/` | same narrow full-transport dismount | 6.0 | 4 | missed a 1220px AP source and reproduced 4-passenger opening bailout |
+| `reports/playtests/battlefield-tempo-20260706075216/` | loaded transport treats intermediate path nodes as reached at 220px instead of 124px | 7.6 | 4 | deaths/min passed, but opening 4-passenger bailout still reproduced with `moveTarget.final=true` near a traffic hint |
 
 Diagnostic update:
 - `npm run tempo` now includes first opening bailout `moveTarget.final`, `moveTarget.stopDistance`, `trafficHoldTarget`, `trafficHoldTimer`, `stuckTimer`, `recoveryTimer`, and `tacticalTrafficHint`.
@@ -775,4 +776,4 @@ Judgment:
 - Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
 - Projectile/source vehicle context now confirms the AP shooter can be about 1000px away while the transport is stationary or nearly stationary near its movement target.
 - `impactSpeed` now confirms at least one loaded transport was truly stopped before destruction, not just zeroed by the destruction handler.
-- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, blanket non-final path stop-distance tightening, dropoff risk scoring alone, traffic bypass alone, or broad armor-contact dismounts. Next behavior work should inspect why loaded transport routing selects exposed non-final path nodes around tactical traffic hints before adding another dismount rule.
+- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, blanket non-final path stop-distance tightening, dropoff risk scoring alone, traffic bypass alone, broad armor-contact dismounts, or wider intermediate-node reach radii. Next behavior work should inspect why loaded transport routing selects exposed final/dropoff targets around tactical traffic hints before adding another dismount rule.
