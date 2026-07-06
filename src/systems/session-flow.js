@@ -70,32 +70,8 @@
       return true;
     }
 
-    createOnlineRoom() {
-      const game = this.game();
-      if (!game || !this.registry) return false;
-      const match = game.matchConfig || game.defaultMatchConfig?.() || {};
-      const profile = game.localProfile || {};
-      const room = this.registry.createRoom({
-        name: "온라인 방",
-        mode: match.mode || "annihilation",
-        blueFactionId: match.blueFactionId || profile.factionId || profile.skinId || "korea",
-        redFactionId: match.redFactionId || "russia",
-        difficulty: match.difficulty || "normal",
-        aiDensityPreset: match.aiDensityPreset || "custom",
-        blueAiTanks: match.blueAiTanks,
-        blueInfantry: match.blueInfantry,
-        redTanks: match.redTanks,
-        redInfantry: match.redInfantry,
-        capacity: 8,
-        spectatorCapacity: 0
-      });
-      if (!room) return false;
-      return this.openLobby({
-        host: true,
-        roomId: room.id,
-        room,
-        participantType: "player"
-      });
+    createOnlineRoom(settings = {}) {
+      return IronLine.OnlineRoomActions?.createOnlineRoom?.(this, settings) || false;
     }
 
     joinOnlineRoom(room, options = {}) {
@@ -183,6 +159,14 @@
       for (const player of game.onlineSession?.players || []) player.ready = false;
       game.hud?.update?.(game);
       return true;
+    }
+
+    startOnlineRoom(game = this.game()) {
+      return IronLine.OnlineRoomActions?.startOnlineRoom?.(this, game) || false;
+    }
+
+    endOnlineRoom(game = this.game()) {
+      return IronLine.OnlineRoomActions?.endOnlineRoom?.(this, game) || false;
     }
 
     prepareOnlineSession(game, options = {}) {
@@ -372,9 +356,12 @@
       return false;
     }
 
+    isRoomHost(game = this.game(), room = null) {
+      return IronLine.OnlineRoomActions?.isRoomHost?.(this, game, room) || false;
+    }
+
     isHost(game = this.game()) {
-      const player = game?.localSessionPlayer?.();
-      return Boolean(player?.host || (game?.onlineSession?.hostId && game.onlineSession.hostId === game.onlineSession.playerId));
+      return this.isRoomHost(game);
     }
 
     participantPublishIntervalMs(game = this.game(), options = {}) {

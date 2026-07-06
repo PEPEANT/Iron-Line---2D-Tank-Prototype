@@ -471,7 +471,7 @@
     renderEntryRooms(game) {
       const list = this.nodes.entryOnlineRoomList;
       if (!list) return;
-      const rooms = IronLine.roomRegistry?.listRooms?.() || [];
+      const rooms = IronLine.roomRegistry?.listVisibleRooms?.() || IronLine.roomRegistry?.listRooms?.() || [];
       const signature = JSON.stringify(rooms.map((room) => ({
         id: room.id,
         name: room.name,

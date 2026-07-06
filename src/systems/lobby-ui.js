@@ -10,6 +10,7 @@
       this.lobbyChatMode = "all";
       this.lobbyLocalChat = [];
       this.lobbyLoadoutOpen = false;
+      this.slotActionOpen = "";
     }
 
     get nodes() {
@@ -101,7 +102,7 @@
       const loadoutButton = document.createElement("button");
       loadoutButton.id = "lobbyLoadoutButton";
       loadoutButton.type = "button";
-      loadoutButton.textContent = "출전 장비";
+      loadoutButton.textContent = "나가기";
       const readyActions = document.createElement("div");
       readyActions.className = "lobby-ready-actions";
       readyActions.append(ready, loadoutButton);
@@ -109,7 +110,7 @@
       start.id = "lobbyStartButton";
       start.type = "button";
       start.className = "hidden";
-      start.textContent = "전투 시작";
+      start.textContent = "시작하기";
       const back = document.createElement("button");
       back.id = "lobbyBackButton";
       back.type = "button";
@@ -143,14 +144,20 @@
       ui.lobbyStartButton = start;
       ui.lobbyBackButton = back;
 
+      team.dataset.bound = "1";
+      ready.dataset.bound = "1";
+      loadoutButton.dataset.bound = "1";
+      start.dataset.bound = "1";
+      back.dataset.bound = "1";
       team.addEventListener("click", () => IronLine.game?.toggleLocalTeam?.());
       ready.addEventListener("click", () => IronLine.game?.toggleLocalReady?.());
-      loadoutButton.addEventListener("click", () => {
-        this.lobbyLoadoutOpen = !this.lobbyLoadoutOpen;
-        if (this.nodes.lobbyLoadout) this.nodes.lobbyLoadout.dataset.signature = "";
-        this.update(IronLine.game);
+      loadoutButton.addEventListener("click", () => this.handleRoomAction());
+      start.addEventListener("click", () => {
+        const game = IronLine.game;
+        if (!game) return;
+        if (game.sessionMode === "online" && this.hud.sessionFlow?.startOnlineRoom?.(game)) return;
+        game.beginDeploymentCountdown?.();
       });
-      start.addEventListener("click", () => IronLine.game?.beginDeploymentCountdown?.());
       back.addEventListener("click", () => {
         const game = IronLine.game;
         if (game && !this.hud.sessionFlow?.backFromLobby(game)) game.returnToDeployment?.();
@@ -161,6 +168,24 @@
         event.preventDefault();
         this.submitLobbyChat();
       });
+    }
+
+    handleRoomAction() {
+      const game = IronLine.game;
+      if (!game) return false;
+      this.lobbyLoadoutOpen = false;
+      if (this.nodes.lobbyLoadout) this.nodes.lobbyLoadout.dataset.signature = "";
+      if (game.sessionMode !== "online") {
+        this.update(game);
+        return false;
+      }
+      const room = IronLine.roomRegistry?.getRoom?.(game.onlineSession?.roomId || "") || null;
+      const isHost = this.hud.sessionFlow?.isRoomHost?.(game, room);
+      if (isHost) {
+        if (!global.confirm?.("정말 방을 종료하겠습니까?")) return false;
+        return this.hud.sessionFlow?.endOnlineRoom?.(game) || false;
+      }
+      return this.hud.sessionFlow?.backFromLobby?.(game) || false;
     }
 
     update(game) {
@@ -178,6 +203,9 @@
       const roleSlots = session.roleSlots || [];
       const filled = roleSlots.filter((slot) => slot.playerId).length;
       const room = IronLine.roomRegistry?.getRoom?.(session.roomId || "") || null;
+      const online = game.sessionMode === "online";
+      const canManageRoom = Boolean(online && this.hud.sessionFlow?.isRoomHost?.(game, room));
+      if (online) this.lobbyLoadoutOpen = false;
 
       ui.lobbyScreen.dataset.mode = conquest ? "conquest" : "annihilation";
       if (ui.lobbyModeTitle) ui.lobbyModeTitle.textContent = conquest ? "점령전" : "섬멸전";
@@ -191,16 +219,25 @@
       if (ui.lobbyReadyButton) {
         ui.lobbyReadyButton.textContent = session.localReady ? "준비 해제" : "준비 완료";
         ui.lobbyReadyButton.classList.toggle("active", Boolean(session.localReady));
-        ui.lobbyReadyButton.classList.toggle("hidden", Boolean(localSpectator));
+        ui.lobbyReadyButton.classList.toggle("hidden", Boolean(localSpectator || canManageRoom));
       }
       if (ui.lobbyLoadoutButton) {
-        ui.lobbyLoadoutButton.textContent = this.lobbyLoadoutOpen ? "장비 닫기" : "출전 장비";
-        ui.lobbyLoadoutButton.classList.toggle("active", Boolean(this.lobbyLoadoutOpen));
-        ui.lobbyLoadoutButton.classList.toggle("hidden", Boolean(localSpectator));
+        ui.lobbyLoadoutButton.textContent = canManageRoom ? "방 종료" : "나가기";
+        ui.lobbyLoadoutButton.classList.toggle("active", false);
+        ui.lobbyLoadoutButton.classList.toggle("hidden", !online);
       }
-      if (ui.lobbyReadyActions) ui.lobbyReadyActions.classList.toggle("hidden", Boolean(localSpectator));
-      if (ui.lobbyStartButton) ui.lobbyStartButton.classList.add("hidden");
-      if (ui.lobbyBackButton) ui.lobbyBackButton.textContent = game.sessionMode === "online" ? "방 목록으로" : "설정으로 돌아가기";
+      if (ui.lobbyReadyActions) {
+        ui.lobbyReadyActions.classList.toggle("hidden", !online && Boolean(localSpectator));
+        ui.lobbyReadyActions.classList.toggle("single", Boolean(localSpectator || canManageRoom));
+      }
+      if (ui.lobbyStartButton) {
+        ui.lobbyStartButton.textContent = "시작하기";
+        ui.lobbyStartButton.classList.toggle("hidden", !canManageRoom);
+      }
+      if (ui.lobbyBackButton) {
+        ui.lobbyBackButton.textContent = online ? "방 목록" : "설정으로 돌아가기";
+        ui.lobbyBackButton.classList.toggle("hidden", online);
+      }
 
       this.updateSlots(game);
       this.updateLoadout(game, { localPlayer, localSpectator, session });
@@ -417,9 +454,13 @@
         ...(session.spectators || [])
       ];
       const roleSlots = session.roleSlots?.length ? session.roleSlots : [];
+      const room = IronLine.roomRegistry?.getRoom?.(session.roomId || "") || null;
+      const canManageRoom = Boolean(this.hud.sessionFlow?.isRoomHost?.(game, room));
       const signature = JSON.stringify({
         playerId: session.playerId,
         participantType: session.participantType || "player",
+        canManageRoom,
+        slotActionOpen: this.slotActionOpen,
         players: players.map((player) => ({
           id: player.id,
           name: player.name,
@@ -439,6 +480,7 @@
           team: slot.team,
           roleId: slot.roleId,
           playerId: slot.playerId,
+          locked: Boolean(slot.locked),
           currentClassId: slot.currentClassId,
           weaponId: slot.weaponId,
           equipmentAmmo: slot.equipmentAmmo || {},
@@ -460,7 +502,8 @@
         subtitle: "아군 슬롯",
         roleSlots: roleSlots.filter((slot) => slot.team !== TEAM.RED),
         players: slotPlayers,
-        session
+        session,
+        canManageRoom
       });
       this.renderTeam(slots, {
         team: TEAM.RED,
@@ -468,7 +511,8 @@
         subtitle: "적군 슬롯",
         roleSlots: roleSlots.filter((slot) => slot.team === TEAM.RED),
         players: slotPlayers,
-        session
+        session,
+        canManageRoom
       });
       if (spectators.length > 0) this.renderSpectators(slots, spectators, session);
     }
@@ -536,18 +580,39 @@
       const roster = document.createElement("div");
       roster.className = "lobby-roster";
       for (const slot of roleSlots) {
-        roster.append(this.createRoleSlotCard(slot, options.players || [], options.session || {}));
+        roster.append(this.createRoleSlotCard(slot, options.players || [], options.session || {}, {
+          canManageRoom: Boolean(options.canManageRoom)
+        }));
       }
 
       team.append(head, roster);
       parent.append(team);
     }
 
-    createRoleSlotCard(slot, players, session = {}) {
+    invalidateSlots() {
+      if (this.nodes.lobbySlots) this.nodes.lobbySlots.dataset.signature = "";
+      if (IronLine.game) this.update(IronLine.game);
+    }
+
+    closeSlotActionMenu() {
+      if (!this.slotActionOpen) return;
+      this.slotActionOpen = "";
+      this.invalidateSlots();
+    }
+
+    toggleSlotActionMenu(key) {
+      this.slotActionOpen = this.slotActionOpen === key ? "" : key;
+      this.invalidateSlots();
+    }
+
+    createRoleSlotCard(slot, players, session = {}, options = {}) {
       const player = players.find((item) => item.id === slot.playerId) || null;
       const local = Boolean(player?.id && player.id === session.playerId);
       const ready = Boolean(player?.ready);
       const locked = Boolean(slot.locked);
+      const canManageRoom = Boolean(options.canManageRoom);
+      const canManagePlayer = Boolean(canManageRoom && player && !local);
+      const actionKey = player ? `player:${player.id}` : "";
       const card = document.createElement("div");
       card.className = "lobby-player-card";
       card.classList.toggle("is-local", local);
@@ -555,6 +620,8 @@
       card.classList.toggle("is-ai", !player);
       card.classList.toggle("empty", !player);
       card.classList.toggle("locked", locked);
+      card.classList.toggle("can-manage", canManagePlayer);
+      card.classList.toggle("menu-open", Boolean(canManagePlayer && actionKey && this.slotActionOpen === actionKey));
 
       const avatar = document.createElement("div");
       avatar.className = "lobby-player-avatar";
@@ -578,6 +645,19 @@
       const state = document.createElement("em");
       state.textContent = player ? (ready ? "준비" : "대기") : "";
       if (!player && locked) state.textContent = "닫힘";
+      if (canManagePlayer) {
+        card.tabIndex = 0;
+        card.setAttribute("role", "button");
+        card.setAttribute("aria-label", `${player.name || "Player"} 관리`);
+        card.addEventListener("click", () => this.toggleSlotActionMenu(actionKey));
+        card.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          this.toggleSlotActionMenu(actionKey);
+        });
+      } else if (!player) {
+        card.addEventListener("click", () => this.closeSlotActionMenu());
+      }
       const canSelect = (!player || local) && !locked;
       if (canSelect) {
         const action = document.createElement("button");
@@ -600,7 +680,46 @@
       } else {
         card.append(avatar, body, state);
       }
+      if (canManagePlayer && this.slotActionOpen === actionKey) {
+        card.append(this.createSlotActionMenu(player, local));
+      }
       return card;
+    }
+
+    createSlotActionMenu(player, local = false) {
+      const menu = document.createElement("div");
+      menu.className = "lobby-slot-menu";
+      menu.addEventListener("click", (event) => event.stopPropagation());
+      const game = IronLine.game;
+      const roomId = game?.onlineSession?.roomId || "";
+      const addAction = (label, handler, danger = false) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lobby-slot-menu-action";
+        button.classList.toggle("danger", danger);
+        button.textContent = label;
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handler();
+          this.slotActionOpen = "";
+          this.invalidateSlots();
+        });
+        menu.append(button);
+      };
+      if (player.team !== TEAM.RED) {
+        addAction("홍팀으로 이동", () => IronLine.roomRegistry?.moveParticipantToTeam?.(roomId, player.id, TEAM.RED));
+      }
+      if (player.team === TEAM.RED) {
+        addAction("청팀으로 이동", () => IronLine.roomRegistry?.moveParticipantToTeam?.(roomId, player.id, TEAM.BLUE));
+      }
+      if (!local) {
+        addAction("강퇴하기", () => {
+          if (global.confirm?.(`${player.name || "Player"} 님을 강퇴할까요?`) === false) return;
+          IronLine.roomRegistry?.kickParticipant?.(roomId, player.id, "방장이 강퇴했습니다.");
+        }, true);
+      }
+      return menu;
     }
 
     updateLoadout(game, options = {}) {

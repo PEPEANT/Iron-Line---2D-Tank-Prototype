@@ -116,6 +116,22 @@
       return Array.from(roomsById.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
     }
 
+    listVisibleRooms() {
+      return IronLine.RoomLifecyclePolicy?.listVisibleRooms?.(this) || this.listRooms();
+    }
+
+    roomParticipantCount(room = {}) {
+      return IronLine.RoomLifecyclePolicy?.participantCount?.(room) ?? 0;
+    }
+
+    roomAgeSinceActivity(room = {}, now = Date.now()) {
+      return IronLine.RoomLifecyclePolicy?.ageSinceActivity?.(this, room, now) ?? 0;
+    }
+
+    isVisibleRoom(room = null, now = Date.now()) {
+      return IronLine.RoomLifecyclePolicy?.isVisibleRoom?.(this, room, now) ?? Boolean(room?.id);
+    }
+
     readLocalRooms() {
       try {
         const raw = localStorage.getItem(this.storageKey) || "[]"; if (raw === this.localRoomsReadSignature) return this.localRoomsReadCache.slice();
@@ -450,7 +466,7 @@
         phase: "waiting",
         locked: false,
         aiFillEmptySlots: input.aiFillEmptySlots !== false,
-        createdBy: "admin",
+        createdBy: input.createdBy || input.hostId || "admin",
         startedBy: "",
         players: [],
         capacity: input.capacity,
@@ -506,12 +522,12 @@
       return next;
     }
 
-    startRoom(id) {
+    startRoom(id, startedBy = "admin") {
       const room = this.getRoom(id);
       return this.updateRoom(id, {
         phase: "playing",
         locked: true,
-        startedBy: "admin",
+        startedBy: String(startedBy || "admin"),
         startedAt: Date.now(),
         events: this.nextEvents(room, {
           type: "room_started",
@@ -562,7 +578,7 @@
       this.saveRooms(rooms);
       this.deleteRemoteRoom(id);
       if (this.selectedRoomId() === id) {
-        const nextRoom = this.listRooms()[0] || null;
+        const nextRoom = this.listVisibleRooms()[0] || this.listRooms()[0] || null;
         if (nextRoom) localStorage.setItem(this.selectedKey, nextRoom.id);
         else localStorage.removeItem(this.selectedKey);
       }
@@ -738,6 +754,11 @@
       const previous = [...(room.players || []), ...(room.spectators || [])].find((item) => item.id === playerId) || null;
       const players = (room.players || []).filter((item) => item.id !== playerId);
       const spectators = (room.spectators || []).filter((item) => item.id !== playerId);
+      const emptyAfterLeave = players.length + spectators.length + (room.admins || []).length === 0;
+      if (emptyAfterLeave && (room.phase === "waiting" || room.phase === "loading")) {
+        this.deleteRoom(roomId);
+        return null;
+      }
       const event = previous ? {
         type: "participant_left",
         severity: "warning",
@@ -751,6 +772,10 @@
       });
       this.deleteRemoteParticipant(roomId, playerId);
       return updated;
+    }
+
+    moveParticipantToTeam(roomId, playerId, team = "blue") {
+      return IronLine.RoomLifecyclePolicy?.moveParticipantToTeam?.(this, roomId, playerId, team) || null;
     }
 
     touchAdmin(roomId, admin = {}) {
@@ -827,34 +852,7 @@
     }
 
     cleanupStaleParticipants(maxAgeMs = 45000) {
-      const now = Date.now();
-      let changed = false;
-      const rooms = this.listRooms().map((room) => {
-        const players = (room.players || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
-        const spectators = (room.spectators || []).filter((player) => now - (Number(player.updatedAt) || 0) <= maxAgeMs);
-        const admins = (room.admins || []).filter((admin) => now - (Number(admin.updatedAt) || 0) <= maxAgeMs);
-        if (
-          players.length === (room.players || []).length &&
-          spectators.length === (room.spectators || []).length &&
-          admins.length === (room.admins || []).length
-        ) return room;
-        changed = true;
-        return {
-          ...room,
-          players,
-          spectators,
-          admins,
-          updatedAt: now,
-          events: this.nextEvents(room, {
-            type: "stale_participants_removed",
-            severity: "warning",
-            title: "\uc751\ub2f5 \uc5c6\ub294 \ucc38\uac00\uc790 \uc815\ub9ac",
-            detail: `${room.name || room.id} \ubc29\uc758 \uc751\ub2f5 \uc5c6\ub294 \ucc38\uac00\uc790\ub97c \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.`
-          })
-        };
-      });
-      if (changed) this.saveRooms(rooms);
-      return changed;
+      return IronLine.RoomLifecyclePolicy?.cleanupStaleParticipants?.(this, maxAgeMs) || false;
     }
 
     pushChat(roomId, message = {}) {

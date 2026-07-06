@@ -373,6 +373,7 @@ function applyClientRoomToServer(body = {}) {
       blueInfantry: body.blueInfantry,
       redTanks: body.redTanks,
       redInfantry: body.redInfantry,
+      createdAt: body.createdAt,
       spectatorChatVisibleToPlayers: body.spectatorChatVisibleToPlayers !== false
     });
   }
@@ -492,7 +493,9 @@ async function handleRoomsApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/rooms") {
     roomDeleteTombstones.cleanup();
-    if (cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp)) persistRooms();
+    if (cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp, 45000, {
+      onRoomDeleted: (id) => roomDeleteTombstones.mark(id)
+    })) persistRooms();
     sendJson(res, 200, {
       ok: true,
       rooms: Array.from(onlineRegistry.rooms.values()).map((room) => exportRoomSummary(room))

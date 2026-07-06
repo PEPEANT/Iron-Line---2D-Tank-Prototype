@@ -445,6 +445,89 @@
   color: rgba(237, 244, 239, 0.92);
 }
 
+.room-list-toolbar button.active {
+  border-color: rgba(255, 209, 102, 0.72);
+  background: rgba(255, 209, 102, 0.92);
+  color: #070807;
+}
+
+.room-create-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 209, 102, 0.24);
+  border-radius: 7px;
+  background: rgba(7, 10, 9, 0.62);
+}
+
+.room-create-panel.hidden {
+  display: none;
+}
+
+.room-create-panel label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: rgba(237, 244, 239, 0.72);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.room-create-panel input,
+.room-create-panel select {
+  width: 100%;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid rgba(237, 244, 239, 0.18);
+  border-radius: 6px;
+  background: rgba(2, 5, 4, 0.72);
+  color: #edf4ef;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.room-create-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.room-create-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.room-create-check input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+}
+
+.room-create-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.room-create-actions button {
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #070807;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.room-create-actions .room-list-muted {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.36);
+  color: rgba(237, 244, 239, 0.92);
+}
+
 .room-list-items {
   display: grid;
   gap: 8px;
@@ -667,6 +750,7 @@
 
   .entry-mode-list,
   .entry-room-grid,
+  .room-create-grid,
   .entry-online-room-wrap,
   .entry-online-room,
   .room-list-item-wrap,

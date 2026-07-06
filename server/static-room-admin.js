@@ -92,11 +92,32 @@ function removeParticipantFromRoom(room, playerId = "") {
   return changed;
 }
 
-function cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp, maxAgeMs = 45000) {
+function serverRoomParticipantCount(room) {
+  return (room?.players?.size || 0) +
+    (room?.spectators?.size || 0) +
+    (room?.admins?.size || 0) +
+    (room?.clients?.size || 0);
+}
+
+function serverRoomIdleAge(room, toClientTimestamp, now = Date.now()) {
+  const updatedAt = toClientTimestamp(room?.updatedAt || 0);
+  const createdAt = toClientTimestamp(room?.config?.createdAt || room?.createdAt || 0);
+  return Math.max(0, now - Math.max(updatedAt, createdAt, 0));
+}
+
+function shouldDeleteEmptyServerRoom(room, toClientTimestamp, now = Date.now()) {
+  if (serverRoomParticipantCount(room) > 0) return false;
+  const age = serverRoomIdleAge(room, toClientTimestamp, now);
+  if (room?.phase === "ended") return age >= 5000;
+  if (room?.phase === "lobby" || room?.phase === "waiting") return age >= 8000;
+  return age >= 45000;
+}
+
+function cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp, maxAgeMs = 45000, options = {}) {
   if (!onlineRegistry) return false;
   const now = Date.now();
   let changed = false;
-  for (const room of onlineRegistry.rooms?.values?.() || []) {
+  for (const [roomId, room] of onlineRegistry.rooms?.entries?.() || []) {
     const ids = [
       ...Array.from(room.players?.values?.() || []),
       ...Array.from(room.spectators?.values?.() || []),
@@ -107,6 +128,11 @@ function cleanupStaleServerParticipants(onlineRegistry, toClientTimestamp, maxAg
       .filter(Boolean);
     for (const id of ids) {
       if (removeParticipantFromRoom(room, id)) changed = true;
+    }
+    if (shouldDeleteEmptyServerRoom(room, toClientTimestamp, now)) {
+      onlineRegistry.rooms.delete(roomId);
+      options.onRoomDeleted?.(roomId);
+      changed = true;
     }
   }
   return changed;
