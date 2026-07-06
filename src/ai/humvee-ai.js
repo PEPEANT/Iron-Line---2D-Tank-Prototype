@@ -56,6 +56,9 @@
       this.suspicionTimer = 0;
       this.machineGunTargetKey = "";
       this.machineGunTrackTimer = 0;
+      this.machineGunSoftBurstKey = "";
+      this.machineGunSoftBurstShots = 0;
+      this.machineGunSoftBurstPause = 0;
       this.debug = {
         state: this.state,
         goal: "",
@@ -77,6 +80,7 @@
       this.strafeTimer -= dt;
       this.transportPickupCooldown = Math.max(0, this.transportPickupCooldown - dt);
       this.suspicionTimer = Math.max(0, (this.suspicionTimer || 0) - dt);
+      this.machineGunSoftBurstPause = Math.max(0, (this.machineGunSoftBurstPause || 0) - dt);
       if (this.suspicionTimer <= 0) this.suspicionPoint = null;
       if (this.strafeTimer <= 0) {
         this.strafeSide *= -1;
@@ -101,6 +105,9 @@
         this.target = null;
         this.machineGunTargetKey = "";
         this.machineGunTrackTimer = 0;
+        this.machineGunSoftBurstKey = "";
+        this.machineGunSoftBurstShots = 0;
+        this.machineGunSoftBurstPause = 0;
         if (suspicion) {
           this.state = "search";
           const angle = angleTo(this.vehicle.x, this.vehicle.y, suspicion.x, suspicion.y);
@@ -494,7 +501,10 @@
       );
 
       const aimError = Math.abs(normalizeAngle(this.vehicle.machineGunAngle - targetAngle));
-      if (aimError < 0.18 && this.trackMachineGunTarget(target, dt, aimError)) this.vehicle.fireMachineGun(this.game, target.x, target.y, { target });
+      if (aimError < 0.18 && this.trackMachineGunTarget(target, dt, aimError) && this.canFireSoftBurst(target)) {
+        const fired = this.vehicle.fireMachineGun(this.game, target.x, target.y, { target });
+        if (fired) this.noteSoftBurstShot(target);
+      }
     }
 
     machineGunTargetId(target) {
@@ -505,7 +515,8 @@
       if (target?.vehicleType) return 0.22;
       const distance = distXY(this.vehicle.x, this.vehicle.y, target.x, target.y);
       const movingPenalty = clamp(Math.abs(this.vehicle.speed || 0) / Math.max(this.vehicle.maxSpeed || 1, 1), 0, 1) * 0.3;
-      return clamp(0.62 + distance / 1500 + movingPenalty, 0.72, 1.16);
+      const reportPenalty = this.isReportedEnemy(target) ? 0 : 0.24;
+      return clamp(0.62 + distance / 1500 + movingPenalty + reportPenalty, 0.72, 1.3);
     }
 
     trackMachineGunTarget(target, dt, aimError) {
@@ -517,6 +528,26 @@
       if (aimError <= 0.34 || target?.vehicleType) this.machineGunTrackTimer += dt;
       else this.machineGunTrackTimer = Math.max(0, this.machineGunTrackTimer - dt * 0.6);
       return this.machineGunTrackTimer >= this.machineGunTrackRequired(target);
+    }
+
+    canFireSoftBurst(target) {
+      if (target?.vehicleType) return true;
+      const key = this.machineGunTargetId(target);
+      if (key !== this.machineGunSoftBurstKey) {
+        this.machineGunSoftBurstKey = key;
+        this.machineGunSoftBurstShots = 0;
+        this.machineGunSoftBurstPause = 0;
+      }
+      return (this.machineGunSoftBurstPause || 0) <= 0;
+    }
+
+    noteSoftBurstShot(target) {
+      if (target?.vehicleType) return;
+      this.machineGunSoftBurstShots = (this.machineGunSoftBurstShots || 0) + 1;
+      if (this.machineGunSoftBurstShots >= 8) {
+        this.machineGunSoftBurstShots = 0;
+        this.machineGunSoftBurstPause = 0.22;
+      }
     }
 
     driveTo(dt, x, y, stopDistance = 0, options = {}) {

@@ -689,3 +689,28 @@ Judgment:
 
 Follow-up source-label guard:
 - `npm run tempo` now treats source-less damage with only a stale vehicle `lastThreat` and no weapon id as `unknown` instead of `tank:weapon`/`humvee:weapon`. This avoids mistaking old suppression threat memory for a real weapon source in future reports.
+
+## Codex Humvee soft-target burst discipline (2026-07-06)
+
+Change scope:
+- Humvee MG now adds a small track-time penalty only for unreported soft targets. Reported soft targets and vehicle targets keep their previous acquisition profile except for the burst rule below.
+- Humvee MG now applies a soft-target burst discipline: after 8 consecutive shots at the same non-vehicle target, AI pauses 0.22s before continuing. Vehicle targets are not burst-limited.
+- Damage, accuracy, range, ammo, vehicle target handling, passenger bailout damage, and transport routing were not changed.
+
+Discarded stronger variant:
+
+| Report | Burst rule | Deaths/min | Active prone ratio | Opening damage sources | Judgment |
+| --- | --- | ---: | ---: | --- | --- |
+| `reports/playtests/battlefield-tempo-20260706060414/` | 4 shots, 0.72s pause | 4.5 | 0.24 | `tank:ap-direct` 1 | fixed Humvee MG opening spike, killed tempo |
+
+Kept verification:
+
+| Run | Report | Deaths/min | Active prone ratio | First death after contact | Opening deaths | Opening damage sources | Opening Humvee bailout passengers |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |
+| 1 | `reports/playtests/battlefield-tempo-20260706060804/` | 7.1 | 0.09 | 4.5s | 1 | `tank:ap-direct` 1 | 0 |
+| 2 | `reports/playtests/battlefield-tempo-20260706061119/` | 6.9 | 0.05 | 9.0s | 3 | `humvee:vehicle_bailout` 4, `tank:machinegun` 12, `humvee:machinegun` 6, `infantry:sniper` 2 | 4 |
+
+Judgment:
+- The weak burst rule preserves the 6-12 deaths/min tempo target in both runs while avoiding the previous 43-opening-event / 3-opening-kill Humvee MG spike sample.
+- This does not solve the loaded-transport AP bailout problem. Run 2 still produced 4 opening passenger bailout damage events from a transport-running Humvee destroyed by AP.
+- Next behavior work should target loaded Humvee route/dropoff exposure around armor lanes, not a broader Humvee MG or passenger damage reduction.
