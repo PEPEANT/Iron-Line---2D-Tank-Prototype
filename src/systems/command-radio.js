@@ -191,7 +191,7 @@
       if (!ui.commandPanel) return;
 
       const visible = Boolean(game.matchStarted && !game.deploymentOpen && !game.lobbyOpen && !game.result && !game.playerDeathActive);
-      ui.commandRadioToggle?.classList.toggle("hidden", !visible || this.open);
+      ui.commandRadioToggle?.classList.add("hidden");
       ui.commandMap?.classList.toggle("hidden", true);
       if (!visible) {
         ui.commandPanel.classList.add("hidden");

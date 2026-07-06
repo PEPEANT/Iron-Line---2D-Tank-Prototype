@@ -3465,7 +3465,7 @@
     }
 
     updateCommandRadioHotkey() {
-      if (!this.input.consumePress("Digit4")) return;
+      if (!(this.input.consumePress("KeyU") || this.input.consumePress("Digit7") || this.input.consumePress("Numpad7"))) return;
       const canUseRadio = this.matchStarted &&
         !this.deploymentOpen &&
         !this.lobbyOpen &&

@@ -84,7 +84,8 @@
       button.classList.toggle("active", player.activeSlot === index && !empty);
       button.classList.toggle("empty", empty);
       button.disabled = empty;
-      button.title = empty ? `${slot.key} ${slot.role} 비어 있음` : `${slot.key} ${weaponLabel(weaponId)}`;
+      button.title = empty ? `${slot.key} empty` : `${slot.key} ${weaponLabel(weaponId)}`;
+      button.setAttribute("aria-label", button.title);
 
       const art = button.querySelector(".infantry-slot-art");
       if (art && art.dataset.weaponId !== weaponId) {
@@ -95,7 +96,7 @@
       }
 
       const role = button.querySelector(".infantry-slot-role");
-      if (role) role.textContent = slot.role;
+      if (role) role.textContent = "";
       const item = button.querySelector(".infantry-slot-item");
       if (item) item.textContent = empty ? "비어 있음" : ammo === null ? weaponLabel(weaponId) : `${weaponLabel(weaponId)} ${ammo}`;
     }

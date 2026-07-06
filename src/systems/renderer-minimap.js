@@ -13,9 +13,9 @@
       const camera = this.camera;
       const mobileLayout = Boolean(game.settings?.mobileControls && camera.width > camera.height && !game.deploymentOpen);
       if (mobileLayout && game.hud?.commandRadio?.open) return;
-      const mapW = mobileLayout ? 150 : 178;
-      const mapH = mobileLayout ? 94 : 120;
-      const x = mobileLayout ? 14 : camera.width - mapW - 16;
+      const mapW = mobileLayout ? 150 : 164;
+      const mapH = mobileLayout ? 94 : 110;
+      const x = 14;
       const y = mobileLayout ? 14 : camera.height - mapH - 18;
       const sx = mapW / game.world.width;
       const sy = mapH / game.world.height;
@@ -125,6 +125,71 @@
         (camera.viewHeight || camera.height) * sy
       );
       ctx.restore();
+      this.drawPlayerVitalsPanel(game, { w: mapW, h: mapH });
+    },
+
+    drawPlayerVitalsPanel(game, sourceSize = {}) {
+      const ctx = this.ctx;
+      const camera = this.camera;
+      const player = game.adminObserverMode ? null : game.player;
+      if (!player || game.playerDeathActive || game.playerDowned) return;
+
+      const panelW = Math.min(178, Math.max(150, sourceSize.w || 164));
+      const panelH = 72;
+      const x = camera.width - panelW - 16;
+      const y = camera.height - panelH - 18;
+      const mounted = player.inTank || player.inVehicle || null;
+      const healthSource = mounted?.alive !== false ? mounted : player;
+      const hpMax = Math.max(1, Math.round(healthSource.maxHp || player.maxHp || 100));
+      const hpNow = Math.max(0, Math.round(healthSource.hp ?? hpMax));
+      const hpPct = Math.max(0, Math.min(1, hpNow / hpMax));
+      const ammoText = mounted
+        ? this.vehicleVitalsAmmoText(mounted)
+        : this.infantryVitalsAmmoText(player);
+      const columnX = x + Math.floor(panelW * 0.54);
+
+      ctx.save();
+      ctx.fillStyle = "rgba(9, 15, 13, 0.76)";
+      ctx.strokeStyle = "rgba(237, 244, 239, 0.18)";
+      roundRect(ctx, x, y, panelW, panelH, 7);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      ctx.font = "900 10px system-ui, sans-serif";
+      ctx.fillStyle = "rgba(237, 244, 239, 0.58)";
+      ctx.fillText("HP", x + 12, y + 10);
+      ctx.fillText("AMMO", columnX, y + 10);
+
+      ctx.font = "950 20px system-ui, sans-serif";
+      ctx.fillStyle = "#edf4ef";
+      ctx.fillText(String(hpNow), x + 12, y + 27);
+      ctx.fillStyle = "#ffd166";
+      ctx.fillText(String(ammoText), columnX, y + 27);
+
+      ctx.fillStyle = "rgba(237, 244, 239, 0.14)";
+      roundRect(ctx, x + 12, y + 58, panelW - 24, 5, 3);
+      ctx.fill();
+      ctx.fillStyle = hpPct < 0.32 ? "#ff6b5c" : hpPct < 0.62 ? "#ffd166" : "#67f27d";
+      roundRect(ctx, x + 12, y + 58, (panelW - 24) * hpPct, 5, 3);
+      ctx.fill();
+      ctx.restore();
+    },
+
+    infantryVitalsAmmoText(player) {
+      const weapon = player?.getWeapon?.();
+      if (!weapon) return "-";
+      if (!weapon.ammoKey) return weapon.shortName || weapon.name || weapon.id || "-";
+      return Math.max(0, Math.floor(player.equipmentAmmo?.[weapon.ammoKey] ?? 0));
+    },
+
+    vehicleVitalsAmmoText(vehicle) {
+      if (!vehicle) return "-";
+      if (vehicle.vehicleType === "humvee" || vehicle.weaponMode === "mg") return Math.max(0, Math.floor(vehicle.ammo?.mg ?? 0));
+      const ammoId = vehicle.reload?.active ? vehicle.reload.ammoId : vehicle.loadedAmmo;
+      if (!ammoId) return "-";
+      return Math.max(0, Math.floor(vehicle.ammo?.[ammoId] ?? 0));
     },
 
     shouldDrawMinimapContact(game, target, viewerTeam) {

@@ -775,7 +775,8 @@
       }
       const activeDrone = game?.activePlayerDrone?.();
       if (activeDrone?.alive && !activeDrone.autoReturn) {
-        this.setInfantryWeaponReadoutCompact(false);
+        this.clearStandardInfantryReadout();
+        return;
         const attackDrone = activeDrone.droneRole === "attack";
         const signalStrength = activeDrone.signalStrength?.() ?? 1;
         const weakSignal = Boolean(activeDrone.isSignalWeak?.());
@@ -809,7 +810,8 @@
         weapon.fireModes.length > 1 &&
         !(ammo !== null && ammo <= 0)
       ) {
-        this.setInfantryWeaponReadoutCompact(false);
+        this.clearStandardInfantryReadout();
+        return;
         const mode = game?.playerFireModeForWeapon?.(weapon) || player.fireModes?.[weapon.id] || player.fireMode || weapon.defaultFireMode || "";
         const modeLabel = mode === "semi" ? "SEMI" : "AUTO";
         ui.weaponState.textContent = `${modeLabel} ${this.weaponAmmoText(player, weapon)} · B`;
