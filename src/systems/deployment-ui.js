@@ -193,9 +193,15 @@
     classLoadout(classId, game = null) {
       const infantryClass = INFANTRY_CLASSES?.[classId] || INFANTRY_CLASSES?.infantry;
       const equipment = game?.deploymentEquipmentForClass?.(classId) || infantryClass?.equipment || [];
+      const equipmentChoices = infantryClass?.equipmentChoices || {};
+      const slotIndices = [0, 1, 2, 3, 4, 5].filter((index) => (
+        equipment[index] ||
+        equipmentChoices[index]?.length ||
+        equipmentChoices[String(index)]?.length
+      ));
       return {
         infantryClass,
-        slots: [0, 1, 2].map((index) => {
+        slots: slotIndices.map((index) => {
           const weaponId = equipment[index];
           const weapon = weaponId ? INFANTRY_WEAPONS[weaponId] : null;
           const choices = game?.equipmentChoiceOptions?.(classId, index) ||
@@ -207,7 +213,7 @@
             weaponId,
             weapon,
             choices,
-            label: ["1", "2", "3"][index],
+            label: String(index + 1),
             role: this.loadoutSlotRole(index, weapon),
             ammo: this.loadoutAmmoText(infantryClass, weapon)
           };

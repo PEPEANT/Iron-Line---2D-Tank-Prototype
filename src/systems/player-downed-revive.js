@@ -46,6 +46,7 @@
 
     updatePlayerDownedRevive(dt) {
       if (!this.playerDowned || this.playerDeathActive || !this.player) return false;
+      this.updateInfantryWeaponInput?.();
 
       const medic = this.findPlayerReviveMedic();
       this.playerDownedReviveMedic = medic;
@@ -59,7 +60,9 @@
         return false;
       }
 
-      if (!this.input.keyDown("KeyE")) {
+      const selectedKit = this.player.getWeapon?.()?.id === "repairKit";
+      const kitUseHeld = selectedKit && (this.input.mouse?.leftDown || this.input.keyDown("Space"));
+      if (!this.input.keyDown("KeyE") && !kitUseHeld) {
         this.playerDownedReviveHold = 0;
         return false;
       }

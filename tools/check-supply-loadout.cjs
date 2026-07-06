@@ -31,7 +31,8 @@ function checkIndexOrder() {
     "src/systems/infantry-slotbar-hud.js",
     "src/systems/vehicle-dashboard-hud.js",
     "src/systems/supply-crates.js",
-    "src/systems/renderer-supply-crates.js"
+    "src/systems/renderer-supply-crates.js",
+    "src/systems/player-medical-kit.js"
   ];
   let previous = -1;
   for (const needle of expected) {
@@ -153,9 +154,9 @@ function checkLoadoutRuntime() {
     pistol: 1,
     rpg: 2,
     grenadeLauncher: 2,
-    reconDrone: 3,
+    reconDrone: 5,
     repairKit: 3,
-    kamikazeDrone: 3,
+    kamikazeDrone: 5,
     grenade: 4
   };
   for (const [itemId, slotIndex] of Object.entries(expectedItems)) {
@@ -164,7 +165,9 @@ function checkLoadoutRuntime() {
     expect(item.slotIndex === slotIndex, `${itemId} should fill slot ${slotIndex + 1}`);
     expect(IronLine.supplyLoadout.defaultStock[item.stockKey] > 0, `${itemId} default stock should be positive`);
   }
-  expect(!Object.values(IronLine.supplyLoadout.items).some((item) => item.slotIndex === 5), "slot 6 must stay empty until installation items exist");
+  expect(IronLine.supplyLoadout.items.reconDrone.slotIndex === 5, "recon drone should occupy slot 6");
+  expect(IronLine.supplyLoadout.items.kamikazeDrone.slotIndex === 5, "kamikaze drone should occupy slot 6");
+  expect(IronLine.supplyLoadout.items.repairKit.slotIndex === 3, "repair kit should stay in slot 4");
 
   const player = {
     weaponInventory: IronLine.playerDefaultLoadout.weaponInventory(),
@@ -180,9 +183,9 @@ function checkLoadoutRuntime() {
     ["pistol", 1, "pistol", 36],
     ["rpg", 2, "rpg", 2],
     ["grenadeLauncher", 2, "grenadeLauncher", 3],
-    ["reconDrone", 3, "reconDrone", 1],
+    ["reconDrone", 5, "reconDrone", 1],
     ["repairKit", 3, "repairKit", 2],
-    ["kamikazeDrone", 3, "kamikazeDrone", 1],
+    ["kamikazeDrone", 5, "kamikazeDrone", 1],
     ["grenade", 4, "grenade", 3],
     ["machinegun", 0, "machinegun", 120],
     ["lmg", 0, "lmg", 150]

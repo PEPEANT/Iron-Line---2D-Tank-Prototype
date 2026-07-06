@@ -56,7 +56,7 @@
     reconDrone: {
       id: "reconDrone",
       weaponId: "reconDrone",
-      slotIndex: 3,
+      slotIndex: 5,
       stockKey: "reconDrone",
       grantAmmo: 1,
       maxAmmo: 2
@@ -72,7 +72,7 @@
     kamikazeDrone: {
       id: "kamikazeDrone",
       weaponId: "kamikazeDrone",
-      slotIndex: 3,
+      slotIndex: 5,
       stockKey: "kamikazeDrone",
       grantAmmo: 1,
       maxAmmo: 2

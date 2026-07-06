@@ -759,11 +759,18 @@
       const equipment = game.deploymentEquipmentForClass?.(classId) ||
         (infantryClass?.equipment || []).slice();
       const locked = Boolean(game.countdownStarted || game.matchStarted);
-      const loadoutSlots = equipment.map((weaponId, index) => ({
-        index,
-        weaponId,
-        choices: game.equipmentChoiceOptions?.(classId, index) || [weaponId]
-      }));
+      const equipmentChoices = infantryClass?.equipmentChoices || {};
+      const loadoutSlots = [0, 1, 2, 3, 4, 5]
+        .filter((index) => (
+          equipment[index] ||
+          equipmentChoices[index]?.length ||
+          equipmentChoices[String(index)]?.length
+        ))
+        .map((index) => ({
+          index,
+          weaponId: equipment[index] || "",
+          choices: game.equipmentChoiceOptions?.(classId, index) || [equipment[index]].filter(Boolean)
+        }));
       const roleOptions = this.loadoutRoleOptions(game, session, localPlayer, slot);
       const signature = JSON.stringify({
         classId,
@@ -956,7 +963,7 @@
       const inventory = Array.isArray(player.weaponInventory) && player.weaponInventory.length > 0
         ? player.weaponInventory
         : [player.weaponId || slot?.weaponId].filter(Boolean);
-      const weapons = inventory.slice(0, 3).map((weaponId) => this.weaponLabel(weaponId)).filter(Boolean);
+      const weapons = inventory.map((weaponId) => this.weaponLabel(weaponId)).filter(Boolean);
       const label = this.classLabel(classId);
       return weapons.length > 0 ? `${label}: ${weapons.join("/")}` : label;
     }

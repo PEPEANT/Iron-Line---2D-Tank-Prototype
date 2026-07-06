@@ -240,6 +240,7 @@
       desiredRange: 44,
       cooldown: 1.1,
       repairAmount: 32,
+      healAmount: 38,
       ammoKey: "repairKit",
       visualLength: 12,
       visualWidth: 7,

@@ -4184,6 +4184,7 @@
   IronLine.installGameAdminMapActions?.(Game);
   IronLine.installGameDroneSystem?.(Game);
   IronLine.installGamePlayerControl?.(Game);
+  IronLine.installPlayerMedicalKit?.(Game);
   IronLine.installPlayerDownedRevive?.(Game);
   IronLine.installSupplyCrates?.(Game);
   IronLine.installMapObjects?.(Game);
