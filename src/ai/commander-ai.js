@@ -599,6 +599,16 @@
     findHumveeDropoffPoint(squad, point, operationIndex) {
       const approachAngle = squad.approachAngle ? squad.approachAngle(point) : angleTo(point.x, point.y, squad.status?.center?.x || point.x, squad.status?.center?.y || point.y);
       const side = operationIndex % 2 === 0 ? -1 : 1;
+      const unsafeTraffic = (candidate, maxDistance = 170) =>
+        this.game.tacticalMap?.vehicleHintNear?.(candidate, { maxDistance })?.kind === "bottleneck";
+      const dropoff = (candidate, stopDistance = 98) => ({
+        name: `${point.name}-dropoff`,
+        ...candidate,
+        radius: 96,
+        stopDistance,
+        final: true,
+        dropoff: true
+      });
       const distances = [point.radius + 245, point.radius + 305, point.radius + 200, point.radius + 365];
       const sideOffsets = [0, 72 * side, -72 * side, 128 * side, -128 * side];
 
@@ -608,15 +618,8 @@
           const y = point.y + Math.sin(approachAngle) * distance + Math.sin(approachAngle + Math.PI / 2) * sideOffset;
           const candidate = this.clampWorldPoint(x, y, 46);
           if (!this.pointPassable(candidate.x, candidate.y, 35)) continue;
-          if (this.game.tacticalMap?.vehicleHintNear?.(candidate, { maxDistance: 170 })?.kind === "bottleneck") continue;
-          return {
-            name: `${point.name}-dropoff`,
-            ...candidate,
-            radius: 96,
-            stopDistance: 98,
-            final: true,
-            dropoff: true
-          };
+          if (unsafeTraffic(candidate)) continue;
+          return dropoff(candidate);
         }
       }
 
@@ -625,14 +628,26 @@
         point.y + Math.sin(approachAngle) * (point.radius + 275),
         46
       );
-      return {
-        name: `${point.name}-dropoff`,
-        ...fallback,
-        radius: 96,
-        stopDistance: 104,
-        final: true,
-        dropoff: true
-      };
+      if (!unsafeTraffic(fallback)) return dropoff(fallback, 104);
+
+      const tacticalAlternates = [
+        this.game.tacticalMap?.stagingPointForObjective?.(this.team, point, {
+          from: point,
+          maxDistance: 820
+        }),
+        this.game.tacticalMap?.rallyPointFor?.(this.team, point, {
+          objectiveName: point.name,
+          from: point,
+          maxDistance: 820
+        })
+      ];
+      for (const alternate of tacticalAlternates) {
+        if (!alternate || unsafeTraffic(alternate)) continue;
+        if (!this.pointPassable(alternate.x, alternate.y, 35)) continue;
+        return dropoff(alternate, Math.max(98, alternate.stopDistance || 102));
+      }
+
+      return dropoff(fallback, 118);
     }
 
     updateSupportRequestTtl(dt) {

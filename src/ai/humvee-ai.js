@@ -334,6 +334,18 @@
           ((unit.transportCooldown || 0) <= 0 || squad.tacticalMode === "fallback" || squad.tacticalMode === "regroup")
         )) || [];
         const nearPickup = distXY(this.vehicle.x, this.vehicle.y, pickupPoint.x, pickupPoint.y) <= (pickupPoint.stopDistance || 94) + 28;
+        const threatDismountPoint = this.transportThreatDismountPoint(order);
+        if (threatDismountPoint) {
+          this.state = "transport-dismount";
+          this.vehicle.dismountPassengers(this.game, {
+            point: threatDismountPoint,
+            cooldown: 7.8
+          });
+          this.transportDismountTimer = 1.1;
+          this.transportPickupCooldown = Math.max(this.transportPickupCooldown, 8.4);
+          this.applyDrive(dt, 0, 0);
+          return threatDismountPoint;
+        }
         if (nearPickup && passengerCount < desiredPassengerCount && waitingPassengers.length > 0 && this.transportBoardingTimer < 2.4) {
           this.state = "transport-load";
           this.transportBoardingTimer += dt;
@@ -464,6 +476,35 @@
           stopDistance
         }
       };
+    }
+
+    transportThreatDismountPoint(order) {
+      if ((this.vehicle.passengerCount?.() || 0) <= 0) return null;
+      const map = this.game.tacticalMap;
+      const navTarget = this.navigation.debugState?.().moveTarget || null;
+      const nearTraffic = map?.vehicleHintNear?.(this.vehicle, { maxDistance: 185 });
+      const targetTraffic = navTarget ? map?.vehicleHintNear?.(navTarget, { maxDistance: 170 }) : null;
+      if (nearTraffic?.kind !== "bottleneck" && targetTraffic?.kind !== "bottleneck") return null;
+      const threat = this.findTransportArmorThreat();
+      if (!threat) return null;
+      return {
+        name: `${order?.pairedSquadId || "squad"}-traffic-dismount`,
+        x: this.vehicle.x,
+        y: this.vehicle.y,
+        radius: 96,
+        stopDistance: 0,
+        final: true,
+        dropoff: true,
+        threatId: threat.callSign || threat.id || ""
+      };
+    }
+
+    findTransportArmorThreat(maxDistance = 980) {
+      return (this.game.tanks || [])
+        .filter((tank) => tank.alive && tank.team !== this.vehicle.team)
+        .map((tank) => ({ tank, distance: distXY(this.vehicle.x, this.vehicle.y, tank.x, tank.y) }))
+        .filter((item) => item.distance <= maxDistance)
+        .sort((a, b) => a.distance - b.distance)[0]?.tank || null;
     }
 
     autoDismountPoint(order, heavyThreat, target) {
