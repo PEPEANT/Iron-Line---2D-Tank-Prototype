@@ -172,7 +172,8 @@ new Promise((resolve, reject) => {
           windowItem.flags["blast:cover"] ||
           windowItem.flags["blast:fallback"] ||
           windowItem.flags["blast:rpg-response"];
-        if (windowItem.proneSeen && !tactical) {
+        const stillAlive = Boolean(windowItem.unit?.alive && Number(windowItem.unit?.hp) > 0);
+        if (stillAlive && windowItem.proneSeen && !tactical) {
           flag(windowItem, "blast:prone-only", at);
         }
         if (!Object.keys(windowItem.flags).length && windowItem.maxMoveDistance < 24) {
@@ -490,7 +491,7 @@ function markdown(summary, outDir) {
     ...jsonBlock("Raw Summary", summary),
     "## Notes",
     "",
-    "- `blast:prone-only` means the unit went prone within the 10s window without spread, cover, fallback, or RPG response. HP loss can still be counted separately as `blast:wounded`.",
+    "- `blast:prone-only` means a surviving unit went prone within the 10s window without spread, cover, fallback, or RPG response. HP loss can still be counted separately as `blast:wounded`, but units killed before a tactical response are not counted as prone-only.",
     "- `blast:wounded` means HP dropped or the unit died; AI wounded/downed behavior is not implemented in this probe.",
     "- Counts are diagnostic and can double-count a unit hit by overlapping blasts.",
     ""
