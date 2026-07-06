@@ -1134,6 +1134,14 @@
       state.accumulated += dt;
       actor.aiLod = { lod: info.lod, reason: info.reason, updateRateMs: info.updateRateMs, skipped: false, accumulated: state.accumulated, updates: state.updates, skips: state.skips };
 
+      if (info.lod === "detailed") {
+        state.accumulated = 0;
+        state.updates += 1;
+        actor.aiLod.accumulated = state.accumulated;
+        actor.aiLod.updates = state.updates;
+        return { skipAi: false, dt };
+      }
+
       if (performance.now() - (this.aiLodBudgetStart || 0) <= 8 && state.accumulated >= interval) {
         const aiDt = Math.min(state.accumulated, interval * 2.5);
         state.accumulated = 0;

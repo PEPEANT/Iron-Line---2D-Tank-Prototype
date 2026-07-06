@@ -274,7 +274,7 @@
       const engaged = Boolean(actor.ai?.target || actor.target || actor.suppressed || actor.lastThreat);
       const actorCount = (game?.infantry?.length || 0) + (game?.tanks?.length || 0) + (game?.humvees?.length || 0) + (game?.drones?.length || 0);
       const loadScale = actorCount >= 58 ? 2.2 : actorCount >= 36 ? 2 : actorCount >= 22 ? 1.08 : 1;
-      const rate = (lod) => Math.round(LOD_RULES[lod].updateRateMs * loadScale);
+      const rate = (lod) => Math.round(LOD_RULES[lod].updateRateMs * (lod === "detailed" ? 1 : loadScale));
 
       if (onScreen || engaged || distanceToPlayer <= 720) {
         return { id: actor.callSign || actor.id || "", lod: "detailed", reason: onScreen ? "on-screen" : engaged ? "engaged" : "near-player", updateRateMs: rate("detailed") };

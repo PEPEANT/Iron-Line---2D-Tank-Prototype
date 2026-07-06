@@ -142,14 +142,75 @@ new Promise((resolve, reject) => {
     tick();
   });
 
-  const waitFrames = (count) => new Promise((done) => {
-    let frames = 0;
-    const step = () => {
-      frames += 1;
-      if (frames >= count) done();
-      else requestAnimationFrame(step);
+  const measureDetailedMovementContinuity = (game, frameCount) => new Promise((done) => {
+    const tracks = new Map();
+    const result = {
+      frames: 0,
+      trackedActors: 0,
+      movingActors: 0,
+      freezeJumpEvents: 0,
+      maxStillFramesWhileMoving: 0,
+      maxJumpPx: 0
     };
-    requestAnimationFrame(step);
+    const actors = () => [
+      ...(game.infantry || []),
+      ...(game.tanks || []),
+      ...(game.humvees || [])
+    ].filter((actor) => actor && actor.alive !== false && actor.destroyed !== true && actor.aiLod?.lod === "detailed");
+    const actorId = (actor, index) => String(actor.callSign || actor.id || (actor.constructor?.name || "actor") + ":" + index);
+    const sample = () => {
+      const seen = new Set();
+      actors().forEach((actor, index) => {
+        const id = actorId(actor, index);
+        seen.add(id);
+        const x = Number(actor.x || 0);
+        const y = Number(actor.y || 0);
+        const speed = Math.abs(Number(actor.speed || 0));
+        const movingIntent = speed > 1.2 || Boolean(actor.ai?.moveTarget || actor.ai?.path?.length || actor.ai?.target || actor.target);
+        const track = tracks.get(id) || {
+          x,
+          y,
+          stillFrames: 0,
+          movedDistance: 0,
+          hasMoved: false,
+          movingSamples: 0
+        };
+        const delta = Math.hypot(x - track.x, y - track.y);
+        if (movingIntent) {
+          track.movingSamples += 1;
+          if (delta <= 0.08) {
+            if (track.hasMoved) track.stillFrames += 1;
+          } else {
+            if (track.hasMoved && track.stillFrames >= 5 && delta >= 4) {
+              result.freezeJumpEvents += 1;
+              result.maxJumpPx = Math.max(result.maxJumpPx, delta);
+            }
+            track.hasMoved = true;
+            track.movedDistance += delta;
+            track.stillFrames = 0;
+          }
+          result.maxStillFramesWhileMoving = Math.max(result.maxStillFramesWhileMoving, track.stillFrames);
+        } else {
+          track.stillFrames = 0;
+        }
+        track.x = x;
+        track.y = y;
+        tracks.set(id, track);
+      });
+      for (const id of tracks.keys()) {
+        if (!seen.has(id)) tracks.delete(id);
+      }
+      result.frames += 1;
+      if (result.frames >= frameCount) {
+        const values = [...tracks.values()];
+        result.trackedActors = values.length;
+        result.movingActors = values.filter((track) => track.movingSamples >= 12 && track.movedDistance >= 6).length;
+        done(result);
+        return;
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
   });
 
   waitForGame().then((game) => {
@@ -166,7 +227,7 @@ new Promise((resolve, reject) => {
           return;
         }
 
-        waitFrames(150).then(() => {
+        measureDetailedMovementContinuity(game, 180).then((movementContinuity) => {
           const snapshot = game.aiScaleReadiness?.snapshot?.({ includeNetwork: true }) || null;
           const evaluation = game.aiScaleReadiness?.evaluate?.(profileId, { includeNetwork: true }) || null;
           const observer = game.observerBridge?.createSnapshot?.();
@@ -183,6 +244,7 @@ new Promise((resolve, reject) => {
             observerVisible: Boolean(observer?.world?.aiScaleReadiness?.counts),
             observatoryVisible: Boolean(observatory?.aiScaleReadiness?.counts),
             snapshotPolicy: snapshot?.snapshotPolicy?.sendFullUnitDetailEveryTick === false,
+            detailedMovementContinuous: Number(movementContinuity?.freezeJumpEvents || 0) === 0,
             evaluationPass: Boolean(evaluation?.pass)
           };
           const pass = Object.values(checks).every(Boolean);
@@ -204,6 +266,7 @@ new Promise((resolve, reject) => {
             evaluation,
             observerScale: observer?.world?.aiScaleReadiness || null,
             observatoryScale: observatory?.aiScaleReadiness || null,
+            movementContinuity,
             checks,
             pass
           });
@@ -302,6 +365,7 @@ async function main() {
           reduced: item.snapshot?.lod?.reduced || 0,
           idle: item.snapshot?.lod?.idle || 0
         },
+        movementContinuity: item.movementContinuity || {},
         stateSummary: item.snapshot?.stateSummary || {},
         evaluation: item.evaluation?.checks || []
       };
@@ -319,6 +383,9 @@ async function main() {
       const ai = numbers((item) => item.performance.aiMs);
       const pathMove = numbers((item) => item.performance.pathfindingAndMovementMs);
       const snapshotBytes = numbers((item) => item.performance.networkSnapshotBytes);
+      const movementFreezeJumps = numbers((item) => item.movementContinuity.freezeJumpEvents);
+      const movementStillFrames = numbers((item) => item.movementContinuity.maxStillFramesWhileMoving);
+      const movementActors = numbers((item) => item.movementContinuity.movingActors);
       return {
         profileId,
         runs: runs.length,
@@ -332,6 +399,9 @@ async function main() {
         maxAiMs: ai.length ? Math.max(...ai) : null,
         maxPathfindingAndMovementMs: pathMove.length ? Math.max(...pathMove) : null,
         maxNetworkSnapshotBytes: snapshotBytes.length ? Math.max(...snapshotBytes) : null,
+        maxMovementFreezeJumps: movementFreezeJumps.length ? Math.max(...movementFreezeJumps) : null,
+        maxMovementStillFrames: movementStillFrames.length ? Math.max(...movementStillFrames) : null,
+        maxMovingContinuityActors: movementActors.length ? Math.max(...movementActors) : null,
         worstStateSummary: runs.reduce((worst, item) => {
           const state = item.stateSummary || {};
           return {
