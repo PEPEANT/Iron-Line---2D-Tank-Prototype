@@ -254,7 +254,8 @@ new Promise((resolve, reject) => {
           passengersBefore: passengerCountBefore,
           catastrophic: Boolean(options.catastrophic),
           weaponId: options.weaponId || "",
-          cause: options.cause || options.weaponId || "destruction"
+          cause: options.cause || options.weaponId || "destruction",
+          ai: this.ai ? { state: this.ai.state || "", orderRole: this.ai.currentOrder?.role || "", orderStance: this.ai.currentOrder?.stance || "", goal: this.ai.currentOrder?.objectiveName || "", moveTarget: this.ai.debug?.moveTarget ? { x: Math.round(this.ai.debug.moveTarget.x || 0), y: Math.round(this.ai.debug.moveTarget.y || 0) } : null } : null
         };
         const result = originalEmergencyBailout.call(this, gameArg, options);
         event.passengers = Number(result?.passengers) || 0;
@@ -589,7 +590,8 @@ function summarize(r) {
       passengers: firstOpeningBailout.passengers,
       catastrophic: Boolean(firstOpeningBailout.catastrophic),
       weaponId: firstOpeningBailout.weaponId || "",
-      cause: firstOpeningBailout.cause || ""
+      cause: firstOpeningBailout.cause || "",
+      ai: firstOpeningBailout.ai || null
     } : null,
     survivalAfterContactP25: +q(survival, 0.25).toFixed(0),
     survivalAfterContactP50: +q(survival, 0.5).toFixed(0),
