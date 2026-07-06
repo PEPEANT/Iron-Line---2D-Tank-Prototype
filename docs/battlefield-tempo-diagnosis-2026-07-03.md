@@ -752,9 +752,27 @@ Discarded intermediate-node braking experiment:
 | `reports/playtests/battlefield-tempo-20260706070157/` | loaded delivery drives through non-final move targets with stop distance 46 | 5.3 | 0 | stopped the sample bailout, but pushed tempo below target |
 | `reports/playtests/battlefield-tempo-20260706070525/` | same non-final stop-distance tightening | 4.8 | 3 | still allowed a loaded AP bailout 0.6s after contact; first death arrived 2.5s after contact |
 
+Discarded route/contact experiments:
+
+| Report | Experiment | Deaths/min | Opening bailout passengers | Judgment |
+| --- | --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706071212/` | score Humvee dropoff candidates by tactical-map risk and enemy armor exposure | 5.3 | 0 | stopped this sample spike, but tempo stayed below target |
+| `reports/playtests/battlefield-tempo-20260706071534/` | same dropoff scoring | 4.6 | 0 | over-safed transport flow; mounted infantry averaged 7.4 |
+| `reports/playtests/battlefield-tempo-20260706071951/` | dropoff scoring plus stable same-operation dropoff reuse | 11.1 | 0 | good sample, but not stable enough to keep |
+| `reports/playtests/battlefield-tempo-20260706072307/` | same stable dropoff reuse | 2.5 | 4 | missed a 1042px AP source while loaded transport was still `transport-run` |
+| `reports/playtests/battlefield-tempo-20260706072723/` | stable dropoff plus faster loaded-transport traffic bypass | 8.8 | 1 | partial improvement only |
+| `reports/playtests/battlefield-tempo-20260706073036/` | same traffic bypass | 5.5 | 8 | close 550px AP source still caused two loaded opening bailouts |
+| `reports/playtests/battlefield-tempo-20260706073502/` | broad loaded-transport armor-contact dismount, slow transports scan to 1080px | 3.3 | 0 | killed tempo and left mounted infantry high |
+| `reports/playtests/battlefield-tempo-20260706073845/` | narrow full-transport dismount inside 600px armor threat | 5.7 | 0 | near pass, but still below deaths/min target |
+| `reports/playtests/battlefield-tempo-20260706074201/` | same narrow full-transport dismount | 6.0 | 4 | missed a 1220px AP source and reproduced 4-passenger opening bailout |
+
+Diagnostic update:
+- `npm run tempo` now includes first opening bailout `moveTarget.final`, `moveTarget.stopDistance`, `trafficHoldTarget`, `trafficHoldTimer`, `stuckTimer`, `recoveryTimer`, and `tacticalTrafficHint`.
+- Verification report `reports/playtests/battlefield-tempo-20260706074652/` reproduced a 3-passenger opening bailout with `moveTarget.final=false`, `stopDistance=104`, no traffic hold, no stuck/recovery timer, and tactical traffic hint `traffic:g_4165_1615:g_4335_1615`.
+
 Judgment:
 - The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
 - Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
 - Projectile/source vehicle context now confirms the AP shooter can be about 1000px away while the transport is stationary or nearly stationary near its movement target.
 - `impactSpeed` now confirms at least one loaded transport was truly stopped before destruction, not just zeroed by the destruction handler.
-- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, or blanket non-final path stop-distance tightening. Next behavior work should inspect loaded transport route/dropoff selection around armor lanes before adding another dismount rule.
+- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, blanket non-final path stop-distance tightening, dropoff risk scoring alone, traffic bypass alone, or broad armor-contact dismounts. Next behavior work should inspect why loaded transport routing selects exposed non-final path nodes around tactical traffic hints before adding another dismount rule.
