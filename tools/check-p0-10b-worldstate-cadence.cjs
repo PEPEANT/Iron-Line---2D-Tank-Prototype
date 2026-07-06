@@ -494,6 +494,9 @@ function decide(report) {
   const vehicleTarget = Math.max(...pages.map((page) => page.vehicleTargetDelta.max || 0));
   const vehicleApplied = Math.max(...pages.map((page) => page.vehicleAppliedDelta.max || 0));
   const unitRatio = Math.max(...pages.map((page) => page.unitAppliedRatio.max || 0));
+  const followerPages = pages.filter((page) => (page.worldApplies || []).length && !(page.worldPublishes || []).some((item) => item.result));
+  const followerApplied = followerPages.some((page) => (page.worldApplies || []).some((item) => item.applied && ((item.units || 0) + (item.vehicles || 0)) > 0));
+  if (followerPages.length && !followerApplied) return "Apply delivery primary: follower never received a usable host worldState sample.";
   if (publishMaxGap > 1200 && (unitTarget > 32 || vehicleTarget > 32)) {
     return `Cadence primary: worldState publishes every ${round(publishMaxGap)}ms, unit/vehicle targets reach ${round(unitTarget)}/${round(vehicleTarget)}px before a one-shot apply.`;
   }

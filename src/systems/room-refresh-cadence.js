@@ -4,6 +4,7 @@
   const IronLine = global.IronLine || (global.IronLine = {});
   const ACTIVE_MATCH_SUMMARY_REFRESH_MS = 6000;
   const ACTIVE_MATCH_DETAIL_REFRESH_MS = 6000;
+  const ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS = 650;
   const ACTIVE_MATCH_SOCKET_REFRESH_MS = 30000;
 
   function realtimeSocketActive() {
@@ -30,7 +31,14 @@
     if (!activeRoomId) return { activeRoomId: "", summaryDue: true, detailDue: true };
     if (!options.periodic) return { activeRoomId, summaryDue: true, detailDue: true };
     const hasActiveRoom = (registry.remoteRooms || []).some((room) => room.id === activeRoomId);
-    const refreshMs = realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_DETAIL_REFRESH_MS;
+    const activeRoom = (registry.remoteRooms || []).find((room) => room.id === activeRoomId) || null;
+    const followsWorld = Boolean(
+      IronLine.game?.sessionMode === "online" &&
+      IronLine.game?.matchStarted &&
+      IronLine.game?.onlineSession?.roomId === activeRoomId &&
+      !IronLine.game?.isOnlineWorldHost?.(activeRoom)
+    );
+    const refreshMs = followsWorld ? ACTIVE_MATCH_WORLD_FOLLOWER_REFRESH_MS : (realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_DETAIL_REFRESH_MS);
     return {
       activeRoomId,
       summaryDue: !hasActiveRoom || now - registry.lastRemoteSummaryRefreshAt >= ACTIVE_MATCH_SUMMARY_REFRESH_MS,

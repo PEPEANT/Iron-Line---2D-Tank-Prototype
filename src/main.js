@@ -2693,8 +2693,8 @@
     stepOnlineWorldInterpolation(state = null, dt = 0, options = {}) {
       if (!state) return false;
       const buffered = Boolean(options.buffered);
-      const unitBlend = buffered ? 0.5 : this.onlineWorldInterpolationBlend(dt, 0.2);
-      const vehicleBlend = buffered ? 0.5 : this.onlineWorldInterpolationBlend(dt, 0.18);
+      const unitBlend = buffered ? .045 : .035;
+      const vehicleBlend = buffered ? .045 : .035;
       const vehicleById = new Map(
         [...(this.tanks || []), ...(this.humvees || [])]
           .map((vehicle) => [vehicle.callSign || vehicle.id || "", vehicle])
@@ -2717,7 +2717,7 @@
         const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : vehicle.x;
         const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : vehicle.y;
         const targetDistance = distXY(vehicle.x, vehicle.y, targetX, targetY);
-        if (targetDistance > 620) {
+        if (targetDistance > 1600) {
           vehicle.x = targetX;
           vehicle.y = targetY;
           vehicle.angle = normalizeAngle(Number(snap.angle) || vehicle.angle);
@@ -2729,7 +2729,7 @@
         const followBlend = buffered ? vehicleBlend : this.onlineWorldCatchUpBlend(vehicleBlend, targetDistance, {
           start: 160,
           full: 420,
-          max: 0.14
+          max: .045
         });
         vehicle.x = lerp(vehicle.x, targetX, followBlend);
         vehicle.y = lerp(vehicle.y, targetY, followBlend);
@@ -2754,8 +2754,8 @@
           continue;
         }
         if (snap.inVehicle) {
-          if (Number.isFinite(Number(snap.x))) unit.x = Number(snap.x);
-          if (Number.isFinite(Number(snap.y))) unit.y = Number(snap.y);
+          unit.x = lerp(unit.x, Number(snap.x) || unit.x, unitBlend);
+          unit.y = lerp(unit.y, Number(snap.y) || unit.y, unitBlend);
           continue;
         }
         if (unit.inTank) {
@@ -2774,7 +2774,7 @@
         const targetX = Number.isFinite(Number(snap.x)) ? Number(snap.x) : unit.x;
         const targetY = Number.isFinite(Number(snap.y)) ? Number(snap.y) : unit.y;
         const targetDistance = distXY(unit.x, unit.y, targetX, targetY);
-        if (targetDistance > 340) {
+        if (targetDistance > 1200) {
           unit.x = targetX;
           unit.y = targetY;
           unit.angle = normalizeAngle(Number(snap.angle) || unit.angle);
@@ -2784,7 +2784,7 @@
         const followBlend = buffered ? unitBlend : this.onlineWorldCatchUpBlend(unitBlend, targetDistance, {
           start: 64,
           full: 240,
-          max: 0.24
+          max: .045
         });
         unit.x = lerp(unit.x, targetX, followBlend);
         unit.y = lerp(unit.y, targetY, followBlend);
