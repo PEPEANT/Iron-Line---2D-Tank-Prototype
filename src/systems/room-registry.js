@@ -101,8 +101,8 @@
         if (event.key === this.storageKey || event.key === this.selectedKey) this.emit();
       });
       if (this.canUseRemoteApi()) {
-        window.setTimeout(() => this.refreshRemoteRooms(), 200);
-        window.setInterval(() => this.refreshRemoteRooms(), REMOTE_REFRESH_INTERVAL_MS);
+        window.setTimeout(() => this.refreshRemoteRooms({ periodic: true }), 200);
+        window.setInterval(() => this.refreshRemoteRooms({ periodic: true }), REMOTE_REFRESH_INTERVAL_MS);
       }
     }
 
@@ -303,8 +303,8 @@
         .join("|");
     }
 
-    async refreshRemoteRooms() {
-      return IronLine.RoomRefreshCadence.refreshRemoteRooms(this);
+    async refreshRemoteRooms(options = {}) {
+      return IronLine.RoomRefreshCadence.refreshRemoteRooms(this, options);
     }
 
     publishRoom(room) {
@@ -347,12 +347,9 @@
 
     publishWorldState(roomId = "", worldState = null) {
       if (!this.canUseRemoteApi() || !roomId || !worldState || this.deletedRemoteRoomIds.has(roomId)) return Promise.resolve(null);
-      return fetch(`${this.roomsApiUrl(roomId)}/world-state`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ worldState })
-      })
-        .then((response) => response.ok ? response.json() : null)
+      const url = `${this.roomsApiUrl(roomId)}/world-state`;
+      const request = IronLine.DeferredJsonFetch?.postLatestJson?.(`world:${roomId}`, url, { worldState }, { delayMs: 260, timeoutMs: 520 }) || fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ worldState }) }).then((response) => response.ok ? response.json() : null);
+      return request
         .then((payload) => {
           if (payload?.ok) this.remoteOnline = true;
           return payload;

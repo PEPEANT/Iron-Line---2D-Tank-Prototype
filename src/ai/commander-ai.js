@@ -35,7 +35,6 @@
     }
 
     getOrderFor(vehicle) {
-      if (!this.assignments.has(vehicle) && vehicle?.vehicleType !== "humvee") this.rebuildAssignments();
       return this.assignments.get(vehicle) || null;
     }
 
@@ -44,7 +43,6 @@
     }
 
     getInfantryOrderFor(unit) {
-      if (!this.infantryAssignments.has(unit)) this.rebuildInfantryAssignments();
       return this.infantryAssignments.get(unit) || null;
     }
 

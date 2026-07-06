@@ -420,10 +420,11 @@
     }
 
     buildTrafficHints(blockers = this.blockers()) {
-      const context = this.signature || this.buildSignature();
+      if (this.game?.matchStarted && this.trafficHintsCache.length) return this.trafficHintsCache.slice();
+      const blockerList = Array.isArray(blockers) ? blockers.filter((blocker) => blocker?.kind !== "vehicle-wreck") : [];
+      const context = this.trafficHintsContext(blockerList);
       if (context && this.trafficHintsCacheContext === context) return this.trafficHintsCache.slice();
       const hints = [];
-      const blockerList = Array.isArray(blockers) ? blockers : [];
       const graph = this.game?.navGraph;
       if (graph?.edges?.length) {
         for (const edge of graph.edges) {
@@ -486,6 +487,12 @@
       this.trafficHintsCacheContext = context;
       this.trafficHintsCache = hints.slice();
       return hints;
+    }
+
+    trafficHintsContext(blockers = []) {
+      const graph = this.game?.navGraph;
+      const blockerKey = blockers.map((item) => `${item.kind || ""}:${Math.round(item.x)}:${Math.round(item.y)}:${Math.round(item.w || 0)}:${Math.round(item.h || 0)}:${item.source?.destroyed ? 1 : 0}`).join("|");
+      return [this.coverCacheContext(), graph?.nodes?.length || 0, graph?.edges?.length || 0, blockerKey, JSON.stringify(this.manualTags("trafficHints"))].join("::");
     }
 
     trafficMetricsForPoint(point, blockers = this.blockers()) {

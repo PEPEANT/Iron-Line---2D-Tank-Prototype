@@ -3,7 +3,7 @@
 (function bootGame(global) {
   const IronLine = global.IronLine;
   const FULLSCREEN_DISABLED_KEY = "iron-line-fullscreen-disabled-v1";
-  const ONLINE_WORLD_SYNC_INTERVAL_SECONDS = 0.3;
+  const ONLINE_WORLD_SYNC_INTERVAL_SECONDS = 0.45;
   const { TEAM, AMMO, INFANTRY_WEAPONS, INFANTRY_CLASSES, PLAYER_CLASS_ORDER } = IronLine.constants;
   const {
     clamp,

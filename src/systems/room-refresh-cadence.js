@@ -2,26 +2,39 @@
 
 (function registerRoomRefreshCadence(global) {
   const IronLine = global.IronLine || (global.IronLine = {});
-  const ACTIVE_MATCH_SUMMARY_REFRESH_MS = 1500;
-  const ACTIVE_MATCH_DETAIL_REFRESH_MS = 750;
+  const ACTIVE_MATCH_SUMMARY_REFRESH_MS = 6000;
+  const ACTIVE_MATCH_DETAIL_REFRESH_MS = 6000;
+  const ACTIVE_MATCH_SOCKET_REFRESH_MS = 30000;
+
+  function realtimeSocketActive() {
+    if (typeof WebSocket !== "function") return false;
+    const flow = IronLine.game?.hud?.sessionFlow;
+    const socket = flow?.playerStateSocket;
+    return Boolean(flow?.playerStateSocketOpen && socket?.readyState === WebSocket.OPEN);
+  }
 
   function activeOnlineMatchRoomId(registry) {
     const game = IronLine.game;
     const onlineRoomId = game?.onlineSession?.roomId || "";
-    const roomId = registry.selectedRoomId() || onlineRoomId;
+    const roomId = onlineRoomId || registry.selectedRoomId();
     if (!roomId || (onlineRoomId === roomId && game?.result)) return "";
-    const room = (registry.remoteRooms || []).find((item) => item.id === roomId) || registry.readLocalRooms().find((item) => item.id === roomId);
+    const remoteRoom = (registry.remoteRooms || []).find((item) => item.id === roomId);
+    if (remoteRoom?.phase === "playing") return roomId;
+    if (onlineRoomId === roomId && game?.sessionMode === "online" && game?.matchStarted && !game?.result) return roomId;
+    const room = registry.readLocalRooms().find((item) => item.id === roomId);
     return room?.phase === "playing" ? roomId : "";
   }
 
-  function remoteRefreshPlan(registry, now = Date.now()) {
+  function remoteRefreshPlan(registry, now = Date.now(), options = {}) {
     const activeRoomId = activeOnlineMatchRoomId(registry);
     if (!activeRoomId) return { activeRoomId: "", summaryDue: true, detailDue: true };
-    const hasActiveRoom = (registry.remoteRooms || []).some((room) => room.id === activeRoomId) || registry.readLocalRooms().some((room) => room.id === activeRoomId);
+    if (!options.periodic) return { activeRoomId, summaryDue: true, detailDue: true };
+    const hasActiveRoom = (registry.remoteRooms || []).some((room) => room.id === activeRoomId);
+    const refreshMs = realtimeSocketActive() ? ACTIVE_MATCH_SOCKET_REFRESH_MS : ACTIVE_MATCH_DETAIL_REFRESH_MS;
     return {
       activeRoomId,
       summaryDue: !hasActiveRoom || now - registry.lastRemoteSummaryRefreshAt >= ACTIVE_MATCH_SUMMARY_REFRESH_MS,
-      detailDue: now - registry.lastRemoteDetailRefreshAt >= ACTIVE_MATCH_DETAIL_REFRESH_MS
+      detailDue: !hasActiveRoom || now - registry.lastRemoteDetailRefreshAt >= refreshMs
     };
   }
 
@@ -55,10 +68,10 @@
     }
   }
 
-  async function refreshRemoteRooms(registry) {
+  async function refreshRemoteRooms(registry, options = {}) {
     if (!registry.canUseRemoteApi() || registry.remoteRefreshInFlight) return;
     const now = Date.now();
-    const refreshPlan = remoteRefreshPlan(registry, now);
+    const refreshPlan = remoteRefreshPlan(registry, now, options);
     if (refreshPlan.activeRoomId && !refreshPlan.summaryDue) {
       if (refreshPlan.detailDue) await refreshActiveRoomDetail(registry, refreshPlan.activeRoomId, now);
       return;
