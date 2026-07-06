@@ -255,7 +255,7 @@ new Promise((resolve, reject) => {
           catastrophic: Boolean(options.catastrophic),
           weaponId: options.weaponId || "",
           cause: options.cause || options.weaponId || "destruction",
-          ai: this.ai ? { state: this.ai.state || "", orderRole: this.ai.currentOrder?.role || "", orderStance: this.ai.currentOrder?.stance || "", goal: this.ai.currentOrder?.objectiveName || "", moveTarget: this.ai.debug?.moveTarget ? { x: Math.round(this.ai.debug.moveTarget.x || 0), y: Math.round(this.ai.debug.moveTarget.y || 0) } : null } : null
+          ai: this.ai ? { state: this.ai.state || "", orderRole: this.ai.currentOrder?.role || "", orderStance: this.ai.currentOrder?.stance || "", goal: this.ai.currentOrder?.objectiveName || "", position: { x: Math.round(this.x || 0), y: Math.round(this.y || 0) }, speed: Math.round((Number(this.speed) || 0) * 10) / 10, passengers: passengerCountBefore, moveTarget: this.ai.debug?.moveTarget ? { x: Math.round(this.ai.debug.moveTarget.x || 0), y: Math.round(this.ai.debug.moveTarget.y || 0) } : null } : null
         };
         const result = originalEmergencyBailout.call(this, gameArg, options);
         event.passengers = Number(result?.passengers) || 0;

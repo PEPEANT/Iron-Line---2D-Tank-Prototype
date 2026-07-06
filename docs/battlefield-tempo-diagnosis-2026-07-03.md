@@ -714,3 +714,26 @@ Judgment:
 - The weak burst rule preserves the 6-12 deaths/min tempo target in both runs while avoiding the previous 43-opening-event / 3-opening-kill Humvee MG spike sample.
 - This does not solve the loaded-transport AP bailout problem. Run 2 still produced 4 opening passenger bailout damage events from a transport-running Humvee destroyed by AP.
 - Next behavior work should target loaded Humvee route/dropoff exposure around armor lanes, not a broader Humvee MG or passenger damage reduction.
+
+## Codex Humvee transport exposure diagnostics (2026-07-06)
+
+Change scope:
+- `npm run tempo` now includes Humvee bailout AI position, speed, and passenger snapshot in the first opening bailout detail.
+- This is diagnostics only. No gameplay, AI routing, passenger damage, vehicle weapon, or transport behavior changed.
+
+Discarded local experiment:
+
+| Report | Experiment | Deaths/min | Opening bailout passengers | Judgment |
+| --- | --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706061820/` | dismount near dropoff when loaded transport enters enemy tank LOS | 6.5 | 4 | did not catch the loaded AP bailout |
+| `reports/playtests/battlefield-tempo-20260706062232/` | wider dropoff approach range for same trigger | 5.6 | 7 | worsened bailout spike and missed deaths/min target |
+
+Diagnostic verification:
+
+| Report | Deaths/min | Opening bailout passengers | First opening bailout context |
+| --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706062728/` | 6.3 | 8 | `R-HMV-1` was `transport-run`, passengers 4, position `(5467,984)`, speed 0, moveTarget `(5286,1046)` |
+
+Judgment:
+- The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
+- Next behavior work should inspect loaded Humvee traffic/stuck/route staging around armor LOS before adding another dismount rule.
