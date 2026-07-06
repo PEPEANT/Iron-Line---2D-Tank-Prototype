@@ -1008,9 +1008,10 @@
       }
 
       this.matchTime += dt;
+      let map = 0;
       if (!remoteOnlineBattlefield) {
         perf?.begin("ai.tacticalMap");
-        this.tacticalMap?.update?.(dt);
+        map = this.tacticalMap?.update?.(dt);
         perf?.end("ai.tacticalMap");
       }
       this.updateDroneDesignation(dt);
@@ -1022,7 +1023,7 @@
         crew.update(this, dt);
       }
       perf?.end("crews");
-      if (!remoteOnlineBattlefield && !this.testLabAiPaused) {
+      if (!remoteOnlineBattlefield && !this.testLabAiPaused && !map) {
         perf?.begin("ai.commanders");
         for (const commander of Object.values(this.commanders)) commander.update(dt);
         this.botCommander?.update?.(dt);
@@ -1123,23 +1124,16 @@
       const interval = Math.max(0.05, Number(info.updateRateMs || 100) / 1000);
       let state = this.aiLodState.get(actor);
       if (!state) {
-        state = { accumulated: 0, updates: 0, skips: 0, lastLod: info.lod };
+        const seed = (Number(actor.ai.seed ?? actor.ai.navigation?.seed) || 0) + Math.round((actor.x || 0) * 3 + (actor.y || 0) * 5);
+        state = { accumulated: interval * ((seed % 997) / 997), updates: 0, skips: 0 };
         this.aiLodState.set(actor, state);
       }
+      const frame = Math.floor((this.matchTime || 0) * 60);
+      if (this.aiLodBudgetFrame !== frame) { this.aiLodBudgetFrame = frame; this.aiLodBudgetStart = performance.now(); }
       state.accumulated += dt;
-      state.lastLod = info.lod;
-      state.updateRateMs = info.updateRateMs;
-      actor.aiLod = {
-        lod: info.lod,
-        reason: info.reason,
-        updateRateMs: info.updateRateMs,
-        skipped: false,
-        accumulated: state.accumulated,
-        updates: state.updates,
-        skips: state.skips
-      };
+      actor.aiLod = { lod: info.lod, reason: info.reason, updateRateMs: info.updateRateMs, skipped: false, accumulated: state.accumulated, updates: state.updates, skips: state.skips };
 
-      if (info.lod === "detailed" || state.accumulated >= interval) {
+      if (performance.now() - (this.aiLodBudgetStart || 0) <= 8 && state.accumulated >= interval) {
         const aiDt = Math.min(state.accumulated, interval * 2.5);
         state.accumulated = 0;
         state.updates += 1;

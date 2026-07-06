@@ -15,21 +15,23 @@
       this.squadAssignments = new Map();
       this.supportRequests = new Map();
       this.operations = [];
-      this.timer = 0;
+      this.timer = team === TEAM.RED ? 0.07 : 0;
       this.summary = "";
       this.supportSummary = "";
+      this.updatePhase = 0;
     }
 
     update(dt) {
       this.updateSupportRequestTtl(dt);
       this.timer -= dt;
       if (this.timer > 0) return;
-      this.timer = 0.45;
-      this.rebuildAssignments();
-      this.rebuildInfantryAssignments();
-      this.collectSupportRequests();
-      this.assignSupportAssets();
-      this.assignRepairAssets();
+      this.timer = 0.12;
+      if (this.updatePhase === 0) this.rebuildAssignments();
+      else if (this.updatePhase === 1) this.rebuildInfantryAssignments();
+      else if (this.updatePhase === 2) this.collectSupportRequests();
+      else if (this.updatePhase === 3) this.assignSupportAssets();
+      else this.assignRepairAssets();
+      this.updatePhase = (this.updatePhase + 1) % 5;
     }
 
     getOrderFor(vehicle) {

@@ -35,6 +35,8 @@
       this.nodeById = new Map();
       this.coverNodeCache = new Map();
       this.coverNodeCacheContext = "";
+      this.trafficHintsCache = [];
+      this.trafficHintsCacheContext = "";
       this.rebuild("init");
     }
 
@@ -418,6 +420,8 @@
     }
 
     buildTrafficHints(blockers = this.blockers()) {
+      const context = this.signature || this.buildSignature();
+      if (context && this.trafficHintsCacheContext === context) return this.trafficHintsCache.slice();
       const hints = [];
       const blockerList = Array.isArray(blockers) ? blockers : [];
       const graph = this.game?.navGraph;
@@ -479,6 +483,8 @@
           manual: true
         });
       }
+      this.trafficHintsCacheContext = context;
+      this.trafficHintsCache = hints.slice();
       return hints;
     }
 

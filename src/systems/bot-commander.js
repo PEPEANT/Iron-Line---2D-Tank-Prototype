@@ -32,13 +32,19 @@
       if (!this.game?.matchStarted || this.game.result || this.game.testLabAiPaused) return;
       if (!this.canDriveLocalBots()) return;
       const now = performance.now();
+      let issued = 0;
       for (const slot of this.game.onlineSession?.roleSlots || []) {
         if (!this.isBotSlot(slot) || !this.slotHasAssets(slot)) continue;
         const state = this.stateForSlot(slot);
         if (now < state.nextAt) continue;
-        const result = this.issueForSlot(slot, { now });
-        state.lastResult = result?.accepted ? "accepted" : result?.reason || "rejected";
+        if (issued >= 1) {
+          state.nextAt = now + 220 + (this.slotHash(slot) % 5) * 70;
+          continue;
+        }
+        issued += 1;
+        state.lastResult = "queued";
         state.nextAt = now + this.nextIntervalSeconds(slot) * 1000;
+        this.deferIssue(slot, { now });
       }
     }
 
@@ -90,6 +96,12 @@
 
     botIdForSlot(slot) {
       return `bot:${slot?.id || "slot"}`;
+    }
+
+    deferIssue(slot, options = {}) {
+      const issue = () => this.issueForSlot(slot, options);
+      if (typeof requestIdleCallback === "function") requestIdleCallback(issue, { timeout: 360 });
+      else setTimeout(issue, 60);
     }
 
     issueForSlot(slot, options = {}) {
@@ -145,9 +157,16 @@
       };
       this.lastIssued = slot.botCommanderState;
       if (result.accepted && this.game.sessionMode === "online" && this.game.isOnlineWorldHost?.()) {
-        this.game.publishOnlineCommand?.(result.packet);
+        this.deferPublish(result.packet);
       }
       return result;
+    }
+
+    deferPublish(packet) {
+      if (!packet) return;
+      const publish = () => this.game?.publishOnlineCommand?.(packet);
+      if (typeof requestIdleCallback === "function") requestIdleCallback(publish, { timeout: 500 });
+      else setTimeout(publish, 80);
     }
 
     nextCommandType(slot, options = {}) {

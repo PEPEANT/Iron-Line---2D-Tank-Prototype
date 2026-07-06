@@ -18,6 +18,7 @@
       this.edgeKeys = new Set();
       this.segmentCache = new Map();
       this.segmentCacheSignature = "";
+      this.nearestCache = new Map();
       this.pathCache = new Map();
 
       for (const edge of config.edges || []) {
@@ -30,6 +31,9 @@
 
     nearestNode(x, y, options = {}) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const cacheKey = this.nearestCacheKey(x, y, options);
+      const cached = this.nearestCache.get(cacheKey);
+      if (cached && (distXY(x, y, cached.x, cached.y) <= 90 || !this.segmentBlocked(x, y, cached.x, cached.y, options.padding ?? 58, options))) return cached;
       let fallback = null;
       let fallbackDistance = Infinity;
       const padding = options.padding ?? 58;
@@ -43,7 +47,7 @@
           fallback = node;
           fallbackDistance = d;
         }
-        if (d <= 90) return node;
+        if (d <= 90) return this.cacheNearest(cacheKey, node);
         if (d <= searchRange) candidates.push({ node, distance: d });
       }
 
@@ -51,10 +55,10 @@
       const limit = Math.min(candidates.length, candidateLimit);
       for (let index = 0; index < limit; index += 1) {
         const item = candidates[index];
-        if (!this.segmentBlocked(x, y, item.node.x, item.node.y, padding, options)) return item.node;
+        if (!this.segmentBlocked(x, y, item.node.x, item.node.y, padding, options)) return this.cacheNearest(cacheKey, item.node);
       }
 
-      return fallback;
+      return this.cacheNearest(cacheKey, fallback);
     }
 
     nodeForObjective(name) {
@@ -150,6 +154,7 @@
       if (signature === this.segmentCacheSignature) return;
       this.segmentCacheSignature = signature;
       this.segmentCache.clear();
+      this.nearestCache.clear();
       this.pathCache.clear();
     }
 
@@ -179,6 +184,18 @@
       const padding = Math.round(options.padding ?? 34);
       const edgePadding = options.edgePadding === undefined ? "n" : Math.round(options.edgePadding);
       return `${startId}|${goalId}|${padding}|${edgePadding}|${scenery}`;
+    }
+
+    nearestCacheKey(x, y, options = {}) {
+      const scenery = options.blockScenery === false ? "0" : "1";
+      return `${Math.round(x / 40)},${Math.round(y / 40)}|${Math.round(options.padding ?? 58)}|${scenery}`;
+    }
+
+    cacheNearest(key, node) {
+      if (!node) return null;
+      this.nearestCache.set(key, node);
+      if (this.nearestCache.size > 5000) this.nearestCache.clear();
+      return node;
     }
 
     cachePath(key, path) {

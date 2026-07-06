@@ -92,6 +92,7 @@
       this.pendingPublishTimers = new Map();
       this.deletedRemoteRoomIds = new Set();
       this.remoteDetailCursors = new Map();
+      this.localRoomsReadSignature = ""; this.localRoomsReadCache = [];
       this.localRoomsWriteSignature = "";
       this.lastRemoteSummaryRefreshAt = 0;
       this.lastRemoteDetailRefreshAt = 0;
@@ -117,9 +118,11 @@
 
     readLocalRooms() {
       try {
-        const data = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
-        if (!Array.isArray(data)) return [];
-        return data.map((room) => this.normalizeRoom(room)).filter(Boolean);
+        const raw = localStorage.getItem(this.storageKey) || "[]"; if (raw === this.localRoomsReadSignature) return this.localRoomsReadCache.slice();
+        const data = JSON.parse(raw); if (!Array.isArray(data)) return [];
+        const rooms = data.map((room) => this.normalizeRoom(room)).filter(Boolean);
+        this.localRoomsReadSignature = this.localRoomsWriteSignature = raw; this.localRoomsReadCache = rooms;
+        return rooms.slice();
       } catch (_error) {
         return [];
       }
@@ -1344,7 +1347,8 @@
 
     writeLocalRooms(rooms) {
       try {
-        const serialized = JSON.stringify((rooms || []).map((room) => this.normalizeRoom(room)).filter(Boolean));
+        const normalizedRooms = (rooms || []).map((room) => this.normalizeRoom(room)).filter(Boolean);
+        const serialized = JSON.stringify(normalizedRooms);
         if (serialized === this.localRoomsWriteSignature) return false;
         localStorage.setItem(this.storageKey, serialized);
         this.localRoomsWriteSignature = serialized;

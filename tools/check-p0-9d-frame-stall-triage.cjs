@@ -310,7 +310,7 @@ async function installProbe(page) {
       wrapMethod(flow, "publishLocalPlayer", "session.publishLocalPlayer");
       wrapAsync(registry, "refreshRemoteRooms", "registry.refreshRemoteRooms");
       wrapAsync(registry, "fetchRemoteRoomDetail", "registry.fetchRemoteRoomDetail");
-      wrapMethod(registry, "writeLocalRooms", "registry.writeLocalRooms");
+      wrapMethod(registry, "readLocalRooms", "registry.readLocalRooms"); wrapMethod(registry, "writeLocalRooms", "registry.writeLocalRooms");
     };
     window.__p09dReset = function() {
       window.__p09dProbe = {

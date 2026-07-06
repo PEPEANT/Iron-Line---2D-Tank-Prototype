@@ -40,10 +40,10 @@
   ];
 
   const LOD_RULES = {
-    detailed: { updateRateMs: 100, reason: "on-screen or actively engaged" },
-    normal: { updateRateMs: 250, reason: "near camera, ordered, or near objective" },
-    reduced: { updateRateMs: 500, reason: "far off-screen and not engaged" },
-    idle: { updateRateMs: 1000, reason: "dead, mounted, or waiting without contact" }
+    detailed: { updateRateMs: 160, reason: "on-screen or actively engaged" },
+    normal: { updateRateMs: 340, reason: "near camera, ordered, or near objective" },
+    reduced: { updateRateMs: 760, reason: "far off-screen and not engaged" },
+    idle: { updateRateMs: 1300, reason: "dead, mounted, or waiting without contact" }
   };
 
   class AIScaleReadiness {
@@ -263,14 +263,17 @@
       const squadCommanded = Boolean(actor.squad?.manualOrder || (actor.squad?.commandState && actor.squad.commandState !== "idle"));
       const ordered = Boolean(actor.commandState || actor.manualOrder || squadCommanded);
       const engaged = Boolean(actor.ai?.target || actor.target || actor.suppressed || actor.lastThreat);
+      const actorCount = (game?.infantry?.length || 0) + (game?.tanks?.length || 0) + (game?.humvees?.length || 0) + (game?.drones?.length || 0);
+      const loadScale = actorCount >= 58 ? 2.2 : actorCount >= 36 ? 2 : actorCount >= 22 ? 1.08 : 1;
+      const rate = (lod) => Math.round(LOD_RULES[lod].updateRateMs * loadScale);
 
       if (onScreen || engaged || distanceToPlayer <= 720) {
-        return { id: actor.callSign || actor.id || "", lod: "detailed", reason: onScreen ? "on-screen" : engaged ? "engaged" : "near-player", updateRateMs: LOD_RULES.detailed.updateRateMs };
+        return { id: actor.callSign || actor.id || "", lod: "detailed", reason: onScreen ? "on-screen" : engaged ? "engaged" : "near-player", updateRateMs: rate("detailed") };
       }
       if (ordered || distanceToPlayer <= 1550 || AIScaleReadiness.nearObjective(game, actor)) {
-        return { id: actor.callSign || actor.id || "", lod: "normal", reason: ordered ? "ordered-offscreen" : "near-front", updateRateMs: LOD_RULES.normal.updateRateMs };
+        return { id: actor.callSign || actor.id || "", lod: "normal", reason: ordered ? "ordered-offscreen" : "near-front", updateRateMs: rate("normal") };
       }
-      return { id: actor.callSign || actor.id || "", lod: "reduced", reason: "far-offscreen", updateRateMs: LOD_RULES.reduced.updateRateMs };
+      return { id: actor.callSign || actor.id || "", lod: "reduced", reason: "far-offscreen", updateRateMs: rate("reduced") };
     }
 
     static nearObjective(game, actor) {
