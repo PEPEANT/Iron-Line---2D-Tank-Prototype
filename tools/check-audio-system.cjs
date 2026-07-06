@@ -25,9 +25,11 @@ const tank = read("src/entities/tank.js");
 const reconDrone = read("src/entities/recon-drone.js");
 const suicideDrone = read("src/entities/suicide-drone.js");
 const readme = read("assets/audio/README.md");
+const manifest = read("assets/audio/manifest.json");
 const plan = read("docs/explosion-impact-plan.md");
 
 mustInclude(html, "src/systems/audio.js");
+mustInclude(html, "src/systems/game-menu-music.js");
 
 for (const token of [
   "MAX_VOICES = 8",
@@ -36,6 +38,11 @@ for (const token of [
   "playWeaponFire",
   "playExplosion",
   "playMetalHit",
+  "startMusic",
+  "stopMusic",
+  "startMenuMusic",
+  "music/soubok-bgm",
+  "maxDuration",
   "cameraVolume",
   "createStereoPanner"
 ]) {
@@ -45,17 +52,48 @@ for (const token of [
 for (const token of [
   "IronLine.audio?.playWeaponFire",
   "IronLine.audio?.playExplosion",
-  "IronLine.audio?.playMetalHit"
+  "IronLine.audio?.playMetalHit",
+  "IronLine.audio?.play?.(\"rpg-fire\""
 ]) {
   mustInclude(combat, token);
 }
 
-mustInclude(tank, "IronLine.audio?.play?.(\"tank-fire\"");
+mustInclude(tank, "tank-fire-he");
+mustInclude(tank, "tank-fire-ap");
+mustInclude(tank, "IronLine.audio?.play?.(tankFireSound");
 mustInclude(reconDrone, "IronLine.audio?.playExplosion?.(game, this, \"drone\"");
 mustInclude(suicideDrone, "IronLine.audio?.playExplosion?.(game, this, \"drone\"");
 
-for (const id of ["explosion-he", "explosion-drone", "tank-fire", "rifle-fire", "mg-fire", "hit-metal"]) {
+for (const id of [
+  "explosion-he",
+  "explosion-drone",
+  "tank-fire",
+  "tank-fire-he",
+  "tank-fire-ap",
+  "rifle-fire",
+  "mg-fire",
+  "pistol-fire",
+  "rpg-fire",
+  "sniper-fire",
+  "hit-metal",
+  "music/soubok-bgm"
+]) {
   mustInclude(readme, id);
+}
+
+for (const id of ["tank-fire-he", "tank-fire-ap", "pistol-fire", "rpg-fire", "mg-fire", "music/soubok-bgm"]) {
+  mustInclude(manifest, id);
+}
+
+for (const rel of [
+  "assets/audio/tank-fire-he.mp3",
+  "assets/audio/tank-fire-ap.mp3",
+  "assets/audio/pistol-fire.mp3",
+  "assets/audio/rpg-fire.mp3",
+  "assets/audio/mg-fire.mp3",
+  "assets/audio/music/soubok-bgm.mp3"
+]) {
+  if (!fs.existsSync(path.join(root, rel))) fail(`missing imported audio file ${rel}`);
 }
 
 mustInclude(plan, "2026-07-05 Codex 구현");

@@ -1,0 +1,68 @@
+{
+  "active": {
+    "tank-fire": {
+      "path": "tank-fire.mp3",
+      "source": "Tank firing.mp3",
+      "status": "confirmed",
+      "usage": "fallback tank cannon fire"
+    },
+    "tank-fire-he": {
+      "path": "tank-fire-he.mp3",
+      "source": "Tank firing.mp3",
+      "status": "confirmed",
+      "usage": "tank HE cannon fire"
+    },
+    "tank-fire-ap": {
+      "path": "tank-fire-ap.mp3",
+      "source": "tank_Armor-piercing shell.mp3",
+      "status": "candidate",
+      "usage": "tank AP cannon fire"
+    },
+    "pistol-fire": {
+      "path": "pistol-fire.mp3",
+      "source": "gun.mp3",
+      "status": "confirmed",
+      "usage": "pistol fire"
+    },
+    "rpg-fire": {
+      "path": "rpg-fire.mp3",
+      "source": "Single shot.mp3",
+      "status": "confirmed",
+      "usage": "RPG launch"
+    },
+    "rifle-fire": {
+      "path": "rifle-fire.mp3",
+      "source": "Rapid fire.mp3",
+      "status": "candidate",
+      "usage": "temporary rifle or automatic fire slot"
+    },
+    "mg-fire": {
+      "path": "mg-fire.mp3",
+      "source": "machine gun.mp3",
+      "status": "confirmed",
+      "usage": "vehicle and support machine gun burst"
+    },
+    "sniper-fire": {
+      "path": "sniper-fire.mp3",
+      "source": "sniper_200m.mp3",
+      "status": "candidate",
+      "usage": "sniper fire"
+    },
+    "music/soubok-bgm": {
+      "path": "music/soubok-bgm.mp3",
+      "source": "bgm2.mp3",
+      "status": "confirmed",
+      "usage": "menu and lobby BGM"
+    }
+  },
+  "review": {
+    "sfx/vehicle/tank-he-alt-candidate.mp3": "Firing a high-explosive shell.mp3",
+    "sfx/vehicle/tank-moving-loop-a.mp3": "tank_moving.mp3",
+    "sfx/vehicle/tank-moving-loop-b.mp3": "tank_moving2.mp3",
+    "sfx/infantry/soldier-hit-a.mp3": "He was shot..mp3",
+    "sfx/infantry/soldier-hit-b.mp3": "He was shot._2.mp3",
+    "sfx/infantry/reload.mp3": "load.mp3",
+    "sfx/drone/drone-loop.mp3": "drone_1.mp3",
+    "sfx/ui/map-select.mp3": "map_select.mp3"
+  }
+}

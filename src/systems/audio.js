@@ -9,6 +9,10 @@
   const activeVoices = new Set();
   let context = null;
   let unlocked = false;
+  let musicSource = null;
+  let musicGain = null;
+  let musicId = "";
+  let pendingMusic = null;
 
   function ensureContext() {
     if (!AudioContextCtor) return null;
@@ -21,6 +25,10 @@
     if (!ctx) return false;
     unlocked = true;
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    if (pendingMusic) {
+      const queued = pendingMusic;
+      startMusic(queued.id, queued.options).catch(() => {});
+    }
     return true;
   }
 
@@ -107,11 +115,100 @@
       activeVoices.add(source);
       source.onended = () => activeVoices.delete(source);
       source.start(0);
+      const maxDuration = Math.max(0, Number(options.maxDuration) || 0);
+      if (maxDuration > 0 && maxDuration < buffer.duration) {
+        source.stop(ctx.currentTime + maxDuration);
+      }
       return Boolean(output);
     } catch (_error) {
       activeVoices.delete(source);
       return false;
     }
+  }
+
+  async function startMusic(id, options = {}) {
+    if (!id) return false;
+    pendingMusic = { id, options };
+    const ctx = ensureContext();
+    if (!ctx || (!unlocked && ctx.state === "suspended")) return false;
+    if (ctx.state === "suspended") {
+      await ctx.resume().catch(() => {});
+      if (ctx.state === "suspended") return false;
+    }
+    if (musicSource && musicId === id) {
+      pendingMusic = null;
+      if (musicGain) musicGain.gain.value = Math.max(0, Math.min(1, options.volume ?? 0.32));
+      return true;
+    }
+    const buffer = await loadBuffer(id);
+    if (!buffer) return false;
+    stopMusic();
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    const volume = Math.max(0, Math.min(1, options.volume ?? 0.32));
+    source.buffer = buffer;
+    source.loop = options.loop !== false;
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    musicSource = source;
+    musicGain = gain;
+    musicId = id;
+    pendingMusic = null;
+    source.onended = () => {
+      if (musicSource === source) {
+        musicSource = null;
+        musicGain = null;
+        musicId = "";
+      }
+    };
+    try {
+      source.start(0);
+      return true;
+    } catch (_error) {
+      musicSource = null;
+      musicGain = null;
+      musicId = "";
+      return false;
+    }
+  }
+
+  function stopMusic(options = {}) {
+    const source = musicSource;
+    const gain = musicGain;
+    pendingMusic = null;
+    musicSource = null;
+    musicGain = null;
+    musicId = "";
+    if (!source) return false;
+    try {
+      const ctx = context;
+      const fadeSeconds = Math.max(0, Number(options.fadeSeconds) || 0);
+      if (ctx && gain && fadeSeconds > 0) {
+        const endAt = ctx.currentTime + fadeSeconds;
+        gain.gain.cancelScheduledValues(ctx.currentTime);
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, endAt);
+        source.stop(endAt);
+      } else {
+        source.stop();
+      }
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function startMenuMusic(options = {}) {
+    return startMusic("music/soubok-bgm", {
+      loop: true,
+      volume: options.volume ?? 0.28
+    });
+  }
+
+  function stopMenuMusic(options = {}) {
+    if (musicId !== "music/soubok-bgm" && pendingMusic?.id !== "music/soubok-bgm") return false;
+    return stopMusic(options);
   }
 
   function sourcePoint(source = {}) {
@@ -123,17 +220,23 @@
 
   function weaponSoundId(weapon = {}) {
     const id = String(weapon.soundId || weapon.id || weapon.sourceWeaponId || "");
+    if (id === "pistol") return "pistol-fire";
+    if (id === "sniper") return "sniper-fire";
+    if (id === "rpg") return "rpg-fire";
     if (id.includes("machinegun") || id.includes("mg") || id.includes("lmg")) return "mg-fire";
     return "rifle-fire";
   }
 
   function playWeaponFire(game, shooter, weapon = {}, options = {}) {
     const point = sourcePoint(shooter || options);
+    const weaponId = String(weapon.id || weapon.sourceWeaponId || "");
+    const burstDuration = weaponId === "machinegun" || weaponId === "lmg" ? 0.32 : 0;
     return play(weaponSoundId(weapon), {
       game,
       x: point.x,
       y: point.y,
-      volume: options.volume ?? (weapon.id === "pistol" ? 0.34 : 0.48)
+      volume: options.volume ?? (weapon.id === "pistol" ? 0.34 : 0.48),
+      maxDuration: options.maxDuration ?? burstDuration
     });
   }
 
@@ -163,6 +266,10 @@
   IronLine.audio = {
     unlock,
     play,
+    startMusic,
+    stopMusic,
+    startMenuMusic,
+    stopMenuMusic,
     playWeaponFire,
     playExplosion,
     playMetalHit

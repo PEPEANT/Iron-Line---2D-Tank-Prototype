@@ -752,7 +752,7 @@
     }; game.publishOnlineProjectileLaunch?.(projectile, { shooter, weaponId: ammo.sourceWeaponId || ammo.id, aimX, aimY });
     game.projectiles.push(projectile);
 
-    if (ammo.id === "rpg") {
+    if (ammo.id === "rpg") { IronLine.audio?.play?.("rpg-fire", { game, x: startX, y: startY, volume: 0.58 });
       game.effects.explosions.push({
         x: startX,
         y: startY,

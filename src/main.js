@@ -56,6 +56,7 @@
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
       this.matchPhase = "deployment";
+      this.menuMusicActive = false;
       this.lobbyOpen = false;
       this.spectatorMode = false;
       this.casterMode = false;
@@ -174,6 +175,7 @@
       if (this.adminObserverMode) this.enterAdminObserverMode();
       this.testLabUI = IronLine.TestLabUI ? new IronLine.TestLabUI(this) : null;
       window.addEventListener("resize", () => this.renderer.resize());
+      this.syncMenuMusic?.();
       requestAnimationFrame((now) => this.loop(now));
     }
 
@@ -893,6 +895,7 @@
 
     update(dt) {
       this.input.updateWorld(this.camera);
+      this.syncMenuMusic?.();
       this.updateDebugToggles();
       this.updateTestLabHotkeys();
       this.testLabUI?.update?.(this, dt);
@@ -4185,6 +4188,7 @@
   IronLine.installSupplyCrates?.(Game);
   IronLine.installMapObjects?.(Game);
   IronLine.installFogOfWar?.(Game);
+  IronLine.installGameMenuMusic?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
   IronLine.installMobileCameraGestures?.(Game);
   IronLine.installOnlineWorldStatePublish?.(Game);
