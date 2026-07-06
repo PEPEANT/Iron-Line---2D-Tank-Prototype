@@ -733,7 +733,9 @@ Diagnostic verification:
 | Report | Deaths/min | Opening bailout passengers | First opening bailout context |
 | --- | ---: | ---: | --- |
 | `reports/playtests/battlefield-tempo-20260706062728/` | 6.3 | 8 | `R-HMV-1` was `transport-run`, passengers 4, position `(5467,984)`, speed 0, moveTarget `(5286,1046)` |
+| `reports/playtests/battlefield-tempo-20260706063216/` | 5.4 | 7 | `B-HMV-1` was `transport-run`, passengers 3, position `(4129,1736)`, speed 0, moveTarget `(4156,1644)`, nearest alive tank `R-05` at 1058px with LOS false |
 
 Judgment:
 - The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
-- Next behavior work should inspect loaded Humvee traffic/stuck/route staging around armor LOS before adding another dismount rule.
+- Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
+- Next behavior work should pass projectile/source vehicle context into Humvee bailout diagnostics, then inspect loaded Humvee traffic/stuck/route staging around confirmed AP source lines before adding another dismount rule.
