@@ -182,6 +182,7 @@
       if (existing) {
         existing.autoReturn = false;
         this.setReconDroneWaypoint(existing, targetX, targetY);
+        this.returnPlayerToPrimaryAfterDroneUse(weapon);
         return true;
       }
 
@@ -203,7 +204,7 @@
 
       this.drones.push(drone);
       this.player.activeDrone = drone;
-      if (this.player.activeSlot === 2) this.player.setEquipmentSlot?.(0);
+      this.returnPlayerToPrimaryAfterDroneUse(weapon);
       this.effects.explosions.push({
         x: drone.x,
         y: drone.y,
@@ -222,6 +223,7 @@
       if (existing) {
         existing.autoReturn = false;
         existing.setWaypoint(targetX, targetY);
+        this.returnPlayerToPrimaryAfterDroneUse(weapon);
         return true;
       }
 
@@ -242,6 +244,7 @@
 
       this.drones.push(drone);
       this.player.activeDrone = drone;
+      this.returnPlayerToPrimaryAfterDroneUse(weapon);
       this.effects.explosions.push({
         x: drone.x,
         y: drone.y,
@@ -252,6 +255,13 @@
         color: "rgba(255, 190, 104, 0.42)"
       });
       return true;
+    },
+    returnPlayerToPrimaryAfterDroneUse(weapon = null) {
+      const player = this.player;
+      if (!player || !player.setEquipmentSlot) return false;
+      const activeWeapon = player.getWeapon?.();
+      if (activeWeapon?.type !== "drone" && (!weapon?.id || player.weaponId !== weapon.id)) return false;
+      return player.setEquipmentSlot(0);
     },
     suicideDroneLockCandidates(drone = this.player?.controlledDrone, options = {}) {
       if (!drone?.alive || drone.droneRole !== "attack") return [];

@@ -52,6 +52,9 @@ function checkSupplyCrateSource() {
     "supply-red-base",
     "supply-mid-field",
     "this.input?.wasConsumed?.(\"KeyE\")",
+    "shieldGamePointerEvent",
+    "this.input?.consumeMousePress?.(0)",
+    "this.input?.setMouseButton?.(0, false)",
     "this.supplyCrateHold.elapsed >= HOLD_SECONDS",
     "IronLine.supplyLoadout?.applyItemToPlayer",
     "crate.stock[stockKey] = Math.max(0"
@@ -66,6 +69,8 @@ function checkPlayerFireModeSource() {
   const required = [
     "this.input.consumePress(\"KeyB\")",
     "cyclePlayerFireMode(weapon)",
+    "weapon?.type === \"drone\"",
+    "trigger.primaryPressed || trigger.spacePressed",
     "playerWantsWeaponUse(weapon",
     "this.playerFireModeForWeapon(weapon) === \"semi\"",
     "automaticFallback = [\"smg\", \"lmg\", \"machinegun\"].includes(weapon.id)",
@@ -74,6 +79,20 @@ function checkPlayerFireModeSource() {
   for (const needle of required) {
     expect(source.includes(needle), `player fire mode contract missing ${needle}`);
   }
+}
+
+function checkDroneDeploymentSource() {
+  const source = read("src/systems/game-drone-system.js");
+  const required = [
+    "returnPlayerToPrimaryAfterDroneUse(weapon)",
+    "returnPlayerToPrimaryAfterDroneUse(weapon = null)",
+    "activeWeapon?.type !== \"drone\"",
+    "player.setEquipmentSlot(0)"
+  ];
+  for (const needle of required) {
+    expect(source.includes(needle), `drone deployment contract missing ${needle}`);
+  }
+  expect(!source.includes("this.player.activeSlot === 2"), "drone deployment must not depend on stale slot index 2");
 }
 
 function checkInputConsumptionRuntime() {
@@ -171,6 +190,7 @@ function checkLoadoutRuntime() {
 checkIndexOrder();
 checkSupplyCrateSource();
 checkPlayerFireModeSource();
+checkDroneDeploymentSource();
 checkInputConsumptionRuntime();
 checkLoadoutRuntime();
 

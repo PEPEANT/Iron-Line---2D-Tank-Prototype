@@ -612,6 +612,9 @@
       }
     },
     playerWantsWeaponUse(weapon, trigger = {}) {
+      if (weapon?.type === "drone") {
+        return Boolean(trigger.primaryPressed || trigger.spacePressed);
+      }
       if (weapon?.type === "gun" && this.playerFireModeForWeapon(weapon) === "semi") {
         return Boolean(trigger.primaryPressed || trigger.spacePressed);
       }

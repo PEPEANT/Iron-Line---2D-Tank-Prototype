@@ -86,6 +86,16 @@
       <div class="supply-crate-grid" data-supply-grid></div>
     `;
     panel.querySelector("[data-supply-close]")?.addEventListener("click", () => IronLine.game?.closeSupplyCratePanel?.());
+    const shieldGamePointerEvent = (event) => event.stopPropagation();
+    [
+      "pointerdown",
+      "pointerup",
+      "mousedown",
+      "mouseup",
+      "click",
+      "dblclick",
+      "contextmenu"
+    ].forEach((type) => panel.addEventListener(type, shieldGamePointerEvent));
     document.body.append(panel);
     return panel;
   }
@@ -301,6 +311,8 @@
         crate.floatTimer = 1.2;
         crate.damageFlash = Math.max(crate.damageFlash || 0, 0.34);
         this.player.rifleCooldown = Math.min(this.player.rifleCooldown || 0, 0.12);
+        this.input?.consumeMousePress?.(0);
+        this.input?.setMouseButton?.(0, false);
         this.renderSupplyCratePanel(crate);
         this.hud?.update?.(this);
         return true;
