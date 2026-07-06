@@ -19,6 +19,7 @@
       this.radius = options.radius || 38;
       this.maxHp = options.maxHp || 110;
       this.hp = this.maxHp;
+      this.healthRevealTimer = 0;
       this.speed = 0;
       this.turnVelocity = 0;
       this.turnRate = options.turnRate || 1.95;
@@ -302,6 +303,7 @@
       this.fireKick = Math.max(0, this.fireKick - dt * 5.2);
       this.machineGunKick = Math.max(0, this.machineGunKick - dt * 9);
       this.impactShake = Math.max(0, this.impactShake - dt * 3.8);
+      this.healthRevealTimer = Math.max(0, (this.healthRevealTimer || 0) - dt);
       this.dustCooldown = Math.max(0, this.dustCooldown - dt);
       if (this.weaponMode === "mg" && !this.hasMachineGunner()) this.weaponMode = "cannon";
       this.updateInfantryAssault(game, dt);
@@ -1087,6 +1089,7 @@
       }
 
       this.hp -= amount;
+      this.healthRevealTimer = Math.max(this.healthRevealTimer || 0, 1.45);
       game.effects.explosions.push({
         x: this.x + (Math.random() - 0.5) * 32,
         y: this.y + (Math.random() - 0.5) * 32,

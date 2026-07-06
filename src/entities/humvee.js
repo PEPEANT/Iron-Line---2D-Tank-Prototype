@@ -18,6 +18,7 @@
       this.radius = options.radius || 31;
       this.maxHp = options.maxHp || 66;
       this.hp = this.maxHp;
+      this.healthRevealTimer = 0;
       this.speed = 0;
       this.turnVelocity = 0;
       this.maxSpeed = options.maxSpeed || 238;
@@ -152,6 +153,7 @@
       this.machineGunCooldown = Math.max(0, this.machineGunCooldown - dt);
       this.machineGunKick = Math.max(0, this.machineGunKick - dt * 10);
       this.impactShake = Math.max(0, this.impactShake - dt * 4.6);
+      this.healthRevealTimer = Math.max(0, (this.healthRevealTimer || 0) - dt);
       this.dustCooldown = Math.max(0, this.dustCooldown - dt);
       this.repairHoldTimer = Math.max(0, (this.repairHoldTimer || 0) - dt);
       if (this.repairHoldTimer <= 0) this.repairHoldSource = "";
@@ -564,6 +566,7 @@
       const options = maybeAmount === null ? {} : maybeOptions;
       const impactSpeed = this.speed;
       this.hp -= amount;
+      this.healthRevealTimer = Math.max(this.healthRevealTimer || 0, 1.45);
       this.impactShake = Math.max(this.impactShake, 0.26);
       if (game?.effects) {
         game.effects.explosions.push({

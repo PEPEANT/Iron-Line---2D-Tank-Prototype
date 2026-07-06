@@ -1633,12 +1633,14 @@
     }
 
     drawInfantryHealth(unit) {
-      if (unit.hp >= unit.maxHp) return;
+      const reveal = Number(unit.healthRevealTimer || 0);
+      if (reveal <= 0) return;
 
       const ctx = this.ctx;
       const width = 28;
       const pct = unit.maxHp > 0 ? clamp(unit.hp / unit.maxHp, 0, 1) : 0;
       ctx.save();
+      ctx.globalAlpha = clamp(reveal / 1.55, 0, 1);
       ctx.translate(unit.x, unit.y - 22);
       ctx.fillStyle = "rgba(9, 15, 13, 0.7)";
       roundRect(ctx, -width / 2, -3, width, 5, 2);
@@ -1647,20 +1649,16 @@
       roundRect(ctx, -width / 2, -3, width * pct, 5, 2);
       ctx.fill();
 
-      if ((unit.healthRevealTimer || 0) > 0) {
-        const alpha = clamp(unit.healthRevealTimer / 1.55, 0, 1);
-        const label = `${Math.ceil(unit.hp)}`;
-        ctx.globalAlpha = alpha;
-        ctx.font = "900 9px Inter, system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const textWidth = ctx.measureText(label).width + 8;
-        ctx.fillStyle = "rgba(6, 12, 11, 0.72)";
-        roundRect(ctx, -textWidth / 2, -17, textWidth, 11, 3);
-        ctx.fill();
-        ctx.fillStyle = unit.team === TEAM.BLUE ? "#d8f4ff" : "#ffd9d6";
-        ctx.fillText(label, 0, -11.5);
-      }
+      const label = `${Math.ceil(unit.hp)}`;
+      ctx.font = "900 9px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const textWidth = ctx.measureText(label).width + 8;
+      ctx.fillStyle = "rgba(6, 12, 11, 0.72)";
+      roundRect(ctx, -textWidth / 2, -17, textWidth, 11, 3);
+      ctx.fill();
+      ctx.fillStyle = unit.team === TEAM.BLUE ? "#d8f4ff" : "#ffd9d6";
+      ctx.fillText(label, 0, -11.5);
       ctx.restore();
     }
 

@@ -858,7 +858,7 @@
     const chipDamage = friendly ? 0 : options.damage ?? smallArmsTankDamage(weapon, tank);
     const tankWasAlive = targetScoreAlive(tank);
     if (chipDamage > 0) {
-      tank.hp = Math.max(0, tank.hp - chipDamage);
+      tank.hp = Math.max(0, tank.hp - chipDamage); tank.healthRevealTimer = Math.max(tank.healthRevealTimer || 0, 1.45);
     }
     emitSmallArmsImpact(game, x, y, Math.atan2(y - shooter.y, x - shooter.x), weapon, {
       hard: true,

@@ -9,7 +9,7 @@
     "src/systems/game-session-state.js": 1002,
     "src/systems/hud-admin-ui.js": 1600,
     "src/systems/hud.js": 1584,
-    "src/systems/renderer.js": 2743,
+    "src/systems/renderer.js": 2742,
     "src/systems/room-registry.js": 1596,
     "src/systems/session-flow.js": 1181,
     "src/tools/map-editor.js": 2263,

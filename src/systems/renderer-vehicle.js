@@ -68,7 +68,6 @@
         ctx.lineTo(25, -10);
         ctx.stroke();
         ctx.restore();
-        this.drawTankLabel(humvee);
         return;
       }
 
@@ -149,7 +148,6 @@
       ctx.restore();
 
       this.drawTankHealth(humvee);
-      this.drawTankLabel(humvee);
     },
 
     drawTank(game, tank) {
@@ -157,7 +155,6 @@
 
       this.drawTankHullLayer(game, tank, colors);
       if (!tank.alive) {
-        if (!tank.coverDestroyed) this.drawTankLabel(tank);
         return;
       }
 
@@ -165,7 +162,6 @@
       this.drawTankMachineGun(game, tank, colors);
       this.drawTankHealth(tank);
       this.drawTankAssaultIndicator(tank);
-      this.drawTankLabel(tank);
     },
 
     vehicleSpriteSlot(kind, team) {
@@ -573,10 +569,14 @@
     },
 
     drawTankHealth(tank) {
+      if (tank.playerControlled) return;
+      const reveal = Number(tank.healthRevealTimer || 0);
+      if (reveal <= 0) return;
       const ctx = this.ctx;
       const width = 66;
       const pct = tank.maxHp > 0 ? tank.hp / tank.maxHp : 0;
       ctx.save();
+      ctx.globalAlpha = clamp(reveal / 1.45, 0, 1);
       ctx.translate(tank.x, tank.y - (tank.vehicleType === "humvee" ? 58 : 64));
       if (tank.reload?.active) {
         const reloadPct = clamp(tank.reload.progress / Math.max(tank.reload.duration, 0.001), 0, 1);
@@ -631,23 +631,7 @@
     },
 
     drawTankLabel(tank) {
-      const ctx = this.ctx;
-      ctx.save();
-      ctx.translate(tank.x, tank.y + (tank.vehicleType === "humvee" ? 53 : 60));
-      const passengerText = tank.vehicleType === "humvee" && tank.passengerCapacity
-        ? ` ${tank.passengerCount?.() || 0}/${tank.passengerCapacity}`
-        : "";
-      const label = `${tank.callSign}${passengerText}`;
-      const width = Math.max(54, label.length * 7.2 + 14);
-      ctx.fillStyle = "rgba(9, 15, 13, 0.65)";
-      roundRect(ctx, -width / 2, -10, width, 18, 4);
-      ctx.fill();
-      ctx.fillStyle = "#edf4ef";
-      ctx.font = "700 10px Inter, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(label, 0, 0);
-      ctx.restore();
+      return;
     }
   });
 })(window);
