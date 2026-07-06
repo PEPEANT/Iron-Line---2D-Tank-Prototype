@@ -207,6 +207,7 @@
       const canManageRoom = Boolean(online && this.hud.sessionFlow?.isRoomHost?.(game, room));
       if (online) this.lobbyLoadoutOpen = false;
 
+      ui.lobbyScreen.classList.toggle("online-host-lobby", canManageRoom);
       ui.lobbyScreen.dataset.mode = conquest ? "conquest" : "annihilation";
       if (ui.lobbyModeTitle) ui.lobbyModeTitle.textContent = conquest ? "점령전" : "섬멸전";
       this.updateHeaderMeta(game, { filled, total: roleSlots.length || 8, conquest, room });
@@ -214,7 +215,7 @@
 
       if (ui.lobbyTeamButton) {
         ui.lobbyTeamButton.textContent = localTeam === TEAM.BLUE ? "홍팀으로 이동" : "청팀으로 이동";
-        ui.lobbyTeamButton.classList.toggle("hidden", Boolean(localSpectator));
+        ui.lobbyTeamButton.classList.toggle("hidden", Boolean(online || localSpectator));
       }
       if (ui.lobbyReadyButton) {
         ui.lobbyReadyButton.textContent = session.localReady ? "준비 해제" : "준비 완료";

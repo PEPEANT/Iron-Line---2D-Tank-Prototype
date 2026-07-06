@@ -971,9 +971,9 @@ body {
 
 .lobby-actions #lobbyStartButton {
   min-height: 52px;
-  border-color: rgba(255, 209, 102, 0.48);
-  background: var(--amber);
-  color: #12160f;
+  border-color: rgba(126, 222, 161, 0.4);
+  background: rgba(126, 222, 161, 0.16);
+  color: #d9ffe3;
 }
 
 .lobby-card {
@@ -1261,6 +1261,24 @@ body {
 
 .lobby-actions #lobbyBackButton {
   grid-column: 1 / -1;
+}
+
+.online-host-lobby .lobby-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.online-host-lobby .lobby-ready-actions {
+  grid-column: auto;
+  order: 2;
+}
+
+.online-host-lobby .lobby-actions #lobbyStartButton {
+  grid-column: auto;
+  order: 1;
+}
+
+.online-host-lobby .lobby-actions #lobbyLoadoutButton {
+  min-height: 52px;
 }
 
 .deployment-kicker {

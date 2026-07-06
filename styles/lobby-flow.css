@@ -26,7 +26,7 @@
   z-index: -2;
   background-image:
     linear-gradient(90deg, rgba(3, 6, 5, 0.78), rgba(3, 6, 5, 0.42) 48%, rgba(3, 6, 5, 0.68)),
-    url("assets/ui/loading-background.png");
+    url("../assets/ui/loading-background.png");
   background-position: center;
   background-size: cover;
   filter: saturate(0.84) contrast(1.05);
@@ -131,7 +131,7 @@
   z-index: -2;
   background-image:
     linear-gradient(90deg, rgba(3, 6, 5, 0.38), rgba(3, 6, 5, 0.2) 42%, rgba(3, 6, 5, 0.62)),
-    url("assets/ui/main-background.png");
+    url("../assets/ui/main-background.png");
   background-position: center;
   background-size: cover;
   filter: saturate(0.82) contrast(1.04);

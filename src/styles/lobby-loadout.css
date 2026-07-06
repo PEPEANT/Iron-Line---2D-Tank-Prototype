@@ -178,15 +178,15 @@
 }
 
 .lobby-actions #lobbyLoadoutButton {
-  border-color: rgba(255, 209, 102, 0.28);
-  background: rgba(255, 209, 102, 0.08);
-  color: #ffe2a3;
+  border-color: rgba(237, 244, 239, 0.18);
+  background: rgba(237, 244, 239, 0.08);
+  color: rgba(237, 244, 239, 0.9);
 }
 
 .lobby-actions #lobbyLoadoutButton.active {
-  border-color: rgba(255, 209, 102, 0.56);
-  background: rgba(255, 209, 102, 0.16);
-  color: #ffd166;
+  border-color: rgba(126, 222, 161, 0.42);
+  background: rgba(126, 222, 161, 0.14);
+  color: #d9ffe3;
 }
 
 .lobby-ready-actions {
