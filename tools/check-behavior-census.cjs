@@ -8,6 +8,7 @@ const { WebSocket } = require("ws");
 const { summaryMarkdown } = require("./behavior-census-report.cjs");
 const { hookDiagnosticsScript } = require("./behavior-census-hook-diagnostics.cjs");
 const { supportDiagnosticsScript } = require("./behavior-census-support-diagnostics.cjs");
+const { countBy, grenadeAimSequences, percentile } = require("./behavior-census-grenade-sequences.cjs");
 
 const root = path.resolve(__dirname, "..");
 const appPort = Number(process.env.IRONLINE_CENSUS_PORT || 4210);
@@ -761,21 +762,6 @@ ${supportDiagnosticsScript()}
 `;
 }
 
-function percentile(values, p) {
-  if (!values.length) return 0;
-  const sorted = values.slice().sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
-}
-
-function countBy(items, keyFn) {
-  const result = {};
-  for (const item of items) {
-    const key = keyFn(item) || "unknown";
-    result[key] = (result[key] || 0) + 1;
-  }
-  return result;
-}
-
 function summarize(data) {
   const frames = data.frames || [];
   const events = data.events || [];
@@ -786,6 +772,8 @@ function summarize(data) {
   const losFalseShots = targetShots.filter((event) => event.los === false);
   const grenadeDecisions = events.filter((event) => event.type === "grenade");
   const grenadeOk = grenadeDecisions.filter((event) => event.ok);
+  const grenadeSequences = grenadeAimSequences(events);
+  const grenadeSequenceOk = grenadeSequences.filter((sequence) => sequence.ok);
   const grenadeLaunches = events.filter((event) => event.type === "grenade-launch");
   const deaths = events.filter((event) => event.type === "death");
   const proneEnter = events.filter((event) => event.type === "prone-enter");
@@ -819,8 +807,11 @@ function summarize(data) {
   const teamworkRatio = stats.teamworkEligibleTicks
     ? stats.teamworkTicks / stats.teamworkEligibleTicks
     : 0;
-  const grenadeSuccessRate = stats.grenadeTryCalls
+  const grenadeTryTickSuccessRate = stats.grenadeTryCalls
     ? stats.grenadeTryOk / stats.grenadeTryCalls
+    : 0;
+  const grenadeAimSequenceCompletionRate = grenadeSequences.length
+    ? grenadeSequenceOk.length / grenadeSequences.length
     : 0;
   const evaluationNullRate = stats.grenadeEvaluationCalls
     ? stats.grenadeEvaluationNull / stats.grenadeEvaluationCalls
@@ -843,7 +834,10 @@ function summarize(data) {
     suppressionShotRatio: Number((suppressionShots / Math.max(1, shots.length)).toFixed(3)),
     grenadeDecisionCalls: grenadeDecisions.length,
     grenadeDecisionOk: grenadeOk.length,
-    grenadeSuccessRate: Number(grenadeSuccessRate.toFixed(3)),
+    grenadeTryTickSuccessRate: Number(grenadeTryTickSuccessRate.toFixed(3)),
+    grenadeAimSequences: grenadeSequences.length,
+    grenadeAimSequenceOk: grenadeSequenceOk.length,
+    grenadeAimSequenceCompletionRate: Number(grenadeAimSequenceCompletionRate.toFixed(3)),
     grenadeLaunches: grenadeLaunches.length,
     grenadeLaunchOk: grenadeLaunches.filter((event) => event.ok).length,
     grenadeBudgetCalls: stats.grenadeBudgetCalls || 0,

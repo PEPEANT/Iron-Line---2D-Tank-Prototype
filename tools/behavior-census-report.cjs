@@ -5,9 +5,11 @@ function passLabel(value, min, max = Infinity) {
 }
 
 function summaryMarkdown(summary, outDir) {
-  const grenadeOkTotal = summary.grenadeOkByWeapon.grenade || 0;
-  const launcherOkTotal = (summary.grenadeOkByWeapon.grenadeLauncher || 0) +
-    (summary.grenadeLaunchByWeapon.grenadeLauncher || 0);
+  const grenadeOkTotal = summary.grenadeDecisionOk || 0;
+  const launcherOkTotal = Math.max(
+    summary.grenadeOkByWeapon.grenadeLauncher || 0,
+    summary.grenadeLaunchByWeapon.grenadeLauncher || 0
+  );
   const jsonBlock = (title, value) => [
     `## ${title}`,
     "",
@@ -30,7 +32,7 @@ function summaryMarkdown(summary, outDir) {
     "| --- | ---: | ---: | --- |",
     `| Grenade decision ok | ${grenadeOkTotal} | 4-10 | ${passLabel(grenadeOkTotal, 4, 10)} |`,
     `| Grenade launcher ok/launched | ${launcherOkTotal} | 6-15 | ${passLabel(launcherOkTotal, 6, 15)} |`,
-    `| Grenade try success rate | ${summary.grenadeSuccessRate} | >0.3 | ${passLabel(summary.grenadeSuccessRate, 0.3)} |`,
+    `| Grenade aim sequence completion | ${summary.grenadeAimSequenceCompletionRate} | >0.6 | ${passLabel(summary.grenadeAimSequenceCompletionRate, 0.6)} |`,
     `| Grenade actual evaluation null rate | ${summary.grenadeEvaluationNullRate} | <0.7 | ${summary.grenadeEvaluationNullRate < 0.7 ? "PASS" : "CHECK"} |`,
     `| Suppression/point shot ratio | ${summary.suppressionShotRatio} | 0.20-0.40 | ${passLabel(summary.suppressionShotRatio, 0.2, 0.4)} |`,
     `| Support suppression handled rate | ${summary.supportFireHandledRate} | diagnostic | CHECK |`,
@@ -61,6 +63,7 @@ function summaryMarkdown(summary, outDir) {
     "- `mode: point` shots come from `fireRifleAtPoint`, including support/report-position fire.",
     "- Death events are alive-set changes in v1 and do not yet carry a kill source.",
     "- Grenade budget calls are per-frame/cache-layer calls. Grenade evaluation calls are the actual `selectGrenadeTarget()` decision passes.",
+    "- Grenade aim sequence completion groups per-frame `aiming` ticks by unit/weapon/target and checks whether that sequence ended in a throw. The raw per-frame tick rate remains in `grenadeTryTickSuccessRate`.",
     "- Grenade reason counts are diagnostic-only and do not change gameplay.",
     "- Fire-move reason counts are diagnostic-only and mirror the early returns inside `executeFireMoveAdvance()`.",
     "- Support suppression handled counts include aiming/alignment frames as well as actual point shots; use `pointShots` for fired rounds.",
