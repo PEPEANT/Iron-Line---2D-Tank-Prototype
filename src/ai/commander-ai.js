@@ -608,6 +608,7 @@
           const y = point.y + Math.sin(approachAngle) * distance + Math.sin(approachAngle + Math.PI / 2) * sideOffset;
           const candidate = this.clampWorldPoint(x, y, 46);
           if (!this.pointPassable(candidate.x, candidate.y, 35)) continue;
+          if (this.game.tacticalMap?.vehicleHintNear?.(candidate, { maxDistance: 170 })?.kind === "bottleneck") continue;
           return {
             name: `${point.name}-dropoff`,
             ...candidate,

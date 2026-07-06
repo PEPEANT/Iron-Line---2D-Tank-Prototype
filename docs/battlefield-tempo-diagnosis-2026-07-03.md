@@ -771,9 +771,17 @@ Diagnostic update:
 - `npm run tempo` now includes first opening bailout `moveTarget.final`, `moveTarget.stopDistance`, `trafficHoldTarget`, `trafficHoldTimer`, `stuckTimer`, `recoveryTimer`, and `tacticalTrafficHint`.
 - Verification report `reports/playtests/battlefield-tempo-20260706074652/` reproduced a 3-passenger opening bailout with `moveTarget.final=false`, `stopDistance=104`, no traffic hold, no stuck/recovery timer, and tactical traffic hint `traffic:g_4165_1615:g_4335_1615`.
 
+Accepted dropoff traffic-hint avoidance:
+
+| Report | Change | Deaths/min | Opening bailout passengers | Judgment |
+| --- | --- | ---: | ---: | --- |
+| `reports/playtests/battlefield-tempo-20260706075635/` | skip Humvee dropoff candidates within 170px of bottleneck traffic hints | 8.3 | 0 | stopped loaded opening bailout while keeping tempo in range |
+| `reports/playtests/battlefield-tempo-20260706075948/` | same | 11.4 | 0 | repeated pass; opening bailout was empty escort Humvee only |
+| `reports/playtests/battlefield-tempo-20260706080304/` | same | 9.6 | 0 | repeated pass; first death after contact 8.4s |
+
 Judgment:
 - The loaded-transport AP spike is not solved by a simple near-dropoff dismount trigger. One reproduced case shows the transport already stationary or stalled near its current movement target while still loaded and exposed to AP.
 - Nearest-alive-tank LOS at bailout time can be misleading; the AP source may be a fired projectile, a non-nearest tank, or a source that is no longer visible by the bailout wrapper time.
 - Projectile/source vehicle context now confirms the AP shooter can be about 1000px away while the transport is stationary or nearly stationary near its movement target.
 - `impactSpeed` now confirms at least one loaded transport was truly stopped before destruction, not just zeroed by the destruction handler.
-- Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, blanket non-final path stop-distance tightening, dropoff risk scoring alone, traffic bypass alone, broad armor-contact dismounts, or wider intermediate-node reach radii. Next behavior work should inspect why loaded transport routing selects exposed final/dropoff targets around tactical traffic hints before adding another dismount rule.
+- The retained behavior fix is to avoid selecting Humvee dropoff candidates that sit directly on tactical bottleneck traffic hints. Do not continue with simple tank target range clamps, slightly larger heavy-threat radii, blanket non-final path stop-distance tightening, dropoff risk scoring alone, traffic bypass alone, broad armor-contact dismounts, or wider intermediate-node reach radii.
