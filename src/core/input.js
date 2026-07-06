@@ -27,6 +27,7 @@
         keys: new Set(),
         pressed: new Set()
       };
+      this.consumed = new Set();
 
       window.addEventListener("keydown", (event) => this.onKeyDown(event), true);
       window.addEventListener("keyup", (event) => this.onKeyUp(event), true);
@@ -133,6 +134,7 @@
     clear() {
       this.keys.clear();
       this.pressed.clear();
+      this.consumed.clear();
       this.clearVirtual();
       this.mouse.down = false;
       this.mouse.leftDown = false;
@@ -164,7 +166,12 @@
       if (!keyboardPressed && !virtualPressed) return false;
       this.pressed.delete(code);
       this.virtual.pressed.delete(code);
+      this.consumed.add(code);
       return true;
+    }
+
+    wasConsumed(code) {
+      return this.consumed.has(code);
     }
 
     consumeMousePress(button) {
@@ -193,6 +200,7 @@
     endFrame() {
       this.pressed.clear();
       this.virtual.pressed.clear();
+      this.consumed.clear();
       this.mouse.pressedButtons.clear();
     }
   }

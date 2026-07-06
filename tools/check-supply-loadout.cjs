@@ -51,6 +51,7 @@ function checkSupplyCrateSource() {
     "supply-blue-base",
     "supply-red-base",
     "supply-mid-field",
+    "this.input?.wasConsumed?.(\"KeyE\")",
     "this.supplyCrateHold.elapsed >= HOLD_SECONDS",
     "IronLine.supplyLoadout?.applyItemToPlayer",
     "crate.stock[stockKey] = Math.max(0"
@@ -73,6 +74,28 @@ function checkPlayerFireModeSource() {
   for (const needle of required) {
     expect(source.includes(needle), `player fire mode contract missing ${needle}`);
   }
+}
+
+function checkInputConsumptionRuntime() {
+  const sandbox = {
+    window: {
+      innerWidth: 1280,
+      innerHeight: 720,
+      addEventListener() {}
+    }
+  };
+  runBrowserScript(sandbox, "src/core/input.js");
+  const input = new sandbox.window.IronLine.Input();
+  input.keys.add("KeyE");
+  input.pressed.add("KeyE");
+  expect(input.consumePress("KeyE"), "KeyE press should be consumable");
+  expect(input.wasConsumed("KeyE"), "consumed KeyE should stay marked for same-frame hold guards");
+  expect(input.keyDown("KeyE"), "consuming a press should not cancel the held key state");
+  input.endFrame();
+  expect(!input.wasConsumed("KeyE"), "consumed keys should clear at endFrame");
+  expect(input.keyDown("KeyE"), "held key state should survive endFrame until keyup/clear");
+  input.clear();
+  expect(!input.keyDown("KeyE"), "clear should release held keys");
 }
 
 function checkLoadoutRuntime() {
@@ -148,6 +171,7 @@ function checkLoadoutRuntime() {
 checkIndexOrder();
 checkSupplyCrateSource();
 checkPlayerFireModeSource();
+checkInputConsumptionRuntime();
 checkLoadoutRuntime();
 
 if (errors.length) {

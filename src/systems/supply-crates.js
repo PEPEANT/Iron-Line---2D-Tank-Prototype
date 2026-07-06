@@ -195,7 +195,8 @@
         }
 
         const crate = this.nearbySupplyCrate?.();
-        const holding = Boolean(crate && this.input?.keyDown?.("KeyE"));
+        const interactConsumed = Boolean(this.input?.wasConsumed?.("KeyE"));
+        const holding = Boolean(crate && !interactConsumed && this.input?.keyDown?.("KeyE"));
         const moveX = this.input?.axis?.("KeyA", "ArrowLeft", "KeyD", "ArrowRight") || 0;
         const moveY = this.input?.axis?.("KeyW", "ArrowUp", "KeyS", "ArrowDown") || 0;
         if (!holding || Math.hypot(moveX, moveY) > 0.12) {
