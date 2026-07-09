@@ -4,19 +4,10 @@
   const IronLine = global.IronLine || (global.IronLine = {});
 
   const primaryTool = {
-    label: "통합 테스트랩",
-    url: "index.html?testLab=hub",
-    note: "유닛, 드론, 밸런스, 음원, 스킨, 오브젝트 전시장을 한 화면에서 선택"
+    label: "샌드박스 실험장",
+    url: "index.html?testLab=sandbox",
+    note: "도감에서 유닛/오브젝트를 골라 맵 클릭으로 바로 배치하고 실험"
   };
-
-  const labTools = [
-    { label: "유닛", url: "index.html?testLab=unit" },
-    { label: "드론", url: "index.html?testLab=drone" },
-    { label: "밸런스", url: "index.html?testLab=balance" },
-    { label: "음원", url: "index.html?testLab=audio" },
-    { label: "스킨", url: "index.html?testLab=skin" },
-    { label: "오브젝트", url: "index.html?testLab=objects" }
-  ];
 
   const utilityTools = [
     {
@@ -57,19 +48,15 @@
     primary.className = "admin-grid-actions admin-test-hub-actions";
     primary.append(toolButton(primaryTool, "admin-test-hub-primary"));
 
-    const quick = document.createElement("div");
-    quick.className = "admin-test-hub-quick";
-    for (const tool of labTools) quick.append(toolButton(tool));
-
     const utility = document.createElement("div");
     utility.className = "admin-grid-actions admin-test-hub-actions";
     for (const tool of utilityTools) utility.append(toolButton(tool));
 
     const hint = document.createElement("p");
     hint.className = "admin-hint";
-    hint.textContent = "권장 흐름은 통합 테스트랩에서 모드를 고르는 방식입니다. 실험장 콘솔의 관리자 패널 버튼으로 다시 돌아올 수 있습니다.";
+    hint.textContent = "샌드박스 실험장에서 카드를 고르고 맵을 클릭하면 배치됩니다. 우클릭 또는 ESC로 배치를 취소합니다.";
 
-    root.append(primary, quick, utility, hint);
+    root.append(primary, utility, hint);
     return root;
   };
 })(window);

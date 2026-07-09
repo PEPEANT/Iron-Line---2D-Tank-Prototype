@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const packsDir = path.join(root, "assets", "packs");
 const defaultManifestPath = path.join(packsDir, "default", "manifest.json");
 const weaponsDir = path.join(root, "assets", "weapons");
+const uiDir = path.join(root, "assets", "ui");
 
 const requiredDefaultSlots = [
   "combat.tracer.line",
@@ -35,8 +36,35 @@ const requiredWeaponArt = [
   "grenadeLauncher",
   "rpg",
   "repairKit",
+  "fieldRadio",
   "reconDrone",
   "kamikazeDrone"
+];
+
+const requiredUiArt = [
+  "loading-background.png",
+  "main-background.png",
+  "soubok-title.png",
+  "soubok-soldier.png",
+  "soubok-button-custom.png",
+  "soubok-button-online.png",
+  "soubok-button-story.png",
+  "soubok-refugee.png",
+  "soubok-north-soldier.png",
+  "soubok-infantry-prone.png",
+  "soubok-infantry-dead.png",
+  "soubok-infantry-top.png",
+  "infantry/soubok-infantry-stand-01.png",
+  "infantry/soubok-infantry-stand-02.png",
+  "infantry/soubok-infantry-stand-fire.png",
+  "infantry/soubok-infantry-stand-fire-walk.png",
+  "infantry/soubok-infantry-prone-crawl-01.png",
+  "infantry/soubok-infantry-prone-crawl-02.png",
+  "infantry/soubok-infantry-prone-fire.png",
+  "infantry/soubok-infantry-prone-no-gun.png",
+  "infantry/soubok-infantry-dead-01.png",
+  "infantry/soubok-infantry-dead-02.png",
+  "infantry/soubok-infantry-dead-prone.png"
 ];
 
 const allowedTypes = new Set(["effect-style", "canvas-style", "image"]);
@@ -143,6 +171,66 @@ for (const id of requiredWeaponArt) {
   weaponArtCount += 1;
 }
 
+let uiArtCount = 0;
+for (const fileName of requiredUiArt) {
+  const file = path.join(uiDir, fileName);
+  if (!fs.existsSync(file)) {
+    fail(`missing UI art assets/ui/${fileName}`);
+    continue;
+  }
+  uiArtCount += 1;
+}
+
+const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const lobbyFlowCss = fs.readFileSync(path.join(root, "styles", "lobby-flow.css"), "utf8");
+const entryFlow = fs.readFileSync(path.join(root, "src", "systems", "entry-flow.js"), "utf8");
+const renderer = fs.readFileSync(path.join(root, "src", "systems", "renderer.js"), "utf8");
+const soubokInfantryRenderer = fs.readFileSync(path.join(root, "src", "systems", "renderer-soubok-infantry-art.js"), "utf8");
+const corpseRenderer = fs.readFileSync(path.join(root, "src", "systems", "renderer-corpse.js"), "utf8");
+for (const asset of [
+  "assets/ui/soubok-title.png",
+  "assets/ui/soubok-soldier.png",
+  "assets/ui/soubok-button-custom.png",
+  "assets/ui/soubok-button-online.png",
+  "assets/ui/soubok-button-story.png",
+  "assets/ui/soubok-refugee.png",
+  "assets/ui/soubok-north-soldier.png"
+]) {
+  if (!index.includes(asset)) fail(`index.html should preload ${asset}`);
+  if (!entryFlow.includes(asset)) fail(`entry-flow should render ${asset}`);
+}
+for (const asset of [
+  "assets/ui/soubok-infantry-prone.png",
+  "assets/ui/soubok-infantry-dead.png",
+  "assets/ui/soubok-infantry-top.png"
+]) {
+  if (!index.includes(asset)) fail(`index.html should preload ${asset}`);
+  if (!renderer.includes(asset) && !soubokInfantryRenderer.includes(asset) && !corpseRenderer.includes(asset)) {
+    fail(`renderer should reference ${asset}`);
+  }
+}
+for (const asset of [
+  "assets/ui/infantry/soubok-infantry-stand-01.png",
+  "assets/ui/infantry/soubok-infantry-stand-02.png",
+  "assets/ui/infantry/soubok-infantry-stand-fire.png",
+  "assets/ui/infantry/soubok-infantry-stand-fire-walk.png",
+  "assets/ui/infantry/soubok-infantry-prone-crawl-01.png",
+  "assets/ui/infantry/soubok-infantry-prone-crawl-02.png",
+  "assets/ui/infantry/soubok-infantry-prone-fire.png",
+  "assets/ui/infantry/soubok-infantry-prone-no-gun.png",
+  "assets/ui/infantry/soubok-infantry-dead-01.png",
+  "assets/ui/infantry/soubok-infantry-dead-02.png",
+  "assets/ui/infantry/soubok-infantry-dead-prone.png"
+]) {
+  if (!index.includes(asset)) fail(`index.html should preload ${asset}`);
+  if (!soubokInfantryRenderer.includes(asset) && !corpseRenderer.includes(asset)) {
+    fail(`renderer should reference ${asset}`);
+  }
+}
+for (const className of ["entry-main-title", "entry-main-soldier", "entry-main-refugee", "entry-main-north-soldier", "entry-art-button"]) {
+  if (!lobbyFlowCss.includes(className)) fail(`lobby-flow.css missing ${className}`);
+}
+
 if (!process.exitCode) {
-  console.log(`Asset pack check passed: ${packCount} pack(s), ${slotCount} slot(s), weapon art ${weaponArtCount}/${requiredWeaponArt.length}.`);
+  console.log(`Asset pack check passed: ${packCount} pack(s), ${slotCount} slot(s), weapon art ${weaponArtCount}/${requiredWeaponArt.length}, UI art ${uiArtCount}/${requiredUiArt.length}.`);
 }

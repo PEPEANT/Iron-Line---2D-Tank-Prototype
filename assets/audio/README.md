@@ -30,10 +30,15 @@ Confirmed:
 - `sniper_200m.mp3` -> `sniper-fire.mp3`
 - `bgm2.mp3` -> `music/soubok-bgm.mp3`; menu/lobby BGM
 
+Temporary placeholders:
+
+- `sfx/vehicle/tank-he-alt-candidate.mp3` -> `explosion-he.mp3`
+- `sfx/projectile/rpg-fire.mp3` -> `explosion-drone.mp3`
+- `sfx/vehicle/tank-ap-fire.mp3` -> `hit-metal.mp3`
+
 Pending exact use:
 
 - `Rapid fire.mp3` -> temporary `rifle-fire.mp3` candidate
-- `Firing a high-explosive shell.mp3` -> `sfx/vehicle/tank-he-alt-candidate.mp3`
 - `tank_moving.mp3`, `tank_moving2.mp3` -> tank movement loop candidates
 - `He was shot..mp3`, `He was shot._2.mp3` -> soldier hit voice candidates
 - `drone_1.mp3` -> drone loop candidate

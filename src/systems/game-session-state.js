@@ -130,6 +130,8 @@
         blueFactionId: "korea",
         redFactionId: "russia",
         aiDensityPreset: density.id,
+        preparationSeconds: 10,
+        countdownSeconds: 5,
         blueAiTanks: this.defaultAiTankCount(blueTankBase, density.blueTankBonus),
         blueInfantry: this.defaultAiInfantryCount(blueInfantryBase, density.blueInfantryScale),
         redTanks: this.defaultAiTankCount(redTankBase, density.redTankBonus),
@@ -482,15 +484,10 @@
     defaultStartLoadingState() {
       return {
         active: false,
-        duration: 2.8,
+        duration: 0,
         remaining: 0,
         stepIndex: 0,
-        steps: [
-          "방 슬롯 잠금",
-          "AI 분대 배치",
-          "관리자 관측 연결",
-          "전투 시작 준비"
-        ]
+        steps: []
       };
     }
 

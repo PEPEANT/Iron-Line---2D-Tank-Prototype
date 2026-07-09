@@ -39,12 +39,20 @@
       main.className = "entry-main";
       main.innerHTML = `
         <div class="entry-main-hero">
+          <img class="entry-main-title" src="assets/ui/soubok-title.png" alt="수복">
           <h1>수복</h1>
         </div>
         <div class="entry-main-panel">
           <div class="entry-main-actions">
-            <button type="button" id="entryMainOffline" class="entry-enter">오프라인 모드</button>
-            <button type="button" id="entryMainOnline" class="entry-enter entry-secondary">온라인 모드</button>
+            <button type="button" id="entryMainCustom" class="entry-art-button" aria-label="커스텀 모드">
+              <img src="assets/ui/soubok-button-custom.png" alt="" aria-hidden="true">
+            </button>
+            <button type="button" id="entryMainOnline" class="entry-art-button" aria-label="온라인 접속">
+              <img src="assets/ui/soubok-button-online.png" alt="" aria-hidden="true">
+            </button>
+            <button type="button" id="entryMainStory" class="entry-art-button" aria-label="스토리 모드">
+              <img src="assets/ui/soubok-button-story.png" alt="" aria-hidden="true">
+            </button>
           </div>
           <label class="entry-field entry-nickname-field hidden">
             <span>닉네임</span>
@@ -54,6 +62,24 @@
           <p class="entry-main-hint" id="entryMainHint"></p>
         </div>
       `;
+
+      const mainSoldier = document.createElement("img");
+      mainSoldier.className = "entry-main-soldier";
+      mainSoldier.src = "assets/ui/soubok-soldier.png";
+      mainSoldier.alt = "";
+      mainSoldier.setAttribute("aria-hidden", "true");
+
+      const mainRefugee = document.createElement("img");
+      mainRefugee.className = "entry-main-extra entry-main-refugee";
+      mainRefugee.src = "assets/ui/soubok-refugee.png";
+      mainRefugee.alt = "";
+      mainRefugee.setAttribute("aria-hidden", "true");
+
+      const mainNorthSoldier = document.createElement("img");
+      mainNorthSoldier.className = "entry-main-extra entry-main-north-soldier";
+      mainNorthSoldier.src = "assets/ui/soubok-north-soldier.png";
+      mainNorthSoldier.alt = "";
+      mainNorthSoldier.setAttribute("aria-hidden", "true");
 
       const account = document.createElement("aside");
       account.className = "entry-account-widget";
@@ -139,13 +165,14 @@
 
       panel.append(modeWrap, status, enter);
       card.append(factionPane, panel);
-      screen.append(main, card, account);
+      screen.append(mainRefugee, mainNorthSoldier, mainSoldier, main, card, account);
       document.body.prepend(screen);
 
       ui.entryScreen = screen;
       ui.entryMainActions = main.querySelector(".entry-main-actions");
-      ui.entryMainOffline = main.querySelector("#entryMainOffline");
+      ui.entryMainCustom = main.querySelector("#entryMainCustom");
       ui.entryMainOnline = main.querySelector("#entryMainOnline");
+      ui.entryMainStory = main.querySelector("#entryMainStory");
       ui.entryNicknameField = main.querySelector(".entry-nickname-field");
       ui.entryNickname = main.querySelector("#entryNickname");
       ui.entryMainStart = main.querySelector("#entryMainStart");
@@ -166,6 +193,7 @@
       ui.entryModeList = modeList;
       ui.entryEnterButton = enter;
       ui.entryStatus = status;
+      this.syncPublicOnlineEntry();
       this.bind();
     }
 
@@ -173,8 +201,11 @@
       const ui = this.nodes;
       if (this.bound || !ui?.entryEnterButton || !ui.entryNickname) return;
       this.bound = true;
-      ui.entryMainOffline?.addEventListener("click", () => this.startOfflineFromMain());
-      ui.entryMainOnline?.addEventListener("click", () => this.showOnlineNickname());
+      ui.entryMainCustom?.addEventListener("click", () => this.startOfflineFromMain());
+      ui.entryMainOnline?.addEventListener("click", () => {
+        if (!this.isPublicOnlineEntryHidden()) this.showOnlineNickname();
+      });
+      ui.entryMainStory?.addEventListener("click", () => this.openStoryMode());
       ui.entryMainStart?.addEventListener("click", () => this.startOnlineFromMain());
       ui.entryAccountButton?.addEventListener("click", () => this.toggleAccountPanel());
       ui.entryAccountModes?.forEach((button) => {
@@ -196,6 +227,43 @@
         if (event.key === "Enter" && this.mainOnlinePending) this.startOnlineFromMain();
       });
       ui.entryNickname.addEventListener("input", () => this.setMainHint(""));
+    }
+
+    isPublicOnlineEntryHidden() {
+      try {
+        const hostname = String(global.location?.hostname || "").toLowerCase();
+        const params = new URLSearchParams(global.location?.search || "");
+        const normalized = (value) => String(value || "").trim().toLowerCase();
+        const explicitOnline = normalized(params.get("showOnline") || params.get("publicOnline"));
+        const roomsApi = normalized(params.get("roomsApi") || params.get("apiBase"));
+        if (["1", "true", "yes", "on"].includes(explicitOnline)) return false;
+        if (roomsApi === "local" || roomsApi === "relative") return false;
+        if (!hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
+        return hostname === "pepeant.github.io";
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    syncPublicOnlineEntry() {
+      const hidden = this.isPublicOnlineEntryHidden();
+      const ui = this.nodes;
+      if (ui.entryMainOnline) {
+        ui.entryMainOnline.hidden = hidden;
+        ui.entryMainOnline.disabled = hidden;
+        ui.entryMainOnline.setAttribute("aria-hidden", hidden ? "true" : "false");
+      }
+      if (hidden && this.selectedMode === "online") this.selectedMode = "offline";
+      if (hidden && this.mainOnlinePending) {
+        this.mainNicknameVisible = false;
+        this.mainOnlinePending = false;
+        ui.entryMainActions?.classList.remove("hidden");
+        ui.entryNicknameField?.classList.add("hidden");
+        ui.entryNicknameField?.classList.remove("locked");
+        ui.entryMainStart?.classList.add("hidden");
+        ui.entryScreen?.classList.remove("main-nickname-open");
+      }
+      return hidden;
     }
 
     mainFallbackNickname() {
@@ -244,6 +312,8 @@
     startOfflineFromMain() {
       const game = IronLine.game;
       if (!game) return;
+      game.storyChapterId = "";
+      this.setMainHint("");
       const blueFactionId = game.matchConfig?.blueFactionId ||
         game.localProfile?.factionId ||
         game.localProfile?.skinId ||
@@ -259,6 +329,7 @@
     }
 
     showOnlineNickname() {
+      if (this.isPublicOnlineEntryHidden()) return;
       const ui = this.nodes;
       const locked = this.lockedNickname();
       this.mainNicknameVisible = true;
@@ -280,7 +351,17 @@
       }
     }
 
+    openStoryMode() {
+      this.mainNicknameVisible = false;
+      this.mainOnlinePending = false;
+      if (!IronLine.storyMode?.open?.()) {
+        this.setMainHint("스토리 모드는 준비 중입니다.", true);
+      }
+      this.update(IronLine.game);
+    }
+
     startOnlineFromMain() {
+      if (this.isPublicOnlineEntryHidden()) return;
       this.selectedMode = "online";
       const ui = this.nodes;
       const locked = this.lockedNickname();
@@ -362,6 +443,10 @@
       if (!game) return;
       const profile = this.entryProfile(game);
       if (this.selectedMode === "online") {
+        if (this.isPublicOnlineEntryHidden()) {
+          this.selectedMode = "offline";
+          return this.submit();
+        }
         this.roomSignature = "";
         game.setLocalProfile?.(profile);
         if (this.hud.sessionFlow?.submitEntry?.("online", profile)) return;
@@ -396,6 +481,7 @@
       document.body.classList.toggle("entry-open", visible);
       if (!visible) return;
       this.syncAccountPanel();
+      const publicOnlineHidden = this.syncPublicOnlineEntry();
 
       const profile = game.localProfile || {};
       if (ui.entryNickname && !this.mainSeeded) {
@@ -408,6 +494,8 @@
       ui.entryScreen.classList.toggle("main-nickname-open", Boolean(mainStage && this.mainNicknameVisible));
       if (mainStage) {
         ui.entryMainActions?.classList.toggle("hidden", Boolean(this.mainNicknameVisible));
+        ui.entryMainOnline?.toggleAttribute("hidden", publicOnlineHidden);
+        if (ui.entryMainOnline) ui.entryMainOnline.disabled = publicOnlineHidden;
         ui.entryNicknameField?.classList.toggle("hidden", !this.mainNicknameVisible);
         ui.entryNicknameField?.classList.toggle("locked", Boolean(this.lockedNickname() && this.mainNicknameVisible));
         if (ui.entryNickname) ui.entryNickname.disabled = Boolean(this.lockedNickname() && this.mainNicknameVisible);
@@ -442,11 +530,11 @@
     renderModeCards() {
       const list = this.nodes.entryModeList;
       if (!list) return;
-      if (list.dataset.ready !== "1") {
-        const modes = [
-          { id: "offline", title: "오프라인" },
-          { id: "online", title: "온라인" }
-        ];
+      const publicOnlineHidden = this.isPublicOnlineEntryHidden();
+      const signature = publicOnlineHidden ? "offline" : "offline-online";
+      if (list.dataset.modeSignature !== signature) {
+        const modes = [{ id: "offline", title: "오프라인" }];
+        if (!publicOnlineHidden) modes.push({ id: "online", title: "온라인" });
         list.textContent = "";
         for (const mode of modes) {
           const button = document.createElement("button");
@@ -461,8 +549,9 @@
           });
           list.append(button);
         }
-        list.dataset.ready = "1";
+        list.dataset.modeSignature = signature;
       }
+      if (publicOnlineHidden && this.selectedMode === "online") this.selectedMode = "offline";
       list.querySelectorAll("[data-entry-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.entryMode === this.selectedMode);
       });

@@ -108,6 +108,10 @@
         this.updateDebug?.(point);
         return true;
       }
+      if (!this.prepareSupportWeaponFire?.(point, dt)) {
+        this.updateDebug?.(point);
+        return true;
+      }
 
       const jitter = point.supportPoint ? 42 : 28;
       const aimX = point.x + (Math.random() - 0.5) * jitter;

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수복 운영센터</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        padding: 40px 20px 64px;
+        color: #eef4ed;
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif;
+        background:
+          radial-gradient(1200px 600px at 20% -10%, rgba(140, 215, 197, 0.08), transparent),
+          linear-gradient(180deg, #0c1614, #070c0d);
+      }
+
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+
+      .ops-head {
+        margin-bottom: 30px;
+      }
+
+      .ops-kicker {
+        display: block;
+        margin-bottom: 6px;
+        color: #8cd7c5;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: 1.7rem;
+        line-height: 1.25;
+      }
+
+      .ops-head p {
+        margin-top: 8px;
+        color: rgba(228, 238, 229, 0.66);
+        font-size: 0.92rem;
+      }
+
+      section {
+        margin-top: 30px;
+      }
+
+      h2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        font-size: 1.02rem;
+      }
+
+      h2::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: rgba(150, 180, 160, 0.22);
+      }
+
+      .ops-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 10px;
+      }
+
+      .ops-card {
+        display: grid;
+        gap: 5px;
+        padding: 15px 16px;
+        color: inherit;
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(150, 180, 160, 0.2);
+        border-radius: 8px;
+        transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+      }
+
+      .ops-card:hover {
+        background: rgba(140, 215, 197, 0.1);
+        border-color: rgba(140, 215, 197, 0.55);
+        transform: translateY(-1px);
+      }
+
+      .ops-card strong {
+        font-size: 0.95rem;
+      }
+
+      .ops-card span {
+        color: rgba(228, 238, 229, 0.6);
+        font-size: 0.76rem;
+        line-height: 1.45;
+      }
+
+      .ops-card.is-primary {
+        background: rgba(140, 215, 197, 0.12);
+        border-color: rgba(140, 215, 197, 0.5);
+      }
+
+      .ops-card code {
+        justify-self: start;
+        margin-top: 2px;
+        padding: 2px 7px;
+        color: #8cd7c5;
+        font-size: 0.72rem;
+        background: rgba(0, 0, 0, 0.34);
+        border-radius: 4px;
+      }
+
+      .ops-cmd {
+        display: grid;
+        gap: 6px;
+      }
+
+      .ops-cmd-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 9px 14px;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(150, 180, 160, 0.14);
+        border-radius: 6px;
+      }
+
+      .ops-cmd-row code {
+        color: #a9e6d6;
+        font-size: 0.8rem;
+        word-break: break-all;
+      }
+
+      .ops-cmd-row span {
+        color: rgba(228, 238, 229, 0.62);
+        font-size: 0.78rem;
+      }
+
+      .ops-catalog {
+        margin-bottom: 10px;
+        border: 1px solid rgba(150, 180, 160, 0.16);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .ops-catalog summary {
+        padding: 12px 16px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+        list-style-position: inside;
+      }
+
+      .ops-catalog summary code {
+        color: #8cd7c5;
+        font-size: 0.82rem;
+      }
+
+      .ops-catalog[open] summary {
+        border-bottom: 1px solid rgba(150, 180, 160, 0.14);
+      }
+
+      .ops-catalog .ops-cmd {
+        padding: 10px 12px 12px;
+      }
+
+      footer {
+        margin-top: 40px;
+        color: rgba(228, 238, 229, 0.4);
+        font-size: 0.74rem;
+      }
+
+      @media (max-width: 560px) {
+        .ops-cmd-row {
+          grid-template-columns: 1fr;
+          gap: 3px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="ops-head">
+        <span class="ops-kicker">Iron Line Ops Center</span>
+        <h1>수복 운영센터</h1>
+        <p>게임, 실험장, 에디터, 작업중 문서, 완료 기준을 한 곳에서 들어갑니다. 이 페이지는 개발자용 임시 허브입니다.</p>
+      </header>
+
+      <section>
+        <h2>플레이</h2>
+        <div class="ops-grid">
+          <a class="ops-card is-primary" href="index.html">
+            <strong>게임 시작</strong>
+            <span>메인 메뉴로 진입해 오프라인/온라인 플레이</span>
+          </a>
+          <a class="ops-card" href="index.html">
+            <strong>스토리 모드</strong>
+            <span>메인 메뉴 → 스토리 버튼. 챕터 카드 8장, 클리어하면 다음 챕터 해금</span>
+          </a>
+          <a class="ops-card" href="home.html">
+            <strong>소개 홈페이지</strong>
+            <span>세계관, 세력 스킨, 패치 소식</span>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <h2>개발 · 실험</h2>
+        <div class="ops-grid">
+          <a class="ops-card is-primary" href="index.html?testLab=sandbox">
+            <strong>샌드박스 실험장</strong>
+            <span>도감에서 유닛/오브젝트 카드를 골라 맵 클릭으로 즉시 배치. 새 그래픽 에셋 확인용</span>
+          </a>
+          <a class="ops-card" href="editor.html">
+            <strong>맵 에디터</strong>
+            <span>맵 구조, 거점, 오브젝트 편집</span>
+          </a>
+          <a class="ops-card" href="admin.html">
+            <strong>관리자 관제</strong>
+            <span>관전 카메라, 방 운영, 실험 노트</span>
+          </a>
+          <a class="ops-card" href="tools/pages/replay-viewer.html">
+            <strong>리플레이 뷰어</strong>
+            <span>기록된 전투 재생과 분석</span>
+          </a>
+          <a class="ops-card" href="tools/pages/main-menu-layout-tuner.html">
+            <strong>메인메뉴 레이아웃 튜너</strong>
+            <span>타이틀 화면 배치 실시간 조정</span>
+          </a>
+          <a class="ops-card" href="docs/design-drafts/infantry-rig-lab.html">
+            <strong>보병 파츠 리그 랩 v2</strong>
+            <span>폐기/참고용 리그 실험실. 보병 파츠, 핀, 포즈, 굽기 결과 확인</span>
+            <code>infantry-rig-lab.html</code>
+          </a>
+          <a class="ops-card is-primary" href="docs/design-drafts/asset-crop-lab.html">
+            <strong>에셋 컷팅 랩</strong>
+            <span>원본 통합 PNG에서 필요한 부위를 직접 박스로 잘라 PNG와 JSON으로 저장</span>
+            <code>asset-crop-lab.html</code>
+          </a>
+          <a class="ops-card is-primary" href="assets/ui/infantry/cut-review/v2-20260709/review.html?confirmed=1">
+            <strong>보병/차량 컷 정리 v2</strong>
+            <span>확정된 보병·차량 컷, 액션점 판정, 본편 적용 후보를 한눈에 확인</span>
+            <code>cut-review/v2-20260709</code>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <h2>작업 상태별 문서</h2>
+        <div class="ops-grid">
+          <a class="ops-card is-primary" href="docs/story/world-board.html">
+            <strong>작업중 · 세계관 보드</strong>
+            <span>눈으로 한눈에 보고 직접 수정 메모를 저장하는 HTML 보드</span>
+          </a>
+          <a class="ops-card is-primary" href="docs/story/world-mindmap.html">
+            <strong>작업중 · 세계관 마인드맵</strong>
+            <span>스토리와 세계관 관계를 그림처럼 한 장으로 보기</span>
+          </a>
+          <a class="ops-card is-primary" href="docs/story/world-bible.md">
+            <strong>작업중 · 세계관 바이블</strong>
+            <span>이서훈, 김민지, BDF, 가상 2차 한국전쟁의 정식 기준 문서</span>
+          </a>
+          <a class="ops-card is-primary" href="docs/asset-contract.md">
+            <strong>작업중 · 에셋 계약</strong>
+            <span>그래픽/사운드 파일명, 폴더, 드롭 규칙</span>
+          </a>
+          <a class="ops-card" href="docs/visual-overhaul-plan.md">
+            <strong>작업중 · 비주얼 오버홀</strong>
+            <span>한국형 탑뷰 에셋과 화면 교체 로드맵</span>
+          </a>
+          <a class="ops-card" href="docs/test-lab-design.md">
+            <strong>작업중 · 테스트랩</strong>
+            <span>샌드박스/검수실/도감 실험장 기준</span>
+          </a>
+          <a class="ops-card" href="docs/subok-r1-north-star.md">
+            <strong>완료 기준 · R1 북극성</strong>
+            <span>수복이 지켜야 하는 핵심 감각</span>
+          </a>
+          <a class="ops-card" href="docs/iron-line-core-doctrine.md">
+            <strong>완료 기준 · 코어 독트린</strong>
+            <span>보존할 본질과 설계 판단</span>
+          </a>
+          <a class="ops-card" href="docs/r1-release-gate.md">
+            <strong>완료 기준 · R1 게이트</strong>
+            <span>알파 R1 출시 전 통과 기준</span>
+          </a>
+          <a class="ops-card" href="docs/repo-housekeeping-plan.md">
+            <strong>정리 계획 · 파일 구조</strong>
+            <span>루트 HTML 축소, 문서 상태 분류, 이동 순서</span>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <h2>검증 명령 (터미널)</h2>
+        <div class="ops-cmd">
+          <div class="ops-cmd-row"><code>npm start</code><span>정적 서버 실행 (이 페이지 포함 전체 진입점 서빙)</span></div>
+          <div class="ops-cmd-row"><code>npm run check</code><span>전체 정적 검증 체인 — 커밋 전 필수</span></div>
+          <div class="ops-cmd-row"><code>npm run asset:drop</code><span>에셋 드롭 현황 — 뭘 채웠고 뭘 만들어야 하는지 목록</span></div>
+          <div class="ops-cmd-row"><code>npm run lab:sandbox</code><span>샌드박스 실험장 구조 검증</span></div>
+          <div class="ops-cmd-row"><code>npm run story:mode</code><span>스토리모드 배선/데이터 검증</span></div>
+          <div class="ops-cmd-row"><code>npm run check:online</code><span>온라인 스모크 테스트</span></div>
+          <div class="ops-cmd-row"><code>npm run census</code><span>AI 행동 센서스</span></div>
+          <div class="ops-cmd-row"><code>npm run tempo</code><span>전장 템포 진단</span></div>
+          <div class="ops-cmd-row"><code>npm run health</code><span>코드 건강 리포트 생성</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>체크 스크립트 전체 목록 (tools/)</h2>
+        <details class="ops-catalog" open>
+          <summary>커밋 게이트 — <code>npm run check</code>에 포함 (25개)</summary>
+          <div class="ops-cmd">
+            <div class="ops-cmd-row"><code>check-syntax</code><span>전체 JS 문법 파싱</span></div>
+            <div class="ops-cmd-row"><code>check-duplicates</code><span>중복 함수/코드 블록 탐지</span></div>
+            <div class="ops-cmd-row"><code>check-code-health</code><span>파일 크기/핫스팟 상한 감시</span></div>
+            <div class="ops-cmd-row"><code>check-ai-lod-continuity-contract</code><span>AI LOD 전환 연속성 계약</span></div>
+            <div class="ops-cmd-row"><code>check-combat-hud-declutter</code><span>전투 HUD 정리 규칙</span></div>
+            <div class="ops-cmd-row"><code>check-map-schema</code><span>맵 데이터 스키마 유효성</span></div>
+            <div class="ops-cmd-row"><code>check-editor-p2</code><span>맵 에디터 2차 기능</span></div>
+            <div class="ops-cmd-row"><code>check-editor-history</code><span>에디터 실행취소/기록</span></div>
+            <div class="ops-cmd-row"><code>check-map-interiors</code><span>건물 내부/지붕 규칙</span></div>
+            <div class="ops-cmd-row"><code>check-map-connections</code><span>맵 연결부/통로 무결성</span></div>
+            <div class="ops-cmd-row"><code>check-corpse-renderer</code><span>시체 렌더링 계약</span></div>
+            <div class="ops-cmd-row"><code>check-commander-presence</code><span>지휘관 존재/행동 계약</span></div>
+            <div class="ops-cmd-row"><code>check-settings-controls</code><span>설정 패널 컨트롤 배선</span></div>
+            <div class="ops-cmd-row"><code>check-supply-loadout</code><span>보급/장비 슬롯 규칙</span></div>
+            <div class="ops-cmd-row"><code>check-death-ui</code><span>사망/부활 UI 흐름</span></div>
+            <div class="ops-cmd-row"><code>check-vehicle-dashboard</code><span>차량 계기판 HUD</span></div>
+            <div class="ops-cmd-row"><code>check-test-lab-sandbox</code><span>샌드박스 실험장 구조</span></div>
+            <div class="ops-cmd-row"><code>check-story-mode</code><span>스토리모드 배선/데이터</span></div>
+            <div class="ops-cmd-row"><code>check-audio-system</code><span>오디오 시스템 슬롯/폴백</span></div>
+            <div class="ops-cmd-row"><code>check-combat-source-contract</code><span>피해 출처 추적 계약</span></div>
+            <div class="ops-cmd-row"><code>check-explosion-renderer</code><span>폭발 이펙트 렌더링</span></div>
+            <div class="ops-cmd-row"><code>check-explosion-debris</code><span>폭발 잔해/파편</span></div>
+            <div class="ops-cmd-row"><code>check-suicide-drone-dumbfire</code><span>자폭드론 무유도 발사</span></div>
+            <div class="ops-cmd-row"><code>check-support-fire-contract</code><span>지원사격 행동 계약</span></div>
+            <div class="ops-cmd-row"><code>check-asset-pack</code><span>에셋 팩/필수 아트 존재</span></div>
+          </div>
+        </details>
+        <details class="ops-catalog">
+          <summary>AI · 전투 진단 (수동 실행)</summary>
+          <div class="ops-cmd">
+            <div class="ops-cmd-row"><code>check-behavior-census</code><span>AI 행동 센서스 본체 (<code>npm run census</code>)</span></div>
+            <div class="ops-cmd-row"><code>behavior-census-report</code><span>센서스 결과 리포트 출력</span></div>
+            <div class="ops-cmd-row"><code>behavior-census-hook-diagnostics</code><span>센서스 훅 연결 진단</span></div>
+            <div class="ops-cmd-row"><code>behavior-census-support-diagnostics</code><span>지원사격 행동 상세 진단</span></div>
+            <div class="ops-cmd-row"><code>behavior-census-grenade-sequences</code><span>수류탄 투척 시퀀스 분석</span></div>
+            <div class="ops-cmd-row"><code>check-bed-combat-census</code><span>부상/기절 전투 센서스 (<code>npm run bed:combat</code>)</span></div>
+            <div class="ops-cmd-row"><code>check-battlefield-tempo</code><span>첫 교전/사망 타이밍 등 전장 템포 (<code>npm run tempo</code>)</span></div>
+            <div class="ops-cmd-row"><code>check-ai-pacing-regression</code><span>AI 페이싱 회귀 감지</span></div>
+            <div class="ops-cmd-row"><code>check-ai-drone-spacing</code><span>드론 간격/배치 (<code>npm run drone:spacing</code>)</span></div>
+            <div class="ops-cmd-row"><code>check-infantry-tank-assault</code><span>보병 대전차 돌격 (<code>npm run tank:assault</code>)</span></div>
+            <div class="ops-cmd-row"><code>check-suppression-flow</code><span>제압→엎드림 자세 흐름</span></div>
+            <div class="ops-cmd-row"><code>check-anti-vehicle-balance</code><span>대차량 밸런스 수치</span></div>
+            <div class="ops-cmd-row"><code>check-ai-scale-readiness</code><span>대규모 AI 준비 상태</span></div>
+            <div class="ops-cmd-row"><code>check-ai-scale-performance</code><span>대규모 AI 성능 측정</span></div>
+            <div class="ops-cmd-row"><code>check-ai-v2-behavior-connection</code><span>AI v2 행동 트리 연결</span></div>
+            <div class="ops-cmd-row"><code>check-bot-commander-skeleton</code><span>봇 지휘관 골격</span></div>
+            <div class="ops-cmd-row"><code>check-fps-command-integration</code><span>FPS 시점 명령 통합</span></div>
+            <div class="ops-cmd-row"><code>check-tactical-map</code><span>전술 지도 데이터</span></div>
+            <div class="ops-cmd-row"><code>check-ui-readability</code><span>UI 가독성 규칙</span></div>
+            <div class="ops-cmd-row"><code>check-alpha-p0-stabilization</code><span>알파 P0 안정화 종합</span></div>
+          </div>
+        </details>
+        <details class="ops-catalog">
+          <summary>온라인 동기화 · P0 진단</summary>
+          <div class="ops-cmd">
+            <div class="ops-cmd-row"><code>check-online-smoke</code><span>온라인 스모크 본체 (<code>npm run check:online</code>)</span></div>
+            <div class="ops-cmd-row"><code>online-smoke-ws / online-smoke-worldstate-ws</code><span>웹소켓/월드상태 스모크</span></div>
+            <div class="ops-cmd-row"><code>check-online-combat-client-flow</code><span>클라이언트 전투 흐름</span></div>
+            <div class="ops-cmd-row"><code>check-online-combat-server-authority</code><span>서버 권위 판정</span></div>
+            <div class="ops-cmd-row"><code>check-online-combat-stabilization</code><span>온라인 전투 안정화</span></div>
+            <div class="ops-cmd-row"><code>check-p0-9c/9d/9e-*</code><span>스터터 불일치, 프레임 정지, 핫패스 진단</span></div>
+            <div class="ops-cmd-row"><code>check-p0-10*-*</code><span>세션/월드 동기화, 월드상태 주기, 라이브 재현 계측</span></div>
+            <div class="ops-cmd-row"><code>check-p0-11a~11e-*</code><span>전투 복구, 플레이어 상태 동기(2인/3인/홍팀)</span></div>
+            <div class="ops-cmd-row"><code>check-p0-12-*</code><span>명령 마커 가시성, 승무원 동기화</span></div>
+            <div class="ops-cmd-row"><code>check-p0-http-combat-load / p0-http-load-summary</code><span>HTTP 부하 테스트와 요약</span></div>
+            <div class="ops-cmd-row"><code>check-p0-real-browser-2p / p0-browser-cdp-helper / p0-9c-browser-probe</code><span>실브라우저 2인 테스트 도구</span></div>
+            <div class="ops-cmd-row"><code>check-p0-team-damage-full-path</code><span>팀 피해 전체 경로</span></div>
+            <div class="ops-cmd-row"><code>check-p0-ai-playtest-harness</code><span>AI 플레이테스트 하네스</span></div>
+            <div class="ops-cmd-row"><code>check-p0-basic-2p-stutter-instrumentation</code><span>기본 2인 스터터 계측</span></div>
+          </div>
+        </details>
+        <details class="ops-catalog">
+          <summary>유틸리티 · 생성기</summary>
+          <div class="ops-cmd">
+            <div class="ops-cmd-row"><code>static-server</code><span>개발 서버 (<code>npm start</code>)</span></div>
+            <div class="ops-cmd-row"><code>check-asset-drop</code><span>에셋 드롭 현황 (<code>npm run asset:drop</code>)</span></div>
+            <div class="ops-cmd-row"><code>code-health-report</code><span>코드 건강 리포트 (<code>npm run health</code>)</span></div>
+            <div class="ops-cmd-row"><code>generate-weapon-placeholders</code><span>무기 아이콘 플레이스홀더 생성</span></div>
+            <div class="ops-cmd-row"><code>static-room-slot-helpers</code><span>방 슬롯 헬퍼 (서버 공용)</span></div>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>핵심 문서</h2>
+        <div class="ops-grid">
+          <a class="ops-card" href="docs/INDEX.md">
+            <strong>문서 색인</strong>
+            <span>docs/INDEX.md</span>
+          </a>
+          <a class="ops-card" href="docs/asset-contract.md">
+            <strong>에셋 계약</strong>
+            <span>파일명/크기/폴더 규칙 — 그림·사운드 제작 가이드</span>
+          </a>
+          <a class="ops-card" href="docs/story/world-board.html">
+            <strong>세계관 보드</strong>
+            <span>직접 메모하고 저장하는 스토리 작업 화면</span>
+          </a>
+          <a class="ops-card" href="docs/story/world-mindmap.html">
+            <strong>세계관 마인드맵</strong>
+            <span>스토리와 세력, 인물, 미션 관계도</span>
+          </a>
+          <a class="ops-card" href="docs/story/world-bible.md">
+            <strong>세계관 바이블</strong>
+            <span>이서훈, 김민지, BDF, 전쟁 발발 흐름</span>
+          </a>
+          <a class="ops-card" href="docs/repo-housekeeping-plan.md">
+            <strong>파일 정리 계획</strong>
+            <span>작업중/완료/아카이브 분류와 루트 HTML 축소 순서</span>
+          </a>
+          <a class="ops-card" href="docs/test-lab-design.md">
+            <strong>테스트랩 설계</strong>
+            <span>샌드박스 v2 구조와 도감 규칙</span>
+          </a>
+          <a class="ops-card" href="docs/visual-overhaul-plan.md">
+            <strong>비주얼 오버홀 계획</strong>
+            <span>그래픽 에셋 교체 로드맵</span>
+          </a>
+          <a class="ops-card" href="docs/r1-release-gate.md">
+            <strong>R1 릴리즈 게이트</strong>
+            <span>출시 전 반드시 통과할 기준</span>
+          </a>
+        </div>
+      </section>
+
+      <footer>수복(Iron Line) 개발 운영센터 · ops.html</footer>
+    </main>
+  </body>
+</html>

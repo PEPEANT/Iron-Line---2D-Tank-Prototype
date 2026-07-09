@@ -219,6 +219,8 @@
     return range * smallArmsRangeScale(shooter, weapon);
   }
 
+  const smallArmsStability = (weapon, shooter, options = {}) => IronLine.combatSmallArmsStability?.profile?.(weapon, shooter, options) || { accuracyBonus: 0, tankAccuracyBonus: 0, spreadScale: 1 };
+
   function targetScoreAlive(target) {
     return Boolean(target && target.alive !== false && (target.hp === undefined || target.hp > 0) && !target.destructionPending);
   }
@@ -490,6 +492,7 @@
     }
   }
 
+  function smallArmsMuzzleDistance(weapon, shooter) { return shooter?.isProne ? (weapon?.id === "pistol" ? 22 : weapon?.id === "sniper" ? 54 : 46) : ({ pistol: 22, smg: 34, rifle: 42, machinegun: 46, lmg: 46, sniper: 54 }[weapon?.id] || (shooter.radius || 10) + 18); }
   function fireRifle(game, shooter, target, options = {}) {
     if (shooter.alive === false || !target || target.alive === false || target.hp <= 0 || (shooter.team && target.team && shooter.team === target.team)) return false;
     if (shooter.inVehicle) return false;
@@ -497,8 +500,8 @@
     if (target === game.player && game.isPlayerInSafeZone?.()) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const baseRange = options.range || weapon.range || 560;
-    const range = smallArmsRange(weapon, shooter, baseRange);
+    const baseRange = options.range || weapon.range || 560, range = smallArmsRange(weapon, shooter, baseRange);
+    const stability = smallArmsStability(weapon, shooter, options);
     const distance = distXY(shooter.x, shooter.y, target.x, target.y);
     if (distance > range) return false;
     if (target.isDrone && game.droneHasRoofCover?.(target) && !options.allowRoofDroneHit) return false;
@@ -517,15 +520,15 @@
       ? Math.min(maxAccuracy, droneProfile.maxAccuracy)
       : maxAccuracy;
     const hitChance = clamp(
-      baseAccuracy - accuracyDistance / range * accuracyFalloff + (options.accuracyBonus || 0) + shooterProneBonus - targetPronePenalty - droneProfile.accuracyPenalty,
+      baseAccuracy - accuracyDistance / range * accuracyFalloff + (options.accuracyBonus || 0) + stability.accuracyBonus + shooterProneBonus - targetPronePenalty - droneProfile.accuracyPenalty,
       effectiveMinAccuracy,
       effectiveMaxAccuracy
     );
-    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const muzzleDistance = options.muzzleDistance ?? smallArmsMuzzleDistance(weapon, shooter);
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const hit = Math.random() < hitChance;
-    const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34);
+    const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34) * stability.spreadScale;
     const endX = hit ? target.x : startX + Math.cos(missAngle) * Math.min(range, distance + 80);
     const endY = hit ? target.y : startY + Math.sin(missAngle) * Math.min(range, distance + 80);
     const tankBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, options);
@@ -591,14 +594,13 @@
     if (shooter.inVehicle) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const baseRange = options.range || weapon.range || 560;
-    const range = smallArmsRange(weapon, shooter, baseRange);
-    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const baseRange = options.range || weapon.range || 560, range = smallArmsRange(weapon, shooter, baseRange);
+    const stability = smallArmsStability(weapon, shooter, options);
+    const muzzleDistance = options.muzzleDistance ?? smallArmsMuzzleDistance(weapon, shooter);
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
-    const aimAngle = Math.atan2(aimY - shooter.y, aimX - shooter.x);
-    const proneSpreadScale = shooter.isProne ? 0.68 : 1;
-    const shotAngle = aimAngle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.22) * 0.18 * proneSpreadScale;
+    const aimAngle = Math.atan2(aimY - startY, aimX - startX);
+    const shotAngle = aimAngle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.22) * 0.18 * stability.spreadScale;
     const impact = traceSmallArmsShot(game, shooter, startX, startY, shotAngle, range, options);
 
     const tracers = game.effects.tracers || (game.effects.tracers = []);
@@ -633,19 +635,19 @@
     if (shooter.inVehicle) return false;
 
     const weapon = options.weapon || INFANTRY_WEAPONS[shooter.weaponId] || INFANTRY_WEAPONS.rifle;
-    const baseRange = options.range || weapon.range || 560;
-    const range = smallArmsRange(weapon, shooter, baseRange);
+    const baseRange = options.range || weapon.range || 560, range = smallArmsRange(weapon, shooter, baseRange);
+    const stability = smallArmsStability(weapon, shooter, options);
     const distance = distXY(shooter.x, shooter.y, tank.x, tank.y);
     if (distance > range) return false;
     if (!IronLine.physics.hasLineOfSight(game, shooter, tank, { padding: 3 })) return false;
 
-    const muzzleDistance = options.muzzleDistance ?? (shooter.radius + 8);
+    const muzzleDistance = options.muzzleDistance ?? smallArmsMuzzleDistance(weapon, shooter);
     const startX = options.startX ?? shooter.x + Math.cos(shooter.angle) * muzzleDistance;
     const startY = options.startY ?? shooter.y + Math.sin(shooter.angle) * muzzleDistance;
     const baseChance = weapon.id === "lmg" || weapon.id === "machinegun" ? 0.2 : 0.13;
-    const hitChance = clamp(baseChance - distance / range * 0.08 + (options.accuracyBonus || 0) + (shooter.isProne ? 0.025 : 0), 0.04, 0.24);
+    const hitChance = clamp(baseChance - distance / range * 0.08 + (options.accuracyBonus || 0) + stability.tankAccuracyBonus + (shooter.isProne ? 0.025 : 0), 0.04, 0.24);
     const hit = Math.random() < hitChance;
-    const missAngle = shooter.angle + (Math.random() - 0.5) * (weapon.spread || 0.34) * (shooter.isProne ? 0.74 : 1);
+    const missAngle = shooter.angle + (Math.random() - 0.5) * (options.spread ?? weapon.spread ?? 0.34) * stability.spreadScale;
     const endX = hit ? tank.x + (Math.random() - 0.5) * tank.radius : startX + Math.cos(missAngle) * Math.min(range, distance + 90);
     const endY = hit ? tank.y + (Math.random() - 0.5) * tank.radius : startY + Math.sin(missAngle) * Math.min(range, distance + 90);
     const tankBlock = findSmallArmsTankHit(game, shooter, startX, startY, endX, endY, { ...options, ignoreVehicle: tank });
@@ -1183,7 +1185,7 @@
       maxRadius: ammo.directExplosionRadius || 42,
       life: 0.24,
       maxLife: 0.24,
-      color: "rgba(255, 242, 168, 0.85)"
+      color: "rgba(255, 242, 168, 0.85)", scorched: true
     });
     game.effects.scorchMarks.push({ x, y, radius: (ammo.directScorchRadius || 16) + Math.random() * 8, alpha: 0.12 });
   }
@@ -1210,8 +1212,8 @@
     const isGrenade = ammo.id === "grenade";
     const isLauncherGrenade = ammo.sourceWeaponId === "grenadeLauncher";
     const scale = isRpg ? 0.9 : isLauncherGrenade ? 0.7 : isGrenade ? 0.58 : 1;
-    const fireLife = ammo.explosionLife || (isGrenade ? 0.16 : 0.48);
-    const smokeLife = isGrenade ? (isLauncherGrenade ? 0.68 : 0.86) : 0.92;
+    const fireLife = ammo.explosionLife || (isGrenade ? 0.34 : 0.55);
+    const smokeLife = isGrenade ? (isLauncherGrenade ? 0.78 : 0.95) : 1.05;
 
     blastRings.push({
       x,
@@ -1227,13 +1229,12 @@
     game.effects.explosions.push({
       x,
       y,
-      radius: ammo.explosionStart || (isRpg ? 20 : isGrenade ? 7 : 24),
-      maxRadius: isGrenade ? (isLauncherGrenade ? 24 : 18) : splash * 0.58,
+      radius: ammo.explosionStart || (isRpg ? 20 : isGrenade ? 12 : 24),
+      maxRadius: isGrenade ? (isLauncherGrenade ? 44 : 38) : splash * 0.62,
       life: fireLife,
       maxLife: fireLife,
-      color: isRpg ? "rgba(255, 112, 52, 0.95)" : isGrenade ? "rgba(255, 231, 171, 0.42)" : "rgba(255, 145, 58, 0.92)",
-      core: true,
-      smoke: false
+      color: isRpg ? "rgba(255, 112, 52, 0.95)" : isGrenade ? "rgba(255, 208, 122, 0.88)" : "rgba(255, 145, 58, 0.92)",
+      core: true, smoke: false, scorched: true
     });
 
     game.effects.explosions.push({
@@ -1244,8 +1245,7 @@
       life: smokeLife,
       maxLife: smokeLife,
       color: isGrenade ? "rgba(86, 82, 69, 0.55)" : "rgba(70, 63, 50, 0.58)",
-      core: false,
-      smoke: true
+      core: false, smoke: true, scorched: true
     });
 
     const sparkCount = Math.round((isGrenade ? (isLauncherGrenade ? 12 : 10) : isRpg ? 13 : 16) * scale);

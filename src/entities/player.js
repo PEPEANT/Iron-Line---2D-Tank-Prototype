@@ -21,6 +21,7 @@
       grenadeLauncher: 0,
       rpg: 0,
       repairKit: 0,
+      fieldRadio: 0,
       reconDrone: 0,
       kamikazeDrone: 0
     };
@@ -39,7 +40,7 @@
   }
 
   function defaultPlayerInventory() {
-    return IronLine.playerDefaultLoadout?.weaponInventory?.() || ["rifle", "", "", "", "", ""];
+    return IronLine.playerDefaultLoadout?.weaponInventory?.() || ["rifle", "", "", "", "", "fieldRadio"];
   }
 
   function defaultPlayerAmmo() {

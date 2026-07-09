@@ -30,7 +30,8 @@
     }
 
     resize() {
-      const dpr = window.devicePixelRatio || 1;
+      const rawDpr = window.devicePixelRatio || 1;
+      const dpr = Number.isFinite(rawDpr) ? Math.max(1, rawDpr) : 1;
       const viewport = this.viewportSize();
       this.camera.width = viewport.width;
       this.camera.height = viewport.height;
@@ -67,13 +68,16 @@
       ctx.translate(-camera.x, -camera.y);
 
       this.drawTerrain(game);
-      this.drawSafeZones(game);
-      this.drawCapturePoints(game);
+      if (!game.testLab) {
+        this.drawSafeZones(game);
+        this.drawCapturePoints(game);
+      }
       this.drawScorchMarks(game);
       this.drawObstacles(game);
       this.drawScenery(game);
       this.drawDustPuffs(game);
       this.drawTrackScuffs(game);
+      this.drawGroundCorpses(game);
 
       for (const humvee of game.humvees || []) this.drawHumvee(game, humvee);
       for (const tank of game.tanks) this.drawTank(game, tank);
@@ -83,7 +87,6 @@
       for (const unit of game.infantry || []) this.drawInfantryUnit(game, unit);
       for (const crew of game.crews || []) this.drawCrewMember(game, crew);
       if (!game.adminObserverMode && !game.player.inTank && game.player.hp > 0) this.drawInfantry(game, game.player, { color: "#b6dcff" });
-      else if (!game.adminObserverMode && !game.player.inTank && (game.playerDowned || game.playerDeathActive)) this.drawInfantryCorpse(game.player, { wounded: game.playerDowned && !game.playerDeathActive });
       this.drawRemoteHumanPlayers(game);
       if (!game.adminObserverMode) this.drawPlayerInfantryAim(game);
       for (const drone of game.drones || []) this.drawReconDrone(game, drone);
@@ -118,6 +121,14 @@
       game.perfMonitor?.begin("render.tactical");
       this.drawTacticalMapOverlay?.(game);
       game.perfMonitor?.end("render.tactical");
+    }
+
+    drawGroundCorpses(game) {
+      for (const unit of game.infantry || []) if (!unit.alive && !unit.inVehicle) this.drawInfantryCorpse(unit);
+      for (const crew of game.crews || []) if (!crew.alive && !crew.inTank) this.drawInfantryCorpse(crew);
+      if (!game.adminObserverMode && !game.player.inTank && (game.playerDowned || game.playerDeathActive)) {
+        this.drawInfantryCorpse(game.player, { wounded: game.playerDowned && !game.playerDeathActive });
+      }
     }
 
     drawChatBubbles(game) {
@@ -433,18 +444,10 @@
       const height = lines.length * lineHeight + 18;
       const top = -height - 9;
       const bottom = -9;
-      const team = game.player?.team || TEAM.BLUE;
-      const accent = team === TEAM.BLUE ? "rgba(112, 193, 255, 0.78)" : "rgba(255, 130, 120, 0.78)";
-
       ctx.globalAlpha = alpha;
-      ctx.shadowColor = "rgba(0, 0, 0, 0.32)";
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetY = 4;
-      ctx.fillStyle = "rgba(7, 13, 12, 0.88)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
       roundRect(ctx, -width / 2, top, width, height, 7);
       ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
 
       ctx.beginPath();
       ctx.moveTo(-8, bottom - 1);
@@ -453,15 +456,18 @@
       ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = "rgba(237, 244, 239, 0.16)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.92)";
+      ctx.lineWidth = 1.4;
       roundRect(ctx, -width / 2, top, width, height, 7);
       ctx.stroke();
-      ctx.fillStyle = accent;
-      roundRect(ctx, -width / 2 + 8, top + 6, width - 16, 2, 1);
-      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-8, bottom - 1);
+      ctx.lineTo(8, bottom - 1);
+      ctx.lineTo(0, 1);
+      ctx.closePath();
+      ctx.stroke();
 
-      ctx.fillStyle = "rgba(237, 244, 239, 0.96)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       for (let i = 0; i < lines.length; i += 1) {
@@ -511,15 +517,6 @@
       if (!game.testLab) return;
 
       const ctx = this.ctx;
-      const labels = {
-        hub: "통합",
-        unit: "유닛",
-        drone: "드론",
-        balance: "밸런스",
-        audio: "음원",
-        skin: "스킨",
-        objects: "오브젝트"
-      };
       const x = 16;
       const y = 82;
       const width = 330;
@@ -537,13 +534,13 @@
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(237, 244, 239, 0.94)";
       ctx.font = "800 13px Inter, sans-serif";
-      ctx.fillText(`실험장: ${labels[game.testLab] || "시험"} · 인공지능 ${game.testLabAiPaused ? "정지" : "작동"}`, x + 12, y + 10);
+      ctx.fillText(`샌드박스 실험장 · 인공지능 ${game.testLabAiPaused ? "정지" : "작동"}`, x + 12, y + 10);
       ctx.font = "11px Inter, sans-serif";
       ctx.fillStyle = "rgba(183, 223, 213, 0.84)";
-      ctx.fillText("단축 1 보병  단축 2 전차  단축 3 험비", x + 12, y + 34);
-      ctx.fillText("단축 4 인공지능  단축 5 보급  단축 6 드론 지붕", x + 12, y + 52);
+      ctx.fillText("F1 보병  F2 전차  F3 험비", x + 12, y + 34);
+      ctx.fillText("F4 인공지능  F5 보급  F6 드론 지붕", x + 12, y + 52);
       ctx.fillStyle = "rgba(255, 209, 102, 0.78)";
-      ctx.fillText("모드 변경은 우측 실험 콘솔에서 합니다", x + 12, y + 70);
+      ctx.fillText("우측 도감에서 카드 선택 후 맵 클릭으로 배치", x + 12, y + 70);
       ctx.restore();
     }
 
@@ -658,14 +655,6 @@
         ctx.beginPath();
         ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.strokeStyle = hexToRgba(color, 0.55);
-        ctx.lineWidth = 3;
-        ctx.setLineDash([14, 12]);
-        ctx.beginPath();
-        ctx.arc(zone.x, zone.y, zone.radius - 8, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
 
         const label = zone.label || (zone.team === TEAM.RED ? "적군 기지" : "아군 기지");
         ctx.fillStyle = "rgba(9, 15, 13, 0.72)";
@@ -991,10 +980,6 @@
       if (!aim) return;
 
       const ctx = this.ctx;
-      const muzzleDistance = player.radius + 16;
-      const angle = Math.atan2(game.input.mouse.worldY - player.y, game.input.mouse.worldX - player.x);
-      const muzzleX = player.x + Math.cos(angle) * muzzleDistance;
-      const muzzleY = player.y + Math.sin(angle) * muzzleDistance;
       const aimReady = (player.rpgAimTime || 0) >= (player.isProne ? 0.42 : 0.34) && !aim.tooClose;
       const lineColor = aim.tooClose
         ? "rgba(255, 109, 102, 0.66)"
@@ -1005,14 +990,6 @@
 
       ctx.save();
       ctx.lineCap = "round";
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = aimReady ? 2.6 : 2;
-      ctx.setLineDash(aimReady ? [] : [8, 9]);
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, muzzleY);
-      ctx.lineTo(aim.x, aim.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
 
       ctx.strokeStyle = aim.tooClose ? "rgba(255, 109, 102, 0.34)" : "rgba(255, 209, 102, 0.22)";
       ctx.lineWidth = 1.6;
@@ -1034,11 +1011,6 @@
       ctx.lineTo(aim.x, aim.y + 28);
       ctx.stroke();
 
-      ctx.strokeStyle = aimReady ? "rgba(255, 159, 85, 0.36)" : "rgba(255, 159, 85, 0.18)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(aim.x, aim.y, weapon.splash || 110, 0, Math.PI * 2);
-      ctx.stroke();
       ctx.restore();
     }
 
@@ -1090,10 +1062,6 @@
       const inRange = distance <= range;
       const ammo = weapon.ammoKey ? player.equipmentAmmo?.[weapon.ammoKey] || 0 : 1;
       const ready = player.rifleCooldown <= 0 && ammo > 0;
-      const angle = angleTo(player.x, player.y, aimX, aimY);
-      const muzzleDistance = player.radius + 17;
-      const muzzleX = player.x + Math.cos(angle) * muzzleDistance;
-      const muzzleY = player.y + Math.sin(angle) * muzzleDistance;
       const reticleColor = ready
         ? inRange ? "rgba(255, 218, 132, 0.82)" : "rgba(255, 218, 132, 0.34)"
         : "rgba(255, 146, 116, 0.64)";
@@ -1101,15 +1069,6 @@
 
       ctx.save();
       ctx.lineCap = "round";
-      ctx.strokeStyle = inRange ? "rgba(255, 218, 132, 0.28)" : "rgba(255, 146, 116, 0.18)";
-      ctx.lineWidth = 1.4;
-      ctx.setLineDash([6, 10]);
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, muzzleY);
-      ctx.lineTo(aimX, aimY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
       ctx.strokeStyle = reticleColor;
       ctx.lineWidth = ready ? 1.7 : 1.25;
       ctx.beginPath();
@@ -1136,16 +1095,26 @@
       const prone = Boolean(unit.isProne || (unit.proneTransitionTimer || 0) > 0);
       const moving = Math.abs(unit.speed || 0) > (prone ? 5 : 12);
       const firingState = ["fire", "support-fire", "prone-fire", "recon-snipe", "harass-tank", "rpg-attack"].includes(unit.ai?.state || "");
+      const supportGun = weapon.id === "machinegun" || weapon.id === "lmg";
       const playerHoldingGunFire = unit === game.player &&
         weapon.type === "gun" &&
         weapon.id !== "sniper" &&
         !unit.controlledDrone &&
+        (!supportGun || unit.supportWeaponReady) &&
         (unit.fireHoldTimer || 0) > 0;
       const playerHoldingPistol = unit === game.player &&
         weapon.id === "pistol" &&
         !unit.controlledDrone &&
         Boolean(game.isPlayerPistolAimMode?.() || game.input?.mouse?.leftDown || game.input?.keyDown?.("Space"));
-      const firing = scoped || playerHoldingGunFire || playerHoldingPistol || (unit.gunKick || 0) > 0.02 || firingState;
+      const playerHoldingRifleAim = unit === game.player &&
+        (weapon.id === "rifle" || weapon.id === "smg") &&
+        !unit.controlledDrone &&
+        Boolean(game.isPlayerRifleAimMode?.());
+      const playerHoldingGrenade = unit === game.player &&
+        weapon.type === "grenade" &&
+        !unit.controlledDrone &&
+        Boolean(game.input?.mouse?.rightDown || (unit.throwPoseTimer || 0) > 0);
+      const firing = scoped || playerHoldingGunFire || playerHoldingPistol || playerHoldingRifleAim || playerHoldingGrenade || (unit.gunKick || 0) > 0.02 || firingState;
       const pose = prone
         ? moving ? "prone-crawl" : "prone-fire"
         : firing ? "stand-fire" : "stand-move";
@@ -1158,6 +1127,7 @@
       const hitOffset = hitReact > 0
         ? Math.sin(hitReact * Math.PI) * Math.max(1.2, unit.hitReactStrength || (prone ? 1.8 : 3.2))
         : 0;
+      if (this.drawSoubokInfantryArt?.(game, unit, { bodyAngle, controlledDrone, hitAngle, hitOffset, hitReact, moving, phase, pose, prone, scoped, style, weapon, showPrompt: options.showPrompt !== false })) return;
       ctx.save();
       ctx.translate(unit.x + Math.cos(hitAngle) * hitOffset, unit.y + Math.sin(hitAngle) * hitOffset);
       ctx.rotate(bodyAngle);
@@ -1177,18 +1147,6 @@
       if (hitReact > 0) this.drawInfantryHitFlash(ctx, unit, prone, hitReact);
       ctx.restore();
 
-      if (options.showPrompt === false) return;
-      const mountTarget = game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.();
-      if (mountTarget?.alive) {
-        ctx.save();
-        ctx.globalAlpha = 0.55 + Math.sin(unit.interactPulse * 5) * 0.18;
-        ctx.strokeStyle = "#ffd166";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(mountTarget.x, mountTarget.y, mountTarget.radius + 20, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
     }
 
     drawInfantryHitFlash(ctx, unit, prone, hitReact) {
@@ -1574,7 +1532,6 @@
 
     drawCrewMember(game, crew) {
       if (!crew.alive) {
-        if (!crew.inTank) this.drawInfantryCorpse(crew);
         return;
       }
       if (crew.inTank) return;
@@ -1584,10 +1541,7 @@
 
     drawInfantryUnit(game, unit) {
       if (unit.inVehicle) return;
-      if (!unit.alive) {
-        this.drawInfantryCorpse(unit);
-        return;
-      }
+      if (!unit.alive) return;
       const color = unit.team === TEAM.BLUE ? "#b6dcff" : "#ffb0ab";
       this.drawInfantry(game, unit, { color, showPrompt: false });
       this.drawInfantryHealth(unit);
@@ -1696,24 +1650,31 @@
       const width = Math.min(122, Math.max(42, ctx.measureText(thought).width + 15));
       const height = 17;
       const x = unit.x - width / 2;
-      const bg = unit.team === TEAM.BLUE ? "rgba(9, 24, 28, 0.78)" : "rgba(31, 14, 14, 0.78)";
-      const stroke = unit.team === TEAM.BLUE ? "rgba(182, 220, 255, 0.68)" : "rgba(255, 176, 171, 0.68)";
-
-      ctx.fillStyle = bg;
+      const bubbleBottom = y + height / 2;
+      const tailBaseY = bubbleBottom - 2;
+      const tailTipY = bubbleBottom + 8;
+      const tailHalf = 5.5;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
       roundRect(ctx, x, y - height / 2, width, height, 5);
       ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(unit.x - 4, y + height / 2 - 1);
-      ctx.lineTo(unit.x + 4, y + height / 2 - 1);
-      ctx.lineTo(unit.x, y + height / 2 + 5);
-      ctx.closePath();
-      ctx.fill();
 
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.92)";
+      ctx.lineWidth = 1.2;
       roundRect(ctx, x, y - height / 2, width, height, 5);
       ctx.stroke();
-      ctx.fillStyle = "#edf4ef";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+      ctx.beginPath();
+      ctx.moveTo(unit.x - tailHalf, tailBaseY);
+      ctx.lineTo(unit.x + tailHalf, tailBaseY);
+      ctx.lineTo(unit.x, tailTipY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(unit.x - tailHalf, tailBaseY);
+      ctx.lineTo(unit.x, tailTipY);
+      ctx.lineTo(unit.x + tailHalf, tailBaseY);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
       ctx.fillText(thought, unit.x, y + 0.5);
       ctx.restore();
     }
@@ -2346,7 +2307,7 @@
       ctx.textBaseline = "middle";
       ctx.fillStyle = "rgba(255, 210, 198, 0.96)";
       ctx.font = "900 38px Inter, sans-serif";
-      ctx.fillText("\uC804\uD22C \uBD88\uB2A5", camera.width / 2, camera.height / 2 - 28);
+      ctx.fillText("\uBD80\uC0C1", camera.width / 2, camera.height / 2 - 28);
       ctx.fillStyle = "rgba(237, 244, 239, 0.9)";
       ctx.font = "800 15px Inter, sans-serif";
       ctx.fillText(`\uC6D0\uC778: ${game.playerPendingDeathReason || "\uD53C\uACA9"}`, camera.width / 2, camera.height / 2 + 12, camera.width * 0.86);
@@ -2379,8 +2340,12 @@
         this.drawMatchLoading(game);
         return;
       }
-      const remaining = Math.max(1, Math.ceil(game.startCountdown || 0));
-      const ready = (game.startCountdown || 0) <= 0.8;
+      const countdownSeconds = game.matchCountdownSeconds?.() || 5;
+      const countdown = Math.max(0, Number(game.startCountdown) || 0);
+      const preparationRemaining = Math.max(0, countdown - countdownSeconds);
+      const inPreparation = preparationRemaining > 0.05;
+      const remaining = Math.max(1, Math.ceil(inPreparation ? preparationRemaining : countdown));
+      const ready = !inPreparation && countdown <= 0.8;
 
       ctx.save();
       ctx.fillStyle = "rgba(5, 9, 8, 0.18)";
@@ -2389,16 +2354,16 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = ready ? "#72e89a" : "#ffd166";
-      ctx.font = "900 92px Inter, sans-serif";
-      ctx.fillText(ready ? "출격" : `${remaining}`, camera.width / 2, camera.height * 0.34);
+      ctx.font = inPreparation ? "900 72px Inter, sans-serif" : "900 92px Inter, sans-serif";
+      ctx.fillText(inPreparation ? `준비 ${remaining}` : ready ? "출격" : `${remaining}`, camera.width / 2, camera.height * 0.34);
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.92)";
       ctx.font = "900 18px Inter, sans-serif";
-      ctx.fillText("기지에서 차량에 탑승하세요", camera.width / 2, camera.height * 0.34 + 78);
+      ctx.fillText(inPreparation ? "보급상자에서 장비를 고르고 위치를 잡으세요" : "기지에서 보급을 챙기고 출격하세요", camera.width / 2, camera.height * 0.34 + 78);
 
       ctx.fillStyle = "rgba(237, 244, 239, 0.64)";
       ctx.font = "800 12px Inter, sans-serif";
-      ctx.fillText("F 탑승/하차 / 1 철갑탄 / 2 고폭탄 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
+      ctx.fillText("E 보급상자 / 1~6 장비 선택 / F 탑승 / 우클릭 조준", camera.width / 2, camera.height * 0.34 + 108);
       ctx.restore();
     }
 

@@ -7,6 +7,95 @@
   const proto = IronLine.Renderer?.prototype;
   if (!proto) return;
 
+  const cutImages = new Map();
+  const cutPaths = {
+    tankHull: "assets/ui/infantry/cut-review/v2-20260709/accepted/tank-hull-top-01.png",
+    tankTurret: "assets/ui/infantry/cut-review/v2-20260709/accepted/tank-turret-main-gun-01.png",
+    humveeHull: "assets/ui/infantry/cut-review/v2-20260709/accepted/humvee-hull-top-01.png",
+    mountedMgPlayer: "assets/ui/infantry/cut-review/v2-20260709/accepted/vehicle-mounted-machinegun-player-01.png",
+    mountedMgCrew: "assets/ui/infantry/cut-review/v2-20260709/accepted/vehicle-mounted-machinegun-crew-01.png"
+  };
+  const cutSizes = {
+    humveeHull: 165,
+    tankHull: 198,
+    tankTurret: 238,
+    mountedMgPlayer: 112,
+    mountedMgCrew: 108,
+    tankMountedMgPlayer: 108,
+    tankMountedMgCrew: 104
+  };
+  const DESERT_CUT_FILTER = "sepia(0.58) saturate(1.22) hue-rotate(336deg) brightness(1.05)";
+
+  function cutImage(slot) {
+    if (typeof Image === "undefined") return null;
+    if (!cutImages.has(slot)) {
+      const src = cutPaths[slot];
+      if (!src) return null;
+      const image = new Image();
+      image.decoding = "async";
+      image.src = src;
+      cutImages.set(slot, image);
+    }
+    return cutImages.get(slot);
+  }
+
+  function drawCutImage(ctx, slot, options = {}) {
+    const image = cutImage(slot);
+    if (!image || !image.complete || !image.naturalWidth) return false;
+    const width = Number(options.width) || image.naturalWidth;
+    const height = Number(options.height) || width * (image.naturalHeight / image.naturalWidth);
+    const pivot = options.pivot || { x: 0.5, y: 0.5 };
+    const pivotX = width * (Number.isFinite(pivot.x) ? pivot.x : 0.5);
+    const pivotY = height * (Number.isFinite(pivot.y) ? pivot.y : 0.5);
+    ctx.save();
+    if (options.x || options.y) ctx.translate(Number(options.x) || 0, Number(options.y) || 0);
+    if (options.angle) ctx.rotate(options.angle);
+    ctx.imageSmoothingEnabled = false;
+    if (options.filter) ctx.filter = options.filter;
+    ctx.drawImage(image, -pivotX, -pivotY, width, height);
+    ctx.restore();
+    return true;
+  }
+
+  function vehicleCutFilter(vehicle) {
+    return vehicle?.team === TEAM.RED ? DESERT_CUT_FILTER : "";
+  }
+
+  function mountedGunSlot(vehicle, manned) {
+    if (!manned) return "";
+    const playerUsingGun = Boolean(vehicle?.playerControlled && (vehicle.vehicleType === "humvee" || vehicle.weaponMode === "mg" || vehicle.playerSeat === "gunner"));
+    return playerUsingGun ? "mountedMgPlayer" : "mountedMgCrew";
+  }
+
+  function applyVehicleShake(ctx, game, vehicle) {
+    if ((vehicle?.impactShake || 0) <= 0.001) return;
+    const wobble = (vehicle.trackPhase || 0) * 13 + (game.matchTime || 0) * 21;
+    ctx.translate(
+      Math.sin(wobble) * vehicle.impactShake * 4,
+      Math.cos(wobble * 0.83) * vehicle.impactShake * 3
+    );
+  }
+
+  function drawMountedGunCut(renderer, game, vehicle, mount, angle, slot, options = {}) {
+    const image = cutImage(slot);
+    if (!image || !image.complete || !image.naturalWidth) return false;
+    const ctx = renderer.ctx;
+    const width = Number(options.width) || 46;
+    const height = width * (image.naturalHeight / image.naturalWidth);
+    const pivot = options.pivot || { x: 0.42, y: 0.54 };
+    const kick = Number(options.kick) || 0;
+    ctx.save();
+    ctx.translate(mount.x, mount.y);
+    applyVehicleShake(ctx, game, vehicle);
+    ctx.rotate(angle + Math.sin((game.matchTime || 0) * 90) * kick * 0.012);
+    ctx.globalAlpha = options.alpha ?? 1;
+    ctx.imageSmoothingEnabled = false;
+    if (options.filter) ctx.filter = options.filter;
+    ctx.drawImage(image, -width * pivot.x - kick * 2.2, -height * pivot.y, width, height);
+    ctx.restore();
+    return true;
+  }
+
   Object.assign(proto, {
     drawHumvee(game, humvee) {
       const ctx = this.ctx;
@@ -71,6 +160,13 @@
         return;
       }
 
+      if (drawCutImage(ctx, "humveeHull", { width: cutSizes.humveeHull, pivot: { x: 0.5, y: 0.5 }, filter: vehicleCutFilter(humvee) })) {
+        ctx.restore();
+        this.drawHumveeMachineGun(game, humvee, { darkColor, lightColor, accentColor });
+        this.drawTankHealth(humvee);
+        return;
+      }
+
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
       ctx.beginPath();
       ctx.ellipse(2, 7, 34, 19, 0, 0, Math.PI * 2);
@@ -128,26 +224,39 @@
       ctx.stroke();
       ctx.restore();
 
+      this.drawHumveeMachineGun(game, humvee, { darkColor, lightColor, accentColor });
+      this.drawTankHealth(humvee);
+    },
+
+    drawHumveeMachineGun(game, humvee, colors) {
+      const ctx = this.ctx;
       const mount = humvee.machineGunMountPoint?.() || { x: humvee.x, y: humvee.y };
       const manned = humvee.hasCrew?.() ?? humvee.playerControlled;
+      const cutSlot = mountedGunSlot(humvee, manned);
+      if (cutSlot && drawMountedGunCut(this, game, humvee, mount, humvee.machineGunAngle ?? humvee.angle, cutSlot, {
+        width: humvee.playerControlled ? cutSizes.mountedMgPlayer : cutSizes.mountedMgCrew,
+        alpha: manned ? 0.96 : 0.34,
+        kick: humvee.machineGunKick || 0,
+        filter: vehicleCutFilter(humvee)
+      })) {
+        return;
+      }
       ctx.save();
       ctx.translate(mount.x, mount.y);
       const humveeKick = humvee.machineGunKick || 0;
       ctx.rotate((humvee.machineGunAngle ?? humvee.angle) + Math.sin((game.matchTime || 0) * 90) * humveeKick * 0.014);
       ctx.globalAlpha = manned ? 0.94 : 0.34;
       const kick = humveeKick * 3.5;
-      ctx.fillStyle = darkColor;
+      ctx.fillStyle = colors.darkColor;
       roundRect(ctx, -7 - kick, -4, 14, 8, 3);
       ctx.fill();
-      ctx.fillStyle = manned ? lightColor : "rgba(214, 222, 210, 0.44)";
+      ctx.fillStyle = manned ? colors.lightColor : "rgba(214, 222, 210, 0.44)";
       roundRect(ctx, 4 - kick, -1.5, 22, 3, 1.3);
       ctx.fill();
       ctx.fillStyle = "#151b18";
       roundRect(ctx, 24 - kick, -2.8, 5, 5.6, 1.2);
       ctx.fill();
       ctx.restore();
-
-      this.drawTankHealth(humvee);
     },
 
     drawTank(game, tank) {
@@ -293,6 +402,10 @@
       ctx.ellipse(2, 7, 39, 23, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      if (drawCutImage(ctx, "tankHull", { width: cutSizes.tankHull, pivot: { x: 0.5, y: 0.5 }, filter: vehicleCutFilter(tank) })) {
+        if (tank.destructionPending) this.drawTankDestructionCharge(game);
+        return;
+      }
       const sprite = this.vehicleSpriteSlot("tank.hull", tank.team);
       if (sprite) {
         this.drawVehicleSprite(sprite, { width: 80, height: 54 });
@@ -444,6 +557,20 @@
       const ctx = this.ctx;
       const recoilOffset = -tank.recoil * 7;
 
+      if (drawCutImage(ctx, "tankTurret", {
+        x: recoilOffset,
+        width: cutSizes.tankTurret,
+        pivot: { x: 0.32, y: 0.52 },
+        filter: vehicleCutFilter(tank)
+      })) {
+        if (tank.destructionPending) {
+          ctx.fillStyle = "rgba(8, 7, 6, 0.44)";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 24, 14, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        return;
+      }
       const sprite = this.vehicleSpriteSlot("tank.turret", tank.team);
       if (sprite) {
         ctx.save();
@@ -519,6 +646,16 @@
         x: tank.x + Math.cos(baseAngle) * -4 + Math.cos(baseAngle + Math.PI / 2) * -15,
         y: tank.y + Math.sin(baseAngle) * -4 + Math.sin(baseAngle + Math.PI / 2) * -15
       };
+      const cutSlot = mountedGunSlot(tank, manned);
+      if (cutSlot && drawMountedGunCut(this, game, tank, mount, tank.machineGunAngle ?? baseAngle, cutSlot, {
+        width: tank.playerControlled && tank.weaponMode === "mg" ? cutSizes.tankMountedMgPlayer : cutSizes.tankMountedMgCrew,
+        alpha: manned ? 0.96 : 0.34,
+        kick: tank.machineGunKick || 0,
+        pivot: { x: 0.42, y: 0.58 },
+        filter: vehicleCutFilter(tank)
+      })) {
+        return;
+      }
 
       ctx.save();
       ctx.translate(mount.x, mount.y);

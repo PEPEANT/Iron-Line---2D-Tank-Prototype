@@ -137,6 +137,39 @@
   font-weight: 900;
 }
 
+.settings-range {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 11px;
+  border: 1px solid rgba(237, 244, 239, 0.12);
+  border-radius: 6px;
+  background: rgba(237, 244, 239, 0.055);
+}
+
+.settings-range span {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.settings-range output {
+  min-width: 44px;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.settings-range input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+
 .settings-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

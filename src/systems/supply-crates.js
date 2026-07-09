@@ -8,6 +8,7 @@
   const HOLD_SECONDS = 0.9;
   const CRATE_SIZE = { w: 42, h: 28 };
   const CRATE_RADIUS = 46;
+  const UNLIMITED_STOCK_LABEL = "\u221e";
 
   function centerOfRect(item) {
     return {
@@ -49,14 +50,27 @@
     };
   }
 
+  function baseWallOffset(team, point) {
+    const radius = Math.max(220, Number(point?.radius) || 340);
+    const side = Math.max(160, Math.min(radius - 64, 320));
+    const depth = Math.max(70, Math.min(radius * 0.32, 130));
+    const red = team === TEAM?.RED;
+    return {
+      dx: red ? side : -side,
+      dy: red ? -depth : depth
+    };
+  }
+
   function defaultSupplyCrates(world) {
     const blue = anchorPoint(world, TEAM?.BLUE || "blue");
     const red = anchorPoint(world, TEAM?.RED || "red");
     const maxX = Math.max(CRATE_SIZE.w, (world?.width || 0) - CRATE_SIZE.w);
     const maxY = Math.max(CRATE_SIZE.h, (world?.height || 0) - CRATE_SIZE.h);
+    const blueOffset = baseWallOffset(TEAM?.BLUE || "blue", blue);
+    const redOffset = baseWallOffset(TEAM?.RED || "red", red);
     return [
-      crateRect("supply-blue-base", TEAM?.BLUE || "blue", blue, 180, -118),
-      crateRect("supply-red-base", TEAM?.RED || "red", red, -180, 118)
+      crateRect("supply-blue-base", TEAM?.BLUE || "blue", blue, blueOffset.dx, blueOffset.dy),
+      crateRect("supply-red-base", TEAM?.RED || "red", red, redOffset.dx, redOffset.dy)
     ].map((crate) => ({
       ...crate,
       x: clamp ? clamp(crate.x, 12, maxX) : crate.x,
@@ -192,7 +206,7 @@
       },
 
       updateSupplyCrateInteraction(dt) {
-        const active = this.matchStarted && !this.result && !this.deploymentOpen && !this.lobbyOpen && !this.entryOpen && !this.playerDeathActive && !this.playerDowned;
+        const active = (this.matchStarted || this.countdownStarted) && !this.hud?.fieldRadioOpen && !this.result && !this.deploymentOpen && !this.lobbyOpen && !this.entryOpen && !this.playerDeathActive && !this.playerDowned;
         if (!active || this.supplyCrateUi?.open) {
           this.resetSupplyCrateHold?.();
           return;
@@ -275,16 +289,15 @@
           items.className = "supply-crate-cat-grid";
           for (const item of bySlot.get(slotIndex)) {
             const weapon = IronLine.constants.INFANTRY_WEAPONS[item.weaponId];
-            const stock = Math.max(0, Number(crate.stock?.[item.stockKey]) || 0);
             const button = document.createElement("button");
             button.type = "button";
             button.className = "supply-crate-item";
             button.dataset.supplyItem = item.id;
-            button.disabled = stock <= 0;
+            button.disabled = false;
             button.innerHTML = `
               <span class="supply-crate-item-art"><img src="assets/weapons/${item.weaponId}.png" alt=""></span>
               <strong>${weapon.name || weapon.shortName || item.weaponId}</strong>
-              <b>${stock}</b>
+              <b>${UNLIMITED_STOCK_LABEL}</b>
             `;
             button.addEventListener("click", () => this.takeSupplyItem(crate, item.id));
             items.append(button);
@@ -296,11 +309,9 @@
 
       takeSupplyItem(crate, itemId) {
         const item = IronLine.supplyLoadout?.items?.[itemId];
-        const stockKey = item?.stockKey || itemId;
-        if (!crate?.stock || (crate.stock[stockKey] || 0) <= 0) return false;
+        if (!crate || !item) return false;
         const result = IronLine.supplyLoadout?.applyItemToPlayer?.(this.player, itemId);
         if (!result?.ok) return false;
-        crate.stock[stockKey] = Math.max(0, (Number(crate.stock[stockKey]) || 0) - 1);
         crate.floatText = `+ ${result.label}`;
         crate.floatTimer = 1.2;
         crate.damageFlash = Math.max(crate.damageFlash || 0, 0.34);

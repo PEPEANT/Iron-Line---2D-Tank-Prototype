@@ -2,6 +2,18 @@
 
 Iron Line 2D Tank Prototype의 현재 작업 문서만 모아둔다. 닫힌 2026-05 게이트 보고서는 `docs/archive/`로 이사했다.
 
+## 전략 검토/Fable 요청
+
+- [미래 엔진/Fable 검토 요청](future-engine-fable-review-2026-07-08.md): 3D 전환, 수제 일러스트 차별성, 보병 파츠 절단, 건물 파괴, 맵 변형 후 AI 경로, AI 시야/소리/기억, LLM 한계에 대한 사용자 의견과 Fable 결론 요청서.
+- [미래 엔진 결정 기록](future-engine-decision-2026-07-08.md): 2D/2.5D 확정, 3D 논쟁 종료, C안 우선, 성능 측정/공간 해시/LOD/도로 비용/버그 로그를 다음 작업 기준으로 고정한 결정 문서.
+
+## 상태별 빠른 찾기
+
+- 작업중: [수복 스토리 문서](story/INDEX.md), [세계관 보드](story/world-board.html), [세계관 마인드맵](story/world-mindmap.html), [에셋 계약](asset-contract.md), [비주얼 오버홀 계획](visual-overhaul-plan.md), [테스트랩 설계](test-lab-design.md), [유혈 시스템 계획](blood-gore-system-plan.md)
+- 완료/기준: [수복 R1 북극성](subok-r1-north-star.md), [Iron Line core doctrine](iron-line-core-doctrine.md), [R1 출시 게이트](r1-release-gate.md), [코드 구조 규칙](code-structure-rules.md)
+- 운영/정리: [리포 대청소 계획](repo-housekeeping-plan.md), [온라인 운영센터](online-operations-center.md), [배포 전 준비](production-prep.md)
+- 아카이브: [archive/](archive/)는 닫힌 게이트 보고서와 과거 인수인계 보관용이다.
+
 ## 먼저 볼 문서
 
 - [루트 AGENTS.md](../AGENTS.md): 모든 AI 작업자의 계약. 읽기 순서, 검증, 설계도 불일치 시 중단 규칙.
@@ -9,12 +21,14 @@ Iron Line 2D Tank Prototype의 현재 작업 문서만 모아둔다. 닫힌 2026
 - [우선순위 고정](priority-lock-2026-07-03.md): 단기 작업 순서. 순서를 바꾸려면 이 문서를 먼저 수정.
 - [수복 R1 북극성](subok-r1-north-star.md): 장기 방향과 "전쟁에서 혼자가 아니다" 기준.
 - [Iron Line core doctrine](iron-line-core-doctrine.md): 2026-07-03 대화에서 확정된 핵심 판단과 보존할 본질.
+- [수복 스토리 문서](story/INDEX.md): 세계관 보드, 세계관 바이블, 이후 인물/캠페인 문서의 입구.
+- [수복 세계관 바이블](story/world-bible.md): 이서훈, 김민지, BDF, 가상 2차 한국전쟁의 현재 스토리 기준.
 
 ## 운영/구조 규칙
 
 - [코드 구조 규칙](code-structure-rules.md): 큰 파일에 기능이 계속 쌓이지 않도록 하는 모듈 분리 규칙과 `npm run check` 코드 건강도 예산.
 - [구조 부채 래칫 설계도](structure-debt-ratchet-blueprint.md): 핫스팟 파일 비대 재발 방지. 구현은 R2 진입 조건 G0.
-- [리포 대청소 계획](repo-housekeeping-plan.md): 문서 아카이브, 루트 파일 정리, gitignore, 새 파일 위치 규칙. H1은 완료 대상, H2는 R1 후.
+- [리포 대청소 계획](repo-housekeeping-plan.md): 문서 아카이브, 루트 파일 정리, 상태별 허브, 새 파일 위치 규칙.
 - [배포 전 준비](production-prep.md): 로컬 실행, 문법 검사, 시작 화면/플레이 검증 기준.
 - [온라인 운영센터](online-operations-center.md): 관리자 운영센터, AI 연구실, 백업 JSON, 온라인 대비 방/슬롯/명령 패킷 상태 구조.
 - [테스트랩 설계](test-lab-design.md): `index.html?testLab=...` 기반 실험장 확장 설계.

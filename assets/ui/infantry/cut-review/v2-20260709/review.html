@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>보병/차량 컷 정리 v2</title>
+    <link rel="icon" href="data:,">
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111711;
+        --panel: #192118;
+        --line: rgba(232, 239, 226, 0.14);
+        --text: #eef4ec;
+        --muted: rgba(238, 244, 236, 0.66);
+        --accent: #ffc85f;
+        --ok: #88d3a3;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Malgun Gothic", "Segoe UI", sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(17, 23, 17, 0.94);
+        backdrop-filter: blur(10px);
+      }
+      .head-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: start;
+      }
+      nav a {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        color: var(--text);
+        text-decoration: none;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 1.28rem;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      main {
+        display: grid;
+        gap: 22px;
+        padding: 20px;
+      }
+      section {
+        display: grid;
+        gap: 12px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+        gap: 12px;
+      }
+      article {
+        min-height: 260px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .thumb {
+        display: grid;
+        place-items: center;
+        height: 168px;
+        padding: 10px;
+        background:
+          linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%),
+          linear-gradient(-45deg, rgba(255,255,255,0.05) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.05) 75%),
+          linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.05) 75%),
+          #0b0f0c;
+        background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+        background-size: 18px 18px;
+      }
+      img {
+        max-width: 100%;
+        max-height: 148px;
+        object-fit: contain;
+      }
+      .body {
+        display: grid;
+        gap: 6px;
+        padding: 10px;
+      }
+      strong {
+        font-size: 0.88rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+      span {
+        color: var(--muted);
+        font-size: 0.76rem;
+        line-height: 1.35;
+      }
+      .tag {
+        justify-self: start;
+        padding: 3px 7px;
+        border: 1px solid rgba(255, 200, 95, 0.42);
+        border-radius: 999px;
+        color: var(--accent);
+      }
+      .confirmed {
+        border-color: rgba(136, 211, 163, 0.52);
+        color: var(--ok);
+      }
+      .action {
+        border-color: rgba(255, 210, 95, 0.55);
+        color: #ffd25f;
+      }
+      .action.none {
+        border-color: rgba(238, 244, 236, 0.16);
+        color: rgba(238, 244, 236, 0.52);
+      }
+      .notes {
+        display: grid;
+        gap: 8px;
+      }
+      .note {
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.035);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="head-row">
+        <div>
+          <h1>보병/차량 컷 정리 v2</h1>
+          <p id="summary">정리본을 불러오는 중입니다.</p>
+        </div>
+        <nav aria-label="빠른 이동">
+          <a href="../../../../../ops.html">운영센터</a>
+          <a href="../../../../../docs/design-drafts/asset-crop-lab.html">컷팅 랩</a>
+          <a href="../../../../../skin-board.html">스킨 보드</a>
+        </nav>
+      </div>
+    </header>
+    <main id="app"></main>
+    <script>
+      const groups = [
+        { id: "infantry", title: "Infantry" },
+        { id: "vehicle", title: "Vehicle" },
+        { id: "vehicle-weapon", title: "Vehicle Weapon Overlay" },
+      ];
+
+      function card(asset) {
+        const article = document.createElement("article");
+        const thumb = document.createElement("div");
+        thumb.className = "thumb";
+        const image = document.createElement("img");
+        image.src = asset.file;
+        image.alt = asset.slot || asset.file;
+        thumb.append(image);
+
+        const body = document.createElement("div");
+        body.className = "body";
+        const title = document.createElement("strong");
+        title.textContent = asset.slot || asset.file;
+        const tag = document.createElement("span");
+        tag.className = `tag${asset.confirmed ? " confirmed" : ""}`;
+        tag.textContent = [asset.weapon || asset.vehicle || asset.assetType || asset.category, asset.state].filter(Boolean).join(" / ");
+        const action = document.createElement("span");
+        const actionType = asset.action?.type || "none";
+        action.className = `tag action${actionType === "none" ? " none" : ""}`;
+        action.textContent = `action: ${asset.action?.label || "없음"}`;
+        const file = document.createElement("span");
+        file.textContent = asset.file;
+        const notes = document.createElement("span");
+        notes.textContent = [asset.notes || "", asset.action?.pointHint ? `기준: ${asset.action.pointHint}` : ""].filter(Boolean).join(" ");
+        body.append(title, tag, action, file, notes);
+        article.append(thumb, body);
+        return article;
+      }
+
+      function section(title, assets) {
+        const section = document.createElement("section");
+        const heading = document.createElement("h2");
+        heading.textContent = `${title} (${assets.length})`;
+        const grid = document.createElement("div");
+        grid.className = "grid";
+        assets.forEach((asset) => grid.append(card(asset)));
+        section.append(heading, grid);
+        return section;
+      }
+
+      function placement(notes) {
+        if (!notes?.length) return null;
+        const section = document.createElement("section");
+        const heading = document.createElement("h2");
+        heading.textContent = "Placement Notes";
+        const list = document.createElement("div");
+        list.className = "notes";
+        notes.forEach((item) => {
+          const note = document.createElement("div");
+          note.className = "note";
+          note.textContent = `${item.slot}: 험비 ${item.humvee}, 탱크 ${item.tank}. ${item.notes}`;
+          list.append(note);
+        });
+        section.append(heading, list);
+        return section;
+      }
+
+      async function boot() {
+        const response = await fetch("curated-manifest.json", { cache: "no-store" });
+        const manifest = await response.json();
+        const app = document.getElementById("app");
+        document.getElementById("summary").textContent =
+          `${manifest.assets.length}개 확정. needs-id ${manifest.needsUserConfirmation.length}개. 본편 적용 전 검수용입니다.`;
+        groups.forEach((group) => {
+          const assets = manifest.assets.filter((asset) => asset.category === group.id);
+          if (assets.length) app.append(section(group.title, assets));
+        });
+        const placementSection = placement(manifest.placementNotes);
+        if (placementSection) app.append(placementSection);
+      }
+
+      boot().catch((error) => {
+        document.getElementById("summary").textContent = `정리본을 불러오지 못했습니다: ${error.message}`;
+      });
+    </script>
+  </body>
+</html>

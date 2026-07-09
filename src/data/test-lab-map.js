@@ -9,7 +9,7 @@
     width: 4200,
     height: 3400,
     captureRate: 0.12,
-    roadWidth: 96,
+    roadWidth: 210,
     terrainStyle: {
       gradient: ["#d9dddb", "#ccd2d1", "#bfc6c4"],
       gridColor: "#6f7b78",

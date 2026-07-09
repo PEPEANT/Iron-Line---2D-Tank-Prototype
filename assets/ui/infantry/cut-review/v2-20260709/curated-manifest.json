@@ -1,0 +1,465 @@
+{
+  "version": 2,
+  "createdAt": "2026-07-09",
+  "updatedAt": "2026-07-09",
+  "sourceManifest": "raw-asset-crop-manifest.json",
+  "vehicleSourceManifest": "raw-tank-crop-manifest.json",
+  "sourceSheet": "assets/ui/source-sheets/soubok-infantry-top-combined-v2.png",
+  "vehicleSourceSheet": "assets/ui/source-sheets/soubok-tank-top-source-v1.png",
+  "status": "review-only",
+  "note": "Confirmed by user on 2026-07-09. Standing infantry weapon frames are being wired into the main game first; vehicle and enemy-specific skins remain review assets.",
+  "assets": [
+    {
+      "file": "accepted/stand-grenade-throw-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_01_01.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "grenade",
+      "slot": "stand-grenade-ready-alt",
+      "confirmed": true,
+      "notes": "수류탄 준비/투척 직전 자세. 본편에서는 수류탄 준비 2프레임 중 확장 프레임으로 사용.",
+      "action": {
+        "type": "release",
+        "label": "투척/손놓기",
+        "role": "throw_release",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "수류탄이 손에서 떨어지는 위치"
+      }
+    },
+    {
+      "file": "accepted/stand-grenade-ready-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_01_copy_02.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "grenade",
+      "slot": "stand-grenade-ready",
+      "confirmed": true,
+      "notes": "수류탄 준비 자세.",
+      "action": {
+        "type": "release",
+        "label": "투척/손놓기",
+        "role": "throw_release",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "수류탄이 손에서 떨어지는 위치"
+      }
+    },
+    {
+      "file": "accepted/stand-pistol-ready-walk-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_02_02.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "pistol",
+      "slot": "stand-pistol-ready-walk",
+      "confirmed": true,
+      "notes": "권총 준비 자세 및 권총 이동 후보.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-pistol-aim-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_03_03.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "pistol",
+      "slot": "stand-pistol-aim",
+      "confirmed": true,
+      "notes": "권총 조준.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-rifle-aim-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_04_04.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "rifle",
+      "slot": "stand-rifle-aim",
+      "confirmed": true,
+      "notes": "소총 조준.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/prone-crawl-no-gun-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_05_05.png",
+      "category": "infantry",
+      "state": "prone",
+      "weapon": "none",
+      "slot": "prone-crawl-no-gun",
+      "confirmed": true,
+      "notes": "엎드림/기어가기 후보.",
+      "action": {
+        "type": "none",
+        "label": "없음",
+        "role": "none",
+        "source": "auto-inferred",
+        "needsPointPick": false,
+        "pointHint": "액션점 없음"
+      }
+    },
+    {
+      "file": "accepted/prone-fire-rifle-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_06_06.png",
+      "category": "infantry",
+      "state": "prone",
+      "weapon": "rifle",
+      "slot": "prone-fire-rifle",
+      "confirmed": true,
+      "notes": "엎드려 소총 조준/사격 후보.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-rifle-fire-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_07_07.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "rifle",
+      "slot": "stand-rifle-fire",
+      "confirmed": true,
+      "notes": "소총 정면 사격 후보.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-rifle-fire-02.png",
+      "sourceFile": "infantry_idle_infantry_auto_07_copy_08.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "rifle",
+      "slot": "stand-rifle-fire-alt",
+      "confirmed": true,
+      "notes": "소총 정면 사격 대체 프레임.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/dead-prone-blood-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_08_08.png",
+      "category": "infantry",
+      "state": "dead",
+      "weapon": "none",
+      "slot": "dead-prone-blood",
+      "confirmed": true,
+      "notes": "엎드린 사망, 피 포함.",
+      "action": {
+        "type": "none",
+        "label": "없음",
+        "role": "none",
+        "source": "auto-inferred",
+        "needsPointPick": false,
+        "pointHint": "액션점 없음"
+      }
+    },
+    {
+      "file": "accepted/stand-machinegun-carry-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_09_09.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "machinegun",
+      "slot": "stand-machinegun-carry",
+      "confirmed": true,
+      "notes": "기관총.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-rpg-walk-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_10_10.png",
+      "category": "infantry",
+      "state": "walk",
+      "weapon": "rpg",
+      "slot": "stand-rpg-walk-01",
+      "confirmed": true,
+      "notes": "RPG 이동 프레임 1.",
+      "action": {
+        "type": "projectile",
+        "label": "미사일/RPG",
+        "role": "projectile_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "RPG, 포탄, 미사일이 실제로 나가는 앞쪽 끝"
+      }
+    },
+    {
+      "file": "accepted/stand-rpg-walk-02.png",
+      "sourceFile": "infantry_idle_infantry_auto_10_copy_11.png",
+      "category": "infantry",
+      "state": "walk",
+      "weapon": "rpg",
+      "slot": "stand-rpg-walk-02",
+      "confirmed": true,
+      "notes": "RPG 이동 프레임 2.",
+      "action": {
+        "type": "projectile",
+        "label": "미사일/RPG",
+        "role": "projectile_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "RPG, 포탄, 미사일이 실제로 나가는 앞쪽 끝"
+      }
+    },
+    {
+      "file": "accepted/stand-rpg-aim-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_11_11.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "rpg",
+      "slot": "stand-rpg-shoulder-aim",
+      "confirmed": true,
+      "notes": "RPG 견착/조준.",
+      "action": {
+        "type": "projectile",
+        "label": "미사일/RPG",
+        "role": "projectile_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "RPG, 포탄, 미사일이 실제로 나가는 앞쪽 끝"
+      }
+    },
+    {
+      "file": "accepted/stand-machinegun-carry-02.png",
+      "sourceFile": "infantry_idle_infantry_auto_12_12.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "machinegun",
+      "slot": "stand-machinegun-carry-alt",
+      "confirmed": true,
+      "notes": "기관총.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-sniper-walk-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_13_13.png",
+      "category": "infantry",
+      "state": "walk",
+      "weapon": "sniper",
+      "slot": "stand-sniper-walk-01",
+      "confirmed": true,
+      "notes": "저격총 이동 프레임 1.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-sniper-walk-02.png",
+      "sourceFile": "infantry_idle_infantry_auto_13_copy_14.png",
+      "category": "infantry",
+      "state": "walk",
+      "weapon": "sniper",
+      "slot": "stand-sniper-walk-02",
+      "confirmed": true,
+      "notes": "저격총 이동 프레임 2.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-sniper-aim-forward-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_14_14.png",
+      "category": "infantry",
+      "state": "stand",
+      "weapon": "sniper",
+      "slot": "stand-sniper-aim-forward",
+      "confirmed": true,
+      "notes": "저격총 조준.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/stand-machinegun-walk-01.png",
+      "sourceFile": "infantry_idle_infantry_auto_15_15.png",
+      "category": "infantry",
+      "state": "walk",
+      "weapon": "machinegun",
+      "slot": "stand-machinegun-walk",
+      "confirmed": true,
+      "notes": "기관총 이동.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/tank-hull-top-01.png",
+      "sourceFile": "tank_misc_tank_auto_01_01.png",
+      "category": "vehicle",
+      "state": "part",
+      "vehicle": "tank",
+      "slot": "tank-hull-top",
+      "confirmed": true,
+      "notes": "전차 차체.",
+      "action": {
+        "type": "none",
+        "label": "없음",
+        "role": "none",
+        "source": "auto-inferred",
+        "needsPointPick": false,
+        "pointHint": "액션점 없음"
+      }
+    },
+    {
+      "file": "accepted/tank-turret-main-gun-01.png",
+      "sourceFile": "tank_misc_tank_auto_02_02.png",
+      "category": "vehicle",
+      "state": "part",
+      "vehicle": "tank",
+      "slot": "tank-turret-main-gun",
+      "confirmed": true,
+      "notes": "전차 포탑/주포. 발사점은 포신 끝.",
+      "action": {
+        "type": "projectile",
+        "label": "미사일/RPG",
+        "role": "projectile_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "RPG, 포탄, 미사일이 실제로 나가는 앞쪽 끝"
+      }
+    },
+    {
+      "file": "accepted/vehicle-mounted-machinegun-player-01.png",
+      "sourceFile": "tank_misc_tank_auto_03_03.png",
+      "category": "vehicle-weapon",
+      "state": "mounted",
+      "vehicle": "humvee,tank",
+      "slot": "mounted-machinegun-player",
+      "confirmed": true,
+      "notes": "플레이어가 기관총 조종 시 표시. 험비는 중심점, 탱크는 중심점보다 약간 아래 배치.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/vehicle-mounted-machinegun-crew-01.png",
+      "sourceFile": "tank_misc_tank_auto_04_04.png",
+      "category": "vehicle-weapon",
+      "state": "mounted",
+      "vehicle": "humvee,tank",
+      "slot": "mounted-machinegun-crew",
+      "confirmed": true,
+      "notes": "다른 플레이어 또는 AI가 기관총을 조종할 때 표시. 험비는 중심점, 탱크는 중심점보다 약간 아래 배치.",
+      "action": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "source": "auto-inferred",
+        "needsPointPick": true,
+        "pointHint": "총열 끝 / 발사 이펙트 시작점"
+      }
+    },
+    {
+      "file": "accepted/humvee-hull-top-01.png",
+      "sourceFile": "tank_misc_tank_auto_05_05.png",
+      "category": "vehicle",
+      "state": "body",
+      "vehicle": "humvee",
+      "slot": "humvee-hull-top",
+      "confirmed": true,
+      "notes": "험비 차체 후보.",
+      "action": {
+        "type": "none",
+        "label": "없음",
+        "role": "none",
+        "source": "auto-inferred",
+        "needsPointPick": false,
+        "pointHint": "액션점 없음"
+      }
+    }
+  ],
+  "needsUserConfirmation": [],
+  "placementNotes": [
+    {
+      "slot": "mounted-machinegun-player",
+      "humvee": "center",
+      "tank": "slightly below center",
+      "notes": "Player-controlled machine gun overlay."
+    },
+    {
+      "slot": "mounted-machinegun-crew",
+      "humvee": "center",
+      "tank": "slightly below center",
+      "notes": "Other player or AI controlled machine gun overlay."
+    }
+  ],
+  "nextStep": "Promote selected review assets into final game slots, then wire weapon-specific infantry frames and vehicle mounted-gun overlays.",
+  "actionPointPolicy": {
+    "source": "auto-inferred",
+    "note": "컷랩에서는 액션점 종류를 사용자가 고르지 않는다. 이름/무기/태그/종류로 총구, 미사일/RPG, 투척, 폭발 중심을 자동 판정하고 사용자는 위치만 찍는다."
+  }
+}

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수복 세계관 보드</title>
+    <style>
+      :root {
+        --bg: #09110f;
+        --panel: rgba(238, 244, 239, 0.065);
+        --panel-strong: rgba(238, 244, 239, 0.1);
+        --line: rgba(238, 244, 239, 0.16);
+        --ink: #edf4ef;
+        --muted: rgba(237, 244, 239, 0.64);
+        --dim: rgba(237, 244, 239, 0.42);
+        --green: #8cd7c5;
+        --amber: #ffd166;
+        --red: #f26d6d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif;
+        background:
+          radial-gradient(900px 420px at 18% -8%, rgba(140, 215, 197, 0.1), transparent),
+          linear-gradient(180deg, #0b1512, var(--bg));
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 54px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: end;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .kicker {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(28px, 4vw, 46px);
+        line-height: 1.08;
+      }
+
+      .lead {
+        max-width: 760px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .top-actions,
+      .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      button,
+      .link-button {
+        min-height: 38px;
+        padding: 0 13px;
+        border: 1px solid rgba(255, 209, 102, 0.45);
+        border-radius: 6px;
+        background: rgba(255, 209, 102, 0.13);
+        color: var(--ink);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 900;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button.secondary,
+      .link-button.secondary {
+        border-color: rgba(237, 244, 239, 0.18);
+        background: rgba(237, 244, 239, 0.06);
+      }
+
+      button.danger {
+        border-color: rgba(242, 109, 109, 0.46);
+        background: rgba(242, 109, 109, 0.1);
+      }
+
+      .status {
+        min-height: 22px;
+        margin-top: 10px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 850;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .card {
+        grid-column: span 4;
+        min-width: 0;
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .card.wide {
+        grid-column: span 8;
+      }
+
+      .card.full {
+        grid-column: 1 / -1;
+      }
+
+      .card h2,
+      .card h3 {
+        font-size: 15px;
+        line-height: 1.35;
+      }
+
+      .card p,
+      .card li {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 19px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .pill {
+        padding: 5px 8px;
+        border: 1px solid rgba(140, 215, 197, 0.28);
+        border-radius: 999px;
+        background: rgba(140, 215, 197, 0.08);
+        color: rgba(237, 244, 239, 0.82);
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 8px;
+        counter-reset: step;
+      }
+
+      .timeline li {
+        list-style: none;
+        position: relative;
+        padding-left: 34px;
+      }
+
+      .timeline li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 1px;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 209, 102, 0.45);
+        border-radius: 50%;
+        color: var(--amber);
+        font-size: 11px;
+        font-weight: 950;
+      }
+
+      .editor-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      label.editor {
+        display: grid;
+        gap: 7px;
+      }
+
+      label.editor span {
+        color: rgba(237, 244, 239, 0.78);
+        font-size: 12px;
+        font-weight: 950;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 118px;
+        resize: vertical;
+        padding: 11px;
+        border: 1px solid rgba(237, 244, 239, 0.14);
+        border-radius: 7px;
+        background: rgba(3, 7, 6, 0.42);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      textarea:focus {
+        outline: 2px solid rgba(140, 215, 197, 0.35);
+        border-color: rgba(140, 215, 197, 0.48);
+      }
+
+      .note {
+        color: var(--dim);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .export-box {
+        min-height: 160px;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 860px) {
+        header {
+          grid-template-columns: 1fr;
+        }
+
+        .top-actions {
+          justify-content: flex-start;
+        }
+
+        .card,
+        .card.wide {
+          grid-column: 1 / -1;
+        }
+
+        .editor-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <span class="kicker">Soubok Story Board</span>
+          <h1>수복 세계관 보드</h1>
+          <p class="lead">세계관을 눈으로 한눈에 보고, 떠오른 설정을 직접 적어두는 작업 보드다. 저장은 이 브라우저에 남고, 정식 설정으로 확정할 때는 Markdown으로 내보내서 `world-bible.md`에 반영한다.</p>
+          <div class="status" id="saveStatus" aria-live="polite"></div>
+        </div>
+        <div class="top-actions">
+          <a class="link-button secondary" href="INDEX.md">스토리 색인</a>
+          <a class="link-button secondary" href="world-mindmap.html">마인드맵</a>
+          <a class="link-button secondary" href="world-bible.md">원본 MD</a>
+          <a class="link-button secondary" href="../../ops.html">운영센터</a>
+        </div>
+      </header>
+
+      <section class="grid" aria-label="세계관 요약">
+        <article class="card wide">
+          <h2>한 줄 핵심</h2>
+          <p>평화로운 한국의 일상이 가상의 2차 한국전쟁으로 붕괴하고, 22살 이서훈은 피난민 속에서 사라진 김민지를 찾기 위해 BDF의 과거와 전쟁의 배후를 마주한다.</p>
+          <div class="pill-row">
+            <span class="pill">가상 2차 한국전쟁</span>
+            <span class="pill">김민지 실종</span>
+            <span class="pill">BDF 과거 비밀</span>
+            <span class="pill">중국 배후</span>
+            <span class="pill">사람과 영토의 수복</span>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>현재 주제</h2>
+          <p>수복은 단순히 땅을 되찾는 이야기가 아니라, 사람과 집과 평범한 하루를 되찾는 이야기다.</p>
+        </article>
+
+        <article class="card">
+          <h3>이서훈</h3>
+          <ul>
+            <li>22살, 초반에는 평범한 청년.</li>
+            <li>국정원과 연결된 BDF 과거 비밀이 있다.</li>
+            <li>전쟁 중 부모를 모두 잃는다.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h3>김민지</h3>
+          <ul>
+            <li>첫 미션에서 사망 확정이 아니라 피난민 속 실종.</li>
+            <li>동명이인이 많아 기록 추적이 계속 꼬인다.</li>
+            <li>이서훈이 전쟁 속에서 끝까지 찾는 사람.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h3>BDF</h3>
+          <ul>
+            <li>가상의 특수임무부대.</li>
+            <li>국정원 또는 국가 특수작전 체계와 연결.</li>
+            <li>이서훈의 과거 비밀과 직접 연결.</li>
+          </ul>
+        </article>
+
+        <article class="card full">
+          <h2>전쟁 발발 흐름</h2>
+          <ol class="timeline">
+            <li>평화로운 한국의 일상.</li>
+            <li>도시에서 대규모 테러 발생.</li>
+            <li>북한 도발과 소규모 국지전.</li>
+            <li>미사일 공격과 ICBM급 위협.</li>
+            <li>이서훈의 BDF 과거가 드러나기 시작.</li>
+            <li>김민지는 피난민 속에서 실종.</li>
+            <li>이서훈은 부모를 모두 잃음.</li>
+            <li>중국 배후가 드러남.</li>
+            <li>중국군 직접 개입으로 대규모 전면전.</li>
+            <li>김민지를 찾고 전쟁의 배후를 추적.</li>
+          </ol>
+        </article>
+      </section>
+
+      <section class="grid" aria-label="직접 수정 메모">
+        <article class="card full">
+          <h2>직접 수정 메모</h2>
+          <p class="note">아래 칸은 네가 바로 고쳐도 된다. 저장 버튼을 누르면 이 브라우저에 남는다. 정식 설정으로 확정할 내용은 Markdown으로 내보내서 원본 MD에 반영하면 된다.</p>
+          <div class="card-actions">
+            <button type="button" id="saveButton">저장</button>
+            <button type="button" class="secondary" id="exportMarkdownButton">Markdown 만들기</button>
+            <button type="button" class="secondary" id="downloadJsonButton">JSON 백업</button>
+            <button type="button" class="danger" id="resetButton">초기값 복원</button>
+          </div>
+          <div class="editor-grid" id="editorGrid"></div>
+        </article>
+
+        <article class="card full">
+          <h2>내보내기 미리보기</h2>
+          <p class="note">Markdown 만들기를 누르면 아래에 현재 메모가 정리된다.</p>
+          <textarea class="export-box" id="exportBox" readonly></textarea>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "soubok-story-board-v1";
+      const FIELDS = [
+        {
+          id: "logline",
+          label: "로그라인",
+          value: "평범한 서울의 하루가 끝나기 전, 전쟁은 이미 시작돼 있었다."
+        },
+        {
+          id: "seohoon",
+          label: "이서훈",
+          value: "22살. 평범한 청년처럼 보이지만 BDF와 연결된 과거 비밀이 있다. 전쟁 중 부모를 모두 잃고, 김민지를 찾기 위해 전쟁 한복판으로 들어간다."
+        },
+        {
+          id: "minji",
+          label: "김민지",
+          value: "피난민 속에서 실종된다. 같은 이름의 사람들이 너무 많아 병원, 보호소, 사망자 명단, 피난민 기록이 계속 혼선을 만든다."
+        },
+        {
+          id: "bdf",
+          label: "BDF",
+          value: "국정원과 연결된 가상 특수임무부대. 북한 특작조와 중국 배후 작전을 추적하던 조직일 수 있다. 이서훈을 보호했는지 이용했는지는 미정."
+        },
+        {
+          id: "mission1",
+          label: "미션 1",
+          value: "도시 테러 발생. 이서훈은 경찰, 경찰특공대, 군, BDF와 함께 테러조를 제거한다. 후반에는 ICBM급 위협과 미사일 공격, 헬기 탈출, 김민지 실종으로 끝난다."
+        },
+        {
+          id: "mission2",
+          label: "미션 2",
+          value: "중국군이 해안 또는 항만 지역에 상륙한다. 한국군은 해안 방어선과 시가전에서 중국군과 북한군의 진입을 막는다."
+        },
+        {
+          id: "mission3",
+          label: "미션 3",
+          value: "중국과 북한의 공세가 본격화된다. 한국군과 BDF는 주요 거점 방어와 반격을 수행한다."
+        },
+        {
+          id: "openQuestions",
+          label: "아직 정할 것",
+          value: "이서훈의 직업/신분, 김민지의 나이와 가족, BDF의 풀네임, 부모 사망 시점, 실제 지명 사용 여부, 김민지 최종 생사."
+        }
+      ];
+
+      const status = document.getElementById("saveStatus");
+      const editorGrid = document.getElementById("editorGrid");
+      const exportBox = document.getElementById("exportBox");
+
+      function defaultState() {
+        return Object.fromEntries(FIELDS.map((field) => [field.id, field.value]));
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return defaultState();
+          return { ...defaultState(), ...JSON.parse(raw) };
+        } catch (_error) {
+          return defaultState();
+        }
+      }
+
+      function readState() {
+        return Object.fromEntries(FIELDS.map((field) => {
+          const input = document.querySelector(`[data-story-field="${field.id}"]`);
+          return [field.id, input ? input.value.trim() : ""];
+        }));
+      }
+
+      function setStatus(message) {
+        status.textContent = message;
+        window.clearTimeout(setStatus.timer);
+        setStatus.timer = window.setTimeout(() => {
+          if (status.textContent === message) status.textContent = "";
+        }, 2600);
+      }
+
+      function renderEditors(state) {
+        editorGrid.innerHTML = "";
+        for (const field of FIELDS) {
+          const label = document.createElement("label");
+          label.className = "editor";
+          const title = document.createElement("span");
+          title.textContent = field.label;
+          const textarea = document.createElement("textarea");
+          textarea.dataset.storyField = field.id;
+          textarea.value = state[field.id] || "";
+          textarea.addEventListener("input", () => {
+            setStatus("수정 중. 저장 버튼을 누르면 이 브라우저에 남습니다.");
+          });
+          label.append(title, textarea);
+          editorGrid.append(label);
+        }
+      }
+
+      function saveState() {
+        const state = readState();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state, null, 2));
+        setStatus("저장됨. 이 브라우저에서 다시 열면 유지됩니다.");
+        return state;
+      }
+
+      function markdownFromState(state) {
+        const lines = ["# 수복 세계관 보드 메모", ""];
+        for (const field of FIELDS) {
+          lines.push(`## ${field.label}`, "", state[field.id] || "-", "");
+        }
+        return lines.join("\n").trim() + "\n";
+      }
+
+      function downloadFile(name, type, content) {
+        const blob = new Blob([content], { type });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = name;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      document.getElementById("saveButton").addEventListener("click", saveState);
+      document.getElementById("exportMarkdownButton").addEventListener("click", () => {
+        const markdown = markdownFromState(saveState());
+        exportBox.value = markdown;
+        exportBox.focus();
+        exportBox.select();
+        navigator.clipboard?.writeText(markdown).catch(() => {});
+        setStatus("Markdown을 만들었습니다. 아래 상자에서 확인할 수 있습니다.");
+      });
+      document.getElementById("downloadJsonButton").addEventListener("click", () => {
+        const state = saveState();
+        downloadFile("soubok-story-board.json", "application/json", JSON.stringify(state, null, 2));
+      });
+      document.getElementById("resetButton").addEventListener("click", () => {
+        if (!confirm("직접 수정한 내용을 초기값으로 되돌릴까요?")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        const state = defaultState();
+        renderEditors(state);
+        exportBox.value = "";
+        setStatus("초기값으로 복원했습니다.");
+      });
+
+      renderEditors(loadState());
+    </script>
+  </body>
+</html>

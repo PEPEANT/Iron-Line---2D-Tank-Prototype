@@ -238,6 +238,24 @@
       roundRect(ctx, 3.4, -2.05, 3.2, 1, 0.2); ctx.fill();
     },
 
+    fieldRadio(ctx) {
+      ctx.translate(1, 0);
+      ctx.fillStyle = FURN;
+      roundRect(ctx, 0, -4.7, 8.8, 9.4, 1.6); ctx.fill(); edge(ctx);
+      ctx.strokeStyle = METD; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(4.4, -4.7); ctx.lineTo(6.5, -8.2); ctx.stroke();
+      ctx.fillStyle = "rgba(216, 244, 199, 0.86)";
+      roundRect(ctx, 1.9, -3.2, 5, 2.6, 0.5); ctx.fill(); edge(ctx);
+      ctx.fillStyle = METD;
+      roundRect(ctx, 2, 0.6, 4.8, 0.7, 0.25); ctx.fill();
+      roundRect(ctx, 2, 2.1, 4.8, 0.7, 0.25); ctx.fill();
+      ctx.fillStyle = "#ffd166";
+      ctx.beginPath(); ctx.arc(2.5, 4, 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = METD;
+      ctx.beginPath(); ctx.arc(4.5, 4, 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6.5, 4, 0.55, 0, Math.PI * 2); ctx.fill();
+    },
+
     reconDrone(ctx) {
       ctx.translate(2, 0);
       ctx.strokeStyle = "#141910"; ctx.lineWidth = 1;
@@ -316,6 +334,7 @@
   // 장착 변환(자세·반동)은 기존 규칙 그대로 유지, 무기 묘사만 스프라이트로 교체.
   Renderer.prototype.drawInfantryWeapon = function drawInfantryWeaponArt(ctx, unit, weapon, pose = "stand-move", scoped = false, phase = 0) {
     const rpg = weapon.id === "rpg";
+    const radio = weapon.id === "fieldRadio";
     const machineGun = weapon.id === "machinegun" || weapon.id === "lmg";
     const crawling = pose === "prone-crawl";
     const proneFire = pose === "prone-fire";
@@ -324,6 +343,11 @@
     let sideOffset = rpg ? 7 : 8.4;
     let forwardOffset = -5.3;
     let weaponAngle = -0.52;
+    if (radio) {
+      sideOffset = 5.4;
+      forwardOffset = -3.2;
+      weaponAngle = -1.05;
+    }
 
     if (crawling) {
       sideOffset = rpg ? 8.5 : 7.2 + Math.sin(phase) * 0.65;

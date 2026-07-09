@@ -36,6 +36,9 @@
       this.isProne = false;
       this.proneCooldown = 0;
       this.proneHoldTimer = 0;
+      this.combatShockTimer = 0;
+      this.combatShockTotal = 0;
+      this.combatShockLookAngle = this.angle;
       this.hitReactTimer = 0;
       this.hitSlowTimer = 0;
       this.hitReactAngle = 0;
@@ -65,6 +68,7 @@
       this.transportCooldown = Math.max(0, (this.transportCooldown || 0) - dt);
       this.proneCooldown = Math.max(0, (this.proneCooldown || 0) - dt);
       this.proneHoldTimer = Math.max(0, (this.proneHoldTimer || 0) - dt);
+      this.combatShockTimer = Math.max(0, (this.combatShockTimer || 0) - dt);
       this.hitReactTimer = Math.max(0, (this.hitReactTimer || 0) - dt);
       this.hitSlowTimer = Math.max(0, (this.hitSlowTimer || 0) - dt);
       this.healthRevealTimer = Math.max(0, (this.healthRevealTimer || 0) - dt);
@@ -125,6 +129,15 @@
         this.hitReactTimer = Math.max(this.hitReactTimer || 0, impact);
         this.hitSlowTimer = Math.max(this.hitSlowTimer || 0, 0.32 + Math.min(0.2, amount / 80));
         if (source && Number.isFinite(source.x) && Number.isFinite(source.y)) {
+          const threatAngle = Math.atan2(source.y - this.y, source.x - this.x);
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const heavyHit = amount >= 30 || source.weaponId === "sniper";
+          const shock = Math.min(1.32, 0.45 + amount / 95 + Math.random() * 0.34 + (heavyHit ? 0.26 : 0));
+          const shockTimer = Math.max(this.combatShockTimer || 0, shock);
+          this.combatShockTimer = shockTimer;
+          this.combatShockTotal = shockTimer;
+          this.combatShockLookAngle = threatAngle + side * (0.48 + Math.random() * 0.88) + (Math.random() - 0.5) * 0.3;
+          if (!this.isProne) this.proneCooldown = Math.max(this.proneCooldown || 0, shock + 0.34);
           this.hitReactAngle = Math.atan2(this.y - source.y, this.x - source.x);
           this.hitReactStrength = Math.max(this.hitReactStrength || 0, Math.min(6, 2.4 + amount / 18));
         }

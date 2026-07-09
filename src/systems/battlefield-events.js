@@ -61,7 +61,6 @@
         "player_down",
         "vehicle_destroyed",
         "squad_leader_lost",
-        "squad_radio",
         "commander_order"
       ].includes(event.type);
     }

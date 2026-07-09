@@ -24,13 +24,13 @@
   };
 
   function drawReticle(ctx, x, y, radius, color, lineWidth) {
-    const gap = radius;
-    const arm = radius * 1.1;
+    const gap = radius * 0.75;
+    const arm = radius * 0.72;
+    const corner = radius * 0.34;
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.moveTo(x - gap - arm, y);
     ctx.lineTo(x - gap, y);
     ctx.moveTo(x + gap, y);
@@ -39,10 +39,22 @@
     ctx.lineTo(x, y - gap);
     ctx.moveTo(x, y + gap);
     ctx.lineTo(x, y + gap + arm);
+    ctx.moveTo(x - gap, y - gap - corner);
+    ctx.lineTo(x - gap, y - gap);
+    ctx.lineTo(x - gap - corner, y - gap);
+    ctx.moveTo(x + gap, y - gap - corner);
+    ctx.lineTo(x + gap, y - gap);
+    ctx.lineTo(x + gap + corner, y - gap);
+    ctx.moveTo(x - gap, y + gap + corner);
+    ctx.lineTo(x - gap, y + gap);
+    ctx.lineTo(x - gap - corner, y + gap);
+    ctx.moveTo(x + gap, y + gap + corner);
+    ctx.lineTo(x + gap, y + gap);
+    ctx.lineTo(x + gap + corner, y + gap);
     ctx.stroke();
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(x, y, Math.max(0.9, radius * 0.14), 0, Math.PI * 2);
+    ctx.arc(x, y, Math.max(1.1, radius * 0.16), 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -66,10 +78,6 @@
   function drawRpgReticle(ctx, game, player, weapon) {
     const aim = game.resolvePlayerRpgAim?.(game.input.mouse.worldX, game.input.mouse.worldY, weapon);
     if (!aim) return;
-    const muzzleDistance = player.radius + 16;
-    const angle = Math.atan2(game.input.mouse.worldY - player.y, game.input.mouse.worldX - player.x);
-    const muzzleX = player.x + Math.cos(angle) * muzzleDistance;
-    const muzzleY = player.y + Math.sin(angle) * muzzleDistance;
     const aimReady = (player.rpgAimTime || 0) >= (player.isProne ? 0.42 : 0.34) && !aim.tooClose;
     const color = aim.tooClose ? COLOR_BLOCKED : aimReady ? COLOR_READY : COLOR_FAR;
     const pulse = 1 + Math.sin(performance.now() * 0.012) * 0.05;
@@ -77,23 +85,10 @@
     ctx.save();
     ctx.lineCap = "round";
 
-    // 조준선 — 플레이어가 지금 조작 중인 대상이므로 점선 허용 (조준 완료 시 실선)
-    ctx.strokeStyle = color;
-    ctx.lineWidth = aimReady ? 2.2 : 1.7;
-    ctx.setLineDash(aimReady ? [] : [8, 9]);
-    ctx.beginPath();
-    ctx.moveTo(muzzleX, muzzleY);
-    ctx.lineTo(aim.x, aim.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // RPG도 긴 조준선 없이 작은 조준점만 표시한다.
 
-    // 레티클 + 스플래시 링 하나만 (최소사거리 위반은 레티클 색으로 표현)
+    // 최소사거리 위반은 조준점 색으로만 표현해서 화면 노이즈를 줄인다.
     drawReticle(ctx, aim.x, aim.y, RETICLE_SIZE.rpg * pulse, color, 1.8);
-    ctx.strokeStyle = aim.tooClose ? "rgba(255, 107, 94, 0.22)" : "rgba(255, 159, 85, 0.26)";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(aim.x, aim.y, weapon.splash || 110, 0, Math.PI * 2);
-    ctx.stroke();
     ctx.restore();
   }
 

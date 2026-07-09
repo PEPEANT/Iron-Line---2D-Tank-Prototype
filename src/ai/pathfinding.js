@@ -20,6 +20,7 @@
       this.segmentCacheSignature = "";
       this.nearestCache = new Map();
       this.pathCache = new Map();
+      this.edgeBlockedCache = new Map();
 
       for (const edge of config.edges || []) {
         this.addEdge(edge[0], edge[1], edge[2], 22);
@@ -72,6 +73,11 @@
       this.ensureSegmentCacheFresh();
       const cacheKey = this.pathCacheKey(startId, goalId, options);
       if (this.pathCache.has(cacheKey)) return this.pathCache.get(cacheKey);
+      const deadlineAt = Number.isFinite(options.deadlineAt)
+        ? options.deadlineAt
+        : Number.isFinite(options.deadlineMs) && options.deadlineMs > 0
+          ? this.now() + options.deadlineMs
+          : Infinity;
 
       const open = new Set([startId]);
       const cameFrom = new Map();
@@ -82,6 +88,9 @@
 
       while (open.size > 0 && iterations < maxIterations) {
         iterations += 1;
+        if ((iterations & 3) === 0 && this.now() > deadlineAt) {
+          return options.returnNullOnTimeout ? null : this.cachePath(cacheKey, []);
+        }
         const current = this.lowestScoreNode(open, fScore);
         if (!current) break;
         if (current === goalId) return this.cachePath(cacheKey, this.reconstructPath(cameFrom, current));
@@ -109,16 +118,27 @@
       const to = this.nodeById.get(neighbor.id);
       if (!from || !to) return true;
       const padding = options.edgePadding ?? neighbor.padding ?? options.padding ?? 34;
-      return this.segmentBlocked(from.x, from.y, to.x, to.y, padding, options);
+      const scenery = options.blockScenery === false ? "0" : "1";
+      const a = fromId < neighbor.id ? fromId : neighbor.id;
+      const b = fromId < neighbor.id ? neighbor.id : fromId;
+      const key = `${a}|${b}|${Math.round(padding)}|${scenery}`;
+      if (this.edgeBlockedCache.has(key)) return this.edgeBlockedCache.get(key);
+      const blocked = this.segmentBlocked(from.x, from.y, to.x, to.y, padding, options);
+      this.edgeBlockedCache.set(key, blocked);
+      if (this.edgeBlockedCache.size > 24000) this.edgeBlockedCache.clear();
+      return blocked;
     }
 
     findPathBetween(start, goal, options = {}) {
-      const startNode = this.nearestNode(start.x, start.y, options);
+      const searchOptions = Number.isFinite(options.deadlineMs) && options.deadlineMs > 0 && !Number.isFinite(options.deadlineAt)
+        ? { ...options, deadlineAt: this.now() + options.deadlineMs }
+        : options;
+      const startNode = this.nearestNode(start.x, start.y, searchOptions);
       const goalNode = goal.name
-        ? this.nodeForObjective(goal.name) || this.nearestNode(goal.x, goal.y, options)
-        : this.nearestNode(goal.x, goal.y, options);
+        ? this.nodeForObjective(goal.name) || this.nearestNode(goal.x, goal.y, searchOptions)
+        : this.nearestNode(goal.x, goal.y, searchOptions);
       if (!startNode || !goalNode) return [];
-      return this.findPath(startNode.id, goalNode.id, options);
+      return this.findPath(startNode.id, goalNode.id, searchOptions);
     }
 
     segmentBlocked(x1, y1, x2, y2, padding = 56, options = {}) {
@@ -156,6 +176,7 @@
       this.segmentCache.clear();
       this.nearestCache.clear();
       this.pathCache.clear();
+      this.edgeBlockedCache.clear();
     }
 
     blockerSignature() {
@@ -202,6 +223,10 @@
       this.pathCache.set(key, path);
       if (this.pathCache.size > 3000) this.pathCache.clear();
       return path;
+    }
+
+    now() {
+      return global.performance?.now ? global.performance.now() : Date.now();
     }
 
     addNode(node) {

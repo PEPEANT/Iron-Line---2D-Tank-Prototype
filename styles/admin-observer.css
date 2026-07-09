@@ -87,7 +87,11 @@
   margin-left: auto;
 }
 
-.admin-standalone-page .admin-head-actions button {
+.admin-standalone-page .admin-head-actions button,
+.admin-standalone-page .admin-head-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
   min-width: 86px;
   min-height: 32px;
@@ -100,9 +104,12 @@
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
+  line-height: 1;
+  text-decoration: none;
 }
 
-.admin-standalone-page .admin-head-actions button.active {
+.admin-standalone-page .admin-head-actions button.active,
+.admin-standalone-page .admin-head-actions a:hover {
   border-color: rgba(255, 209, 102, 0.56);
   background: rgba(255, 209, 102, 0.15);
   color: #fff1b8;
@@ -525,7 +532,8 @@
     margin-left: 0;
   }
 
-  .admin-standalone-page .admin-head-actions button {
+  .admin-standalone-page .admin-head-actions button,
+  .admin-standalone-page .admin-head-actions a {
     flex: 1 1 0;
   }
 

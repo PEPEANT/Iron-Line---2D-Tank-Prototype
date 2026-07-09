@@ -18,6 +18,24 @@
       "status": "candidate",
       "usage": "tank AP cannon fire"
     },
+    "explosion-he": {
+      "path": "explosion-he.mp3",
+      "source": "sfx/vehicle/tank-he-alt-candidate.mp3",
+      "status": "placeholder",
+      "usage": "temporary HE/RPG/grenade explosion slot"
+    },
+    "explosion-drone": {
+      "path": "explosion-drone.mp3",
+      "source": "sfx/projectile/rpg-fire.mp3",
+      "status": "placeholder",
+      "usage": "temporary drone explosion slot"
+    },
+    "hit-metal": {
+      "path": "hit-metal.mp3",
+      "source": "sfx/vehicle/tank-ap-fire.mp3",
+      "status": "placeholder",
+      "usage": "temporary armor impact slot"
+    },
     "pistol-fire": {
       "path": "pistol-fire.mp3",
       "source": "gun.mp3",

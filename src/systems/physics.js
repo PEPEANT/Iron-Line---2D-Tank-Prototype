@@ -250,6 +250,80 @@
     return true;
   }
 
+  function vehicleBodyProfile(vehicle) {
+    const tank = vehicle?.vehicleType !== "humvee";
+    const baseRadius = Math.max(vehicle?.radius || 0, tank ? 62 : 44);
+    return {
+      centerRadius: tank ? baseRadius * 0.94 : baseRadius * 0.9,
+      endRadius: tank ? baseRadius * 0.82 : baseRadius * 0.76,
+      halfLength: tank ? baseRadius * 1.28 : baseRadius * 1.36
+    };
+  }
+
+  function vehicleBodyCircles(vehicle) {
+    const profile = vehicleBodyProfile(vehicle);
+    const angle = vehicle?.angle || 0;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const x = vehicle?.x || 0;
+    const y = vehicle?.y || 0;
+    return [
+      { x, y, radius: profile.centerRadius },
+      { x: x + c * profile.halfLength, y: y + s * profile.halfLength, radius: profile.endRadius },
+      { x: x - c * profile.halfLength, y: y - s * profile.halfLength, radius: profile.endRadius }
+    ];
+  }
+
+  function circleVehicleContact(x, y, radius, vehicle, padding = 0) {
+    let best = null;
+    for (const body of vehicleBodyCircles(vehicle)) {
+      const dx = x - body.x;
+      const dy = y - body.y;
+      let distance = Math.hypot(dx, dy);
+      const minDistance = radius + body.radius + padding;
+      if (distance >= minDistance) continue;
+      let nx = dx / Math.max(distance, 1);
+      let ny = dy / Math.max(distance, 1);
+      if (distance < 1) {
+        const angle = vehicle?.angle || 0;
+        nx = Math.cos(angle + Math.PI / 2);
+        ny = Math.sin(angle + Math.PI / 2);
+        distance = 1;
+      }
+      const overlap = minDistance - distance;
+      if (!best || overlap > best.overlap) {
+        best = { body, distance, minDistance, overlap, nx, ny };
+      }
+    }
+    return best;
+  }
+
+  function vehicleVehicleContact(a, b, padding = 0) {
+    let best = null;
+    for (const bodyA of vehicleBodyCircles(a)) {
+      for (const bodyB of vehicleBodyCircles(b)) {
+        const dx = bodyB.x - bodyA.x;
+        const dy = bodyB.y - bodyA.y;
+        let distance = Math.hypot(dx, dy);
+        const minDistance = bodyA.radius + bodyB.radius + padding;
+        if (distance >= minDistance) continue;
+        let nx = dx / Math.max(distance, 1);
+        let ny = dy / Math.max(distance, 1);
+        if (distance < 1) {
+          const angle = (b?.angle || 0) + Math.PI / 2;
+          nx = Math.cos(angle);
+          ny = Math.sin(angle);
+          distance = 1;
+        }
+        const overlap = minDistance - distance;
+        if (!best || overlap > best.overlap) {
+          best = { distance, minDistance, overlap, nx, ny };
+        }
+      }
+    }
+    return best;
+  }
+
   function circleIntersectsTank(game, entity, x, y, radius, options = {}) {
     const padding = options.padding ?? 4;
     const ignoreTanks = new Set(options.ignoreTanks || []);
@@ -258,8 +332,8 @@
     return [...(game.tanks || []), ...(game.humvees || [])].some((tank) => {
       if (tank === entity || ignoreTanks.has(tank)) return false;
       if (!tank.alive && (!options.blockWrecks || !vehicleWreckBlocks(tank, options))) return false;
-      const hit = distXY(x, y, tank.x, tank.y) < radius + tank.radius + padding;
-      if (!hit) return false;
+      const contact = circleVehicleContact(x, y, radius, tank, padding);
+      if (!contact) return false;
       if (!tank.alive && tryBreakVehicleWreckOnImpact(game, entity, tank, options)) return false;
       return true;
     });
@@ -416,6 +490,11 @@
 
     const wasAlive = entity.alive !== false && (entity.hp === undefined || entity.hp > 0);
     entity.suppress?.(threat.kind === "tank_crush" ? 42 : 28, source);
+    // 유혈 시스템 힌트: 차량 진행 방향으로 피가 번지게 (blood-system.js takeDamage 래퍼가 소비)
+    {
+      const travelDirection = Math.sign(vehicle?.speed || 1) < 0 ? (vehicle?.angle || 0) + Math.PI : vehicle?.angle || 0;
+      entity.__bloodImpact = { kind: "vehicle", dirX: Math.cos(travelDirection), dirY: Math.sin(travelDirection), speed: threat.speed };
+    }
     entity.takeDamage?.(damage);
     entity.lastVehicleImpact = {
       kind: threat.kind,
@@ -598,30 +677,18 @@
     const radius = entity.radius || 10;
     for (const tank of [...(game.tanks || []), ...(game.humvees || [])]) {
       if (!tank.alive) continue;
-      const dx = entity.x - tank.x;
-      const dy = entity.y - tank.y;
-      let distance = Math.hypot(dx, dy);
-      const minDistance = radius + tank.radius + padding;
-      if (distance >= minDistance) continue;
+      const contact = circleVehicleContact(entity.x, entity.y, radius, tank, padding);
+      if (!contact) continue;
 
-      let nx = dx / Math.max(distance, 1);
-      let ny = dy / Math.max(distance, 1);
-      if (distance < 1) {
-        const angle = entity.angle ?? tank.angle ?? 0;
-        nx = Math.cos(angle);
-        ny = Math.sin(angle);
-        distance = 1;
-      }
-
-      const push = minDistance - distance;
+      const push = contact.overlap;
       applyVehicleContactDamage(game, entity, tank, {
         dt,
-        distance,
-        minDistance,
+        distance: contact.distance,
+        minDistance: contact.minDistance,
         contactDepth: push
       });
-      entity.x = clamp(entity.x + nx * push, radius, game.world.width - radius);
-      entity.y = clamp(entity.y + ny * push, radius, game.world.height - radius);
+      entity.x = clamp(entity.x + contact.nx * push, radius, game.world.width - radius);
+      entity.y = clamp(entity.y + contact.ny * push, radius, game.world.height - radius);
       if (entity.speed !== undefined) entity.speed *= 0.35;
     }
   }
@@ -647,24 +714,11 @@
           const b = tanks[j];
           if (!b.alive) continue;
 
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          let d = Math.hypot(dx, dy);
-          const minDist = a.radius + b.radius + 10;
-          if (d >= minDist) continue;
+          const contact = vehicleVehicleContact(a, b, 10);
+          if (!contact) continue;
 
-          let nx = dx / Math.max(d, 1);
-          let ny = dy / Math.max(d, 1);
-          if (d < 1) {
-            const angle = (b.angle || 0) + Math.PI / 2;
-            nx = Math.cos(angle);
-            ny = Math.sin(angle);
-            d = 1;
-          }
-
-          const overlap = minDist - d;
-          const severity = clamp(overlap / Math.max(minDist, 1), 0.08, 0.9);
-          const push = clamp(overlap * 0.72, 2.5, 28);
+          const severity = clamp(contact.overlap / Math.max(contact.minDistance, 1), 0.08, 0.9);
+          const push = clamp(contact.overlap * 0.72, 3, 34);
           let aShare = 0.5;
           let bShare = 0.5;
           if (a.playerControlled && !b.playerControlled) {
@@ -675,10 +729,10 @@
             bShare = 0.18;
           }
 
-          a.x = clamp(a.x - nx * push * aShare, a.radius, (world.width || a.x) - a.radius);
-          a.y = clamp(a.y - ny * push * aShare, a.radius, (world.height || a.y) - a.radius);
-          b.x = clamp(b.x + nx * push * bShare, b.radius, (world.width || b.x) - b.radius);
-          b.y = clamp(b.y + ny * push * bShare, b.radius, (world.height || b.y) - b.radius);
+          a.x = clamp(a.x - contact.nx * push * aShare, a.radius, (world.width || a.x) - a.radius);
+          a.y = clamp(a.y - contact.ny * push * aShare, a.radius, (world.height || a.y) - a.radius);
+          b.x = clamp(b.x + contact.nx * push * bShare, b.radius, (world.width || b.x) - b.radius);
+          b.y = clamp(b.y + contact.ny * push * bShare, b.radius, (world.height || b.y) - b.radius);
 
           const impact = clamp(severity * 0.8, 0.08, 0.55);
           a.impactShake = Math.max(a.impactShake || 0, impact);
@@ -687,6 +741,77 @@
           if (b.turnVelocity !== undefined) b.turnVelocity *= 0.62;
           if (a.speed !== undefined) a.speed *= severity > 0.32 ? -0.1 : 0.42;
           if (b.speed !== undefined) b.speed *= severity > 0.32 ? -0.1 : 0.42;
+        }
+      }
+    }
+  }
+
+  function infantryBodyRadius(unit) {
+    return Math.max(unit?.radius || 10, unit?.isProne ? 12 : 10);
+  }
+
+  function infantryBlocksMovement(game, unit) {
+    if (!unit || unit.inVehicle || unit.inTank) return false;
+    if (unit === game?.player) return !game.playerDowned && !game.playerDeathActive && (unit.hp ?? 0) > 0 && !unit.inTank;
+    if (unit.alive === false) return false;
+    if (unit.hp !== undefined && unit.hp <= 0) return false;
+    return true;
+  }
+
+  function resolveInfantrySpacing(game, dt = 0) {
+    const units = [];
+    for (const unit of game.infantry || []) {
+      if (infantryBlocksMovement(game, unit)) units.push(unit);
+    }
+    for (const crew of game.crews || []) {
+      if (infantryBlocksMovement(game, crew)) units.push(crew);
+    }
+    if (infantryBlocksMovement(game, game.player)) units.push(game.player);
+    if (units.length < 2) return;
+
+    const world = game.world || {};
+    const passes = units.length > 90 ? 1 : 2;
+    for (let pass = 0; pass < passes; pass += 1) {
+      for (let i = 0; i < units.length; i += 1) {
+        const a = units[i];
+        const ar = infantryBodyRadius(a);
+        for (let j = i + 1; j < units.length; j += 1) {
+          const b = units[j];
+          if (a === b) continue;
+          const br = infantryBodyRadius(b);
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          let distance = Math.hypot(dx, dy);
+          const minDistance = ar + br + 1.8;
+          if (distance >= minDistance) continue;
+
+          let nx = dx / Math.max(distance, 1);
+          let ny = dy / Math.max(distance, 1);
+          if (distance < 1) {
+            const angle = (b.angle || a.angle || 0) + Math.PI / 2;
+            nx = Math.cos(angle);
+            ny = Math.sin(angle);
+            distance = 1;
+          }
+
+          const overlap = minDistance - distance;
+          const push = clamp(overlap * 0.62, 0.8, 8.5);
+          let aShare = 0.5;
+          let bShare = 0.5;
+          if (a === game.player && b !== game.player) {
+            aShare = 0.24;
+            bShare = 0.76;
+          } else if (b === game.player && a !== game.player) {
+            aShare = 0.76;
+            bShare = 0.24;
+          }
+
+          a.x = clamp(a.x - nx * push * aShare, ar, (world.width || a.x) - ar);
+          a.y = clamp(a.y - ny * push * aShare, ar, (world.height || a.y) - ar);
+          b.x = clamp(b.x + nx * push * bShare, br, (world.width || b.x) - br);
+          b.y = clamp(b.y + ny * push * bShare, br, (world.height || b.y) - br);
+          if (a.speed !== undefined) a.speed *= Math.max(0.2, 1 - dt * 7);
+          if (b.speed !== undefined) b.speed *= Math.max(0.2, 1 - dt * 7);
         }
       }
     }
@@ -704,6 +829,7 @@
     tryMoveCircle,
     resolveTankSpacing,
     resolveInfantryTankSpacing,
+    resolveInfantrySpacing,
     circleIntersectsTank,
     pointInRect,
     circleRectCollision,

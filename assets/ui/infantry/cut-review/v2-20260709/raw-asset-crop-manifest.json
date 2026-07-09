@@ -1,0 +1,665 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-09T03:00:02.424Z",
+  "source": {
+    "id": "infantry-v2",
+    "label": "보병 탑뷰 통합본 V2",
+    "url": "../../assets/ui/source-sheets/soubok-infantry-top-combined-v2.png",
+    "width": 1253,
+    "height": 1192
+  },
+  "export": {
+    "transparentWhite": true,
+    "whiteThreshold": 238,
+    "padding": 6
+  },
+  "crops": [
+    {
+      "id": "auto-infantry-v2-1783563360752-0",
+      "name": "infantry_auto_01",
+      "file": "infantry_idle_infantry_auto_01_01.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "01",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 142,
+        "y": 82,
+        "w": 143,
+        "h": 164
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 65,
+        "y": 79,
+        "sourceX": 201,
+        "sourceY": 155,
+        "normalizedX": 0.413,
+        "normalizedY": 0.445
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 88,
+        "y": 144,
+        "sourceX": 224,
+        "sourceY": 220,
+        "normalizedX": 0.573,
+        "normalizedY": 0.841
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-1",
+      "name": "infantry_auto_02",
+      "file": "infantry_idle_infantry_auto_02_02.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "02",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 476,
+        "y": 99,
+        "w": 137,
+        "h": 110
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 75,
+        "y": 61,
+        "sourceX": 545,
+        "sourceY": 154,
+        "normalizedX": 0.504,
+        "normalizedY": 0.5
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-2",
+      "name": "infantry_auto_03",
+      "file": "infantry_idle_infantry_auto_03_03.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "03",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 689,
+        "y": 101,
+        "w": 161,
+        "h": 108
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 68,
+        "y": 57,
+        "sourceX": 751,
+        "sourceY": 152,
+        "normalizedX": 0.385,
+        "normalizedY": 0.472
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 166,
+        "y": 61,
+        "sourceX": 849,
+        "sourceY": 156,
+        "normalizedX": 0.994,
+        "normalizedY": 0.509
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-3",
+      "name": "infantry_auto_04",
+      "file": "infantry_idle_infantry_auto_04_04.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "04",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 1041,
+        "y": 119,
+        "w": 117,
+        "h": 210
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 62,
+        "y": 74,
+        "sourceX": 1097,
+        "sourceY": 187,
+        "normalizedX": 0.479,
+        "normalizedY": 0.324
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 38,
+        "y": 202,
+        "sourceX": 1073,
+        "sourceY": 315,
+        "normalizedX": 0.274,
+        "normalizedY": 0.933
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-4",
+      "name": "infantry_auto_05",
+      "file": "infantry_idle_infantry_auto_05_05.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "05",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 444,
+        "y": 263,
+        "w": 299,
+        "h": 116
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 156,
+        "y": 64,
+        "sourceX": 594,
+        "sourceY": 321,
+        "normalizedX": 0.502,
+        "normalizedY": 0.5
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-5",
+      "name": "infantry_auto_06",
+      "file": "infantry_idle_infantry_auto_06_06.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "06",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 132,
+        "y": 269,
+        "w": 299,
+        "h": 120
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 156,
+        "y": 66,
+        "sourceX": 282,
+        "sourceY": 329,
+        "normalizedX": 0.502,
+        "normalizedY": 0.5
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-6",
+      "name": "infantry_auto_07",
+      "file": "infantry_idle_infantry_auto_07_07.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "07",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 823,
+        "y": 356,
+        "w": 179,
+        "h": 151
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 77,
+        "y": 73,
+        "sourceX": 894,
+        "sourceY": 423,
+        "normalizedX": 0.397,
+        "normalizedY": 0.444
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-7",
+      "name": "infantry_auto_08",
+      "file": "infantry_idle_infantry_auto_08_08.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "08",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 457,
+        "y": 404,
+        "w": 295,
+        "h": 113
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 154,
+        "y": 63,
+        "sourceX": 605,
+        "sourceY": 461,
+        "normalizedX": 0.502,
+        "normalizedY": 0.504
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-8",
+      "name": "infantry_auto_09",
+      "file": "infantry_idle_infantry_auto_09_09.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "09",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 594,
+        "y": 547,
+        "w": 132,
+        "h": 221
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 59,
+        "y": 115,
+        "sourceX": 647,
+        "sourceY": 656,
+        "normalizedX": 0.402,
+        "normalizedY": 0.493
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-9",
+      "name": "infantry_auto_10",
+      "file": "infantry_idle_infantry_auto_10_10.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "10",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 229,
+        "y": 560,
+        "w": 140,
+        "h": 202
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 76,
+        "y": 107,
+        "sourceX": 299,
+        "sourceY": 661,
+        "normalizedX": 0.5,
+        "normalizedY": 0.5
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-10",
+      "name": "infantry_auto_11",
+      "file": "infantry_idle_infantry_auto_11_11.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "11",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 71,
+        "y": 562,
+        "w": 123,
+        "h": 207
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 61,
+        "y": 79,
+        "sourceX": 126,
+        "sourceY": 635,
+        "normalizedX": 0.447,
+        "normalizedY": 0.353
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 97,
+        "y": 190,
+        "sourceX": 162,
+        "sourceY": 746,
+        "normalizedX": 0.74,
+        "normalizedY": 0.889
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-11",
+      "name": "infantry_auto_12",
+      "file": "infantry_idle_infantry_auto_12_12.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "12",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 434,
+        "y": 585,
+        "w": 130,
+        "h": 218
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 81,
+        "y": 74,
+        "sourceX": 509,
+        "sourceY": 653,
+        "normalizedX": 0.577,
+        "normalizedY": 0.312
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 42,
+        "y": 210,
+        "sourceX": 470,
+        "sourceY": 789,
+        "normalizedX": 0.277,
+        "normalizedY": 0.936
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-12",
+      "name": "infantry_auto_13",
+      "file": "infantry_idle_infantry_auto_13_13.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "13",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 763,
+        "y": 585,
+        "w": 154,
+        "h": 196
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 80,
+        "y": 77,
+        "sourceX": 837,
+        "sourceY": 656,
+        "normalizedX": 0.481,
+        "normalizedY": 0.362
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-13",
+      "name": "infantry_auto_14",
+      "file": "infantry_idle_infantry_auto_14_14.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "14",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 1118,
+        "y": 593,
+        "w": 111,
+        "h": 256
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 72,
+        "y": 66,
+        "sourceX": 1184,
+        "sourceY": 653,
+        "normalizedX": 0.595,
+        "normalizedY": 0.234
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 48,
+        "y": 262,
+        "sourceX": 1160,
+        "sourceY": 849,
+        "normalizedX": 0.378,
+        "normalizedY": 1
+      }
+    },
+    {
+      "id": "auto-infantry-v2-1783563360752-14",
+      "name": "infantry_auto_15",
+      "file": "infantry_idle_infantry_auto_15_15.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "15",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 593,
+        "y": 802,
+        "w": 135,
+        "h": 221
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 57,
+        "y": 117,
+        "sourceX": 644,
+        "sourceY": 913,
+        "normalizedX": 0.378,
+        "normalizedY": 0.502
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "crop-1783565813242-paste",
+      "name": "infantry_auto_01_copy",
+      "file": "infantry_idle_infantry_auto_01_copy_02.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "02",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 307,
+        "y": 84,
+        "w": 126,
+        "h": 103
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 69,
+        "y": 58,
+        "sourceX": 370,
+        "sourceY": 136,
+        "normalizedX": 0.5,
+        "normalizedY": 0.505
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 109,
+        "y": 58,
+        "sourceX": 410,
+        "sourceY": 136,
+        "normalizedX": 0.817,
+        "normalizedY": 0.505
+      }
+    },
+    {
+      "id": "crop-1783565887770-paste",
+      "name": "infantry_auto_07_copy",
+      "file": "infantry_idle_infantry_auto_07_copy_08.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "08",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 1020,
+        "y": 360,
+        "w": 180,
+        "h": 146
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 73,
+        "y": 70,
+        "sourceX": 1087,
+        "sourceY": 424,
+        "normalizedX": 0.372,
+        "normalizedY": 0.438
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "crop-1783565913434-paste",
+      "name": "infantry_auto_10_copy",
+      "file": "infantry_idle_infantry_auto_10_copy_11.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "11",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 232,
+        "y": 772,
+        "w": 136,
+        "h": 197
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 65,
+        "y": 127,
+        "sourceX": 291,
+        "sourceY": 893,
+        "normalizedX": 0.434,
+        "normalizedY": 0.614
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "crop-1783565964441-paste",
+      "name": "infantry_auto_13_copy",
+      "file": "infantry_idle_infantry_auto_13_copy_14.png",
+      "type": "infantry",
+      "state": "idle",
+      "variant": "14",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "infantry-v2",
+      "sourceLabel": "보병 탑뷰 통합본 V2",
+      "sourceRect": {
+        "x": 927,
+        "y": 581,
+        "w": 165,
+        "h": 196
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 81,
+        "y": 85,
+        "sourceX": 1002,
+        "sourceY": 660,
+        "normalizedX": 0.455,
+        "normalizedY": 0.403
+      },
+      "actionPoint": null
+    }
+  ]
+}

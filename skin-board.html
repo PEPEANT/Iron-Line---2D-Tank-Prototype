@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수복 스킨 보드</title>
+    <link rel="stylesheet" href="styles/skin-board.css">
+    <script src="src/systems/skin-board.js" defer></script>
+  </head>
+  <body>
+    <main class="skin-board">
+      <header class="board-head">
+        <div>
+          <span class="kicker">Subok Asset Board</span>
+          <h1>스킨 보드</h1>
+          <p>지금까지 들어온 스킨과 다음에 필요한 스킨을 한 화면에서 확인합니다.</p>
+        </div>
+        <nav class="head-actions" aria-label="빠른 이동">
+          <a href="index.html?testLab=sandbox">테스트맵</a>
+          <a href="ops.html">운영센터</a>
+          <a href="docs/design-drafts/asset-crop-lab.html">컷팅 랩</a>
+          <a href="assets/ui/infantry/cut-review/v2-20260709/review.html?confirmed=1">컷 정리 v2</a>
+          <a href="docs/design-drafts/infantry-rig-lab.html">리그 랩 v2</a>
+          <a href="docs/visual-overhaul-plan.md">후속 기록</a>
+        </nav>
+      </header>
+
+      <section class="summary-strip" aria-label="스킨 현황 요약">
+        <article>
+          <span>플레이 적용</span>
+          <strong data-count="play">0</strong>
+          <small>보병 프레임</small>
+        </article>
+        <article>
+          <span>UI 이미지</span>
+          <strong data-count="ui">0</strong>
+          <small>메뉴/인물/버튼</small>
+        </article>
+        <article>
+          <span>로고/아이콘</span>
+          <strong data-count="system">0</strong>
+          <small>세력/무기 슬롯</small>
+        </article>
+        <article>
+          <span>다음 필요</span>
+          <strong data-count="next">0</strong>
+          <small>스킨 작업</small>
+        </article>
+      </section>
+
+      <section class="filter-bar" aria-label="스킨 분류">
+        <button type="button" class="is-active" data-filter="all">전체</button>
+        <button type="button" data-filter="play">플레이 보병</button>
+        <button type="button" data-filter="ui">메뉴/UI</button>
+        <button type="button" data-filter="system">로고/아이콘</button>
+        <button type="button" data-filter="next">다음 필요</button>
+      </section>
+
+      <section class="section-note" aria-label="판정">
+        <strong>현재 판단</strong>
+        <p>
+          네가 준 보병 스킨은 게임 분위기를 바로 올리는 쪽으로 효과가 크다. 이제 문제는 적 스킨,
+          총기별 실루엣, 사망 프레임, 차량 스킨이 아직 비어 있어서 같은 그림이 반복되어 보인다는 점이다.
+        </p>
+      </section>
+
+      <section class="asset-grid" id="assetGrid" aria-label="스킨 목록"></section>
+    </main>
+  </body>
+</html>

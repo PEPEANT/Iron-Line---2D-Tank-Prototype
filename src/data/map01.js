@@ -9,7 +9,7 @@
     width: 3400,
     height: 2200,
     captureRate: 0.16,
-    roadWidth: 108,
+    roadWidth: 132,
     obstacles: [
       { x: 240, y: 360, w: 360, h: 92, kind: "concrete" },
       { x: 545, y: 605, w: 92, h: 300, kind: "building" },
@@ -220,6 +220,7 @@
 
     world.width = Math.round(world.width * scale + 980);
     world.height = Math.round(world.height * scale + 760);
+    world.roadWidth = tr(world.roadWidth || 108);
     world.captureRate = 0.105;
 
     for (const obstacle of world.obstacles) {

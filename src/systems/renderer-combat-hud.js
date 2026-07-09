@@ -15,6 +15,7 @@
 
   Object.assign(proto, {
     drawCombatCompassHud(game) {
+      if (game.testLab) return;
       if (!this.shouldDrawCombatCompassHud(game)) return;
       const ctx = this.ctx;
       const camera = this.camera;
@@ -45,7 +46,7 @@
     shouldDrawCombatCompassHud(game) {
       if (!game || game.result || game.entryOpen || game.deploymentOpen || game.lobbyOpen || game.roomListOpen) return false;
       if (game.tacticalMapOpen || game.playerDeathActive) return false;
-      return Boolean(game.matchStarted || game.testLab || game.matchPhase === "live");
+      return Boolean(game.matchStarted || game.matchPhase === "live");
     },
 
     drawCombatScoreFlags(ctx, game, cx, top, camera) {

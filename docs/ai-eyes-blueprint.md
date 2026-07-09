@@ -5,7 +5,7 @@
 
 ## 구현/검증 상태 (2026-07-05 Codex)
 
-- 산출물 A/B/C는 이미 존재 확인: `tools/check-behavior-census.cjs`, `tools/behavior-census-report.cjs`, `tools/replay-viewer.html`, `package.json`의 `npm run census`.
+- 산출물 A/B/C는 이미 존재 확인: `tools/check-behavior-census.cjs`, `tools/behavior-census-report.cjs`, `tools/pages/replay-viewer.html`, `package.json`의 `npm run census`.
 - 설계도 보완점도 반영되어 있다: `fireRifleAtPoint`, `throwGrenade`, `tryThrowGrenade`, `enterProne`/`clearProne`, fire-move 진단, 2단계 로비(`#entryMainGuest`→`#entryEnterButton`→`#deploymentStart`) 진입을 모두 다룬다.
 - 검증 실행 1: `npm run census` → `reports/playtests/behavior-census-20260705092057/` 생성. 360 frames, 212 events, report/result 출력 확인. point shot 0, fireMoveOk 0, teamworkRatio 0, grenade ok 1, proneEnter 12.
 - 검증 실행 2: `npm run census` → `reports/playtests/behavior-census-20260705092542/` 생성. fireMoveOk 1075, `assault-fire-move`/rifle 성공 재확인, point shot 8, teamworkRatio 0.007, grenade ok 1, proneEnter 29.
@@ -106,7 +106,7 @@ frames는 유닛 30명 × 360틱 ≈ 11k 레코드 — JSON 수 MB, 문제없음
 - Top support point blockers: `no-direct-report-mode:advance` 7768, `direct-grenade-launcher` 592, `report-rejected` 435, `direct-cadence` 371.
 - This is diagnostic-only; gameplay behavior was not changed.
 
-## (B) tools/replay-viewer.html — 단일 HTML, 외부 의존성 0
+## (B) tools/pages/replay-viewer.html — 단일 HTML, 외부 의존성 0
 - `<input type="file">`로 result.json 로드 (file:// 로 열어도 동작해야 함 — fetch 금지, FileReader 사용).
 - 캔버스 1개: 프레임 units를 점으로 (blue/red 원, prone이면 납작, hp 비례 투명도, 클릭하면 해당 유닛 팔로우 + 우측 패널에 state/sup 표시).
 - 이벤트 마커: shot은 from→(tx,ty) 선 0.3초 잔상 (los==false는 점선 = 제압사격이 눈에 보임), grenade는 노란 원, death는 ×를 5초 유지.

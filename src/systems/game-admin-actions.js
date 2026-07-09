@@ -161,12 +161,12 @@
       }
       if (action === "reset-player") return this.adminResetPlayerPosition();
       if (action === "enter-test-lab") {
-        this.activateTestLab(this.testLab || "drone");
+        this.activateTestLab(this.testLab || "sandbox");
         this.adminNotify("테스트랩 시작");
         return true;
       }
       if (action === "reset-test-lab") {
-        this.activateTestLab(this.testLab || "drone");
+        this.activateTestLab(this.testLab || "sandbox");
         this.adminNotify("테스트랩 리셋");
         return true;
       }

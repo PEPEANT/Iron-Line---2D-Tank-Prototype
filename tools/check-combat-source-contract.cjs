@@ -32,4 +32,12 @@ if (!source.includes("tank.takeDamage(game, 0.01, {") || !source.includes("cause
   fail("small-arms vehicle destruction must pass weapon source into takeDamage");
 }
 
+if (!source.includes("function smallArmsMuzzleDistance") || !source.includes("rifle: 42") || !source.includes("sniper: 54")) {
+  fail("small-arms tracers must use weapon-specific muzzle distance for top-view sprites");
+}
+
+if (!source.includes("const aimAngle = Math.atan2(aimY - startY, aimX - startX);")) {
+  fail("point-fire aim angle must originate from the corrected muzzle point");
+}
+
 if (!process.exitCode) console.log("Combat source contract check passed");

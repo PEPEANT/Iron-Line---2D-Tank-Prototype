@@ -6,7 +6,7 @@
 ## 2026-07-04 구현 결과
 
 - `tools/check-behavior-census.cjs`: 런타임 후킹 기반 행동 인구조사 프로브 구현.
-- `tools/replay-viewer.html`: `result.json`을 file input으로 열어 유닛, 사격, 수류탄, 엎드림, 사망 이벤트를 재생하는 단일 HTML 뷰어 구현.
+- `tools/pages/replay-viewer.html`: `result.json`을 file input으로 열어 유닛, 사격, 수류탄, 엎드림, 사망 이벤트를 재생하는 단일 HTML 뷰어 구현.
 - `package.json`: `npm run census`, `npm run tempo` 별칭 추가.
 - 최신 180초 풀런 결과: `reports/playtests/behavior-census-20260704055609/report.md`.
 
@@ -36,7 +36,7 @@
 ## 2단계: 리플레이 뷰어 (사람과 AI가 같은 눈을 갖기)
 
 - 프로브가 0.5초 간격으로 전 유닛 위치·상태·이벤트(사격/투척/사망/제압)를 JSON으로 덤프 (tempo 프로브 샘플링에 유닛 좌표만 추가).
-- `tools/replay-viewer.html` 1장: 그 JSON을 읽어 탑다운 캔버스에 재생 (타임라인 슬라이더, 배속, 이벤트 마커).
+- `tools/pages/replay-viewer.html` 1장: 그 JSON을 읽어 탑다운 캔버스에 재생 (타임라인 슬라이더, 배속, 이벤트 마커).
 - 효과: 유저는 눈으로 "저 분대가 왜 저기서 멈췄지"를 확인하고, AI(나)는 같은 JSON을 수치로 읽는다. **같은 근거로 대화 가능해짐.**
 - 보너스: 이 JSON 포맷은 향후 게임 내 리플레이/킬캠의 데이터 계약이 된다.
 

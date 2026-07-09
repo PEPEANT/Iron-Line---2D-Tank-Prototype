@@ -57,6 +57,7 @@ function createContext() {
 
 const context = createContext();
 vm.runInContext(read("src/systems/renderer-corpse.js"), context, { filename: "src/systems/renderer-corpse.js" });
+const rendererSource = read("src/systems/renderer.js");
 
 const renderer = Object.create(context.IronLine.Renderer.prototype);
 renderer.ctx = fakeCtx();
@@ -73,6 +74,9 @@ if (typeof renderer.drawInfantryCorpse !== "function") errors.push("drawInfantry
 if (!calls.includes("ellipse")) errors.push("corpse renderer did not draw body shadow");
 if (!calls.includes("arc")) errors.push("corpse renderer did not draw head or wounded ring");
 if (!calls.includes("setLineDash")) errors.push("wounded renderer did not draw dashed revive marker");
+if (!rendererSource.includes("drawGroundCorpses(game)")) errors.push("renderer must expose ground corpse pass");
+if (rendererSource.indexOf("this.drawGroundCorpses(game);") > rendererSource.indexOf("for (const humvee of game.humvees || [])")) errors.push("ground corpses must render below vehicles");
+if (!rendererSource.includes("if (!unit.alive) return;")) errors.push("dead infantry should not be redrawn over vehicles");
 
 if (errors.length) {
   for (const error of errors) console.error(error);

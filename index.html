@@ -5,8 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
     <title>Iron Line - 2D Tank Prototype</title>
     <link rel="icon" href="data:,">
-    <link rel="preload" as="image" href="assets/ui/loading-background.png">
     <link rel="preload" as="image" href="assets/ui/main-background.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-title.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-soldier.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-button-custom.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-button-online.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-button-story.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-refugee.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-north-soldier.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-infantry-prone.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-infantry-dead.png">
+    <link rel="preload" as="image" href="assets/ui/soubok-infantry-top.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-stand-01.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-stand-02.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-stand-fire.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-stand-fire-walk.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-prone-crawl-01.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-prone-crawl-02.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-prone-fire.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-prone-no-gun.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-dead-01.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-dead-02.png">
+    <link rel="preload" as="image" href="assets/ui/infantry/soubok-infantry-dead-prone.png">
     <link rel="stylesheet" href="styles/styles.css">
     <link rel="stylesheet" href="styles/settings-panel.css">
     <link rel="stylesheet" href="styles/game-version.css">
@@ -23,21 +43,16 @@
     <link rel="stylesheet" href="styles/chat.css">
     <link rel="stylesheet" href="styles/role-change.css">
     <link rel="stylesheet" href="styles/test-lab.css">
+    <link rel="stylesheet" href="styles/story-mode.css">
     <link rel="stylesheet" href="styles/lobby-flow.css">
     <link rel="stylesheet" href="styles/combat-hud.css?v=20260704-r1">
     <link rel="stylesheet" href="styles/loadout-slotbar.css">
+    <link rel="stylesheet" href="styles/drone-gcs-hud.css">
+    <link rel="stylesheet" href="styles/field-radio-hud.css">
     <link rel="stylesheet" href="styles/vehicle-dashboard.css">
     <link rel="stylesheet" href="styles/supply-crates.css">
   </head>
   <body>
-    <div class="boot-screen" id="bootScreen" aria-label="로딩 중">
-      <div class="boot-inner">
-        <span class="boot-mark">IRON LINE</span>
-        <strong>전장 준비 중</strong>
-        <div class="boot-bar"><span></span></div>
-        <small>ALPHA R1.0</small>
-      </div>
-    </div>
     <canvas id="game" tabindex="0" aria-label="2D tank battlefield"></canvas>
     <button type="button" class="admin-button hidden" id="adminButton" aria-label="관리자 패널 열기" title="관리자">관리자</button>
 
@@ -105,6 +120,22 @@
           </details>
 
           <details class="settings-details">
+            <summary>소리</summary>
+            <div class="settings-section compact">
+              <label class="settings-toggle">
+                <input type="checkbox" data-bgm-enabled>
+                <span>배경음악</span>
+                <small>BGM</small>
+              </label>
+              <label class="settings-range">
+                <span>배경음악 음량</span>
+                <output data-bgm-volume-value>28%</output>
+                <input type="range" min="0" max="100" step="1" value="28" data-bgm-volume aria-label="배경음악 음량">
+              </label>
+            </div>
+          </details>
+
+          <details class="settings-details">
             <summary>그래픽</summary>
             <div class="settings-section compact">
               <label class="settings-toggle">
@@ -116,6 +147,11 @@
                 <input type="checkbox" data-debug-option="performance">
                 <span>성능 표시</span>
                 <small>P</small>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-blood-enabled checked>
+                <span>유혈 표현</span>
+                <small>혈흔</small>
               </label>
             </div>
           </details>
@@ -177,16 +213,12 @@
         <label class="admin-field">
           <span>병기 선택</span>
           <select id="adminWeaponSelect">
-            <option value="machinegun">기관총</option>
             <option value="rifle">소총</option>
+            <option value="pistol">권총</option>
+            <option value="grenade">수류탄</option>
+            <option value="machinegun">기관총</option>
             <option value="sniper">저격총</option>
             <option value="rpg">RPG</option>
-            <option value="grenadeLauncher">유탄발사기</option>
-            <option value="grenade">수류탄</option>
-            <option value="repairKit">수리킷</option>
-            <option value="reconDrone">정찰드론</option>
-            <option value="kamikazeDrone">자폭드론</option>
-            <option value="pistol">권총</option>
           </select>
         </label>
 
@@ -336,6 +368,14 @@
             </summary>
             <div class="deployment-settings" id="deploymentSettings">
               <label class="deployment-setting">
+                <span>준비 시간</span>
+                <input type="number" data-setting="preparationSeconds" min="0" max="30" step="1" value="10">
+              </label>
+              <label class="deployment-setting">
+                <span>출격 카운트</span>
+                <input type="number" data-setting="countdownSeconds" min="3" max="10" step="1" value="5">
+              </label>
+              <label class="deployment-setting">
                 <span>아군 세력</span>
                 <select data-setting="blueFactionId"></select>
               </label>
@@ -449,6 +489,7 @@
     <script src="src/data/map01.js"></script>
     <script src="src/data/map01-custom-layout.js"></script>
     <script src="src/data/test-lab-map.js"></script>
+    <script src="src/data/story-chapters.js"></script>
     <script src="src/core/input.js"></script>
     <script src="src/systems/physics.js"></script>
     <script src="src/systems/awareness-signals.js"></script>
@@ -462,6 +503,7 @@
     <script src="src/systems/battlefield-events.js"></script>
     <script src="src/systems/audio.js"></script>
     <script src="src/systems/game-menu-music.js"></script>
+    <script src="src/systems/audio-settings.js"></script>
     <script src="src/systems/room-slot-config.js"></script>
     <script src="src/systems/admin-ops.js"></script>
     <script src="src/entities/player.js"></script>
@@ -481,11 +523,11 @@
     <script src="src/ai/combat-controller.js"></script>
     <script src="src/ai/infantry-combat-balance.js"></script>
     <script src="src/ai/infantry-ai.js"></script>
+    <script src="src/ai/infantry-support-weapon-stance.js"></script>
     <script src="src/ai/infantry-ai-update-handlers.js"></script>
     <script src="src/ai/infantry-fire-tempo.js"></script>
     <script src="src/ai/infantry-support-fire.js"></script>
     <script src="src/ai/infantry-suppression-posture.js"></script>
-    <script src="src/ai/infantry-melee.js"></script>
     <script src="src/ai/infantry-tactical-map.js"></script>
     <script src="src/ai/infantry-command-priority.js"></script>
     <script src="src/ai/infantry-base-egress.js"></script>
@@ -500,9 +542,9 @@
     <script src="src/ai/vehicle-tactical-hints.js"></script>
     <script src="src/ai/squad-v2-first-pass.js"></script>
     <script src="src/systems/combat-friendly-body-block.js"></script>
+    <script src="src/systems/combat-small-arms-stability.js"></script>
     <script src="src/systems/combat.js"></script>
     <script src="src/ai/infantry-blast-response.js"></script>
-    <script src="src/systems/melee-combat.js"></script>
     <script src="src/systems/chat.js"></script>
     <script src="src/systems/role-change.js"></script>
     <script src="src/systems/overlay-controller.js"></script>
@@ -534,17 +576,24 @@
     <script src="src/systems/hud-admin-room-controls.js"></script>
     <script src="src/systems/hud-admin-layout.js"></script>
     <script src="src/systems/hud-spectator-panel.js"></script>
+    <script src="src/systems/drone-gcs-hud.js"></script>
+    <script src="src/systems/field-radio-hud.js"></script>
     <script src="src/systems/hud.js"></script>
     <script src="src/systems/hud-readability-hook.js"></script>
     <script src="src/systems/infantry-slotbar-hud.js"></script>
     <script src="src/systems/vehicle-dashboard-hud.js"></script>
     <script src="src/systems/supply-crates.js"></script>
     <script src="src/systems/renderer.js?v=20260704-r1"></script>
+    <script src="src/systems/renderer-deployment-speech.js?v=20260709-leader-speech"></script>
+    <script src="src/systems/renderer-soubok-infantry-art.js"></script>
     <script src="src/systems/renderer-infantry-weapons.js"></script>
     <script src="src/systems/renderer-terrain.js"></script>
     <script src="src/systems/renderer-player-reticle.js"></script>
     <script src="src/systems/renderer-explosions.js"></script>
     <script src="src/systems/explosion-debris.js"></script>
+    <script src="src/systems/explosion-scorch.js"></script>
+    <script src="src/systems/blood-system.js"></script>
+    <script src="src/systems/renderer-blood.js"></script>
     <script src="src/systems/renderer-corpse.js"></script>
     <script src="src/systems/renderer-vehicle.js"></script>
     <script src="src/systems/renderer-scenery.js"></script>
@@ -565,10 +614,9 @@
     <script src="src/systems/player-medical-kit.js"></script>
     <script src="src/systems/player-downed-revive.js"></script>
     <script src="src/systems/fog-of-war.js"></script>
+    <script src="src/systems/ai-path-rebuild-budget.js"></script>
     <script src="src/systems/test-lab-ui.js"></script>
-    <script src="src/systems/test-lab-asset-preview.js"></script>
-    <script src="src/systems/test-lab-p0-online.js"></script>
-    <script src="src/systems/test-lab-objects.js"></script>
+    <script src="src/systems/story-mode.js"></script>
     <script src="src/systems/performance-monitor.js"></script>
     <script src="src/systems/ai-scale-readiness.js"></script>
     <script src="src/systems/mobile-camera-gestures.js"></script>

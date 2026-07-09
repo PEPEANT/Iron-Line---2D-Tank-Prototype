@@ -5,29 +5,27 @@
   IronLine.constants = IronLine.constants || {};
 
   const SUPPLY_LOADOUT_ITEMS = {
+    rifle: {
+      id: "rifle",
+      weaponId: "rifle",
+      slotIndex: 0,
+      stockKey: "rifle",
+      grantAmmo: 96,
+      maxAmmo: 192
+    },
     machinegun: {
       id: "machinegun",
       weaponId: "machinegun",
       slotIndex: 0,
-      stockKey: "machinegun"
-    },
-    lmg: {
-      id: "lmg",
-      weaponId: "lmg",
-      slotIndex: 0,
-      stockKey: "lmg"
+      stockKey: "machinegun",
+      grantAmmo: 160,
+      maxAmmo: 320
     },
     sniper: {
       id: "sniper",
       weaponId: "sniper",
       slotIndex: 0,
       stockKey: "sniper"
-    },
-    smg: {
-      id: "smg",
-      weaponId: "smg",
-      slotIndex: 0,
-      stockKey: "smg"
     },
     pistol: {
       id: "pistol",
@@ -56,8 +54,16 @@
     reconDrone: {
       id: "reconDrone",
       weaponId: "reconDrone",
-      slotIndex: 5,
+      slotIndex: 3,
       stockKey: "reconDrone",
+      grantAmmo: 1,
+      maxAmmo: 2
+    },
+    kamikazeDrone: {
+      id: "kamikazeDrone",
+      weaponId: "kamikazeDrone",
+      slotIndex: 3,
+      stockKey: "kamikazeDrone",
       grantAmmo: 1,
       maxAmmo: 2
     },
@@ -68,14 +74,6 @@
       stockKey: "repairKit",
       grantAmmo: 2,
       maxAmmo: 4
-    },
-    kamikazeDrone: {
-      id: "kamikazeDrone",
-      weaponId: "kamikazeDrone",
-      slotIndex: 5,
-      stockKey: "kamikazeDrone",
-      grantAmmo: 1,
-      maxAmmo: 2
     },
     grenade: {
       id: "grenade",
@@ -88,16 +86,15 @@
   };
 
   const DEFAULT_SUPPLY_STOCK = {
+    rifle: 4,
     machinegun: 2,
-    lmg: 2,
     sniper: 2,
-    smg: 3,
     pistol: 4,
     rpg: 2,
-    grenadeLauncher: 3,
+    grenadeLauncher: 2,
     reconDrone: 2,
-    repairKit: 3,
-    kamikazeDrone: 2,
+    kamikazeDrone: 1,
+    repairKit: 2,
     grenade: 6
   };
 
@@ -148,7 +145,6 @@
     ensurePlayerSlotShape(player);
     const slotIndex = item.slotIndex;
     const alreadyEquipped = player.weaponInventory[slotIndex] === item.weaponId;
-    let changed = !alreadyEquipped;
 
     player.weaponInventory[slotIndex] = item.weaponId;
     if (weapon.ammoKey) {
@@ -156,17 +152,16 @@
       const grant = Math.max(0, Number(item.grantAmmo) || Number(weapon.defaultAmmo) || 1);
       const maxAmmo = Math.max(grant, Number(item.maxAmmo) || Number(weapon.defaultAmmo) || current + grant);
       const next = Math.min(maxAmmo, current + grant);
-      if (next !== current) changed = true;
       player.equipmentAmmo[weapon.ammoKey] = next;
     }
 
-    if (!changed) return { ok: false, reason: "full" };
     player.setEquipmentSlot?.(slotIndex);
     return {
       ok: true,
       item,
       weapon,
       slotIndex,
+      changed: !alreadyEquipped,
       label: weaponLabel(item.weaponId),
       slotRole: slotRole(slotIndex)
     };

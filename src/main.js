@@ -18,7 +18,7 @@
     lineIntersectsRect,
     segmentDistanceToPoint
   } = IronLine.math;
-  const { tryMoveCircle, resolveTankSpacing, resolveInfantryTankSpacing, hasLineOfSight, circleIntersectsTank } = IronLine.physics;
+  const { tryMoveCircle, resolveTankSpacing, resolveInfantryTankSpacing, resolveInfantrySpacing, hasLineOfSight, circleIntersectsTank } = IronLine.physics;
 
   class Game {
     constructor() {
@@ -37,9 +37,9 @@
         y: 0,
         width: window.innerWidth,
         height: window.innerHeight,
-        zoom: 1,
-        viewWidth: window.innerWidth,
-        viewHeight: window.innerHeight
+        zoom: 0.9,
+        viewWidth: window.innerWidth / 0.9,
+        viewHeight: window.innerHeight / 0.9
       };
 
       this.input = new IronLine.Input();
@@ -51,7 +51,7 @@
       this.combatOnlyRecoveryMode = this.requestedCombatOnlyRecoveryMode?.() !== false;
       this.installFullscreenPreferenceListener();
       this.installInitialFullscreen();
-      this.cameraZoomPreference = 1;
+      this.cameraZoomPreference = 0.9;
       this.input.setVirtualEnabled(this.settings.mobileControls);
       this.renderer = new IronLine.Renderer(this.canvas, this.camera);
       this.matchConfig = this.defaultMatchConfig();
@@ -157,7 +157,7 @@
       this.deploymentOpen = !this.entryOpen;
       this.countdownStarted = false;
       this.matchStarted = false;
-      this.startCountdown = 5;
+      this.startCountdown = this.matchStartDelaySeconds?.() || 15;
       this.startLoading = this.defaultStartLoadingState();
       this.matchTime = 0;
       this.objectiveHoldDuration = 12;
@@ -933,7 +933,7 @@
       }
 
       if (this.playerDowned && !this.playerDeathActive) {
-        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
+        const battleContinues = this.playerDownedBattleContinues?.() || this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -954,7 +954,7 @@
       this.updatePlayer(dt);
       this.updatePlayerDeathState();
       if (this.playerDowned && !this.playerDeathActive) {
-        const battleContinues = this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
+        const battleContinues = this.playerDownedBattleContinues?.() || this.battleContinuesAfterPlayerDeath?.() || (this.isConquestMode() && this.matchStarted);
         if (battleContinues) this.updateBattlefield(dt);
         else IronLine.combat.updateEffects(this, dt);
         this.updateCamera(dt);
@@ -975,6 +975,7 @@
       if (!this.matchStarted) {
         IronLine.combat.updateEffects(this, dt);
         resolveInfantryTankSpacing(this, dt);
+        resolveInfantrySpacing(this, dt);
         this.updateCamera(dt);
         this.hud.update(this);
         return;
@@ -1097,6 +1098,7 @@
         perf?.begin("spacing");
         resolveTankSpacing(this, dt);
         resolveInfantryTankSpacing(this, dt);
+        resolveInfantrySpacing(this, dt);
         perf?.end("spacing");
         perf?.begin("result");
         this.updateResult(dt);
@@ -1192,6 +1194,12 @@
     updateConquestScoring(dt) {
       const objectiveScoringMode = this.isConquestMode() || this.isAnnihilationMode?.();
       if (!objectiveScoringMode || !this.matchStarted || this.result) return;
+      if (this.testLab) {
+        this.conquest.score[TEAM.BLUE] = 0;
+        this.conquest.score[TEAM.RED] = 0;
+        this.conquest.remaining = this.conquest.duration;
+        return;
+      }
       if (this.isConquestMode()) this.conquest.remaining = Math.max(0, this.conquest.duration - this.matchTime);
       for (const point of this.capturePoints) {
         if (point.owner !== TEAM.BLUE && point.owner !== TEAM.RED) continue;
@@ -1376,21 +1384,15 @@
     updateStartCountdown(dt) {
       if (this.matchStarted || this.deploymentOpen || this.lobbyOpen || !this.countdownStarted) return;
       if (this.matchPhase === "loading") {
-        const loading = this.startLoading || this.defaultStartLoadingState();
-        loading.active = true;
-        loading.remaining = Math.max(0, (loading.remaining || loading.duration || 0) - dt);
-        const progress = 1 - loading.remaining / Math.max(0.1, loading.duration || 1);
-        loading.stepIndex = Math.min(
-          (loading.steps || []).length - 1,
-          Math.max(0, Math.floor(progress * Math.max(1, (loading.steps || []).length)))
-        );
-        this.startLoading = loading;
-        if (loading.remaining > 0) return;
-        loading.active = false;
         this.matchPhase = "countdown";
+        if (this.startLoading) {
+          this.startLoading.active = false;
+          this.startLoading.remaining = 0;
+        }
       }
       this.startCountdown = Math.max(0, this.startCountdown - dt);
       if (this.startCountdown <= 0) {
+        this.closeSupplyCratePanel?.();
         this.matchStarted = true;
         this.matchPhase = "live";
         if (this.startLoading) this.startLoading.active = false;
@@ -1491,11 +1493,30 @@
 
     matchSettingBounds() {
       return {
+        preparationSeconds: { min: 0, max: 30 },
+        countdownSeconds: { min: 3, max: 10 },
         blueAiTanks: { min: 0, max: 8 },
         blueInfantry: { min: 4, max: 56 },
         redTanks: { min: 1, max: 10 },
         redInfantry: { min: 4, max: 64 }
       };
+    }
+    matchPreparationSeconds(config = this.matchConfig) {
+      const bounds = this.matchSettingBounds();
+      return clamp(Math.round(Number(config?.preparationSeconds) || 0), bounds.preparationSeconds.min, bounds.preparationSeconds.max);
+    }
+
+    matchCountdownSeconds(config = this.matchConfig) {
+      const bounds = this.matchSettingBounds();
+      return clamp(Math.round(Number(config?.countdownSeconds) || 5), bounds.countdownSeconds.min, bounds.countdownSeconds.max);
+    }
+
+    matchStartDelaySeconds(config = this.matchConfig) {
+      return this.matchPreparationSeconds(config) + this.matchCountdownSeconds(config);
+    }
+
+    playerDownedBattleContinues() {
+      return Boolean(this.playerDowned && !this.playerDeathActive && this.matchStarted && !this.result);
     }
 
     enterLobby() {
@@ -1579,43 +1600,28 @@
       if (this.deploymentOpen) return this.enterLobby();
       if (!this.lobbyOpen) return false;
       const startOptions = options && typeof options === "object" ? options : {};
-      const loading = this.defaultStartLoadingState();
-      const countdownDuration = 4;
-      const loadingDuration = Math.max(0, Number(loading?.duration) || 0);
-      const totalDuration = loadingDuration + countdownDuration;
+      const countdownDuration = this.matchCountdownSeconds?.() || 5;
+      const startDelayDuration = this.matchStartDelaySeconds?.() || countdownDuration;
       const room = startOptions.room || {};
       const startedAt = Math.max(0, Number(startOptions.startedAt || room.startedAt) || 0);
       const explicitStartDeadline = Math.max(0, Number(startOptions.startDeadline || room.startDeadline) || 0);
-      const startDeadline = explicitStartDeadline || (startedAt > 0 ? startedAt + totalDuration * 1000 : 0);
+      const startDeadline = explicitStartDeadline || (startedAt > 0 ? startedAt + startDelayDuration * 1000 : 0);
       const now = Date.now();
       const sharedStartTimeline = startedAt > 0 || startDeadline > 0;
-      const deadlineRemaining = sharedStartTimeline ? Math.max(0, (startDeadline - now) / 1000) : totalDuration;
-      const elapsed = startedAt > 0
-        ? Math.max(0, (now - startedAt) / 1000)
-        : Math.max(0, totalDuration - deadlineRemaining);
+      const deadlineRemaining = sharedStartTimeline ? Math.max(0, (startDeadline - now) / 1000) : startDelayDuration;
       this.resetScenarioForMatch();
       this.deploymentOpen = false;
       this.lobbyOpen = false;
-      this.matchPhase = sharedStartTimeline && elapsed >= loadingDuration ? "countdown" : "loading";
+      this.matchPhase = "countdown";
       this.countdownStarted = true;
       this.startCountdown = sharedStartTimeline
-        ? Math.min(countdownDuration, deadlineRemaining)
-        : countdownDuration;
-      this.startLoading = loading;
+        ? Math.min(startDelayDuration, deadlineRemaining)
+        : startDelayDuration;
+      this.startLoading = this.defaultStartLoadingState();
       if (this.startLoading) {
-        const loadingRemaining = sharedStartTimeline
-          ? Math.max(0, loadingDuration - elapsed)
-          : loadingDuration;
-        const steps = this.startLoading.steps || [];
-        const progress = loadingDuration > 0
-          ? 1 - loadingRemaining / Math.max(0.1, loadingDuration)
-          : 1;
-        this.startLoading.active = loadingRemaining > 0;
-        this.startLoading.remaining = loadingRemaining;
-        this.startLoading.stepIndex = Math.min(
-          Math.max(0, steps.length - 1),
-          Math.max(0, Math.floor(progress * Math.max(1, steps.length)))
-        );
+        this.startLoading.active = false;
+        this.startLoading.remaining = 0;
+        this.startLoading.stepIndex = 0;
       }
       if (sharedStartTimeline && deadlineRemaining <= 0) {
         this.matchPhase = "live";
@@ -2950,15 +2956,20 @@
       const interactPressed = this.input.consumePress("KeyE");
       const mountPressed = this.input.consumePress("KeyF");
       if (interactPressed) {
+        if (this.player?.getWeapon?.()?.type === "radio" && this.hud?.toggleFieldRadioFromTool?.(this)) {
+          this.updatePlayerSafeZone();
+          return;
+        }
         if (this.roleChange?.handleInteractPressed?.()) {
           this.updatePlayerSafeZone();
           return;
         }
-        if (this.pickupPlayerDrone()) {
+        if (this.deploySelectedDroneFromTool?.()) { this.updatePlayerSafeZone(); return; }
+        if (!this.nearbySupplyCrate?.() && this.pickupPlayerDrone()) {
           this.updatePlayerSafeZone();
           return;
         }
-        if (this.togglePlayerDroneControl()) {
+        if (this.canUseSelectedDroneTool?.() && !this.nearbySupplyCrate?.() && this.togglePlayerDroneControl()) {
           this.updatePlayerSafeZone();
           return;
         }
@@ -3059,7 +3070,7 @@
       this.deploymentOpen = false;
       this.countdownStarted = true;
       this.matchStarted = false;
-      this.startCountdown = 5;
+      this.startCountdown = this.matchStartDelaySeconds?.() || 15;
       this.canvas.focus();
       return true;
     }
@@ -3067,6 +3078,7 @@
     returnToMainMenu() {
       this.input.clear();
       this.testLab = "";
+      this.storyChapterId = "";
       this.useLiveWorld();
       this.hud?.sessionFlow?.leaveOnlineRoom?.(this, "main-menu");
       this.resetScenarioForMatch();
@@ -3079,7 +3091,7 @@
       this.matchPhase = this.entryOpen ? "entry" : "ended";
       this.countdownStarted = false;
       this.matchStarted = false;
-      this.startCountdown = 5;
+      this.startCountdown = this.matchStartDelaySeconds?.() || 15;
       this.startLoading = this.defaultStartLoadingState();
       this.result = "";
       this.resultReason = "";
@@ -3096,8 +3108,8 @@
       return true;
     }
 
-    activateTestLab(id = "drone") {
-      this.testLab = id || "drone";
+    activateTestLab(id = "sandbox") {
+      this.testLab = id || "sandbox";
       this.useTestLabWorld();
       this.deploymentOpen = false;
       this.lobbyOpen = false;
@@ -3111,8 +3123,9 @@
       this.playerDeathReason = "";
       this.resetPlayerFeedbackState();
       this.matchTime = 0;
+      this.conquest = this.defaultConquestState();
       this.droneDesignation = null;
-      this.testLabAiPaused = true;
+      this.testLabAiPaused = false;
       this.testLabSpawnIndex = 0;
       this.testLabRoofPoint = this.world.testLab?.roofPoint || { x: 2680, y: 2680 };
 
@@ -3146,19 +3159,11 @@
       this.playerTank = null;
 
       this.player = IronLine.createPlayer({ x: 2320, y: 3000 });
-      this.player.setClass("scout");
+      this.player.setClass("infantry");
       this.applyPlayerLoadoutOverrides();
       this.player.setEquipmentSlot?.(0);
       this.player.angle = angleTo(this.player.x, this.player.y, this.testLabRoofPoint.x, this.testLabRoofPoint.y);
       this.refillTestLabPlayer();
-
-      this.spawnTestLabReconDrone();
-      [
-        { x: 2980, y: 2620, weaponId: "rifle" },
-        { x: 3060, y: 2705, weaponId: "machinegun" },
-        { x: 2960, y: 2835, weaponId: "rifle" },
-        { x: 3100, y: 2870, weaponId: "rifle", classId: "engineer", rpgAmmo: 2 }
-      ].forEach((spawn) => this.spawnTestLabInfantry(spawn));
 
       this.createCommanders();
       this.hud?.toggleSettingsPanel?.(false);
@@ -3174,14 +3179,15 @@
       this.player.rifleCooldown = 0;
       this.player.equipmentAmmo = {
         ...(this.player.equipmentAmmo || {}),
-        sniper: 999,
+        rifle: 999, smg: 999, lmg: 999, machinegun: 999, sniper: 999,
         pistol: 999,
         reconDrone: Math.max(1, this.player.equipmentAmmo?.reconDrone || 0),
-        grenade: 6,
+        grenade: 6, grenadeLauncher: 6,
         rpg: 6,
         repairKit: 4,
         kamikazeDrone: 3
       };
+      if (!this.player.weaponInventory?.[3]) this.player.weaponInventory[3] = "reconDrone";
 
       const drone = this.activePlayerDrone();
       if (drone) {
@@ -3324,7 +3330,6 @@
       if (this.input.consumePress("F4")) this.testLabAiPaused = !this.testLabAiPaused;
       if (this.input.consumePress("F5")) {
         this.refillTestLabPlayer();
-        if (!this.activePlayerDrone()) this.spawnTestLabReconDrone();
       }
       if (this.input.consumePress("F6")) this.placeTestLabDroneOnRoof();
       if (this.input.consumePress("F7")) this.debug.ai = !this.debug.ai;
@@ -3332,15 +3337,7 @@
 
     updateCommandRadioHotkey() {
       if (!(this.input.consumePress("KeyU") || this.input.consumePress("Digit7") || this.input.consumePress("Numpad7"))) return;
-      const canUseRadio = this.matchStarted &&
-        !this.deploymentOpen &&
-        !this.lobbyOpen &&
-        !this.entryOpen &&
-        !this.result &&
-        !this.playerDeathActive &&
-        !this.adminObserverMode;
-      if (!canUseRadio) return;
-      this.hud?.toggleCommandRadio?.();
+      this.hud?.toggleCommandRadio?.(false);
     }
 
     updateTacticalMapHotkey() {
@@ -3648,7 +3645,7 @@
     }
 
     firePlayerGun(weapon, targetX, targetY) {
-      if (!this.hasPlayerWeaponAmmo(weapon)) return false;
+      if (!this.hasPlayerWeaponAmmo(weapon) || this.isPlayerSupportGun?.(weapon) && !this.canPlayerFireSupportGun?.(weapon)) return false;
 
       const scoped = this.isPlayerScoutAimMode() && weapon.id === "sniper";
       const machineGunAim = this.isPlayerMachineGunAimMode() && (weapon.id === "machinegun" || weapon.id === "lmg");
@@ -3707,7 +3704,7 @@
         });
         if (observedShot) this.player.lastShotCooldownScale = observedTarget.designated ? 1.18 : 1.35;
         this.consumePlayerEquipmentAmmo(weapon);
-        this.emitPlayerGunFeedback(weapon, machineGunAim || pistolAim || observedShot);
+        this.emitPlayerGunFeedback(weapon, scoped || machineGunAim || pistolAim || observedShot);
       }
       return fired;
     }
@@ -3726,6 +3723,7 @@
       const muzzleX = player.x + c * muzzleDistance - s * side;
       const muzzleY = player.y + s * muzzleDistance + c * side;
       const heavy = weapon.id === "machinegun" || weapon.id === "lmg";
+      const moving = Math.abs(player.speed || 0) > (player.isProne ? 5 : 12);
       const flashes = this.effects.muzzleFlashes || (this.effects.muzzleFlashes = []);
       const smokePuffs = this.effects.gunSmokePuffs || (this.effects.gunSmokePuffs = []);
 
@@ -3756,7 +3754,12 @@
         warm: true
       });
 
-      player.gunKick = Math.max(player.gunKick || 0, heavy ? 1.35 : 0.8);
+      let kick = 0.78;
+      if (heavy) kick = player.isProne ? 0.62 : moving ? 1.72 : aimed ? 0.82 : 1.18;
+      else if (weapon.id === "sniper") kick = player.isProne ? 0.72 : moving ? 1.34 : aimed ? 0.94 : 1.1;
+      else if (weapon.id === "rifle") kick = player.isProne ? 0.54 : moving ? 0.76 : 0.66;
+      else if (weapon.id === "pistol") kick = moving ? 0.62 : 0.5;
+      player.gunKick = Math.max(player.gunKick || 0, kick);
     }
 
     hasPlayerWeaponAmmo(weapon) {
@@ -4107,6 +4110,8 @@
 
     updateResult(dt) {
       if (this.result) return;
+      // 샌드박스 실험장은 자유 배치 공간이라 승패 판정을 하지 않는다.
+      if (this.testLab) return;
       if (this.playerDeathActive && this.matchConfig.mode !== "conquest" && !this.isRoundSpectatorMode?.()) return;
       if (this.matchConfig.mode === "conquest") {
         this.updateConquestResult();
@@ -4190,6 +4195,9 @@
   IronLine.installMapObjects?.(Game);
   IronLine.installFogOfWar?.(Game);
   IronLine.installGameMenuMusic?.(Game);
+  IronLine.installAiPathRebuildBudget?.(Game);
+  IronLine.installAudioSettings?.(Game);
+  IronLine.installGameBloodEffects?.(Game);
   IronLine.installAnnihilationRounds?.(Game);
   IronLine.installMobileCameraGestures?.(Game);
   IronLine.installOnlineWorldStatePublish?.(Game);

@@ -12,6 +12,8 @@
       const ctx = this.ctx;
       const camera = this.camera;
       const mobileLayout = Boolean(game.settings?.mobileControls && camera.width > camera.height && !game.deploymentOpen);
+      if (game.hud?.fieldRadioOpen) return;
+      if (game.player?.controlledDrone) return;
       if (mobileLayout && game.hud?.commandRadio?.open) return;
       const mapW = mobileLayout ? 150 : 164;
       const mapH = mobileLayout ? 94 : 110;

@@ -677,7 +677,8 @@
         maxLife: boostedDirectHit ? this.explosionLife + 0.1 : this.explosionLife,
         color: "rgba(255, 126, 54, 0.94)",
         core: true,
-        smoke: false
+        smoke: false,
+        scorched: true
       });
       game.effects.explosions.push({
         x: this.x + (Math.random() - 0.5) * 8,
@@ -688,7 +689,8 @@
         maxLife: 0.72,
         color: "rgba(72, 66, 52, 0.56)",
         core: false,
-        smoke: true
+        smoke: true,
+        scorched: true
       });
       IronLine.audio?.playExplosion?.(game, this, "drone");
       game.effects.scorchMarks?.push({

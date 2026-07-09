@@ -567,6 +567,7 @@
       this.player.rifleCooldown = Math.max(0, this.player.rifleCooldown - dt);
       this.player.gunKick = Math.max(0, (this.player.gunKick || 0) - dt * 11);
       this.player.fireHoldTimer = Math.max(0, (this.player.fireHoldTimer || 0) - dt);
+      this.player.throwPoseTimer = Math.max(0, (this.player.throwPoseTimer || 0) - dt);
       this.updateInfantryWeaponInput();
       this.updatePlayerProneTransition(dt);
       if (this.input.consumePress("KeyC")) {
@@ -574,6 +575,13 @@
       }
       const mouse = this.input.mouse;
       const weapon = this.player.getWeapon();
+      if (this.hud?.fieldRadioOpen && this.input.consumePress("Escape")) {
+        this.hud.closeFieldRadio?.();
+        return;
+      }
+      if (weapon?.type === "radio" && this.input.consumePress("KeyE")) {
+        if (this.hud?.toggleFieldRadioFromTool?.(this)) return;
+      }
       if (this.input.consumePress("KeyB")) {
         this.cyclePlayerFireMode(weapon);
       }
@@ -590,6 +598,7 @@
       const rpgAimMode = this.isPlayerRpgAimMode();
       const machineGunAimMode = this.isPlayerMachineGunAimMode();
       const pistolAimMode = this.isPlayerPistolAimMode();
+      const supportGun = this.isPlayerSupportGun(weapon);
       this.player.scoutAim = scoutAimMode;
       this.player.rpgAim = rpgAimMode;
       this.player.machineGunAim = machineGunAimMode;
@@ -600,8 +609,8 @@
       const length = Math.hypot(moveX, moveY);
       const prone = this.isPlayerProneLike();
       const baseInfantrySpeed = prone
-        ? scoutAimMode ? 0 : rpgAimMode ? 34 : machineGunAimMode ? 38 : pistolAimMode ? 42 : fireHoldMode ? 44 : 46
-        : scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 82 : pistolAimMode ? 118 : fireHoldMode ? 118 : 155;
+        ? scoutAimMode ? 0 : rpgAimMode ? 34 : machineGunAimMode ? 0 : pistolAimMode ? 42 : fireHoldMode && !supportGun ? 44 : 46
+        : scoutAimMode ? 0 : rpgAimMode ? 68 : machineGunAimMode ? 0 : pistolAimMode ? 118 : fireHoldMode && !supportGun ? 118 : 155;
       const sprinting = this.updateBoostState(this.player, dt, length > 0.05, {
         disabled: prone || scoutAimMode || rpgAimMode || machineGunAimMode || pistolAimMode || fireHoldMode,
         drainTime: 1.18,
@@ -612,7 +621,11 @@
       const vx = length > 0 ? (moveX / length) * infantrySpeed : 0;
       const vy = length > 0 ? (moveY / length) * infantrySpeed : 0;
 
+      const previousX = this.player.x;
+      const previousY = this.player.y;
       tryMoveCircle(this, this.player, vx, vy, this.player.radius, dt, { blockTanks: true, blockWrecks: true, padding: 5 });
+      this.player.speed = distXY(previousX, previousY, this.player.x, this.player.y) / Math.max(dt, 0.001);
+      this.updatePlayerSupportWeaponStance(weapon, dt, { aimMode: machineGunAimMode, prone });
       this.applyVirtualAim(this.player, scoutAimMode ? 1050 : rpgAimMode ? 980 : machineGunAimMode ? 880 : pistolAimMode ? 560 : fireHoldMode ? 760 : 650);
       if (scoutAimMode) this.applyDroneDesignationAimAssist(dt);
 
@@ -682,9 +695,47 @@
       }
 
       const heavy = weapon.id === "machinegun" || weapon.id === "lmg";
+      if (heavy && !this.canPlayerBraceSupportWeapon(weapon)) return false;
       const holdTime = heavy ? 0.34 : weapon.id === "smg" || weapon.id === "pistol" ? 0.24 : 0.28;
       player.fireHoldTimer = Math.max(player.fireHoldTimer || 0, holdTime, (weapon.cooldown || 0.2) + 0.08);
       return true;
+    },
+    isPlayerSupportGun(weapon) {
+      return weapon?.id === "machinegun" || weapon?.id === "lmg";
+    },
+    canPlayerBraceSupportWeapon(weapon) {
+      if (!this.isPlayerSupportGun(weapon)) return true;
+      if (!this.player || this.player.inTank || this.player.controlledDrone || this.player.hp <= 0) return false;
+      return Boolean(this.player.isProne || this.isPlayerMachineGunAimMode?.());
+    },
+    updatePlayerSupportWeaponStance(weapon, dt, options = {}) {
+      const player = this.player;
+      if (!player) return false;
+      if (!this.isPlayerSupportGun(weapon)) {
+        player.supportWeaponReady = false;
+        player.supportWeaponDeployTimer = 0;
+        return false;
+      }
+
+      const prone = Boolean(options.prone || player.isProne);
+      const aiming = Boolean(options.aimMode || prone);
+      const moving = Math.abs(player.speed || 0) > (prone ? 5 : 8);
+      const canDeploy = aiming && !moving && !this.isPlayerProneTransitioning?.();
+      const required = prone ? 0.24 : 0.46;
+      if (canDeploy) {
+        player.supportWeaponDeployTimer = Math.min(required, (player.supportWeaponDeployTimer || 0) + dt);
+      } else {
+        player.supportWeaponDeployTimer = Math.max(0, (player.supportWeaponDeployTimer || 0) - dt * 1.8);
+      }
+      player.supportWeaponReady = player.supportWeaponDeployTimer >= required;
+      return player.supportWeaponReady;
+    },
+    canPlayerFireSupportGun(weapon) {
+      if (!this.isPlayerSupportGun(weapon)) return true;
+      if (!this.canPlayerBraceSupportWeapon(weapon)) return false;
+      const prone = Boolean(this.player?.isProne);
+      const moving = Math.abs(this.player?.speed || 0) > (prone ? 5 : 8);
+      return Boolean(this.player?.supportWeaponReady && !moving);
     },
     isPlayerFireHoldWeapon(weapon) {
       return Boolean(weapon?.type === "gun" && weapon.id !== "sniper");
@@ -708,6 +759,11 @@
       if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
       const weapon = this.player.getWeapon?.();
       return weapon?.id === "pistol";
+    },
+    isPlayerRifleAimMode() {
+      if (this.player.inTank || this.player.controlledDrone || this.player.hp <= 0 || !this.input.mouse.rightDown) return false;
+      const weapon = this.player.getWeapon?.();
+      return weapon?.id === "rifle" || weapon?.id === "smg";
     },
     updateInfantryWeaponInput() {
       const keys = [

@@ -6,6 +6,7 @@
   function wantsMenuMusic(game) {
     return Boolean(
       game &&
+      game.settings?.musicEnabled !== false &&
       !game.adminObserverMode &&
       !game.testLab &&
       !game.result &&
@@ -20,7 +21,7 @@
     if (this.menuMusicActive === active) return;
     this.menuMusicActive = active;
     if (active) {
-      IronLine.audio?.startMenuMusic?.({ volume: 0.28 });
+      IronLine.audio?.startMenuMusic?.({ volume: this.settings?.musicVolume ?? 0.28 });
     } else {
       IronLine.audio?.stopMenuMusic?.({ fadeSeconds: 0.45 });
     }

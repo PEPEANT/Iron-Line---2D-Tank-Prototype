@@ -332,6 +332,7 @@
     engagementHoldRange(weapon = this.weapon()) { const range = weapon.range || 560; return Math.min(range * 0.9, Math.max(weapon.desiredRange || 0, range * 0.72)); }
 
     update(dt) {
+      this.lastUpdateDt = dt;
       const beforeX = this.unit.x;
       const beforeY = this.unit.y;
       this.thoughtTimer = Math.max(0, this.thoughtTimer - dt);
@@ -349,6 +350,9 @@
       }
       this.repathTimer = Math.max(0, this.repathTimer - dt);
       this.fireCooldown = Math.max(0, this.fireCooldown - dt);
+      this.supportWeaponLockTimer = Math.max(0, (this.supportWeaponLockTimer || 0) - dt);
+      if (!this.isSupportWeapon()) this.supportWeaponDeployTimer = 0;
+      else if ((this.supportWeaponLockTimer || 0) <= 0 && !String(this.state || "").startsWith("support") && this.state !== "prone-fire") this.supportWeaponDeployTimer = Math.max(0, (this.supportWeaponDeployTimer || 0) - dt * 1.2);
       this.grenadeCooldown = Math.max(0, this.grenadeCooldown - dt);
       this.droneCooldown = Math.max(0, this.droneCooldown - dt);
       this.droneCommandTimer = Math.max(0, this.droneCommandTimer - dt);
@@ -1623,6 +1627,7 @@
         this.fireCooldown = Math.min(weapon.cooldown, 0.22 + Math.random() * 0.24);
         return false;
       }
+      if (!this.prepareSupportWeaponFire(target, this.lastUpdateDt || 0.033)) return false;
 
       const suppressionPenalty = clamp(this.unit.suppression / 165, 0, 0.36);
       const firstContactPenalty = this.contactShotPenalty(target);
@@ -1636,6 +1641,7 @@
       });
       if (fired) {
         this.fireTargetShots = Math.min(8, (this.fireTargetShots || 0) + 1);
+        if (this.isSupportWeapon(weapon)) this.supportWeaponLockTimer = Math.max(this.supportWeaponLockTimer || 0, this.unit.isProne ? 0.42 : 0.68);
         this.fireCooldown = Math.max(0.08, weapon.cooldown * difficulty.cooldownScale + difficulty.cooldownAdd + suppressionPenalty * 0.7 + firstContactPenalty * 0.45 + Math.random() * weapon.cooldown * 0.45);
       }
       return fired;
@@ -1664,12 +1670,16 @@
       const weapon = this.weapon();
       const range = IronLine.combat?.smallArmsRange?.(weapon, this.unit, weapon.range) || weapon.range;
       const suppressionPenalty = clamp(this.unit.suppression / 180, 0, 0.32);
+      if (!this.prepareSupportWeaponFire(tank, this.lastUpdateDt || 0.033)) return false;
       const fired = IronLine.combat.fireRifleAtTank(this.game, this.unit, tank, {
         weapon,
         range: weapon.range,
         accuracyBonus: -0.02 - suppressionPenalty
       });
-      if (fired) this.fireCooldown = weapon.cooldown + suppressionPenalty * 0.5 + Math.random() * weapon.cooldown * 0.38;
+      if (fired) {
+        if (this.isSupportWeapon(weapon)) this.supportWeaponLockTimer = Math.max(this.supportWeaponLockTimer || 0, this.unit.isProne ? 0.42 : 0.68);
+        this.fireCooldown = weapon.cooldown + suppressionPenalty * 0.5 + Math.random() * weapon.cooldown * 0.38;
+      }
       return fired;
     }
 
@@ -2168,10 +2178,25 @@
 
     rebuildPath(order, finalTarget = null) {
       if (!this.game.navGraph) return;
+      if (this.game.consumeAiPathRebuildBudget && !this.game.consumeAiPathRebuildBudget(this.unit)) {
+        this.repathTimer = 0.06 + (this.seed % 7) * 0.015;
+        return;
+      }
       const destination = finalTarget || order.point;
-      const rawPath = this.game.navGraph.findPathBetween(this.unit, destination, { padding: 24 });
+      const rawPath = this.game.navGraph.findPathBetween(this.unit, destination, {
+        padding: 24,
+        deadlineMs: 6,
+        returnNullOnTimeout: true
+      });
+      if (!Array.isArray(rawPath)) {
+        this.repathTimer = 0.12 + (this.seed % 7) * 0.025;
+        this.unit.aiPathRebuildTimedOut = (this.unit.aiPathRebuildTimedOut || 0) + 1;
+        this.unit.aiPathRebuildTimedOutAt = this.game.matchTime || 0;
+        return;
+      }
       this.path = rawPath.filter((node) => distXY(this.unit.x, this.unit.y, node.x, node.y) > 52);
       this.pathIndex = 0;
+      this.unit.aiPathRebuildTimedOut = 0;
       this.repathTimer = 2.8 + Math.random() * 0.9;
     }
 
@@ -2206,6 +2231,10 @@
     }
 
     moveTo(dt, target) {
+      if ((this.supportWeaponLockTimer || 0) > 0 && this.isSupportWeapon?.()) {
+        this.unit.speed = approach(this.unit.speed, 0, 320 * dt);
+        return;
+      }
       this.clearProne(1.35);
       target = this.activeMoveTarget(dt, target);
       const dx = target.x - this.unit.x;

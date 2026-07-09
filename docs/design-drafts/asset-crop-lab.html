@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>수복 에셋 컷팅 랩</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="../../styles/asset-crop-lab.css">
+    <script src="../../src/systems/asset-crop-lab.js" defer></script>
+  </head>
+  <body>
+    <main class="crop-shell">
+      <section class="crop-stage" aria-label="원본 시트 컷팅 작업장">
+        <header class="crop-titlebar">
+          <div>
+            <span class="kicker">Subok Asset Crop Lab</span>
+            <h1>에셋 컷팅 랩</h1>
+          </div>
+          <nav class="quick-links" aria-label="빠른 이동">
+            <a href="../../ops.html">운영센터</a>
+            <a href="../../skin-board.html">스킨 보드</a>
+            <a href="infantry-rig-lab.html">리그 랩 v2</a>
+          </nav>
+        </header>
+
+        <div class="canvas-toolbar">
+          <label>
+            원본
+            <select id="sourceSelect"></select>
+          </label>
+          <label class="file-button">
+            PNG 불러오기
+            <input id="sourceFile" type="file" accept="image/png,image/webp,image/jpeg">
+          </label>
+          <label>
+            확대
+            <input id="zoomRange" type="range" min="25" max="260" value="100">
+            <output id="zoomValue">100%</output>
+          </label>
+          <label class="check">
+            <input id="gridToggle" type="checkbox" checked>
+            격자
+          </label>
+          <label class="check">
+            <input id="snapToggle" type="checkbox">
+            4px 스냅
+          </label>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="sheetCanvas" width="1200" height="760" aria-label="원본 시트 캔버스"></canvas>
+        </div>
+
+        <div class="status-row">
+          <span id="statusText">준비 중</span>
+          <span id="coordText">x 0 · y 0</span>
+        </div>
+      </section>
+
+      <aside class="crop-panel" aria-label="컷팅 설정">
+        <section class="tool-block">
+          <h2>선택 영역</h2>
+          <div class="field-grid four">
+            <label>x <input id="cropX" type="number" value="0"></label>
+            <label>y <input id="cropY" type="number" value="0"></label>
+            <label>w <input id="cropW" type="number" value="0" min="1"></label>
+            <label>h <input id="cropH" type="number" value="0" min="1"></label>
+          </div>
+          <div class="field-grid two">
+            <label>중심 x <input id="pivotX" type="number" value="0"></label>
+            <label>중심 y <input id="pivotY" type="number" value="0"></label>
+          </div>
+          <div class="button-row">
+            <button type="button" id="centerPivot">중심 자동</button>
+            <button type="button" id="pickPivot">중심 찍기</button>
+          </div>
+          <input id="actionType" type="hidden" value="none">
+          <div class="action-kind">
+            <span>액션점</span>
+            <output id="actionKindText">자동 판정: 없음</output>
+          </div>
+          <div class="field-grid two">
+            <label>액션 x <input id="actionX" type="number" value="0"></label>
+            <label>액션 y <input id="actionY" type="number" value="0"></label>
+          </div>
+          <div class="button-row">
+            <button type="button" id="pickActionPoint">액션점 자동 찍기</button>
+            <button type="button" id="clearActionPoint">액션점 제거</button>
+          </div>
+          <p class="auto-note">빨간 점은 배치/회전 중심, 컬러 점은 이름·무기·태그로 자동 판정된 총구·RPG 발사점·수류탄 손놓기·폭발 중심입니다.</p>
+        </section>
+
+        <section class="tool-block">
+          <h2>이름</h2>
+          <label>
+            파일명
+            <input id="cropName" type="text" value="infantry_rifle_idle_01" spellcheck="false">
+          </label>
+          <div class="field-grid two">
+            <label>
+              종류
+              <select id="cropType">
+                <option value="infantry">보병</option>
+                <option value="tank">탱크</option>
+                <option value="vehicle">차량</option>
+                <option value="weapon">무기</option>
+                <option value="effect">효과</option>
+                <option value="ui">UI</option>
+              </select>
+            </label>
+            <label>
+              상태
+              <select id="cropState">
+                <option value="idle">대기</option>
+                <option value="walk">걷기</option>
+                <option value="fire">사격</option>
+                <option value="prone">엎드림</option>
+                <option value="crawl">기어가기</option>
+                <option value="dead">사망</option>
+                <option value="body">차체</option>
+                <option value="turret">포탑</option>
+                <option value="misc">기타</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            변형/프레임
+            <input id="cropVariant" type="text" value="01" spellcheck="false">
+          </label>
+          <label>
+            태그
+            <input id="cropTags" type="text" placeholder="rifle, friendly, top" spellcheck="false">
+          </label>
+          <label>
+            메모
+            <textarea id="cropNotes" rows="3" spellcheck="false"></textarea>
+          </label>
+        </section>
+
+        <section class="tool-block">
+          <h2>출력</h2>
+          <label class="check">
+            <input id="transparentToggle" type="checkbox" checked>
+            흰 배경 투명화
+          </label>
+          <label>
+            흰색 기준
+            <input id="thresholdRange" type="range" min="210" max="255" value="242">
+            <output id="thresholdValue">242</output>
+          </label>
+          <label>
+            패딩
+            <input id="paddingInput" type="number" min="0" max="64" value="6">
+          </label>
+          <canvas id="previewCanvas" width="220" height="160" aria-label="선택 영역 미리보기"></canvas>
+        </section>
+
+        <section class="tool-block">
+          <h2>자동 컷팅</h2>
+          <div class="field-grid three">
+            <label>최소 픽셀 <input id="autoMinArea" type="number" min="10" max="5000" value="90"></label>
+            <label>합치기 거리 <input id="autoMergeGap" type="number" min="0" max="120" value="26"></label>
+            <label>박스 여백 <input id="autoBoxPadding" type="number" min="0" max="64" value="8"></label>
+          </div>
+          <div class="button-row">
+            <button type="button" id="autoDetect" class="primary">자동 감지</button>
+            <button type="button" id="clearAutoCrops">자동컷 삭제</button>
+          </div>
+          <p class="auto-note" id="autoSummary">흰 배경이 아닌 덩어리를 찾아 초안 컷 목록으로 추가합니다.</p>
+        </section>
+
+        <section class="tool-block">
+          <h2>작업</h2>
+          <div class="button-row">
+            <button type="button" id="addCrop" class="primary">목록 추가</button>
+            <button type="button" id="updateCrop">수정 반영</button>
+            <button type="button" id="deleteCrop">삭제</button>
+          </div>
+          <div class="button-row">
+            <button type="button" id="exportSelected">선택 PNG</button>
+            <button type="button" id="downloadManifest">JSON</button>
+          </div>
+          <div class="button-row">
+            <button type="button" id="chooseFolder">폴더 선택</button>
+            <button type="button" id="saveAll">전체 저장</button>
+          </div>
+          <label class="file-button wide">
+            JSON 불러오기
+            <input id="manifestFile" type="file" accept="application/json">
+          </label>
+        </section>
+
+        <section class="tool-block crop-list-block">
+          <div class="list-head">
+            <h2>컷 목록</h2>
+            <button type="button" id="clearCrops">비우기</button>
+          </div>
+          <div id="cropList" class="crop-list" aria-label="저장된 컷 목록"></div>
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>

@@ -214,6 +214,13 @@
         const game = IronLine.game;
         if (game) {
           this.toggleSettingsPanel(false);
+          if (game.testLab) {
+            game.testLabAiPaused = false;
+            game.testLabUI?.updateDynamic?.(true);
+            game.adminNotify?.("테스트랩 AI 재개");
+            game.canvas?.focus?.();
+            return;
+          }
           if (!this.sessionFlow?.startFromDeployment(game)) game.enterLobby();
         }
       });
@@ -509,8 +516,9 @@
       const inTank = Boolean(game.player?.inTank);
       const controlledDrone = Boolean(game.player?.controlledDrone);
       const canPickupDrone = Boolean(game.nearbyPlayerDroneForPickup?.());
-      const canDrone = Boolean(game.activePlayerDrone?.());
-      const canInteract = Boolean(canPickupDrone || controlledDrone || canDrone || inTank || game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.());
+      const canDrone = Boolean(game.canUseSelectedDroneTool?.() && (game.activePlayerDrone?.() || game.player?.getWeapon?.()?.type === "drone"));
+      const canFieldRadio = Boolean(game.player?.getWeapon?.()?.type === "radio" && !inTank && !controlledDrone);
+      const canInteract = Boolean(canPickupDrone || controlledDrone || canDrone || canFieldRadio || inTank || game.findMountablePlayerVehicle?.() || game.findMountablePlayerTank?.());
       const roleChangeAvailable = Boolean(showPlayerControls && !inTank && !controlledDrone && !game.roleChange?.open && game.roleChange?.canChangeNow?.().available);
       const radioOpen = Boolean(this.commandRadio?.open);
 
@@ -540,8 +548,8 @@
       this.nodes.mobileTacticalMapButton?.setAttribute("aria-label", game.tacticalMapOpen ? "전술지도 닫기" : "전술지도 열기");
 
       if (this.nodes.mobileInteractButton) {
-        const label = inTank ? "\uD558\uCC28" : canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : "\uD0D1\uC2B9";
-        const mobileKey = inTank ? "KeyF" : canPickupDrone || controlledDrone || canDrone ? "KeyE" : "KeyF";
+        const label = inTank ? "\uD558\uCC28" : canPickupDrone ? "\uD68C\uC218" : controlledDrone ? "\uBCF5\uADC0" : canDrone ? "\uB4DC\uB860" : canFieldRadio ? "\uBB34\uC804" : "\uD0D1\uC2B9";
+        const mobileKey = inTank ? "KeyF" : canPickupDrone || controlledDrone || canDrone || canFieldRadio ? "KeyE" : "KeyF";
         this.nodes.mobileInteractButton.textContent = label;
         this.nodes.mobileInteractButton.dataset.mobileKey = mobileKey;
         this.nodes.mobileInteractButton.setAttribute(
@@ -584,7 +592,8 @@
         rpg: "RPG",
         repairKit: "KIT",
         reconDrone: "UAV",
-        kamikazeDrone: "FPV"
+        kamikazeDrone: "FPV",
+        fieldRadio: "RAD"
       };
       const ammo = this.weaponAmmoText(player, weapon);
       const fireMode = weapon?.type === "gun" && Array.isArray(weapon.fireModes) && weapon.fireModes.length > 1
@@ -722,39 +731,7 @@
       const ammo = this.weaponAmmoCount(player, weapon);
       const drone = game?.player?.controlledDrone;
       if (drone?.alive) {
-        this.setInfantryWeaponReadoutCompact(false);
-        const attackDrone = drone.droneRole === "attack";
-        const signalStrength = drone.signalStrength?.() ?? 1;
-        const weakSignal = Boolean(drone.isSignalWeak?.());
-        const signalSuffix = weakSignal ? ` · 신호 약함 ${Math.round(signalStrength * 100)}%` : "";
-        const designationCandidate = !attackDrone ? game?.findReconDroneDesignationTarget?.(drone) : null;
-        const designationOptions = !attackDrone ? game?.reconDroneDesignationOptions?.(drone) || [] : [];
-        const boostPct = attackDrone ? IronLine.math.clamp(drone.boostCharge ?? 1, 0, 1) : 1;
-        const pct = attackDrone
-          ? boostPct
-          : drone.batteryLimit
-            ? IronLine.math.clamp(drone.battery / Math.max(1, drone.maxBattery), 0, 1)
-            : IronLine.math.clamp(signalStrength, 0, 1);
-        if (!attackDrone && !designationCandidate && designationOptions.length > 0) {
-          ui.weaponState.textContent = `정찰드론 표적 ${designationOptions.length} · 마커 클릭${signalSuffix}`;
-          ui.reloadBar.style.width = `${pct * 100}%`;
-          return;
-        }
-        let attackText = "";
-        let barPct = pct;
-        if (attackDrone) {
-          const detectedSuffix = drone.detectedTimer > 0 ? " · 감지됨" : "";
-          const failureSuffix = drone.lockFailureTimer > 0 && drone.lockFailureReason ? ` · 실패: ${drone.lockFailureReason}` : "";
-          barPct = boostPct;
-          if (drone.diveActive) attackText = `자폭드론 돌입중 · Shift 가속${signalSuffix}${detectedSuffix}`;
-          else attackText = `FPV ready · left click attack / Shift boost${failureSuffix}${signalSuffix}${detectedSuffix}`;
-        }
-        ui.weaponState.textContent = attackDrone
-          ? attackText
-          : designationCandidate
-            ? `Recon drone marking${signalSuffix}`
-            : drone.batteryLimit ? `Recon drone ${Math.ceil(drone.battery)}s${signalSuffix}` : `Recon drone active${signalSuffix}`;
-        ui.reloadBar.style.width = `${barPct * 100}%`;
+        this.clearStandardInfantryReadout();
         return;
       }
       const returningDrone = game?.activePlayerDrone?.();
@@ -762,14 +739,14 @@
         this.setInfantryWeaponReadoutCompact(false);
         const distance = IronLine.math.distXY(player.x, player.y, returningDrone.x, returningDrone.y);
         const pct = 1 - IronLine.math.clamp(distance / Math.max(120, returningDrone.maxControlRange || 1200), 0, 1);
-        ui.weaponState.textContent = returningDrone.droneRole === "attack" ? "FPV auto returning" : "Recon drone auto returning";
+        ui.weaponState.textContent = returningDrone.droneRole === "attack" ? "자폭드론 복귀 중" : "정찰드론 복귀 중";
         ui.reloadBar.style.width = `${pct * 100}%`;
         return;
       }
       const pickupDrone = game?.nearbyPlayerDroneForPickup?.();
       if (pickupDrone) {
         this.setInfantryWeaponReadoutCompact(false);
-        ui.weaponState.textContent = pickupDrone.droneRole === "attack" ? "FPV retrieve ready" : "Recon drone retrieve ready";
+        ui.weaponState.textContent = pickupDrone.droneRole === "attack" ? "자폭드론 회수 가능" : "정찰드론 회수 가능";
         ui.reloadBar.style.width = "100%";
         return;
       }
@@ -843,7 +820,7 @@
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0 && game?.isPlayerScoutAimMode?.()) {
         this.setInfantryWeaponReadoutCompact(false);
-        ui.weaponState.textContent = `Recon observed ${reconObservedContacts.length} · align aim`;
+        ui.weaponState.textContent = `드론 관측 ${reconObservedContacts.length} · 조준 정렬`;
         ui.reloadBar.style.width = `${readyPct * 100}%`;
       } else if (reconObservedContacts.length > 0) {
         this.setInfantryWeaponReadoutCompact(false);
@@ -1593,6 +1570,9 @@
   IronLine.installHudAdminNotes?.(Hud);
   IronLine.installHudAdminLobby?.(Hud);
   IronLine.installHudAdminUi?.(Hud);
+  IronLine.installDroneGcsHud?.(Hud);
+  IronLine.installFieldRadioHud?.(Hud);
+  IronLine.installHudAudioSettings?.(Hud);
   IronLine.installHudAdminRoomControls?.(Hud);
   IronLine.installHudAdminLayout?.(Hud);
   IronLine.installHudSpectatorPanel?.(Hud);

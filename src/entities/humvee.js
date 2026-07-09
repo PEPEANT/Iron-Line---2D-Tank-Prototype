@@ -15,7 +15,7 @@
       this.factionId = options.factionId || options.skinId || "";
       this.skinId = this.factionId;
       this.angle = options.angle || 0;
-      this.radius = options.radius || 31;
+      this.radius = options.radius || 44;
       this.maxHp = options.maxHp || 66;
       this.hp = this.maxHp;
       this.healthRevealTimer = 0;

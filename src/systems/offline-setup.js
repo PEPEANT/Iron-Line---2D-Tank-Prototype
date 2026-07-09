@@ -24,13 +24,13 @@
       game.deploymentOpen = false;
       game.lobbyOpen = false;
       game.roomListOpen = false;
-      game.matchPhase = "loading";
+      game.matchPhase = "countdown";
       game.countdownStarted = true;
-      game.startCountdown = 4;
+      game.startCountdown = game.matchStartDelaySeconds?.() || 15;
       game.startLoading = game.defaultStartLoadingState?.() || game.startLoading;
       if (game.startLoading) {
-        game.startLoading.active = true;
-        game.startLoading.remaining = game.startLoading.duration;
+        game.startLoading.active = false;
+        game.startLoading.remaining = 0;
         game.startLoading.stepIndex = 0;
       }
       game.canvas?.focus?.();

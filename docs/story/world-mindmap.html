@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수복 세계관 마인드맵</title>
+    <style>
+      :root {
+        --bg: #08110f;
+        --ink: #edf4ef;
+        --muted: rgba(237, 244, 239, 0.64);
+        --line: rgba(237, 244, 239, 0.16);
+        --green: #8cd7c5;
+        --amber: #ffd166;
+        --blue: #8ab4ff;
+        --red: #ff7a7a;
+        --panel: rgba(237, 244, 239, 0.07);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif;
+        background:
+          radial-gradient(900px 420px at 50% -12%, rgba(140, 215, 197, 0.13), transparent),
+          linear-gradient(180deg, #0d1714, var(--bg));
+      }
+
+      main {
+        width: min(1240px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 30px 0 48px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: end;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      .kicker {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1.1;
+      }
+
+      .lead {
+        max-width: 780px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.62;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .link-button {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 13px;
+        border: 1px solid rgba(237, 244, 239, 0.18);
+        border-radius: 6px;
+        background: rgba(237, 244, 239, 0.06);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 900;
+        text-decoration: none;
+      }
+
+      .map-shell {
+        margin-top: 18px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background:
+          linear-gradient(rgba(237, 244, 239, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(237, 244, 239, 0.025) 1px, transparent 1px),
+          rgba(3, 7, 6, 0.32);
+        background-size: 32px 32px;
+      }
+
+      .mindmap {
+        position: relative;
+        width: 1180px;
+        height: 820px;
+        margin: 0 auto;
+      }
+
+      svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .branch {
+        fill: none;
+        stroke: rgba(140, 215, 197, 0.34);
+        stroke-width: 2.4;
+      }
+
+      .branch.alt {
+        stroke: rgba(255, 209, 102, 0.32);
+      }
+
+      .node {
+        position: absolute;
+        min-width: 210px;
+        max-width: 270px;
+        padding: 13px 14px;
+        border: 1px solid rgba(237, 244, 239, 0.16);
+        border-radius: 8px;
+        background: rgba(8, 14, 12, 0.92);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+      }
+
+      .node.center {
+        left: 455px;
+        top: 330px;
+        width: 270px;
+        min-height: 150px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        border-color: rgba(140, 215, 197, 0.48);
+        background: rgba(140, 215, 197, 0.11);
+      }
+
+      .node h2,
+      .node h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        line-height: 1.35;
+      }
+
+      .node.center h2 {
+        margin: 0 0 8px;
+        color: var(--green);
+        font-size: 30px;
+      }
+
+      .node p,
+      .node li {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .node ul {
+        margin: 0;
+        padding-left: 17px;
+      }
+
+      .node.theme {
+        left: 70px;
+        top: 70px;
+        border-color: rgba(140, 215, 197, 0.34);
+      }
+
+      .node.seohoon {
+        left: 70px;
+        top: 300px;
+        border-color: rgba(138, 180, 255, 0.34);
+      }
+
+      .node.minji {
+        left: 70px;
+        top: 550px;
+        border-color: rgba(255, 209, 102, 0.34);
+      }
+
+      .node.war {
+        left: 455px;
+        top: 56px;
+        width: 285px;
+        border-color: rgba(255, 122, 122, 0.34);
+      }
+
+      .node.factions {
+        left: 825px;
+        top: 76px;
+        border-color: rgba(138, 180, 255, 0.34);
+      }
+
+      .node.missions {
+        left: 835px;
+        top: 300px;
+        width: 280px;
+        border-color: rgba(255, 209, 102, 0.34);
+      }
+
+      .node.visual {
+        left: 835px;
+        top: 560px;
+        border-color: rgba(140, 215, 197, 0.34);
+      }
+
+      .node.open {
+        left: 445px;
+        top: 655px;
+        width: 300px;
+        border-color: rgba(237, 244, 239, 0.24);
+      }
+
+      .tag {
+        display: inline-block;
+        margin-bottom: 7px;
+        color: var(--amber);
+        font-size: 11px;
+        font-weight: 950;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .legend div {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .legend strong {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--ink);
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        header {
+          grid-template-columns: 1fr;
+        }
+
+        .actions {
+          justify-content: flex-start;
+        }
+
+        .legend {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <span class="kicker">Soubok Story Mind Map</span>
+          <h1>스토리와 세계관 마인드맵</h1>
+          <p class="lead">현재 확정된 세계관을 한 장의 관계도로 정리했다. 가운데는 수복의 핵심이고, 왼쪽은 감정과 인물, 오른쪽은 전쟁 구조와 미션, 위아래는 원인과 미해결 질문이다.</p>
+        </div>
+        <div class="actions">
+          <a class="link-button" href="world-board.html">세계관 보드</a>
+          <a class="link-button" href="world-bible.md">원본 MD</a>
+          <a class="link-button" href="INDEX.md">스토리 색인</a>
+          <a class="link-button" href="../../ops.html">운영센터</a>
+        </div>
+      </header>
+
+      <section class="map-shell" aria-label="수복 세계관 마인드맵">
+        <div class="mindmap">
+          <svg viewBox="0 0 1180 820" aria-hidden="true">
+            <path class="branch" d="M 590 405 C 430 340, 330 210, 280 140"></path>
+            <path class="branch" d="M 590 405 C 430 405, 330 380, 280 370"></path>
+            <path class="branch alt" d="M 590 405 C 430 490, 330 605, 280 625"></path>
+            <path class="branch alt" d="M 590 405 C 585 270, 590 190, 600 135"></path>
+            <path class="branch" d="M 590 405 C 730 280, 800 175, 835 145"></path>
+            <path class="branch alt" d="M 590 405 C 730 390, 810 390, 835 385"></path>
+            <path class="branch" d="M 590 405 C 735 510, 810 620, 835 635"></path>
+            <path class="branch alt" d="M 590 405 C 590 525, 595 610, 595 655"></path>
+          </svg>
+
+          <article class="node center">
+            <div>
+              <h2>수복</h2>
+              <p>영토를 되찾는 이야기이자, 사람과 일상과 집을 되찾는 이야기.</p>
+            </div>
+          </article>
+
+          <article class="node theme">
+            <span class="tag">핵심 주제</span>
+            <h3>사람의 수복</h3>
+            <ul>
+              <li>전쟁으로 무너진 평범한 하루</li>
+              <li>김민지를 찾는 개인적 목표</li>
+              <li>부모의 죽음 이후 돌아갈 집 상실</li>
+            </ul>
+          </article>
+
+          <article class="node seohoon">
+            <span class="tag">주인공</span>
+            <h3>이서훈</h3>
+            <ul>
+              <li>22살, 겉으로는 평범한 청년</li>
+              <li>BDF와 연결된 과거 비밀</li>
+              <li>김민지를 찾기 위해 전장으로 진입</li>
+            </ul>
+          </article>
+
+          <article class="node minji">
+            <span class="tag">감정의 목적지</span>
+            <h3>김민지</h3>
+            <ul>
+              <li>피난민 속에서 실종</li>
+              <li>동명이인 때문에 기록 추적 혼선</li>
+              <li>최종 생사는 아직 미정</li>
+            </ul>
+          </article>
+
+          <article class="node war">
+            <span class="tag">발발 구조</span>
+            <h3>전쟁의 확대</h3>
+            <ul>
+              <li>도심 테러</li>
+              <li>북한 도발과 국지전</li>
+              <li>미사일/ICBM급 위협</li>
+              <li>중국 배후와 직접 개입</li>
+            </ul>
+          </article>
+
+          <article class="node factions">
+            <span class="tag">세력</span>
+            <h3>전쟁의 축</h3>
+            <ul>
+              <li>대한민국군, 경찰, 경찰특공대</li>
+              <li>국정원 연결 BDF</li>
+              <li>북한 특작조와 테러조</li>
+              <li>중국군 상륙/전면전</li>
+            </ul>
+          </article>
+
+          <article class="node missions">
+            <span class="tag">캠페인 뼈대</span>
+            <h3>미션 흐름</h3>
+            <ul>
+              <li>1장: 붕괴의 첫날, 헬기 탈출</li>
+              <li>2장: 해안 상륙 방어</li>
+              <li>3장: 중국/북한 전면전</li>
+              <li>4장: 수색, BDF 진실, 첫 수복 후보</li>
+            </ul>
+          </article>
+
+          <article class="node visual">
+            <span class="tag">그래픽 방향</span>
+            <h3>한국 일상 + 전쟁</h3>
+            <ul>
+              <li>아파트, 편의점, 버스정류장</li>
+              <li>택시, 버스, 경찰차, 구급차</li>
+              <li>피난민과 군 병력의 혼재</li>
+              <li>미사일 경보와 불탄 도시</li>
+            </ul>
+          </article>
+
+          <article class="node open">
+            <span class="tag">아직 정할 것</span>
+            <h3>미확정 질문</h3>
+            <ul>
+              <li>이서훈의 직업과 BDF 과거</li>
+              <li>김민지의 나이, 가족, 역할</li>
+              <li>BDF 풀네임과 조직 성격</li>
+              <li>실제 지명 사용 여부와 최종 결말</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="legend" aria-label="읽는 법">
+        <div><strong>왼쪽</strong>감정선과 인물 관계. 플레이어가 왜 계속 전쟁을 밀고 나가는지 보여준다.</div>
+        <div><strong>오른쪽</strong>전쟁의 세력, 미션, 그래픽으로 확장되는 제작 방향이다.</div>
+        <div><strong>위쪽</strong>전쟁이 어떻게 커지는지, 사건의 원인과 배후를 잡는다.</div>
+        <div><strong>아래쪽</strong>아직 비워둔 질문. 다음 세계관 회의에서 채울 곳이다.</div>
+      </section>
+    </main>
+  </body>
+</html>

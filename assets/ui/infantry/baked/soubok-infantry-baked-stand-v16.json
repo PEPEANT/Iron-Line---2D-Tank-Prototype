@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "rigVersion": 14,
+  "generatedAt": "2026-07-08T15:07:08.791Z",
+  "sheet": "soubok-infantry-baked-stand-v16.png",
+  "frameWidth": 256,
+  "frameHeight": 320,
+  "weaponIncluded": false,
+  "source": {
+    "rig": {
+      "root": {
+        "x": 418.6745935939452,
+        "y": 349.1431587173995
+      },
+      "headPin": {
+        "x": 3.6287331827123808,
+        "y": 7.257445965115153
+      },
+      "shoulderL": {
+        "x": -26.85254581940808,
+        "y": 6.531699375287133
+      },
+      "shoulderR": {
+        "x": 21.772339296776636,
+        "y": 5.805952785459169
+      },
+      "partPins": {
+        "leftArm": {
+          "shoulder": {
+            "x": 0,
+            "y": 0
+          },
+          "elbow": {
+            "x": -8.73656631959534,
+            "y": 63.17216066527221
+          },
+          "hand": {
+            "x": -3,
+            "y": 122
+          }
+        },
+        "rightArm": {
+          "shoulder": {
+            "x": 0,
+            "y": 0
+          },
+          "elbow": {
+            "x": 25.181920830258367,
+            "y": 52.94655657123523
+          },
+          "hand": {
+            "x": 21.307770978958672,
+            "y": 112.9956859418336
+          }
+        }
+      },
+      "weaponRest": {
+        "grip": {
+          "x": -14.489284265691879,
+          "y": 66.51895590966149
+        },
+        "foregrip": {
+          "x": 7.931334247306438,
+          "y": 67.31416248764454
+        },
+        "rearGrip": {
+          "x": 37.678971882067046,
+          "y": 84.62426757020208
+        },
+        "muzzle": {
+          "x": 70.18244437624435,
+          "y": 83.0179922414539
+        }
+      }
+    },
+    "scales": {
+      "body": 0.96,
+      "head": 0.96,
+      "leftArm": 0.98,
+      "rightArm": 1.02,
+      "weapon": 1.6
+    },
+    "motion": {
+      "walk": {
+        "speed": 6.2,
+        "rootSide": 1.8,
+        "rootForward": 1.4,
+        "bodyRoll": 0.052,
+        "headCounterRoll": 0.026,
+        "shoulderSwing": 3.6,
+        "shoulderLift": 1.1,
+        "weaponSide": 4.2,
+        "weaponForward": 2.2,
+        "weaponAim": 0.046,
+        "freeArmSwing": 18,
+        "freeArmSide": 4,
+        "freeArmForward": 5
+      }
+    },
+    "layers": [
+      {
+        "id": "rightArm",
+        "visible": true
+      },
+      {
+        "id": "leftArm",
+        "visible": true
+      },
+      {
+        "id": "body",
+        "visible": true
+      },
+      {
+        "id": "weapon",
+        "visible": true
+      },
+      {
+        "id": "head",
+        "visible": true
+      }
+    ]
+  },
+  "animations": {
+    "idle": [
+      "stand-idle"
+    ],
+    "walk": [
+      "walk-01",
+      "walk-02",
+      "walk-03",
+      "walk-04"
+    ],
+    "fire": [
+      "stand-fire-01",
+      "stand-fire-02"
+    ]
+  },
+  "frames": [
+    {
+      "name": "stand-idle",
+      "x": 0,
+      "y": 0,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 180,
+      "sourceAnim": "idle",
+      "sourceTimeMs": 0,
+      "weapon": {
+        "grip": {
+          "x": 96.984,
+          "y": 220.336
+        },
+        "foregrip": {
+          "x": 101.251,
+          "y": 242.361
+        },
+        "rearGrip": {
+          "x": 91.073,
+          "y": 275.239
+        },
+        "muzzle": {
+          "x": 99.946,
+          "y": 306.549
+        },
+        "angle": 1.536,
+        "flash": false
+      }
+    },
+    {
+      "name": "walk-01",
+      "x": 256,
+      "y": 0,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 80,
+      "sourceAnim": "walk",
+      "sourceTimeMs": 0,
+      "weapon": {
+        "grip": {
+          "x": 97.487,
+          "y": 219.246
+        },
+        "foregrip": {
+          "x": 101.754,
+          "y": 241.271
+        },
+        "rearGrip": {
+          "x": 91.576,
+          "y": 274.149
+        },
+        "muzzle": {
+          "x": 100.449,
+          "y": 305.459
+        },
+        "angle": 1.536,
+        "flash": false
+      }
+    },
+    {
+      "name": "walk-02",
+      "x": 512,
+      "y": 0,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 80,
+      "sourceAnim": "walk",
+      "sourceTimeMs": 253.354,
+      "weapon": {
+        "grip": {
+          "x": 97.607,
+          "y": 220.598
+        },
+        "foregrip": {
+          "x": 101.741,
+          "y": 242.649
+        },
+        "rearGrip": {
+          "x": 91.366,
+          "y": 275.465
+        },
+        "muzzle": {
+          "x": 100.051,
+          "y": 306.828
+        },
+        "angle": 1.542,
+        "flash": false
+      }
+    },
+    {
+      "name": "walk-03",
+      "x": 768,
+      "y": 0,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 80,
+      "sourceAnim": "walk",
+      "sourceTimeMs": 506.708,
+      "weapon": {
+        "grip": {
+          "x": 97.487,
+          "y": 219.246
+        },
+        "foregrip": {
+          "x": 101.754,
+          "y": 241.271
+        },
+        "rearGrip": {
+          "x": 91.576,
+          "y": 274.149
+        },
+        "muzzle": {
+          "x": 100.449,
+          "y": 305.459
+        },
+        "angle": 1.536,
+        "flash": false
+      }
+    },
+    {
+      "name": "walk-04",
+      "x": 0,
+      "y": 320,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 80,
+      "sourceAnim": "walk",
+      "sourceTimeMs": 760.063,
+      "weapon": {
+        "grip": {
+          "x": 96.263,
+          "y": 220.306
+        },
+        "foregrip": {
+          "x": 100.661,
+          "y": 242.305
+        },
+        "rearGrip": {
+          "x": 90.681,
+          "y": 275.244
+        },
+        "muzzle": {
+          "x": 99.742,
+          "y": 306.5
+        },
+        "angle": 1.53,
+        "flash": false
+      }
+    },
+    {
+      "name": "stand-fire-01",
+      "x": 256,
+      "y": 320,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 70,
+      "sourceAnim": "fire",
+      "sourceTimeMs": 0,
+      "weapon": {
+        "grip": {
+          "x": 96.744,
+          "y": 213.34
+        },
+        "foregrip": {
+          "x": 101.01,
+          "y": 235.365
+        },
+        "rearGrip": {
+          "x": 90.832,
+          "y": 268.243
+        },
+        "muzzle": {
+          "x": 99.706,
+          "y": 299.553
+        },
+        "angle": 1.536,
+        "flash": true
+      }
+    },
+    {
+      "name": "stand-fire-02",
+      "x": 512,
+      "y": 320,
+      "w": 256,
+      "h": 320,
+      "origin": {
+        "x": 128,
+        "y": 160
+      },
+      "durationMs": 90,
+      "sourceAnim": "fire",
+      "sourceTimeMs": 130,
+      "weapon": {
+        "grip": {
+          "x": 96.984,
+          "y": 220.336
+        },
+        "foregrip": {
+          "x": 101.251,
+          "y": 242.361
+        },
+        "rearGrip": {
+          "x": 91.073,
+          "y": 275.239
+        },
+        "muzzle": {
+          "x": 99.946,
+          "y": 306.549
+        },
+        "angle": 1.536,
+        "flash": false
+      }
+    }
+  ]
+}

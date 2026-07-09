@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>보병 파츠 리그 랩 v2</title>
+  <link rel="stylesheet" href="../../styles/infantry-rig-lab.css">
+</head>
+<body>
+  <main class="rig-shell">
+    <section class="rig-stage" aria-label="보병 파츠 리그 미리보기">
+      <div class="rig-titlebar">
+        <div>
+          <h1>보병 파츠 리그 랩 v2</h1>
+          <p>리깅 모드에서 뼈대를 배치하고, 포즈 모드에서 핀을 움직여 팔 움직임을 확인합니다.</p>
+        </div>
+        <div class="rig-status" id="rigStatus">로딩</div>
+      </div>
+      <canvas id="rigCanvas" width="960" height="640" aria-label="보병 리그 캔버스"></canvas>
+      <p class="rig-hint" id="rigHint">리깅 모드: 점을 끌어 그림 위 기준 위치를 맞춥니다.</p>
+    </section>
+
+    <aside class="rig-panel" aria-label="리그 컨트롤">
+      <section class="tool-block">
+        <h2>모드</h2>
+        <div class="segmented two" role="group" aria-label="모드 선택">
+          <button type="button" class="active" data-mode="rig">리깅 (뼈 배치)</button>
+          <button type="button" data-mode="pose">포즈 (움직임)</button>
+        </div>
+      </section>
+
+      <section class="tool-block">
+        <h2>애니메이션</h2>
+        <div class="segmented four" role="group" aria-label="애니메이션 선택">
+          <button type="button" class="active" data-anim="none">정지</button>
+          <button type="button" data-anim="idle">대기</button>
+          <button type="button" data-anim="walk">걷기</button>
+          <button type="button" data-anim="fire">사격</button>
+        </div>
+      </section>
+
+      <section class="tool-block">
+        <h2>무기</h2>
+        <select id="weaponSelect" aria-label="무기 선택">
+          <option value="rifle">소총</option>
+          <option value="smg">기관단총</option>
+          <option value="lmg">경기관총</option>
+          <option value="machinegun">기관총</option>
+          <option value="pistol">권총</option>
+          <option value="sniper">저격총</option>
+          <option value="grenade">수류탄</option>
+          <option value="grenadeLauncher">유탄발사기</option>
+          <option value="rpg">RPG</option>
+          <option value="repairKit">치료/수리 키트</option>
+          <option value="reconDrone">정찰드론</option>
+          <option value="kamikazeDrone">자폭드론</option>
+        </select>
+        <label class="check-row">
+          <input id="holdWeapon" type="checkbox" checked>
+          <span>무기 들기 (양손이 그립을 잡음)</span>
+        </label>
+        <label class="check-row">
+          <input id="followAim" type="checkbox" checked>
+          <span>조준하면 몸이 따라 돈다 (꼬임 방지)</span>
+        </label>
+        <div class="button-row" style="margin-top:10px;">
+          <button type="button" id="flipLeft">L 팔굽치 반전</button>
+          <button type="button" id="flipRight">R 팔굽치 반전</button>
+        </div>
+      </section>
+
+      <section class="tool-block">
+        <h2>레이어 (위 = 앞)</h2>
+        <div class="layer-list" id="layerList"></div>
+      </section>
+
+      <section class="tool-block">
+        <h2>파츠 크기</h2>
+        <div class="scale-list" id="scaleList"></div>
+        <div class="button-row" style="margin-top:8px;">
+          <button type="button" id="resetScales">크기 초기화</button>
+        </div>
+      </section>
+
+      <section class="tool-block">
+        <h2>보기</h2>
+        <label class="check-row">
+          <input id="showBones" type="checkbox" checked>
+          <span>뼈대 표시</span>
+        </label>
+        <label class="check-row">
+          <input id="showSheet" type="checkbox">
+          <span>원본 파츠 시트 표시</span>
+        </label>
+        <label class="check-row">
+          <input id="showPinDots" type="checkbox" checked>
+          <span>핀 점 표시</span>
+        </label>
+        <label class="check-row">
+          <input id="showPinLabels" type="checkbox">
+          <span>핀 글자 표시</span>
+        </label>
+        <label class="range-row">
+          <span>줌</span>
+          <input id="zoomRange" type="range" min="0.8" max="2.4" step="0.05" value="1.35">
+        </label>
+      </section>
+
+      <section class="tool-block">
+        <h2>조정</h2>
+        <div class="button-row">
+          <button type="button" id="resetRig">리깅 초기화</button>
+          <button type="button" id="resetPose">포즈 초기화</button>
+        </div>
+      </section>
+
+      <section class="tool-block">
+        <h2>스프라이트 굽기</h2>
+        <div class="button-row bake-actions">
+          <button type="button" id="bakeSprites">PNG 시트 + JSON 굽기</button>
+          <button type="button" id="saveBakeToFolder">폴더 선택 저장</button>
+        </div>
+        <p class="bake-note">서기 몸 프레임만 굽고 무기는 JSON 앵커로 따로 얹습니다.</p>
+        <div class="bake-result" id="bakeResult" aria-live="polite"></div>
+      </section>
+
+      <section class="tool-block output-block">
+        <h2>리그 JSON</h2>
+        <div class="button-row" style="margin-bottom:8px;">
+          <button type="button" id="copyRig">복사</button>
+          <button type="button" id="applyRig">적용</button>
+        </div>
+        <textarea id="rigOutput" spellcheck="false" aria-label="리그 JSON 출력"></textarea>
+      </section>
+    </aside>
+  </main>
+
+  <script src="../../src/systems/infantry-rig-lab-weapons.js"></script>
+  <script src="../../src/systems/infantry-rig-lab.js"></script>
+</body>
+</html>

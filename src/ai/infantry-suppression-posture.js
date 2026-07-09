@@ -5,7 +5,7 @@
   const InfantryAI = IronLine.InfantryAI;
   if (!InfantryAI) return;
 
-  const { approach } = IronLine.math;
+  const { approach, rotateTowards } = IronLine.math;
   const originalEnterProne = InfantryAI.prototype.enterProne;
   const originalClearProne = InfantryAI.prototype.clearProne;
   const originalUpdate = InfantryAI.prototype.update;
@@ -53,6 +53,7 @@
 
     trySuppressedPostureHold(dt = 0.033) {
       if (!this.unit?.alive || this.unit.inVehicle || postureBlockedStates.has(this.state || "")) return false;
+      if ((this.unit.combatShockTimer || 0) > 0 || (this.unit.proneCooldown || 0) > 0) return false;
       const suppression = Number(this.unit.suppression) || 0;
       const role = this.squadRole?.() || "";
       const support = role === "support" || this.isSupportWeapon?.();
@@ -72,7 +73,31 @@
       return true;
     },
 
+    handleCombatShock(dt = 0.033) {
+      if (!this.unit?.alive || this.unit.inVehicle || postureBlockedStates.has(this.state || "")) return false;
+      const timer = Number(this.unit.combatShockTimer) || 0;
+      if (timer <= 0 || this.unit.isProne) return false;
+
+      const total = Math.max(timer, Number(this.unit.combatShockTotal) || timer);
+      const elapsed = Math.max(0, total - timer);
+      const baseAngle = Number.isFinite(this.unit.combatShockLookAngle)
+        ? this.unit.combatShockLookAngle
+        : this.unit.angle || 0;
+      const jitter = Math.sin(elapsed * 17 + (this.seed || 0)) * 0.22;
+      const desiredAngle = baseAngle + jitter;
+
+      this.state = "startled";
+      this.target = null;
+      this.unit.speed = approach(this.unit.speed || 0, 0, 340 * dt);
+      this.unit.angle = rotateTowards
+        ? rotateTowards(this.unit.angle || 0, desiredAngle, 5.6 * dt)
+        : desiredAngle;
+      this.updateDebug?.(null);
+      return true;
+    },
+
     update(dt) {
+      if (this.handleCombatShock?.(dt)) return;
       if (this.trySuppressedPostureHold?.(dt)) return;
       return originalUpdate.call(this, dt);
     }

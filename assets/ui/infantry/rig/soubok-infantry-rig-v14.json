@@ -1,0 +1,240 @@
+{
+  "version": 14,
+  "source": "../../assets/ui/infantry/rig/soubok-infantry-top-v2.png",
+  "armSource": "../../assets/ui/infantry/rig/soubok-infantry-arms-patch-v4.png",
+  "sheet": {
+    "body": {
+      "sx": 188,
+      "sy": 94,
+      "sw": 86,
+      "sh": 109,
+      "pivot": {
+        "x": 43,
+        "y": 55
+      }
+    },
+    "head": {
+      "sx": 198,
+      "sy": 207,
+      "sw": 78,
+      "sh": 86,
+      "pivot": {
+        "x": 39,
+        "y": 43
+      }
+    },
+    "leftArm": {
+      "sx": 145,
+      "sy": 111,
+      "sw": 49,
+      "sh": 115
+    },
+    "rightArm": {
+      "sx": 284,
+      "sy": 111,
+      "sw": 49,
+      "sh": 115
+    }
+  },
+  "armSheet": {
+    "leftUpperArm": {
+      "sx": 34,
+      "sy": 10,
+      "sw": 38,
+      "sh": 83,
+      "pivot": {
+        "x": 19,
+        "y": 8
+      },
+      "distal": {
+        "x": 18,
+        "y": 76
+      }
+    },
+    "leftLowerArm": {
+      "sx": 35,
+      "sy": 96,
+      "sw": 33,
+      "sh": 75,
+      "pivot": {
+        "x": 16,
+        "y": 10
+      },
+      "distal": {
+        "x": 16,
+        "y": 69
+      }
+    },
+    "rightUpperArm": {
+      "sx": 170,
+      "sy": 10,
+      "sw": 38,
+      "sh": 83,
+      "pivot": {
+        "x": 19,
+        "y": 8
+      },
+      "distal": {
+        "x": 19,
+        "y": 76
+      }
+    },
+    "rightLowerArm": {
+      "sx": 173,
+      "sy": 97,
+      "sw": 33,
+      "sh": 73,
+      "pivot": {
+        "x": 17,
+        "y": 10
+      },
+      "distal": {
+        "x": 16,
+        "y": 68
+      }
+    }
+  },
+  "rig": {
+    "root": {
+      "x": 429.946142200697,
+      "y": 307.5894541640945
+    },
+    "headPin": {
+      "x": 2.126735162919431,
+      "y": 3.828132751087537
+    },
+    "shoulderL": {
+      "x": -28.923663637891877,
+      "y": 10.208350108722072
+    },
+    "shoulderR": {
+      "x": 26.796928474972674,
+      "y": 9.78300072720856
+    },
+    "partPins": {
+      "leftArm": {
+        "shoulder": {
+          "x": 0,
+          "y": 0
+        },
+        "elbow": {
+          "x": -9.924805631521219,
+          "y": 56.7130821207536
+        },
+        "hand": {
+          "x": 8.9795588501339,
+          "y": 72.30918716780208
+        }
+      },
+      "rightArm": {
+        "shoulder": {
+          "x": 0,
+          "y": 0
+        },
+        "elbow": {
+          "x": 38.753949783511594,
+          "y": 50.5691725711897
+        },
+        "hand": {
+          "x": 12.760442130939207,
+          "y": 75.61743417394256
+        }
+      }
+    },
+    "weaponRest": {
+      "grip": {
+        "x": -14.585325338797134,
+        "y": 81.95024392363212
+      },
+      "foregrip": {
+        "x": -32.698740728356555,
+        "y": 94.42913895813382
+      },
+      "rearGrip": {
+        "x": 38.19921944255726,
+        "y": 80.7450033926834
+      },
+      "muzzle": {
+        "x": 70.18244437624435,
+        "y": 83.0179922414539
+      }
+    }
+  },
+  "pose": {
+    "bodyAngle": 0,
+    "torsoAngle": 0.27994959279003595,
+    "headAngle": -0.1751875242847094,
+    "armL": {
+      "target": {
+        "x": -49,
+        "y": 86
+      },
+      "bend": -1
+    },
+    "armR": {
+      "target": {
+        "x": 50,
+        "y": 86
+      },
+      "bend": 1
+    },
+    "weapon": {
+      "pos": {
+        "x": -8.088172494589088,
+        "y": 55.49643654936471
+      },
+      "aim": 0.848708750984382
+    }
+  },
+  "motion": {
+    "walk": {
+      "speed": 6.2,
+      "rootSide": 1.8,
+      "rootForward": 1.4,
+      "bodyRoll": 0.052,
+      "headCounterRoll": 0.026,
+      "shoulderSwing": 3.6,
+      "shoulderLift": 1.1,
+      "weaponSide": 4.2,
+      "weaponForward": 2.2,
+      "weaponAim": 0.046,
+      "freeArmSwing": 18,
+      "freeArmSide": 4,
+      "freeArmForward": 5
+    }
+  },
+  "scales": {
+    "body": 1,
+    "head": 1,
+    "leftArm": 0.9,
+    "rightArm": 0.9,
+    "weapon": 1.6
+  },
+  "layers": [
+    {
+      "id": "rightArm",
+      "visible": true
+    },
+    {
+      "id": "leftArm",
+      "visible": true
+    },
+    {
+      "id": "body",
+      "visible": true
+    },
+    {
+      "id": "weapon",
+      "visible": true
+    },
+    {
+      "id": "head",
+      "visible": true
+    }
+  ],
+  "weaponType": "lmg",
+  "holdWeapon": true,
+  "followAim": true,
+  "showPinDots": true,
+  "showPinLabels": false
+}

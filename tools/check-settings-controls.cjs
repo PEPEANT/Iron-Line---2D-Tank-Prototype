@@ -6,6 +6,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "styles", "settings-panel.css"), "utf8");
+const audioSettings = fs.readFileSync(path.join(root, "src", "systems", "audio-settings.js"), "utf8");
 const playerControl = fs.readFileSync(path.join(root, "src", "systems", "game-player-control.js"), "utf8");
 const rendererDebug = fs.readFileSync(path.join(root, "src", "systems", "renderer-debug.js"), "utf8");
 
@@ -43,6 +44,20 @@ for (const text of [
   mustInclude(html, text);
 }
 mustInclude(html, "발사 모드 전환", "fire mode toggle");
+mustInclude(html, "소리", "sound settings section");
+mustInclude(html, "배경음악", "BGM toggle label");
+mustInclude(html, "data-bgm-enabled", "BGM enabled control");
+mustInclude(html, "data-bgm-volume", "BGM volume control");
+mustInclude(html, "src/systems/audio-settings.js", "audio settings module");
+mustInclude(audioSettings, "iron-line-music-enabled-v1", "BGM enabled persistence key");
+mustInclude(audioSettings, "iron-line-music-volume-v1", "BGM volume persistence key");
+mustInclude(audioSettings, "installHudAudioSettings", "BGM settings HUD installer");
+
+const bloodSystem = fs.readFileSync(path.join(root, "src", "systems", "blood-system.js"), "utf8");
+mustInclude(html, "유혈 표현", "blood toggle label");
+mustInclude(html, "data-blood-enabled", "blood enabled control");
+mustInclude(bloodSystem, "iron-line-blood-enabled-v1", "blood enabled persistence key");
+mustInclude(bloodSystem, "data-blood-enabled", "blood toggle binding");
 
 for (const key of ["<kbd>1</kbd>", "<kbd>2</kbd>", "<kbd>3</kbd>", "<kbd>4</kbd>", "<kbd>5</kbd>", "<kbd>6</kbd>", "<kbd>Q</kbd>", "<kbd>B</kbd>", "<kbd>G</kbd>", "<kbd>V</kbd>", "<kbd>E</kbd>", "<kbd>F</kbd>", "<kbd>R</kbd>", "<kbd>Tab</kbd>"]) {
   mustInclude(html, key, key.replace(/<[^>]+>/g, ""));
@@ -59,5 +74,6 @@ mustInclude(rendererDebug, "if (!showAi && !showNavGraph && !showTacticalMap) re
 for (const selector of [".control-map", ".control-row", ".control-row kbd"]) {
   mustInclude(css, selector, selector);
 }
+mustInclude(css, ".settings-range", "settings range control");
 
 console.log("Settings controls check passed");

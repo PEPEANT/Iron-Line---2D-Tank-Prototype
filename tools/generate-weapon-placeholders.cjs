@@ -175,6 +175,18 @@ const WEAPONS = {
     c.rect(44, 20, 8, 16, AMBER); // cross v
     c.rect(38, 26, 20, 4, AMBER); // cross h (overwritten seam ok)
   },
+  fieldRadio(c) {
+    c.line(46, 10, 58, 3, 3, DARK);
+    c.line(56, 5, 66, 17, 3, DARK);
+    c.rect(35, 10, 28, 32, DARK);
+    c.rect(38, 13, 22, 26, BODY);
+    c.rect(42, 16, 14, 8, [216, 244, 199, 255]);
+    c.rect(42, 28, 14, 2, DARK);
+    c.rect(42, 33, 14, 2, DARK);
+    c.circle(44, 39, 2, AMBER);
+    c.circle(50, 39, 2, DARK);
+    c.circle(56, 39, 2, DARK);
+  },
   reconDrone(c) {
     c.rect(38, 22, 20, 10, BODY); // body
     c.line(38, 24, 22, 14, 3, DARK);

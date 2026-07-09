@@ -17,6 +17,7 @@
     segmentDistanceToPoint
   } = IronLine.math;
   const { tryMoveCircle, resolveTankSpacing, hasLineOfSight, circleIntersectsTank } = IronLine.physics;
+  const DRONE_TOOL_SLOT_INDEX = 3;
 
   const gameDroneSystemMethods = {
     findDroneRoofLockPoint(x, y, margin = 18) {
@@ -263,6 +264,32 @@
       if (activeWeapon?.type !== "drone" && (!weapon?.id || player.weaponId !== weapon.id)) return false;
       return player.setEquipmentSlot(0);
     },
+    selectedDroneToolWeapon() {
+      const player = this.player;
+      if (!player || player.activeSlot !== DRONE_TOOL_SLOT_INDEX) return null;
+      const weapon = player.getWeapon?.();
+      return weapon?.type === "drone" ? weapon : null;
+    },
+    canUseSelectedDroneTool() {
+      return Boolean(this.selectedDroneToolWeapon?.());
+    },
+    deploySelectedDroneFromTool() {
+      const weapon = this.selectedDroneToolWeapon?.();
+      if (!weapon) return false;
+      const existing = this.activePlayerDrone();
+      if (existing) return this.togglePlayerDroneControl();
+      const mouse = this.input?.mouse || {};
+      const angle = this.player?.angle || 0;
+      const targetX = Number.isFinite(mouse.worldX) ? mouse.worldX : this.player.x + Math.cos(angle) * 360;
+      const targetY = Number.isFinite(mouse.worldY) ? mouse.worldY : this.player.y + Math.sin(angle) * 360;
+      const deployed = this.usePlayerEquipment(weapon, targetX, targetY);
+      const drone = deployed ? this.activePlayerDrone() : null;
+      if (drone?.alive) {
+        drone.pendingPlayerControl = true;
+        if (!drone.isDeploying?.()) this.togglePlayerDroneControl();
+      }
+      return deployed;
+    },
     suicideDroneLockCandidates(drone = this.player?.controlledDrone, options = {}) {
       if (!drone?.alive || drone.droneRole !== "attack") return [];
       const targets = [];
@@ -456,6 +483,7 @@
 
       drone.autoReturn = false;
       drone.clearRoofLock?.();
+      drone.pendingPlayerControl = false;
       this.player.controlledDrone = drone;
       drone.controlled = true;
       this.droneInteractReleaseRequired = true;
@@ -599,6 +627,18 @@
           drone.setWaypoint?.(this.player.x, this.player.y);
         }
         if (drone.alive) drone.update(this, dt);
+        if (
+          drone.alive &&
+          drone.pendingPlayerControl &&
+          !drone.isDeploying?.() &&
+          this.player?.activeDrone === drone &&
+          !this.player?.controlledDrone &&
+          !this.player?.inTank &&
+          this.player?.hp > 0
+        ) {
+          drone.pendingPlayerControl = false;
+          this.togglePlayerDroneControl();
+        }
         if (drone.alive && drone.autoReturn && this.droneCloseEnoughToRecover(drone)) {
           this.recoverPlayerDrone(drone);
         }
@@ -883,6 +923,7 @@
         const thrown = IronLine.combat.throwGrenade(this, this.player, targetX, targetY, { weapon });
         if (!thrown) return false;
         this.consumePlayerEquipmentAmmo(weapon);
+        this.player.throwPoseTimer = Math.max(this.player.throwPoseTimer || 0, Math.min(0.52, weapon.throwTime || 0.42));
         if (thrown && prone) this.player.lastShotCooldownScale = Math.max(this.player.lastShotCooldownScale || 1, 1.45);
         return thrown;
       }
@@ -893,6 +934,10 @@
 
       if (weapon.type === "repair") {
         return this.repairFriendlyTank(weapon);
+      }
+
+      if (weapon.type === "radio") {
+        return false;
       }
 
       return this.firePlayerGun(weapon, targetX, targetY);

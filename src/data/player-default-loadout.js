@@ -10,8 +10,21 @@
     { index: 2, key: "3", role: "중화기", weaponId: "" },
     { index: 3, key: "4", role: "지원장비", weaponId: "" },
     { index: 4, key: "5", role: "투척류", weaponId: "" },
-    { index: 5, key: "6", role: "설치류", weaponId: "" }
+    { index: 5, key: "6", role: "무전기", weaponId: "" }
   ];
+
+  const SLOT_ROLES = [
+    "\uC8FC\uBB34\uAE30",
+    "\uBCF4\uC870\uBB34\uAE30",
+    "\uC911\uD654\uAE30",
+    "\uC9C0\uC6D0\uC7A5\uBE44",
+    "\uD22C\uCC99\uB958",
+    "\uBB34\uC804\uAE30"
+  ];
+  PLAYER_LOADOUT_SLOTS.forEach((slot, index) => {
+    slot.role = SLOT_ROLES[index] || slot.role;
+    if (index === 5) slot.weaponId = "fieldRadio";
+  });
 
   const ZERO_AMMO = {
     rifle: 0,
@@ -24,6 +37,7 @@
     grenadeLauncher: 0,
     rpg: 0,
     repairKit: 0,
+    fieldRadio: 0,
     reconDrone: 0,
     kamikazeDrone: 0
   };

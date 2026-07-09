@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-09T03:06:12.076Z",
+  "source": {
+    "id": "tank-v1",
+    "label": "탱크 탑뷰",
+    "url": "../../assets/ui/source-sheets/soubok-tank-top-source-v1.png",
+    "width": 690,
+    "height": 1193
+  },
+  "export": {
+    "transparentWhite": true,
+    "whiteThreshold": 238,
+    "padding": 6
+  },
+  "crops": [
+    {
+      "id": "auto-tank-v1-1783566095478-0",
+      "name": "tank_auto_01",
+      "file": "tank_misc_tank_auto_01_01.png",
+      "type": "tank",
+      "state": "misc",
+      "variant": "01",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "tank-v1",
+      "sourceLabel": "탱크 탑뷰",
+      "sourceRect": {
+        "x": 48,
+        "y": 105,
+        "w": 508,
+        "h": 264
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 274,
+        "y": 134,
+        "sourceX": 316,
+        "sourceY": 233,
+        "normalizedX": 0.528,
+        "normalizedY": 0.485
+      },
+      "actionPoint": null
+    },
+    {
+      "id": "auto-tank-v1-1783566095478-1",
+      "name": "tank_auto_02",
+      "file": "tank_misc_tank_auto_02_02.png",
+      "type": "tank",
+      "state": "misc",
+      "variant": "02",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "tank-v1",
+      "sourceLabel": "탱크 탑뷰",
+      "sourceRect": {
+        "x": 100,
+        "y": 432,
+        "w": 560,
+        "h": 219
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 146,
+        "y": 117,
+        "sourceX": 240,
+        "sourceY": 543,
+        "normalizedX": 0.25,
+        "normalizedY": 0.507
+      },
+      "actionPoint": {
+        "type": "projectile",
+        "label": "미사일/RPG",
+        "role": "projectile_spawn",
+        "usage": "rocket, shell, or missile spawn point",
+        "x": 565,
+        "y": 106,
+        "sourceX": 659,
+        "sourceY": 532,
+        "normalizedX": 0.998,
+        "normalizedY": 0.457
+      }
+    },
+    {
+      "id": "auto-tank-v1-1783566095478-2",
+      "name": "tank_auto_03",
+      "file": "tank_misc_tank_auto_03_03.png",
+      "type": "tank",
+      "state": "misc",
+      "variant": "03",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "tank-v1",
+      "sourceLabel": "탱크 탑뷰",
+      "sourceRect": {
+        "x": 101,
+        "y": 695,
+        "w": 191,
+        "h": 107
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 75,
+        "y": 60,
+        "sourceX": 170,
+        "sourceY": 749,
+        "normalizedX": 0.361,
+        "normalizedY": 0.505
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 185,
+        "y": 60,
+        "sourceX": 280,
+        "sourceY": 749,
+        "normalizedX": 0.937,
+        "normalizedY": 0.505
+      }
+    },
+    {
+      "id": "auto-tank-v1-1783566095478-3",
+      "name": "tank_auto_04",
+      "file": "tank_misc_tank_auto_04_04.png",
+      "type": "tank",
+      "state": "misc",
+      "variant": "04",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "tank-v1",
+      "sourceLabel": "탱크 탑뷰",
+      "sourceRect": {
+        "x": 344,
+        "y": 700,
+        "w": 217,
+        "h": 110
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 83,
+        "y": 53,
+        "sourceX": 421,
+        "sourceY": 747,
+        "normalizedX": 0.355,
+        "normalizedY": 0.427
+      },
+      "actionPoint": {
+        "type": "muzzle",
+        "label": "총구",
+        "role": "bullet_spawn",
+        "usage": "bullet/tracer spawn point",
+        "x": 217,
+        "y": 58,
+        "sourceX": 555,
+        "sourceY": 752,
+        "normalizedX": 0.972,
+        "normalizedY": 0.473
+      }
+    },
+    {
+      "id": "auto-tank-v1-1783566095478-4",
+      "name": "tank_auto_05",
+      "file": "tank_misc_tank_auto_05_05.png",
+      "type": "tank",
+      "state": "misc",
+      "variant": "05",
+      "tags": [
+        "auto"
+      ],
+      "notes": "자동 컷팅 초안",
+      "sourceId": "tank-v1",
+      "sourceLabel": "탱크 탑뷰",
+      "sourceRect": {
+        "x": 168,
+        "y": 967,
+        "w": 339,
+        "h": 197
+      },
+      "pivot": {
+        "role": "placement_rotation",
+        "x": 168,
+        "y": 108,
+        "sourceX": 330,
+        "sourceY": 1069,
+        "normalizedX": 0.478,
+        "normalizedY": 0.518
+      },
+      "actionPoint": null
+    }
+  ]
+}

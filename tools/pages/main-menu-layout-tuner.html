@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>수복 메인 화면 위치 조절</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel-width: 340px;
+      --control-width: 420px;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #090b0a;
+      color: #eef4ef;
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background-image:
+        linear-gradient(90deg, rgba(3, 6, 5, 0.38), rgba(3, 6, 5, 0.2) 42%, rgba(3, 6, 5, 0.62)),
+        url("../assets/ui/main-background.png");
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 28% 48%, rgba(0, 0, 0, 0.08), transparent 0 28%, rgba(0, 0, 0, 0.64) 100%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 42%, rgba(0, 0, 0, 0.7));
+    }
+
+    .asset {
+      position: absolute;
+      z-index: 1;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .asset:active { cursor: grabbing; }
+
+    .asset.selected {
+      outline: 2px solid rgba(255, 255, 255, 0.82);
+      outline-offset: 4px;
+    }
+
+    .asset img {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+    }
+
+    .buttons {
+      display: grid;
+      justify-items: center;
+    }
+
+    .open-panel {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 5;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 7px;
+      background: rgba(4, 7, 6, 0.88);
+      color: #eef4ef;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
+    }
+
+    .side {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: var(--control-width);
+      max-height: calc(100vh - 32px);
+      z-index: 2;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      overflow: auto;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      background: rgba(4, 7, 6, 0.94);
+      box-shadow: 0 22px 52px rgba(0, 0, 0, 0.46);
+    }
+
+    .side.hidden {
+      display: none;
+    }
+
+    .side-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .side-head:active {
+      cursor: grabbing;
+    }
+
+    .close-panel {
+      min-width: 34px;
+      min-height: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eef4ef;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .hint {
+      margin: 0;
+      color: rgba(238, 244, 239, 0.62);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .tabs button,
+    .actions button {
+      min-height: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eef4ef;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .tabs button.active {
+      border-color: rgba(255, 255, 255, 0.72);
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .field {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) 76px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .field input[type="range"] { width: 100%; }
+
+    .field input[type="number"] {
+      width: 76px;
+      min-height: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eef4ef;
+      padding: 0 7px;
+      font-weight: 800;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 190px;
+      resize: vertical;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.36);
+      color: #dff7e8;
+      padding: 10px;
+      font: 12px/1.45 Consolas, "Courier New", monospace;
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" id="stage">
+    <div class="asset" id="titleAsset" data-key="title">
+      <img src="../assets/ui/soubok-title.png" alt="수복 제목">
+    </div>
+    <div class="asset" id="soldierAsset" data-key="soldier">
+      <img src="../assets/ui/soubok-soldier.png" alt="군인">
+    </div>
+    <div class="asset buttons" id="buttonsAsset" data-key="buttons">
+      <img src="../assets/ui/soubok-button-custom.png" alt="커스텀 모드">
+      <img src="../assets/ui/soubok-button-online.png" alt="온라인 접속">
+      <img src="../assets/ui/soubok-button-story.png" alt="스토리 모드">
+    </div>
+    <div class="asset" id="refugeeAsset" data-key="refugee">
+      <img src="../assets/ui/soubok-refugee.png" alt="피난민">
+    </div>
+    <div class="asset" id="northSoldierAsset" data-key="northSoldier">
+      <img src="../assets/ui/soubok-north-soldier.png" alt="북한군">
+    </div>
+  </main>
+
+  <button type="button" class="open-panel" id="openPanel">위치 조절 열기</button>
+
+  <aside class="side hidden" id="controlPanel">
+    <div class="side-head" id="panelHandle">
+      <div>
+        <h1>메인 화면 위치 조절</h1>
+        <p class="hint">이미지를 직접 드래그하거나 숫자를 바꿔줘. 아래 JSON 값을 나한테 주면 그대로 CSS에 반영할게.</p>
+      </div>
+      <button type="button" class="close-panel" id="closePanel" aria-label="위치 조절 닫기">X</button>
+    </div>
+
+    <div class="tabs">
+      <button type="button" data-select="title">제목</button>
+      <button type="button" data-select="soldier">군인</button>
+      <button type="button" data-select="buttons">버튼</button>
+      <button type="button" data-select="refugee">피난민</button>
+      <button type="button" data-select="northSoldier">북한군</button>
+    </div>
+
+    <label class="field">
+      <span>X</span>
+      <input id="xRange" type="range" min="-500" max="3000" step="1">
+      <input id="xNumber" type="number" step="1">
+    </label>
+    <label class="field">
+      <span>Y</span>
+      <input id="yRange" type="range" min="-300" max="1800" step="1">
+      <input id="yNumber" type="number" step="1">
+    </label>
+    <label class="field">
+      <span>W</span>
+      <input id="wRange" type="range" min="80" max="1000" step="1">
+      <input id="wNumber" type="number" step="1">
+    </label>
+    <label class="field">
+      <span>Gap</span>
+      <input id="gapRange" type="range" min="0" max="36" step="1">
+      <input id="gapNumber" type="number" step="1">
+    </label>
+
+    <div class="actions">
+      <button type="button" id="centerTitle">제목 중앙</button>
+      <button type="button" id="copyJson">JSON 복사</button>
+    </div>
+
+    <textarea id="output" spellcheck="false"></textarea>
+  </aside>
+
+  <script>
+    const stage = document.getElementById("stage");
+    const openPanel = document.getElementById("openPanel");
+    const controlPanel = document.getElementById("controlPanel");
+    const closePanel = document.getElementById("closePanel");
+    const panelHandle = document.getElementById("panelHandle");
+    const controls = {
+      x: [document.getElementById("xRange"), document.getElementById("xNumber")],
+      y: [document.getElementById("yRange"), document.getElementById("yNumber")],
+      w: [document.getElementById("wRange"), document.getElementById("wNumber")],
+      gap: [document.getElementById("gapRange"), document.getElementById("gapNumber")]
+    };
+    const output = document.getElementById("output");
+    function makeDefaults() {
+      const sw = stage.clientWidth;
+      const sh = stage.clientHeight;
+      const titleW = Math.min(340, Math.round(sw * 0.42));
+      const buttonsW = Math.min(252, Math.round(sw * 0.34));
+      const soldierW = Math.min(430, Math.max(320, Math.round(sw * 0.32)));
+      const extraW = Math.min(310, Math.max(210, Math.round(sw * 0.22)));
+      return {
+        title: { x: Math.round((sw - titleW) / 2), y: Math.round(sh * 0.27), w: titleW, gap: 0 },
+        soldier: { x: Math.round(sw * 0.04), y: Math.round(sh - soldierW * (200 / 318) - sh * 0.04), w: soldierW, gap: 0 },
+        buttons: { x: Math.round((sw - buttonsW) / 2), y: Math.round(sh * 0.51), w: buttonsW, gap: 7 },
+        refugee: { x: Math.round(sw * 0.72), y: Math.round(sh * 0.56), w: extraW, gap: 0 },
+        northSoldier: { x: Math.round(sw * 0.72), y: Math.round(sh * 0.28), w: extraW, gap: 0 }
+      };
+    }
+
+    const state = makeDefaults();
+    let selected = "title";
+
+    function asset(key) {
+      return document.querySelector(`[data-key="${key}"]`);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function apply() {
+      for (const [key, value] of Object.entries(state)) {
+        const el = asset(key);
+        el.style.left = `${value.x}px`;
+        el.style.top = `${value.y}px`;
+        el.style.width = `${value.w}px`;
+        if (key === "buttons") el.style.gap = `${value.gap}px`;
+        el.classList.toggle("selected", key === selected);
+      }
+      for (const button of document.querySelectorAll("[data-select]")) {
+        button.classList.toggle("active", button.dataset.select === selected);
+      }
+      syncControls();
+      writeOutput();
+    }
+
+    function syncControls() {
+      const value = state[selected];
+      for (const key of ["x", "y", "w", "gap"]) {
+        for (const input of controls[key]) input.value = value[key] || 0;
+      }
+      const gapDisabled = selected !== "buttons";
+      for (const input of controls.gap) input.disabled = gapDisabled;
+    }
+
+    function writeOutput() {
+      const rounded = {};
+      for (const [key, value] of Object.entries(state)) {
+        rounded[key] = {};
+        for (const [prop, propValue] of Object.entries(value)) {
+          rounded[key][prop] = Math.round(propValue);
+        }
+      }
+      output.value = JSON.stringify({
+        viewport: { width: stage.clientWidth, height: stage.clientHeight },
+        layout: rounded
+      }, null, 2);
+    }
+
+    function updateControl(prop, raw) {
+      const next = Number(raw);
+      if (!Number.isFinite(next)) return;
+      state[selected][prop] = next;
+      apply();
+    }
+
+    for (const [prop, pair] of Object.entries(controls)) {
+      for (const input of pair) {
+        input.addEventListener("input", () => updateControl(prop, input.value));
+      }
+    }
+
+    for (const button of document.querySelectorAll("[data-select]")) {
+      button.addEventListener("click", () => {
+        selected = button.dataset.select;
+        apply();
+      });
+    }
+
+    document.getElementById("centerTitle").addEventListener("click", () => {
+      const next = state.title;
+      next.x = Math.round((stage.clientWidth - next.w) / 2);
+      selected = "title";
+      apply();
+    });
+
+    document.getElementById("copyJson").addEventListener("click", async () => {
+      output.select();
+      try {
+        await navigator.clipboard.writeText(output.value);
+      } catch {
+        document.execCommand("copy");
+      }
+    });
+
+    openPanel.addEventListener("click", () => {
+      controlPanel.classList.remove("hidden");
+      openPanel.hidden = true;
+      writeOutput();
+    });
+
+    closePanel.addEventListener("click", () => {
+      controlPanel.classList.add("hidden");
+      openPanel.hidden = false;
+    });
+
+    panelHandle.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("button")) return;
+      const rect = controlPanel.getBoundingClientRect();
+      const start = {
+        x: event.clientX,
+        y: event.clientY,
+        left: rect.left,
+        top: rect.top
+      };
+      panelHandle.setPointerCapture(event.pointerId);
+
+      function move(moveEvent) {
+        const maxLeft = window.innerWidth - controlPanel.offsetWidth - 8;
+        const maxTop = window.innerHeight - controlPanel.offsetHeight - 8;
+        const left = clamp(start.left + moveEvent.clientX - start.x, 8, Math.max(8, maxLeft));
+        const top = clamp(start.top + moveEvent.clientY - start.y, 8, Math.max(8, maxTop));
+        controlPanel.style.left = `${Math.round(left)}px`;
+        controlPanel.style.top = `${Math.round(top)}px`;
+        controlPanel.style.right = "auto";
+      }
+
+      function up() {
+        panelHandle.removeEventListener("pointermove", move);
+        panelHandle.removeEventListener("pointerup", up);
+        panelHandle.removeEventListener("pointercancel", up);
+      }
+
+      panelHandle.addEventListener("pointermove", move);
+      panelHandle.addEventListener("pointerup", up);
+      panelHandle.addEventListener("pointercancel", up);
+    });
+
+    for (const el of document.querySelectorAll(".asset")) {
+      el.addEventListener("pointerdown", (event) => {
+        selected = el.dataset.key;
+        const start = { x: event.clientX, y: event.clientY, left: state[selected].x, top: state[selected].y };
+        el.setPointerCapture(event.pointerId);
+        apply();
+
+        function move(moveEvent) {
+          state[selected].x = Math.round(start.left + moveEvent.clientX - start.x);
+          state[selected].y = Math.round(start.top + moveEvent.clientY - start.y);
+          apply();
+        }
+
+        function up() {
+          el.removeEventListener("pointermove", move);
+          el.removeEventListener("pointerup", up);
+          el.removeEventListener("pointercancel", up);
+        }
+
+        el.addEventListener("pointermove", move);
+        el.addEventListener("pointerup", up);
+        el.addEventListener("pointercancel", up);
+      });
+    }
+
+    window.addEventListener("resize", writeOutput);
+    apply();
+  </script>
+</body>
+</html>

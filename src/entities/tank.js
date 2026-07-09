@@ -16,7 +16,7 @@
       this.skinId = this.factionId;
       this.angle = options.angle || 0;
       this.turretAngle = this.angle;
-      this.radius = options.radius || 38;
+      this.radius = options.radius || 62;
       this.maxHp = options.maxHp || 110;
       this.hp = this.maxHp;
       this.healthRevealTimer = 0;
@@ -877,12 +877,9 @@
     }
 
     machineGunMountPoint() {
-      const baseAngle = this.turretAngle ?? this.angle;
-      const forwardOffset = -4;
-      const sideOffset = -15;
       return {
-        x: this.x + Math.cos(baseAngle) * forwardOffset + Math.cos(baseAngle + Math.PI / 2) * sideOffset,
-        y: this.y + Math.sin(baseAngle) * forwardOffset + Math.sin(baseAngle + Math.PI / 2) * sideOffset
+        x: this.x,
+        y: this.y
       };
     }
 

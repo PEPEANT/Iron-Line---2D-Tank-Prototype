@@ -81,16 +81,35 @@ for (const id of [
   mustInclude(readme, id);
 }
 
-for (const id of ["tank-fire-he", "tank-fire-ap", "pistol-fire", "rpg-fire", "mg-fire", "music/soubok-bgm"]) {
+for (const id of [
+  "explosion-he",
+  "explosion-drone",
+  "tank-fire",
+  "tank-fire-he",
+  "tank-fire-ap",
+  "rifle-fire",
+  "mg-fire",
+  "pistol-fire",
+  "rpg-fire",
+  "sniper-fire",
+  "hit-metal",
+  "music/soubok-bgm"
+]) {
   mustInclude(manifest, id);
 }
 
 for (const rel of [
+  "assets/audio/explosion-he.mp3",
+  "assets/audio/explosion-drone.mp3",
+  "assets/audio/tank-fire.mp3",
   "assets/audio/tank-fire-he.mp3",
   "assets/audio/tank-fire-ap.mp3",
+  "assets/audio/rifle-fire.mp3",
   "assets/audio/pistol-fire.mp3",
   "assets/audio/rpg-fire.mp3",
   "assets/audio/mg-fire.mp3",
+  "assets/audio/sniper-fire.mp3",
+  "assets/audio/hit-metal.mp3",
   "assets/audio/music/soubok-bgm.mp3"
 ]) {
   if (!fs.existsSync(path.join(root, rel))) fail(`missing imported audio file ${rel}`);

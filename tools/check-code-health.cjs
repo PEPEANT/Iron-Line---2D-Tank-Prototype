@@ -17,10 +17,12 @@ const lineBudgets = new Map([
   ["src/main.js", 4650],
   ["src/systems/hud.js", 3300],
   ["src/systems/renderer.js", 3050],
+  ["src/systems/infantry-rig-lab.js", 1800],
   ["styles/styles.css", 3100],
   ["src/ai/infantry-ai.js", 2850],
   ["src/tools/map-editor.js", 2400],
-  ["tools/check-behavior-census.cjs", 950]
+  ["tools/check-behavior-census.cjs", 950],
+  ["tools/check-scale-spike-probe.cjs", 1000]
 ]);
 
 const defaultBudgets = {
