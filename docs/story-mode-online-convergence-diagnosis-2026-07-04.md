@@ -16,7 +16,7 @@
 - 온라인: `tools/static-server.cjs` — Node HTTP 정적 서버 + JSON 파일(`. data/online-rooms.json`) 방 저장 + world-state POST 엔드포인트. 클라이언트는 HTTP 폴링 + 보간 버퍼.
 - 평가: **LAN/제한 알파용으로는 충분, 공개 온라인용으로는 부족.** 권위가 서버에 없고(각 클라이언트가 자기 상태를 밀어넣는 구조), 파일 저장이라 동시성/확장에 약함. 2026-05-22 문서들도 "full server authority는 이후 작업"으로 명시해둔 상태.
 
-### B. "수복 R1" 폴더 (`C:\Users\rneet\OneDrive\문서\수복 R1`) — 실체는 baegeum-city-v2 리포
+### B. "수복 R1" 폴더 (`<local-documents-folder>`) — 실체는 baegeum-city-v2 리포
 - **특이점레이스 온라인**: `wrangler.toml` + `workers/singularity-race-worker.js` (2,327줄).
   - Cloudflare **Durable Object(SQLite)** 방 상태 = 진짜 권위 서버.
   - 서버 틱 100ms, 스냅샷 100ms, 입력 초당 10회 제한, 입력 유효기간 550ms, 속도 배율 상한(치트 방지), 채팅 쿨다운/버스트 제한.
@@ -24,7 +24,7 @@
   - 최대 50러너 + 관전자 32명.
 - **baegeum-city-v2 기초 문서**: "오프라인 도시 코어 먼저, 모든 상태는 온라인 전환 가능하게" + 파일 300줄 제한 + **"기존 Iron Line 맵 기반 도시"를 첫 알파 목표로 명시**. → 수복 맵/에디터를 도시 씬에 재사용하는 그림을 과거의 네가 이미 그려놨음.
 
-### C. 배금도시 v3 (`C:\Users\rneet\OneDrive\Desktop\배금도시 v3`)
+### C. 배금도시 v3 (`<local-desktop-folder>`)
 - `00_core.md` = 세계관 헌법 (시스템창 금지, 폰 앱/알림/기록 카드로 압박 표현, 플롯 엔진=돈 / 감정 엔진=인정).
 - `game/` = **작동하는 폰 엔진 코드**: `phone.js` 2,141줄, `engine.js` 1,821줄, `phone-stock.js`(차트), `phone-gold.js`(금거래소), `phone-social.js`, `market-math.js`(롱/숏/레버리지/청산 계산), `casino-economy.js`, `minigames.js`.
 - 데이터 주도 구조: `data/scenes*.js`(스토리 장면), `data/branches.js`(분기), `data/market-events.js`, `data/asset-catalog.js`. 시드 기반 난수(`random.js`)로 저장/재현 가능.

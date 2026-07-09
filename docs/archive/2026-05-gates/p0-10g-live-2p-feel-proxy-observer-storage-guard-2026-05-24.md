@@ -6,7 +6,7 @@ Conclusion: P0-10G is a manual live 2P FAIL. The automated 2P feel-proxy PASS ca
 
 Video evidence:
 
-`C:\Users\rneet\Videos\Captures\Iron Line - 2D Tank Prototype - Chrome 2026-05-24 15-57-43.mp4`
+`<local-captures-folder>`
 
 Video metadata: `31.56s`, `1312x700`, `17.36MB`.
 

@@ -20,7 +20,7 @@ This PASS is narrow. It means the local/offline commander-order path is stable e
   - live squad order state
   - live vehicle assignment / `manualOrder`
   - `game.aiObservatory.latest()`
-  - screenshots under `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f`
+  - screenshots under `<local-codex-workspace>`
 
 Latest command-line checks:
 
@@ -63,10 +63,10 @@ Each role was tested in a separate local live scene with the role assigned befor
 
 Screenshots:
 
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-stability-gate-infantry-commands.png`
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-stability-gate-engineer-commands.png`
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-stability-gate-recon-commands.png`
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-stability-gate-armor-commands.png`
+- `<local-codex-workspace>`
+- `<local-codex-workspace>`
+- `<local-codex-workspace>`
+- `<local-codex-workspace>`
 
 ## Command Stability
 
@@ -95,7 +95,7 @@ Note: after cancel, normal bot logic can later assign a new default order. That 
 
 Primary screenshot:
 
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-stability-gate-20260522.png`
+- `<local-codex-workspace>`
 
 ## Direct Fixes Made During This Gate
 

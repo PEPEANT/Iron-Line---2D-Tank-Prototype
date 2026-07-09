@@ -8,7 +8,7 @@ P0-10G manual live 2P result failed after `c436a6e`.
 
 Evidence:
 
-`C:\Users\rneet\Videos\Captures\Iron Line - 2D Tank Prototype - Chrome 2026-05-24 15-57-43.mp4`
+`<local-captures-folder>`
 
 Reported symptoms:
 

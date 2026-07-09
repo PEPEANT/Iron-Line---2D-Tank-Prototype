@@ -18,7 +18,7 @@ Important: this PASS does not close the offline command stability gate. It only 
   - live `SquadAI` state on squad objects.
   - live vehicle commander assignment and `manualOrder`.
   - `game.aiObservatory.latest()`.
-  - screenshots saved under `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f`.
+  - screenshots saved under `<local-codex-workspace>`.
 - Related checks:
   - `npm run check` passed.
   - `npm run check:online` passed with `Online smoke passed: SMOKE-1779428082121, players=2, combat=1, ws=hello/join_result/observer_snapshot`.

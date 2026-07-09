@@ -19,7 +19,7 @@ This is an interim checkpoint, not a completion report. It records what has been
   - live vehicle commander assignment / `manualOrder`
   - `game.aiObservatory.latest()`
   - command radio UI click smoke for all four role-special commands
-  - screenshots saved under `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f`
+  - screenshots saved under `<local-codex-workspace>`
 
 ## Command Flow Check
 
@@ -111,6 +111,6 @@ Recommended next checks:
 
 Correction pass screenshots:
 
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-engineer-repair-ui-click-qa.png`
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-recon-scan-ui-click-qa.png`
-- `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-armor-fire-support-ui-click-qa-2.png`
+- `<local-codex-workspace>`
+- `<local-codex-workspace>`
+- `<local-codex-workspace>`

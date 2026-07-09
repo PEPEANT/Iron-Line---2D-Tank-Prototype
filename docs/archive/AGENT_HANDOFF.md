@@ -650,7 +650,7 @@ Do not advance into AI V2 or real bot commander behavior until the current workt
 
 ## Repository
 
-- Actual repo: `C:\Users\rneet\Documents\Codex\2026-05-20\pepeant-iron-line-2d-tank-prototype`
+- Actual repo: `<local-codex-workspace>`
 - Live URL: `https://iron-line-2d-tank-prototype.onrender.com/`
 - Check current commit with `git log -1 --oneline`.
 - Check remote with `git ls-remote origin refs/heads/main`.
@@ -662,7 +662,7 @@ Run date: 2026-05-22 KST.
 
 Completed before this handoff:
 
-- Backed up the project before edits to `C:\Users\rneet\Documents\Codex\2026-05-22\iron-line-backups`.
+- Backed up the project before edits to `<local-codex-workspace>`.
 - Separated lobby role selection from weapon/loadout changes.
 - `assignPlayerToSlot()` now changes command slot / role authority without calling `applyFullPlayerClassLoadout()`.
 - Lobby loadout UI now displays the player's current combat class/loadout instead of deriving it from the command role.
@@ -698,7 +698,7 @@ Additional verification already run:
 - 2026-05-22 re-run: `npm run check` passed; `npm run check:online` passed with `Online smoke passed: SMOKE-1779424259639, players=2, combat=1, ws=hello/join_result/observer_snapshot`.
 - 2026-05-22 browser lobby smoke: entered online room `ROOM-001`, switched the local slot from blue infantry to blue armor, and verified the displayed command role changed to armor while the combat loadout stayed `infantry: machinegun / pistol / grenade`.
 - 2026-05-22 command metadata smoke: `CommandBus` player-issued `attack` order produced `commandState: assault`, `commandSource: player`, `commandReason: attack`, `commandLockSeconds: 2.2`, `commanderSlotId: blue-infantry`, and one command log entry.
-- 2026-05-22 browser battle smoke: offline battle reached the field, command radio button/panel rendered, command buttons were present, and browser console errors were empty. Screenshot: `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\iron-line-command-radio-smoke-20260522.png`.
+- 2026-05-22 browser battle smoke: offline battle reached the field, command radio button/panel rendered, command buttons were present, and browser console errors were empty. Screenshot: `<local-codex-workspace>`.
 - 2026-05-22 pre-checkpoint verification: `npm run check` passed; `npm run check:online` passed with `Online smoke passed: SMOKE-1779424968014, players=2, combat=1, ws=hello/join_result/observer_snapshot`.
 - 2026-05-22 offline commander-order QA pass 1: local Playwright/Chrome entered live play for each blue role, selected the role before deployment, opened the command radio, and verified the role special button was present and enabled.
 - 2026-05-22 offline commander-order QA pass 1 results:
@@ -731,14 +731,14 @@ Additional verification already run:
   - `cancel` now immediately clears player command state to idle / bot / lock `0`.
   - Basic vehicle diagnostics passed: no sampled blue vehicle overlap, forced traffic hold exposed `traffic waiting`, and forced stuck diagnostics surfaced stuck state.
 - 2026-05-22 offline commander-order QA pass 1 screenshots:
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-infantry-assault-qa-2.png`
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-engineer-repair-qa-2.png`
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-recon-scan-qa-2.png`
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-armor-fire-support-qa-2.png`
+  - `<local-codex-workspace>`
+  - `<local-codex-workspace>`
+  - `<local-codex-workspace>`
+  - `<local-codex-workspace>`
 - 2026-05-22 command radio UI click screenshots:
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-engineer-repair-ui-click-qa.png`
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-recon-scan-ui-click-qa.png`
-  - `C:\Users\rneet\Documents\Codex\2026-05-22\codex-threads-019e4849-e426-7b73-826f\offline-command-armor-fire-support-ui-click-qa-2.png`
+  - `<local-codex-workspace>`
+  - `<local-codex-workspace>`
+  - `<local-codex-workspace>`
 - 2026-05-22 direct fixes from offline QA:
   - `CommanderAI.applyCombinedArmsOrders()` now excludes manually commanded tanks so player armor orders are not overwritten by automatic combined-arms support.
   - Role specials are enabled through the existing `CommandBus` / `CommandRadio` path: infantry `assault`, engineer `repair`, recon `scan`, armor `fire_support`.
@@ -838,7 +838,7 @@ Run date: 2026-05-21 KST.
 
 Completed:
 
-- Actual repo path confirmed: `C:\Users\rneet\Documents\Codex\2026-05-20\pepeant-iron-line-2d-tank-prototype`
+- Actual repo path confirmed: `<local-codex-workspace>`
 - GitHub `main` confirmed at `11412ca docs: narrow online stabilization handoff` before this note.
 - Local checks passed:
   - `npm run check`

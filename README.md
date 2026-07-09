@@ -1,43 +1,55 @@
 # Iron Line - 2D Tank Prototype
 
-정적 HTML/JavaScript 기반 2D 전차/보병 프로토타입입니다.
+Iron Line is a personal 2D top-down tank and infantry prototype. It currently focuses on offline battles, sandbox testing, story-mode groundwork, asset tooling, AI behavior experiments, and local multiplayer/server experiments.
 
-## 실행
+This repository is shared as a development record and playable prototype. The source code, art, audio, story material, design documents, and game assets remain protected. See [LICENSE](LICENSE).
 
-가장 안전한 실행 방법은 프로젝트 폴더에서 아래 명령을 쓰는 것입니다.
+## Run Locally
+
+Install dependencies once:
+
+```powershell
+npm install
+```
+
+Start the local Node server:
 
 ```powershell
 npm start
 ```
 
-게임:
+Open the game:
 
 ```text
 http://127.0.0.1:4173/index.html
 ```
 
-드론 테스트랩:
+Useful local pages:
 
 ```text
-http://127.0.0.1:4173/index.html?testLab=drone
-```
-
-맵 편집기:
-
-```text
+http://127.0.0.1:4173/index.html?testLab=sandbox
 http://127.0.0.1:4173/editor.html
+http://127.0.0.1:4173/admin.html
 ```
 
-## VS Code에서 실행
+## Online Mode
 
-VS Code에서 `Terminal > Run Task... > Iron Line: local server 4173`을 실행하면 이 프로젝트 서버가 켜집니다.
+Online room creation and room lists require the Node server from `npm start`. Static hosting such as GitHub Pages can serve the offline game files, but it cannot run the `/ws` WebSocket server or `/api/rooms` endpoints by itself.
 
-Live Server 확장을 사용할 경우 이 폴더를 VS Code의 작업 폴더로 열어야 합니다. 다른 게임 폴더나 상위 폴더를 열어 둔 상태에서 `Go Live`를 누르면 `http://127.0.0.1:5500/index.html`처럼 다른 프로젝트의 `index.html`이 열릴 수 있습니다.
+In short:
 
-## 검사
+- Offline, story, sandbox, editor, and asset tools can be opened from the local app.
+- Online multiplayer requires a running Node server.
+- A static deployment without the server will not provide working online rooms.
+
+## Checks
+
+Run the project checks:
 
 ```powershell
 npm run check
 ```
 
-`src/` 아래 JavaScript 파일을 문법 검사합니다.
+## Asset Note
+
+Only runtime-ready game assets should be committed here. High-resolution source artwork, private drafts, and external working files should stay outside the public repository unless intentionally released.

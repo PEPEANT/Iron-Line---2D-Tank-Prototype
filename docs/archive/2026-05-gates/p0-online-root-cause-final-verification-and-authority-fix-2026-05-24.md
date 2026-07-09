@@ -12,7 +12,7 @@ Conclusion: as of 2026-05-24, the human `4v4` online path is in PASS state for a
 ## Backup
 
 - Project backup created before edits:
-  - `C:\Users\rneet\Documents\Codex\2026-05-24\1-9-15-10-4-2\backups\Iron-Line---2D-Tank-Prototype-20260524-192559`
+  - `<local-codex-workspace>`
 
 ## Final locked causes and closure status
 
